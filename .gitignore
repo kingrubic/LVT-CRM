@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*_secret
+session_secret
+auth_config.json
+
+# Runtime/cache
+__pycache__/
+*.py[cod]
+*.log
+
+# Temporary files
+.tmp/
+tmp/
