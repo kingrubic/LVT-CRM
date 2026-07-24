@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ClerkProvider,
@@ -7,9 +7,14 @@ import {
   useAuth,
   useUser,
 } from '@clerk/react';
+import { useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
+import { ConvexProviderWithClerk } from 'convex/react-clerk';
+import { anyApi } from 'convex/server';
 import './styles.css';
 
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const convexUrl = import.meta.env.VITE_CONVEX_URL;
+const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
 
 const demoItems = [
   ['dashboard', 'Tổng quan', '▦'],
@@ -35,11 +40,15 @@ const settingsItems = [
 
 function AuthenticatedApp() {
   const { user } = useUser();
-  const role = user?.publicMetadata?.role === 'admin' ? 'admin' : 'demo';
-  return <AppShell user={user} role={role} />;
+  const current = useQuery(anyApi.users.current);
+  const storeCurrent = useMutation(anyApi.users.storeCurrent);
+  useEffect(() => { if (user && current === null) storeCurrent().catch(() => undefined); }, [user, current, storeCurrent]);
+  if (current === undefined) return <LoadingView label="Đang đồng bộ hồ sơ…" />;
+  const role = current?.role === 'admin' ? 'admin' : 'demo';
+  return <AppShell user={user} role={role} current={current} />;
 }
 
-function AppShell({ user, role }) {
+function AppShell({ user, role, current }) {
   const [active, setActive] = useState('dashboard');
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -78,7 +87,7 @@ function AppShell({ user, role }) {
           <div><p className="eyebrow">Lê Văn Tám CRM</p><h1>{title}</h1></div>
           <div className="header-user"><span className="user-greeting">{user?.firstName || 'Người dùng'}</span><UserButton /></div>
         </header>
-        {active === 'dashboard' ? <DemoView /> : active === 'users' ? <UserManagement /> : <PlaceholderView title={title} role={role} />}
+        {current?.mustChangePassword ? <MustChangePasswordView /> : active === 'dashboard' ? <DemoView /> : active === 'users' ? <UserManagement /> : <PlaceholderView title={title} role={role} />}
       </main>
     </div>
   );
@@ -96,14 +105,18 @@ function DemoView() {
 }
 
 function UserManagement() {
-  const [users, setUsers] = useState([
-    { name: 'Phạm Thị Thuỷ', email: 'hiệu trưởng · dữ liệu mẫu', role: 'Quản trị viên', status: 'Hoạt động' },
-    { name: 'Trần Thị Ngọc Minh', email: 'phó hiệu trưởng · dữ liệu mẫu', role: 'Quản lý', status: 'Hoạt động' },
-    { name: 'Tài khoản giáo viên mẫu', email: 'chưa kết nối Clerk', role: 'Người dùng', status: 'Chờ kích hoạt' },
-  ]);
-  const addUser = () => setUsers((current) => [...current, { name: 'Người dùng mới', email: 'Chưa đồng bộ Clerk', role: 'Người dùng', status: 'Chờ kích hoạt' }]);
-  return <section className="admin-view"><div className="section-intro"><div><span className="status-pill blue">Quản trị người dùng</span><h2>Quản lý người dùng</h2><p>Scaffold giao diện cho danh sách và vai trò. Đồng bộ Clerk/Convex sẽ được nối ở milestone tiếp theo.</p></div><button className="primary-button" onClick={addUser}>+ Thêm người dùng</button></div><div className="notice"><strong>Phạm vi milestone 1</strong><span>Danh sách dưới đây là dữ liệu demo cục bộ. Chưa có thao tác tạo user thật hoặc ghi dữ liệu backend.</span></div><div className="user-table"><div className="user-table-head"><span>Người dùng</span><span>Vai trò</span><span>Trạng thái</span></div>{users.map((item) => <div className="user-row" key={`${item.name}-${item.role}`}><div><strong>{item.name}</strong><span>{item.email}</span></div><span className="role-tag">{item.role}</span><span className={item.status === 'Hoạt động' ? 'live-tag' : 'pending-tag'}>{item.status}</span></div>)}</div></section>;
+  const users = useQuery(anyApi.users.list);
+  const create = useAction(anyApi.users.create);
+  const setDisabled = useAction(anyApi.users.setDisabled);
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const addUser = async () => { if (!username || !name || temporaryPassword.length < 12) return; await create({ username, email: email || undefined, name, role: 'user', temporaryPassword }); setUsername(''); setEmail(''); setName(''); setTemporaryPassword(''); };
+  return <section className="admin-view"><div className="section-intro"><div><span className="status-pill blue">Quản trị người dùng</span><h2>Quản lý người dùng</h2><p>Admin tạo tài khoản nội bộ bằng username và mật khẩu tạm thời; hệ thống không tự đăng ký và không gửi mật khẩu qua email.</p></div></div><div className="notice"><strong>Thêm tài khoản</strong><span className="invite-form"><input aria-label="Username" placeholder="Username" value={username} onChange={(event) => setUsername(event.target.value)} /><input aria-label="Họ tên" placeholder="Họ tên" value={name} onChange={(event) => setName(event.target.value)} /><input aria-label="Email tùy chọn" type="email" placeholder="Email tùy chọn" value={email} onChange={(event) => setEmail(event.target.value)} /><input aria-label="Mật khẩu tạm thời" type="password" placeholder="Mật khẩu tạm thời (12+ ký tự)" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} /><button className="primary-button" onClick={addUser}>+ Tạo tài khoản</button></span></div><div className="user-table"><div className="user-table-head"><span>Người dùng</span><span>Vai trò</span><span>Trạng thái</span></div>{(users ?? []).map((item) => <div className="user-row" key={item._id}><div><strong>{item.name}</strong><span>{item.username}{item.email ? ` · ${item.email}` : ''}</span></div><span className="role-tag">{item.role}</span><button className={item.status === 'active' ? 'live-tag' : 'pending-tag'} onClick={() => setDisabled({ id: item._id, disabled: item.status === 'active' })}>{item.status === 'active' ? 'Hoạt động · khóa' : item.status}</button></div>)}</div></section>;
 }
+
+function MustChangePasswordView() { return <section className="placeholder-view"><span className="placeholder-icon">!</span><span className="status-pill blue">Bảo mật tài khoản</span><h2>Cần đổi mật khẩu</h2><p>Quản trị viên đã yêu cầu bạn đổi mật khẩu. Hãy dùng luồng đổi mật khẩu của Clerk từ menu tài khoản trước khi tiếp tục.</p><div className="placeholder-grid"><span>Mở menu tài khoản ở góc phải</span><span>Chọn đổi mật khẩu</span><span>Đăng nhập lại nếu được yêu cầu</span></div></section>; }
 
 function PlaceholderView({ title, role }) {
   return <section className="placeholder-view"><span className="placeholder-icon">⌁</span><span className="status-pill blue">Admin scaffold</span><h2>{title}</h2><p>Không gian <b>{title}</b> đã có trong điều hướng role-based. Nội dung nghiệp vụ sẽ được bổ sung sau khi chốt schema và quyền backend.</p><div className="placeholder-grid"><span>Frontend route: sẵn sàng</span><span>Backend data: chưa nối</span><span>Role hiện tại: {role}</span></div></section>;
@@ -119,7 +132,8 @@ function MissingKeyView() {
 
 function Root() {
   if (!clerkKey || clerkKey.includes('replace_me')) return <MissingKeyView />;
-  return <ClerkProvider publishableKey={clerkKey}><AuthBoundary /></ClerkProvider>;
+  if (!convex) return <MissingKeyView />;
+  return <ClerkProvider publishableKey={clerkKey}><ConvexProviderWithClerk client={convex} useAuth={useAuth}><AuthBoundary /></ConvexProviderWithClerk></ClerkProvider>;
 }
 
 function AuthBoundary() {
@@ -127,5 +141,7 @@ function AuthBoundary() {
   if (!isLoaded) return <main className="auth-page"><div className="auth-card"><p className="eyebrow">Lê Văn Tám CRM</p><h1>Đang kiểm tra phiên đăng nhập…</h1></div></main>;
   return isSignedIn ? <AuthenticatedApp /> : <SignedOutView />;
 }
+
+function LoadingView({ label }) { return <main className="auth-page"><div className="auth-card"><p className="eyebrow">Lê Văn Tám CRM</p><h1>{label}</h1></div></main>; }
 
 createRoot(document.getElementById('root')).render(<Root />);

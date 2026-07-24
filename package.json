@@ -6,14 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check": "node scripts/check-files.mjs",
+    "typecheck": "convex codegen --typecheck enable",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy"
   },
   "dependencies": {
+    "@clerk/backend": "^3.13.0",
     "@clerk/react": "^6.12.7",
     "@vitejs/plugin-react": "^6.0.4",
-    "vite": "^8.1.5",
+    "convex": "^1.42.3",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "vite": "^8.1.5",
+    "typescript": "^5.9.3"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
 }

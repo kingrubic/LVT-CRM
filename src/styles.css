@@ -44,6 +44,8 @@ button { font: inherit; cursor: pointer; }
 .primary-button { min-height: 42px; padding: 0 15px; border: 0; border-radius: 8px; color: white; background: #2448a2; font-weight: 750; white-space: nowrap; }
 .primary-button:hover { background: #18377f; }
 .notice { display: flex; gap: 8px; margin-bottom: 16px; padding: 14px 16px; border-left: 3px solid #dba01c; background: #fff9e9; color: #785d16; font-size: 12px; }
+.invite-form { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.invite-form input { min-height: 36px; min-width: 160px; flex: 1; padding: 0 10px; border: 1px solid #e1d6ae; border-radius: 7px; color: #19233d; background: #fff; }
 .notice strong { white-space: nowrap; }
 .user-table { overflow: hidden; border: 1px solid #e1e7f1; border-radius: 10px; background: #fff; }
 .user-table-head, .user-row { display: grid; grid-template-columns: 1.8fr 1fr .8fr; align-items: center; gap: 18px; padding: 15px 18px; }
