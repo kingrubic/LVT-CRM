@@ -1,60 +1,118 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  ClerkProvider,
-  SignIn,
-  UserButton,
-  useAuth,
-  useUser,
-} from '@clerk/react';
-import { useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
-import { ConvexProviderWithClerk } from 'convex/react-clerk';
+import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
+import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
 import { anyApi } from 'convex/server';
 import './styles.css';
 
-const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const convexUrl = import.meta.env.VITE_CONVEX_URL;
-const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
+const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
+const publicConvexUrl = window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : configuredConvexUrl;
+const convex = publicConvexUrl ? new ConvexReactClient(publicConvexUrl) : null;
 
-const demoItems = [
-  ['dashboard', 'Tổng quan', '▦'],
-  ['schedule', 'Lịch công tác', '▣'],
-  ['tasks', 'Công việc của tôi', '✓'],
-  ['classes', 'Lớp chủ nhiệm', '▤'],
-];
-
-const adminItems = [
+const SYSTEM_MENUS = [
   ['reports', 'Báo cáo'],
   ['duties', 'Công tác'],
   ['work', 'Công việc'],
   ['homeroom', 'Lớp chủ nhiệm'],
   ['people-review', 'Đánh giá nhân sự'],
-  ['settings', 'Cài đặt'],
 ];
-
-const settingsItems = [
+const ADMIN_SETTINGS = [
   ['users', 'Quản lý người dùng'],
-  ['departments', 'Quản lý Phòng ban'],
+  ['departments', 'Quản lý phòng ban'],
   ['roles', 'Quản lý nhóm quyền'],
+  ['positions', 'Quản lý chức vụ'],
 ];
+const ROLE_LABELS = { admin: 'Quản trị viên', user: 'Người dùng' };
+const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', edit: 'Sửa' };
 
-function AuthenticatedApp() {
-  const { user } = useUser();
-  const current = useQuery(anyApi.users.current);
-  const storeCurrent = useMutation(anyApi.users.storeCurrent);
-  useEffect(() => { if (user && current === null) storeCurrent().catch(() => undefined); }, [user, current, storeCurrent]);
-  if (current === undefined) return <LoadingView label="Đang đồng bộ hồ sơ…" />;
-  const role = current?.role === 'admin' ? 'admin' : 'demo';
-  return <AppShell user={user} role={role} current={current} />;
+function messageFor(error) {
+  const code = String(error?.message || 'UNKNOWN_ERROR').replace(/^Uncaught Error: /, '').replace(/^Error: /, '');
+  const messages = {
+    USER_NOT_ACTIVE: 'Tài khoản không còn hoạt động.',
+    EMAIL_TAKEN: 'Email đã được sử dụng.',
+    TEMP_PASSWORD_TOO_SHORT: 'Mật khẩu tạm thời phải có ít nhất 12 ký tự.',
+    PASSWORD_TOO_SHORT: 'Mật khẩu mới phải có ít nhất 12 ký tự.',
+    CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể khóa tài khoản quản trị đang đăng nhập.',
+    CANNOT_DELETE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể xóa tài khoản quản trị đang đăng nhập.',
+    USER_REMOVE_FAILED: 'Không thể vô hiệu hóa tài khoản hoàn toàn. Hãy kiểm tra audit log và thử lại.',
+    USER_CREATE_FAILED: 'Không thể tạo tài khoản. Hãy kiểm tra audit log.',
+    USER_UPDATE_FAILED: 'Không thể cập nhật tài khoản. Hãy kiểm tra audit log.',
+    PASSWORD_CHANGED_SYNC_PENDING: 'Mật khẩu đã đổi nhưng CRM chưa đồng bộ. Vui lòng liên hệ quản trị viên.',
+    PASSWORD_RESET_FAILED: 'Không thể đặt lại mật khẩu. Hãy kiểm tra audit log.',
+    PASSWORD_CHANGE_FAILED: 'Không thể đổi mật khẩu. Vui lòng thử lại.',
+    EMAIL_CHANGE_UNSUPPORTED: 'Đổi email đăng nhập chưa được hỗ trợ. Tạo tài khoản mới nếu cần.',
+    PUBLIC_SIGNUP_DISABLED: 'Không cho phép tự đăng ký.',
+    'Invalid credentials': 'Email hoặc mật khẩu không đúng.',
+    INVALID_EMAIL: 'Email không hợp lệ.',
+    INVALID_ROLE: 'Vai trò chỉ được chọn Quản trị viên hoặc Người dùng.',
+    INVALID_DEPARTMENT: 'Phòng ban không hợp lệ hoặc đã ngưng.',
+    INVALID_PERMISSION_GROUP: 'Nhóm quyền không hợp lệ hoặc đã ngưng.',
+    INVALID_POSITION: 'Chức vụ không hợp lệ hoặc đã ngưng.',
+    INVALID_POSITION_LEVEL: 'Cấp bậc chức vụ phải từ 1 đến 5 sao.',
+    INVALID_CODE: 'Mã không hợp lệ (chữ in hoa, số, gạch ngang/gạch dưới).',
+    INVALID_NAME: 'Tên không hợp lệ.',
+    CODE_TAKEN: 'Mã đã được sử dụng.',
+    DEPARTMENT_NOT_FOUND: 'Không tìm thấy phòng ban.',
+    PERMISSION_GROUP_NOT_FOUND: 'Không tìm thấy nhóm quyền.',
+    POSITION_NOT_FOUND: 'Không tìm thấy chức vụ.',
+    USER_NOT_FOUND: 'Không tìm thấy người dùng.',
+  };
+  if (messages[code]) return messages[code];
+  if (/invalid credentials|invalidsecret/i.test(code)) return messages['Invalid credentials'];
+  if (/FORBIDDEN/i.test(code)) return 'Bạn không có quyền thực hiện thao tác này.';
+  return 'Không thể hoàn tất thao tác. Vui lòng thử lại hoặc kiểm tra audit log.';
 }
 
-function AppShell({ user, role, current }) {
-  const [active, setActive] = useState('dashboard');
+function StarRating({ level, max = 5 }) {
+  const n = Math.min(max, Math.max(0, Number(level) || 0));
+  return (
+    <span className="star-rating" aria-label={`${n} trên ${max} sao`} title={`Cấp ${n}/${max}`}>
+      {Array.from({ length: max }, (_, i) => (
+        <span key={i} className={i < n ? 'star on' : 'star'}>★</span>
+      ))}
+    </span>
+  );
+}
+
+function AuthenticatedApp() {
+  const session = useQuery(anyApi.users.sessionContext);
+
+  if (session === undefined) return <LoadingView label="Đang kiểm tra quyền truy cập…" />;
+  if (!session?.user) return <AccessDeniedView message="Phiên đăng nhập không gắn với hồ sơ người dùng hợp lệ." />;
+  if (session.user.status !== 'active') {
+    return <AccessDeniedView message="Tài khoản này đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên." />;
+  }
+  return <AppShell session={session} />;
+}
+
+function AppShell({ session }) {
+  const { signOut } = useAuthActions();
+  const { user, isAdmin, menuAccess } = session;
+  const visibleSystemMenus = useMemo(() => {
+    if (isAdmin) return SYSTEM_MENUS;
+    return SYSTEM_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
+  }, [isAdmin, menuAccess]);
+
+  const defaultActive = isAdmin
+    ? 'reports'
+    : visibleSystemMenus[0]?.[0] || 'profile';
+  const [active, setActive] = useState(defaultActive);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  useEffect(() => {
+    const allowed = new Set([
+      ...visibleSystemMenus.map(([id]) => id),
+      ...(isAdmin ? ADMIN_SETTINGS.map(([id]) => id) : []),
+      'profile',
+      'settings',
+    ]);
+    if (!allowed.has(active)) setActive(defaultActive);
+  }, [active, defaultActive, isAdmin, visibleSystemMenus]);
+
   const title = useMemo(() => {
-    const all = [...demoItems, ...adminItems, ...settingsItems];
-    return all.find(([id]) => id === active)?.[1] || 'Tổng quan';
+    if (active === 'profile' || active === 'settings') return 'Thông tin cá nhân';
+    const all = [...SYSTEM_MENUS, ...ADMIN_SETTINGS];
+    return all.find(([id]) => id === active)?.[1] || 'Lê Văn Tám CRM';
   }, [active]);
 
   const choose = (id) => {
@@ -62,86 +120,1155 @@ function AppShell({ user, role, current }) {
     setMobileOpen(false);
   };
 
+  if (user.mustChangePassword) {
+    return (
+      <main className="auth-page">
+        <div className="auth-card password-gate-card">
+          <MustChangePasswordView />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="shell">
       <aside className={`shell-sidebar ${mobileOpen ? 'is-open' : ''}`}>
         <div className="school-brand">
           <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
-          <div><strong>Trường THCS<br />Lê Văn Tám</strong><span>CRM nội bộ</span></div>
+          <div>
+            <strong>
+              Trường THCS
+              <br />
+              Lê Văn Tám
+            </strong>
+            <span>CRM nội bộ</span>
+          </div>
         </div>
         <nav className="shell-nav" aria-label="Điều hướng CRM">
-          <p className="nav-label">Không gian làm việc</p>
-          {demoItems.map(([id, label, icon]) => <NavButton key={id} id={id} label={label} icon={icon} active={active} onClick={choose} />)}
-          {role === 'admin' && <>
-            <p className="nav-label admin-label">Quản trị hệ thống</p>
-            {adminItems.map(([id, label]) => <NavButton key={id} id={id} label={label} active={active} onClick={choose} />)}
-            <p className="nav-label admin-label">Cài đặt</p>
-            {settingsItems.map(([id, label]) => <NavButton key={id} id={id} label={label} active={active} onClick={choose} nested />)}
-          </>}
+          <p className="nav-label">Quản trị hệ thống</p>
+          {visibleSystemMenus.length === 0 && !isAdmin ? (
+            <p className="nav-empty">Chưa được gán menu. Liên hệ quản trị viên.</p>
+          ) : (
+            visibleSystemMenus.map(([id, label]) => (
+              <NavButton key={id} id={id} label={label} active={active} onClick={choose} />
+            ))
+          )}
+          <p className="nav-label admin-label">Cài đặt</p>
+          {isAdmin ? (
+            ADMIN_SETTINGS.map(([id, label]) => (
+              <NavButton key={id} id={id} label={label} active={active} onClick={choose} nested />
+            ))
+          ) : (
+            <NavButton id="profile" label="Thông tin cá nhân" active={active} onClick={choose} nested />
+          )}
         </nav>
-        <div className="sidebar-note"><b>{role === 'admin' ? 'Vai trò quản trị' : 'Không gian demo'}</b><span>{role === 'admin' ? 'Bạn đang xem các menu dành cho quản trị viên.' : 'Menu quản trị sẽ xuất hiện theo role từ Clerk.'}</span></div>
+        <div className="sidebar-note">
+          <b>{isAdmin ? 'Vai trò quản trị' : 'Người dùng'}</b>
+          <span>
+            {isAdmin
+              ? 'Quản trị viên có mọi quyền cao nhất. Menu Cài đặt chỉ hiển thị cho quản trị.'
+              : 'Quyền menu phụ thuộc nhóm quyền do admin gán. Quên mật khẩu: liên hệ Admin.'}
+          </span>
+        </div>
       </aside>
       <main className="shell-main">
         <header className="shell-header">
-          <button className="mobile-menu" onClick={() => setMobileOpen((open) => !open)} aria-label="Mở menu">☰</button>
-          <div><p className="eyebrow">Lê Văn Tám CRM</p><h1>{title}</h1></div>
-          <div className="header-user"><span className="user-greeting">{user?.firstName || 'Người dùng'}</span><UserButton /></div>
+          <button className="mobile-menu" onClick={() => setMobileOpen((open) => !open)} aria-label="Mở menu" aria-expanded={mobileOpen}>
+            ☰
+          </button>
+          <div>
+            <p className="eyebrow">Lê Văn Tám CRM</p>
+            <h1>{title}</h1>
+          </div>
+          <div className="header-user">
+            <span className="user-greeting">{user.name || user.email || 'Người dùng'}</span>
+            <button type="button" className="text-button" onClick={() => void signOut()}>
+              Đăng xuất
+            </button>
+          </div>
         </header>
-        {current?.mustChangePassword ? <MustChangePasswordView /> : active === 'dashboard' ? <DemoView /> : active === 'users' ? <UserManagement /> : <PlaceholderView title={title} role={role} />}
+        {active === 'users' && isAdmin ? (
+          <UserManagement />
+        ) : active === 'departments' && isAdmin ? (
+          <DepartmentManagement />
+        ) : active === 'roles' && isAdmin ? (
+          <PermissionGroupManagement />
+        ) : active === 'positions' && isAdmin ? (
+          <PositionManagement />
+        ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
+          <ProfileView session={session} />
+        ) : (
+          <PlaceholderView
+            title={title}
+            access={isAdmin ? 'edit' : menuAccess?.[active] || 'view'}
+            isAdmin={isAdmin}
+          />
+        )}
       </main>
     </div>
   );
 }
 
 function NavButton({ id, label, icon = '→', active, onClick, nested }) {
-  return <button className={`shell-nav-button ${active === id ? 'active' : ''} ${nested ? 'nested' : ''}`} onClick={() => onClick(id)}><span className="nav-icon">{icon}</span><span>{label}</span>{id === 'users' && <em>Mới</em>}</button>;
+  return (
+    <button type="button" className={`shell-nav-button ${active === id ? 'active' : ''} ${nested ? 'nested' : ''}`} onClick={() => onClick(id)}>
+      <span className="nav-icon">{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
 }
 
-function DemoView() {
-  return <section className="demo-view">
-    <div className="demo-banner"><div><span className="status-pill">Đã xác thực</span><h2>Chào mừng trở lại không gian làm việc.</h2><p>Prototype hiện tại được giữ nguyên trong vùng đã đăng nhập để đội ngũ tiếp tục duyệt luồng nghiệp vụ.</p></div><span className="banner-mark">LVT</span></div>
-    <div className="demo-frame-wrap"><div className="frame-caption"><span>Demo giao diện CRM</span><span>Authenticated view · static prototype</span></div><iframe title="LVT CRM demo" src="/demo/index.html" /></div>
-  </section>;
+function useFeedback() {
+  const [pending, setPending] = useState('');
+  const [feedback, setFeedback] = useState({ type: '', text: '' });
+  const run = async (name, operation, success) => {
+    setPending(name);
+    setFeedback({ type: '', text: '' });
+    try {
+      await operation();
+      setFeedback({ type: 'success', text: success });
+      return true;
+    } catch (error) {
+      setFeedback({ type: 'error', text: messageFor(error) });
+      return false;
+    } finally {
+      setPending('');
+    }
+  };
+  return { pending, feedback, setFeedback, run };
+}
+
+function emptyUserForm() {
+  return {
+    name: '',
+    email: '',
+    role: 'user',
+    departmentId: '',
+    permissionGroupId: '',
+    positionId: '',
+    temporaryPassword: '',
+  };
 }
 
 function UserManagement() {
-  const users = useQuery(anyApi.users.list);
+  const data = useQuery(anyApi.users.bootstrap);
   const create = useAction(anyApi.users.create);
+  const update = useAction(anyApi.users.update);
   const setDisabled = useAction(anyApi.users.setDisabled);
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [temporaryPassword, setTemporaryPassword] = useState('');
-  const addUser = async () => { if (!username || !name || temporaryPassword.length < 12) return; await create({ username, email: email || undefined, name, role: 'user', temporaryPassword }); setUsername(''); setEmail(''); setName(''); setTemporaryPassword(''); };
-  return <section className="admin-view"><div className="section-intro"><div><span className="status-pill blue">Quản trị người dùng</span><h2>Quản lý người dùng</h2><p>Admin tạo tài khoản nội bộ bằng username và mật khẩu tạm thời; hệ thống không tự đăng ký và không gửi mật khẩu qua email.</p></div></div><div className="notice"><strong>Thêm tài khoản</strong><span className="invite-form"><input aria-label="Username" placeholder="Username" value={username} onChange={(event) => setUsername(event.target.value)} /><input aria-label="Họ tên" placeholder="Họ tên" value={name} onChange={(event) => setName(event.target.value)} /><input aria-label="Email tùy chọn" type="email" placeholder="Email tùy chọn" value={email} onChange={(event) => setEmail(event.target.value)} /><input aria-label="Mật khẩu tạm thời" type="password" placeholder="Mật khẩu tạm thời (12+ ký tự)" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} /><button className="primary-button" onClick={addUser}>+ Tạo tài khoản</button></span></div><div className="user-table"><div className="user-table-head"><span>Người dùng</span><span>Vai trò</span><span>Trạng thái</span></div>{(users ?? []).map((item) => <div className="user-row" key={item._id}><div><strong>{item.name}</strong><span>{item.username}{item.email ? ` · ${item.email}` : ''}</span></div><span className="role-tag">{item.role}</span><button className={item.status === 'active' ? 'live-tag' : 'pending-tag'} onClick={() => setDisabled({ id: item._id, disabled: item.status === 'active' })}>{item.status === 'active' ? 'Hoạt động · khóa' : item.status}</button></div>)}</div></section>;
+  const remove = useAction(anyApi.users.remove);
+  const resetPassword = useAction(anyApi.users.resetPassword);
+  const [form, setForm] = useState(emptyUserForm);
+  const [editing, setEditing] = useState(null);
+  const [resetting, setResetting] = useState(null);
+  const { pending, feedback, run } = useFeedback();
+
+  const departments = (data?.departments || []).filter((d) => d.active);
+  const groups = (data?.permissionGroups || []).filter((g) => g.active);
+  const positions = (data?.positions || []).filter((p) => p.active);
+  const users = data?.users || [];
+  const systemRoles = data?.systemRoles || [
+    { key: 'admin', name: 'Quản trị viên' },
+    { key: 'user', name: 'Người dùng' },
+  ];
+
+  const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  const payload = () => ({
+    name: form.name,
+    email: form.email,
+    role: form.role,
+    departmentId: form.departmentId || undefined,
+    permissionGroupId: form.permissionGroupId || undefined,
+    positionId: form.positionId || undefined,
+  });
+
+  const submitCreate = async (event) => {
+    event.preventDefault();
+    const ok = await run(
+      'create',
+      () => create({ ...payload(), temporaryPassword: form.temporaryPassword }),
+      'Đã tạo tài khoản. Chuyển mật khẩu tạm thời qua kênh nội bộ an toàn.',
+    );
+    if (ok) setForm(emptyUserForm());
+  };
+
+  const submitEdit = async (event) => {
+    event.preventDefault();
+    const ok = await run('update', () => update({ id: editing._id, ...payload() }), 'Đã cập nhật tài khoản.');
+    if (ok) {
+      setEditing(null);
+      setForm(emptyUserForm());
+    }
+  };
+
+  const startEdit = (item) => {
+    setEditing(item);
+    setResetting(null);
+    setForm({
+      name: item.name || '',
+      email: item.email || '',
+      role: item.role === 'admin' ? 'admin' : 'user',
+      departmentId: item.departmentId || '',
+      permissionGroupId: item.permissionGroupId || '',
+      positionId: item.positionId || '',
+      temporaryPassword: '',
+    });
+  };
+
+  const confirmDelete = (item) => {
+    if (window.confirm(`Xóa tài khoản ${item.email}? Thao tác này không thể hoàn tác.`)) {
+      void run(`delete-${item._id}`, () => remove({ id: item._id }), 'Đã xóa tài khoản.');
+    }
+  };
+
+  const submitReset = async (event) => {
+    event.preventDefault();
+    const ok = await run(
+      `reset-${resetting._id}`,
+      () => resetPassword({ id: resetting._id, temporaryPassword: form.temporaryPassword }),
+      'Đã đặt mật khẩu tạm thời, thu hồi phiên và yêu cầu đổi mật khẩu khi đăng nhập.',
+    );
+    if (ok) {
+      setResetting(null);
+      setForm(emptyUserForm());
+    }
+  };
+
+  if (data === undefined) return <LoadingView label="Đang tải danh sách người dùng…" />;
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Quản trị người dùng</span>
+          <h2>Quản lý người dùng</h2>
+          <p>
+            Vai trò chỉ gồm Quản trị viên (mọi quyền) và Người dùng (theo nhóm quyền). Quên mật khẩu: liên hệ Admin để khôi phục — không có tự phục hồi.
+          </p>
+        </div>
+      </div>
+      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
+        {feedback.text}
+      </div>
+      <form className="admin-form" onSubmit={editing ? submitEdit : submitCreate}>
+        <div className="form-heading">
+          <strong>{editing ? `Chỉnh sửa: ${editing.email}` : 'Tạo tài khoản'}</strong>
+          {editing && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setEditing(null);
+                setForm(emptyUserForm());
+              }}
+            >
+              Hủy chỉnh sửa
+            </button>
+          )}
+        </div>
+        <label>
+          Họ tên
+          <input required maxLength="120" value={form.name} onChange={(e) => setField('name', e.target.value)} />
+        </label>
+        <label>
+          Email (đăng nhập)
+          <input required type="email" autoComplete="off" value={form.email} onChange={(e) => setField('email', e.target.value)} disabled={Boolean(editing)} />
+          <small>{editing ? 'Email đăng nhập không đổi qua form này.' : 'Email được chuẩn hóa (trim + lowercase) và phải duy nhất.'}</small>
+        </label>
+        <label>
+          Vai trò
+          <select value={form.role} onChange={(e) => setField('role', e.target.value)}>
+            {systemRoles.map((role) => (
+              <option key={role.key} value={role.key}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+          <small>Quản trị viên có mọi quyền. Người dùng phụ thuộc nhóm quyền.</small>
+        </label>
+        <label>
+          Phòng ban
+          <select value={form.departmentId} onChange={(e) => setField('departmentId', e.target.value)}>
+            <option value="">Chưa gán</option>
+            {departments.map((d) => (
+              <option key={d._id} value={d._id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Chức vụ
+          <select value={form.positionId} onChange={(e) => setField('positionId', e.target.value)}>
+            <option value="">Chưa gán</option>
+            {positions.map((p) => (
+              <option key={p._id} value={p._id}>
+                {p.name} ({p.level}★)
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Nhóm quyền
+          <select value={form.permissionGroupId} onChange={(e) => setField('permissionGroupId', e.target.value)}>
+            <option value="">Chưa gán</option>
+            {groups.map((g) => (
+              <option key={g._id} value={g._id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <small>Chỉ áp dụng cho Người dùng. Quản trị viên bỏ qua nhóm quyền.</small>
+        </label>
+        {!editing && (
+          <label>
+            Mật khẩu tạm thời
+            <input required minLength="12" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
+            <small>Ít nhất 12 ký tự. Không gửi qua email hoặc chat công khai.</small>
+          </label>
+        )}
+        <button className="primary-button" disabled={Boolean(pending)}>
+          {pending === 'create' ? 'Đang tạo…' : pending === 'update' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : '+ Tạo tài khoản'}
+        </button>
+      </form>
+      {resetting && (
+        <form className="admin-form compact-form" onSubmit={submitReset}>
+          <div className="form-heading">
+            <strong>Đặt lại mật khẩu: {resetting.email}</strong>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setResetting(null);
+                setForm(emptyUserForm());
+              }}
+            >
+              Hủy
+            </button>
+          </div>
+          <label>
+            Mật khẩu tạm thời mới
+            <input required minLength="12" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
+          </label>
+          <button className="primary-button" disabled={Boolean(pending)}>
+            {pending ? 'Đang đặt lại…' : 'Đặt lại mật khẩu'}
+          </button>
+        </form>
+      )}
+      <div className="user-table wide-table" aria-label="Danh sách người dùng">
+        <div className="user-table-head user-table-head-5">
+          <span>Người dùng</span>
+          <span>Vai trò</span>
+          <span>PB / Chức vụ / Nhóm quyền</span>
+          <span>Trạng thái</span>
+          <span>Thao tác</span>
+        </div>
+        {users.map((item) => (
+          <div className="user-row user-row-5" key={item._id}>
+            <div>
+              <strong>{item.name}</strong>
+              <span>{item.email}</span>
+            </div>
+            <div>
+              <span className="role-tag">{ROLE_LABELS[item.role] || item.role}</span>
+            </div>
+            <div className="meta-stack">
+              <span>{departments.find((d) => d._id === item.departmentId)?.name || 'Chưa gán PB'}</span>
+              <span>{positions.find((p) => p._id === item.positionId)?.name || 'Chưa gán chức vụ'}</span>
+              <span>{groups.find((g) => g._id === item.permissionGroupId)?.name || 'Chưa gán nhóm quyền'}</span>
+            </div>
+            <span className={item.status === 'active' ? 'live-tag' : 'pending-tag'}>
+              {item.status === 'active' ? (item.mustChangePassword ? 'Cần đổi MK' : 'Hoạt động') : item.status === 'disabled' ? 'Đã khóa' : item.status}
+            </span>
+            <div className="row-actions">
+              <button type="button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>
+                Sửa
+              </button>
+              <button type="button" onClick={() => setResetting(item)} disabled={Boolean(pending) || !item.email}>
+                Đặt lại MK
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  run(
+                    `status-${item._id}`,
+                    () => setDisabled({ id: item._id, disabled: item.status === 'active' }),
+                    item.status === 'active' ? 'Đã khóa tài khoản.' : 'Đã mở lại tài khoản.',
+                  )
+                }
+                disabled={Boolean(pending)}
+              >
+                {item.status === 'active' ? 'Khóa' : 'Mở khóa'}
+              </button>
+              <button type="button" className="danger-button" onClick={() => confirmDelete(item)} disabled={Boolean(pending)}>
+                Xóa
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
-function MustChangePasswordView() { return <section className="placeholder-view"><span className="placeholder-icon">!</span><span className="status-pill blue">Bảo mật tài khoản</span><h2>Cần đổi mật khẩu</h2><p>Quản trị viên đã yêu cầu bạn đổi mật khẩu. Hãy dùng luồng đổi mật khẩu của Clerk từ menu tài khoản trước khi tiếp tục.</p><div className="placeholder-grid"><span>Mở menu tài khoản ở góc phải</span><span>Chọn đổi mật khẩu</span><span>Đăng nhập lại nếu được yêu cầu</span></div></section>; }
+function AssignUserPanel({ users, filterId, idField, onAssign, onUnassign, pending, label }) {
+  const [userId, setUserId] = useState('');
+  const members = users.filter((u) => u[idField] === filterId);
+  const candidates = users.filter((u) => u.status === 'active' && u[idField] !== filterId);
+  return (
+    <div className="assign-panel">
+      <div className="assign-row">
+        <select value={userId} onChange={(e) => setUserId(e.target.value)}>
+          <option value="">Chọn người dùng…</option>
+          {candidates.map((u) => (
+            <option key={u._id} value={u._id}>
+              {u.name || u.email} ({u.email})
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="primary-button small-btn"
+          disabled={!userId || Boolean(pending)}
+          onClick={async () => {
+            if (!userId) return;
+            await onAssign(userId);
+            setUserId('');
+          }}
+        >
+          + Thêm user vào {label}
+        </button>
+      </div>
+      {members.length === 0 ? (
+        <p className="muted">Chưa có user trong mục này.</p>
+      ) : (
+        <ul className="member-list">
+          {members.map((u) => (
+            <li key={u._id}>
+              <span>
+                <strong>{u.name || '—'}</strong> · {u.email}
+              </span>
+              <button type="button" className="text-button" disabled={Boolean(pending)} onClick={() => onUnassign(u._id)}>
+                Gỡ
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
-function PlaceholderView({ title, role }) {
-  return <section className="placeholder-view"><span className="placeholder-icon">⌁</span><span className="status-pill blue">Admin scaffold</span><h2>{title}</h2><p>Không gian <b>{title}</b> đã có trong điều hướng role-based. Nội dung nghiệp vụ sẽ được bổ sung sau khi chốt schema và quyền backend.</p><div className="placeholder-grid"><span>Frontend route: sẵn sàng</span><span>Backend data: chưa nối</span><span>Role hiện tại: {role}</span></div></section>;
+function DepartmentManagement() {
+  const data = useQuery(anyApi.departments.list);
+  const create = useMutation(anyApi.departments.create);
+  const update = useMutation(anyApi.departments.update);
+  const remove = useMutation(anyApi.departments.remove);
+  const assignUser = useMutation(anyApi.departments.assignUser);
+  const unassignUser = useMutation(anyApi.departments.unassignUser);
+  const [form, setForm] = useState({ name: '', code: '' });
+  const [editing, setEditing] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const { pending, feedback, run } = useFeedback();
+
+  const departments = (data?.departments || []).filter((d) => d.active);
+  const users = data?.users || [];
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (editing) {
+      const ok = await run('save', () => update({ id: editing._id, name: form.name, code: form.code }), 'Đã cập nhật phòng ban.');
+      if (ok) {
+        setEditing(null);
+        setForm({ name: '', code: '' });
+      }
+    } else {
+      const ok = await run('save', () => create({ name: form.name, code: form.code }), 'Đã thêm phòng ban. Có thể thêm user bên dưới.');
+      if (ok) setForm({ name: '', code: '' });
+    }
+  };
+
+  if (data === undefined) return <LoadingView label="Đang tải phòng ban…" />;
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Phòng ban</span>
+          <h2>Quản lý phòng ban</h2>
+          <p>Thêm, sửa, xóa phòng ban. Sau khi tạo có thể gán user vào phòng ban.</p>
+        </div>
+      </div>
+      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
+        {feedback.text}
+      </div>
+      <form className="admin-form" onSubmit={submit}>
+        <div className="form-heading">
+          <strong>{editing ? `Sửa: ${editing.name}` : 'Thêm phòng ban'}</strong>
+          {editing && (
+            <button type="button" className="text-button" onClick={() => { setEditing(null); setForm({ name: '', code: '' }); }}>
+              Hủy
+            </button>
+          )}
+        </div>
+        <label>
+          Tên phòng ban
+          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </label>
+        <label>
+          Mã
+          <input required maxLength="32" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+        </label>
+        <button className="primary-button" disabled={Boolean(pending)}>
+          {editing ? 'Lưu' : '+ Thêm phòng ban'}
+        </button>
+      </form>
+      <div className="card-list">
+        {departments.map((item) => (
+          <article className="mgmt-card" key={item._id}>
+            <div className="mgmt-card-head">
+              <div>
+                <strong>{item.name}</strong>
+                <span className="code-tag">{item.code}</span>
+              </div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(item);
+                    setForm({ name: item.name, code: item.code });
+                  }}
+                  disabled={Boolean(pending)}
+                >
+                  Sửa
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => {
+                    if (window.confirm(`Xóa phòng ban ${item.name}? User trong phòng ban sẽ được gỡ gán.`)) {
+                      void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa phòng ban.');
+                    }
+                  }}
+                  disabled={Boolean(pending)}
+                >
+                  Xóa
+                </button>
+                <button type="button" onClick={() => setExpanded(expanded === item._id ? null : item._id)}>
+                  {expanded === item._id ? 'Ẩn user' : 'Thêm user'}
+                </button>
+              </div>
+            </div>
+            {expanded === item._id && (
+              <AssignUserPanel
+                users={users}
+                filterId={item._id}
+                idField="departmentId"
+                label="phòng ban"
+                pending={pending}
+                onAssign={(userId) => run('assign', () => assignUser({ departmentId: item._id, userId }), 'Đã gán user vào phòng ban.')}
+                onUnassign={(userId) => run('unassign', () => unassignUser({ userId }), 'Đã gỡ user khỏi phòng ban.')}
+              />
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function defaultAccessForm() {
+  return Object.fromEntries(SYSTEM_MENUS.map(([id]) => [id, 'hidden']));
+}
+
+function PermissionGroupManagement() {
+  const data = useQuery(anyApi.permissionGroups.list);
+  const create = useMutation(anyApi.permissionGroups.create);
+  const update = useMutation(anyApi.permissionGroups.update);
+  const remove = useMutation(anyApi.permissionGroups.remove);
+  const assignUser = useMutation(anyApi.permissionGroups.assignUser);
+  const unassignUser = useMutation(anyApi.permissionGroups.unassignUser);
+  const [form, setForm] = useState({ name: '', description: '', access: defaultAccessForm() });
+  const [editing, setEditing] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const { pending, feedback, run } = useFeedback();
+
+  const groups = (data?.groups || []).filter((g) => g.active);
+  const menus = data?.menus || SYSTEM_MENUS.map(([id, label]) => ({ id, label }));
+  const users = data?.users || [];
+
+  const toMenuAccess = (accessMap) => menus.map((m) => ({ menu: m.id, access: accessMap[m.id] || 'hidden' }));
+
+  const startEdit = (item) => {
+    setEditing(item);
+    const access = defaultAccessForm();
+    for (const entry of item.menuAccess || []) access[entry.menu] = entry.access;
+    setForm({ name: item.name, description: item.description || '', access });
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const menuAccess = toMenuAccess(form.access);
+    if (editing) {
+      const ok = await run(
+        'save',
+        () => update({ id: editing._id, name: form.name, description: form.description || undefined, menuAccess }),
+        'Đã cập nhật nhóm quyền.',
+      );
+      if (ok) {
+        setEditing(null);
+        setForm({ name: '', description: '', access: defaultAccessForm() });
+      }
+    } else {
+      const ok = await run(
+        'save',
+        () => create({ name: form.name, description: form.description || undefined, menuAccess }),
+        'Đã tạo nhóm quyền. Có thể thêm user bên dưới.',
+      );
+      if (ok) setForm({ name: '', description: '', access: defaultAccessForm() });
+    }
+  };
+
+  if (data === undefined) return <LoadingView label="Đang tải nhóm quyền…" />;
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Nhóm quyền</span>
+          <h2>Quản lý nhóm quyền</h2>
+          <p>
+            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn (không thấy menu), Xem (chỉ xem), Sửa (thêm/sửa nội dung).
+          </p>
+        </div>
+      </div>
+      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
+        {feedback.text}
+      </div>
+      <form className="admin-form wide-form" onSubmit={submit}>
+        <div className="form-heading">
+          <strong>{editing ? `Sửa: ${editing.name}` : 'Thêm nhóm quyền'}</strong>
+          {editing && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setEditing(null);
+                setForm({ name: '', description: '', access: defaultAccessForm() });
+              }}
+            >
+              Hủy
+            </button>
+          )}
+        </div>
+        <label>
+          Tên nhóm quyền
+          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </label>
+        <label>
+          Mô tả (tùy chọn)
+          <input maxLength="500" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+        </label>
+        <div className="perm-matrix" role="group" aria-label="Quyền menu">
+          <div className="perm-matrix-head">
+            <span>Menu</span>
+            <span>Ẩn</span>
+            <span>Xem</span>
+            <span>Sửa</span>
+          </div>
+          {menus.map((menu) => (
+            <div className="perm-matrix-row" key={menu.id}>
+              <span>{menu.label}</span>
+              {['hidden', 'view', 'edit'].map((level) => (
+                <label key={level} className="radio-cell">
+                  <input
+                    type="radio"
+                    name={`access-${menu.id}`}
+                    checked={(form.access[menu.id] || 'hidden') === level}
+                    onChange={() => setForm((f) => ({ ...f, access: { ...f.access, [menu.id]: level } }))}
+                  />
+                  <span className="sr-only">{ACCESS_LABELS[level]}</span>
+                </label>
+              ))}
+            </div>
+          ))}
+        </div>
+        <button className="primary-button" disabled={Boolean(pending)}>
+          {editing ? 'Lưu nhóm quyền' : '+ Thêm nhóm quyền'}
+        </button>
+      </form>
+      <div className="card-list">
+        {groups.map((item) => {
+          const accessMap = Object.fromEntries((item.menuAccess || []).map((e) => [e.menu, e.access]));
+          return (
+            <article className="mgmt-card" key={item._id}>
+              <div className="mgmt-card-head">
+                <div>
+                  <strong>{item.name}</strong>
+                  {item.description && <span className="muted-block">{item.description}</span>}
+                </div>
+                <div className="row-actions">
+                  <button type="button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>
+                    Sửa
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    onClick={() => {
+                      if (window.confirm(`Xóa nhóm quyền ${item.name}? User trong nhóm sẽ được gỡ gán.`)) {
+                        void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa nhóm quyền.');
+                      }
+                    }}
+                    disabled={Boolean(pending)}
+                  >
+                    Xóa
+                  </button>
+                  <button type="button" onClick={() => setExpanded(expanded === item._id ? null : item._id)}>
+                    {expanded === item._id ? 'Ẩn user' : 'Thêm user'}
+                  </button>
+                </div>
+              </div>
+              <div className="perm-summary">
+                {menus.map((menu) => (
+                  <span key={menu.id} className={`access-chip ${accessMap[menu.id] || 'hidden'}`}>
+                    {menu.label}: {ACCESS_LABELS[accessMap[menu.id] || 'hidden']}
+                  </span>
+                ))}
+              </div>
+              {expanded === item._id && (
+                <AssignUserPanel
+                  users={users}
+                  filterId={item._id}
+                  idField="permissionGroupId"
+                  label="nhóm quyền"
+                  pending={pending}
+                  onAssign={(userId) =>
+                    run('assign', () => assignUser({ permissionGroupId: item._id, userId }), 'Đã gán user vào nhóm quyền.')
+                  }
+                  onUnassign={(userId) => run('unassign', () => unassignUser({ userId }), 'Đã gỡ user khỏi nhóm quyền.')}
+                />
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function PositionManagement() {
+  const data = useQuery(anyApi.positions.list);
+  const create = useMutation(anyApi.positions.create);
+  const update = useMutation(anyApi.positions.update);
+  const remove = useMutation(anyApi.positions.remove);
+  const assignUser = useMutation(anyApi.positions.assignUser);
+  const unassignUser = useMutation(anyApi.positions.unassignUser);
+  const [form, setForm] = useState({ name: '', code: '', level: 3 });
+  const [editing, setEditing] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const { pending, feedback, run } = useFeedback();
+
+  const positions = (data?.positions || []).filter((p) => p.active);
+  const users = data?.users || [];
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const level = Number(form.level);
+    if (editing) {
+      const ok = await run(
+        'save',
+        () => update({ id: editing._id, name: form.name, code: form.code, level }),
+        'Đã cập nhật chức vụ.',
+      );
+      if (ok) {
+        setEditing(null);
+        setForm({ name: '', code: '', level: 3 });
+      }
+    } else {
+      const ok = await run('save', () => create({ name: form.name, code: form.code, level }), 'Đã tạo chức vụ. Có thể thêm user bên dưới.');
+      if (ok) setForm({ name: '', code: '', level: 3 });
+    }
+  };
+
+  if (data === undefined) return <LoadingView label="Đang tải chức vụ…" />;
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Chức vụ</span>
+          <h2>Quản lý chức vụ</h2>
+          <p>
+            Cấp bậc 1–5 sao quyết định quy trình duyệt: cấp cao hơn duyệt được cấp thấp hơn; có thể duyệt thay cấp thấp hơn (ghi log người duyệt và thời điểm).
+          </p>
+        </div>
+      </div>
+      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
+        {feedback.text}
+      </div>
+      <div className="notice approval-note">
+        <strong>Quy tắc duyệt</strong>
+        <span>
+          5★ duyệt 4–1 · 4★ duyệt 3–1 (không duyệt 5) · 1★ không duyệt ai. Nhiều cấp duyệt: cấp cao hơn được duyệt thay cấp thấp và ghi log.
+        </span>
+      </div>
+      <form className="admin-form" onSubmit={submit}>
+        <div className="form-heading">
+          <strong>{editing ? `Sửa: ${editing.name}` : 'Thêm chức vụ'}</strong>
+          {editing && (
+            <button type="button" className="text-button" onClick={() => { setEditing(null); setForm({ name: '', code: '', level: 3 }); }}>
+              Hủy
+            </button>
+          )}
+        </div>
+        <label>
+          Tên chức vụ
+          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </label>
+        <label>
+          Mã
+          <input required maxLength="32" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+        </label>
+        <label>
+          Cấp bậc (1–5 sao)
+          <select value={form.level} onChange={(e) => setForm((f) => ({ ...f, level: Number(e.target.value) }))}>
+            {[5, 4, 3, 2, 1].map((n) => (
+              <option key={n} value={n}>
+                {n} sao {n === 5 ? '(cao nhất)' : n === 1 ? '(thấp nhất)' : ''}
+              </option>
+            ))}
+          </select>
+          <StarRating level={form.level} />
+        </label>
+        <button className="primary-button" disabled={Boolean(pending)}>
+          {editing ? 'Lưu chức vụ' : '+ Thêm chức vụ'}
+        </button>
+      </form>
+      <div className="card-list">
+        {positions.map((item) => (
+          <article className="mgmt-card" key={item._id}>
+            <div className="mgmt-card-head">
+              <div>
+                <strong>{item.name}</strong>
+                <span className="code-tag">{item.code}</span>
+                <div className="star-row">
+                  <StarRating level={item.level} />
+                  <span className="muted">Cấp {item.level}/5</span>
+                </div>
+              </div>
+              <div className="row-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(item);
+                    setForm({ name: item.name, code: item.code, level: item.level });
+                  }}
+                  disabled={Boolean(pending)}
+                >
+                  Sửa
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => {
+                    if (window.confirm(`Xóa chức vụ ${item.name}? User mang chức vụ này sẽ được gỡ gán.`)) {
+                      void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa chức vụ.');
+                    }
+                  }}
+                  disabled={Boolean(pending)}
+                >
+                  Xóa
+                </button>
+                <button type="button" onClick={() => setExpanded(expanded === item._id ? null : item._id)}>
+                  {expanded === item._id ? 'Ẩn user' : 'Thêm user'}
+                </button>
+              </div>
+            </div>
+            {expanded === item._id && (
+              <AssignUserPanel
+                users={users}
+                filterId={item._id}
+                idField="positionId"
+                label="chức vụ"
+                pending={pending}
+                onAssign={(userId) => run('assign', () => assignUser({ positionId: item._id, userId }), 'Đã gán user vào chức vụ.')}
+                onUnassign={(userId) => run('unassign', () => unassignUser({ userId }), 'Đã gỡ user khỏi chức vụ.')}
+              />
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProfileView({ session }) {
+  const changeOwnPassword = useAction(anyApi.users.changeOwnPassword);
+  const { user, department, permissionGroup, position, isAdmin } = session;
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setFeedback('');
+    if (password.length < 12) return setFeedback('Mật khẩu mới phải có ít nhất 12 ký tự.');
+    if (password !== confirmation) return setFeedback('Xác nhận mật khẩu không khớp.');
+    setPending(true);
+    try {
+      await changeOwnPassword({ newPassword: password });
+      setFeedback('Đã đổi mật khẩu thành công.');
+      setPassword('');
+      setConfirmation('');
+    } catch (error) {
+      setFeedback(messageFor(error));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Hồ sơ</span>
+          <h2>Thông tin cá nhân</h2>
+          <p>Xem thông tin tài khoản và đổi mật khẩu. Nếu quên mật khẩu, liên hệ Quản trị viên để khôi phục.</p>
+        </div>
+      </div>
+      <div className="profile-grid">
+        <div className="profile-card">
+          <h3>Thông tin tài khoản</h3>
+          <dl className="profile-dl">
+            <div>
+              <dt>Họ tên</dt>
+              <dd>{user.name || '—'}</dd>
+            </div>
+            <div>
+              <dt>Email đăng nhập</dt>
+              <dd>{user.email || '—'}</dd>
+            </div>
+            <div>
+              <dt>Vai trò</dt>
+              <dd>{ROLE_LABELS[user.role] || user.role}</dd>
+            </div>
+            <div>
+              <dt>Phòng ban</dt>
+              <dd>{department?.name || 'Chưa gán'}</dd>
+            </div>
+            <div>
+              <dt>Chức vụ</dt>
+              <dd>
+                {position ? (
+                  <>
+                    {position.name} <StarRating level={position.level} />
+                  </>
+                ) : (
+                  'Chưa gán'
+                )}
+              </dd>
+            </div>
+            {!isAdmin && (
+              <div>
+                <dt>Nhóm quyền</dt>
+                <dd>{permissionGroup?.name || 'Chưa gán'}</dd>
+              </div>
+            )}
+          </dl>
+          <p className="muted">Quên mật khẩu? Liên hệ Admin để được đặt lại — không có tự phục hồi mật khẩu.</p>
+        </div>
+        <form className="password-form profile-password" onSubmit={submit}>
+          <h3>Đổi mật khẩu</h3>
+          <label>
+            Mật khẩu mới
+            <input required minLength="12" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <label>
+            Xác nhận mật khẩu
+            <input required minLength="12" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
+          </label>
+          <p className="form-message" role="status" aria-live="polite">
+            {feedback}
+          </p>
+          <button className="primary-button" disabled={pending}>
+            {pending ? 'Đang cập nhật…' : 'Đổi mật khẩu'}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function MustChangePasswordView() {
+  const changeOwnPassword = useAction(anyApi.users.changeOwnPassword);
+  const { signOut } = useAuthActions();
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const submit = async (event) => {
+    event.preventDefault();
+    setFeedback('');
+    if (password.length < 12) return setFeedback('Mật khẩu mới phải có ít nhất 12 ký tự.');
+    if (password !== confirmation) return setFeedback('Xác nhận mật khẩu không khớp.');
+    setPending(true);
+    try {
+      await changeOwnPassword({ newPassword: password });
+      setFeedback('Đã đổi mật khẩu. Đang mở không gian làm việc…');
+      setPassword('');
+      setConfirmation('');
+    } catch (error) {
+      setFeedback(messageFor(error));
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <section className="placeholder-view">
+      <span className="placeholder-icon">!</span>
+      <span className="status-pill blue">Bảo mật tài khoản</span>
+      <h2>Đổi mật khẩu trước khi tiếp tục</h2>
+      <p>Đây là lần đăng nhập đầu tiên hoặc mật khẩu vừa được quản trị viên đặt lại. Đổi mật khẩu của chính bạn để vào ứng dụng.</p>
+      <form className="password-form" onSubmit={submit}>
+        <label>
+          Mật khẩu mới
+          <input required minLength="12" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </label>
+        <label>
+          Xác nhận mật khẩu
+          <input required minLength="12" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
+        </label>
+        <p className="form-message" role="status" aria-live="polite">
+          {feedback}
+        </p>
+        <button className="primary-button" disabled={pending}>
+          {pending ? 'Đang cập nhật…' : 'Đổi mật khẩu và tiếp tục'}
+        </button>
+        <button type="button" className="text-button" onClick={() => void signOut()} disabled={pending}>
+          Đăng xuất
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function PlaceholderView({ title, access, isAdmin }) {
+  return (
+    <section className="placeholder-view">
+      <span className="placeholder-icon">⌁</span>
+      <span className="status-pill blue">{isAdmin ? 'Quản trị' : access === 'edit' ? 'Được sửa' : 'Chỉ xem'}</span>
+      <h2>{title}</h2>
+      <p>
+        Nội dung nghiệp vụ đang được hoàn thiện.
+        {!isAdmin && access === 'view' ? ' Bạn chỉ có quyền xem mục này.' : ''}
+        {!isAdmin && access === 'edit' ? ' Bạn có quyền thêm/sửa nội dung khi module sẵn sàng.' : ''}
+      </p>
+    </section>
+  );
+}
+
+function AccessDeniedView({ message }) {
+  const { signOut } = useAuthActions();
+  return (
+    <main className="auth-page">
+      <div className="auth-card">
+        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <h1>Chưa thể truy cập</h1>
+        <p>{message}</p>
+        <button type="button" className="text-button" onClick={() => void signOut()}>
+          Đăng xuất
+        </button>
+      </div>
+    </main>
+  );
 }
 
 function SignedOutView() {
-  return <main className="auth-page"><div className="auth-card"><img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" /><p className="eyebrow">Lê Văn Tám CRM</p><h1>Đăng nhập không gian nội bộ</h1><p>Đăng nhập bằng tài khoản trường để mở dashboard và các chức năng theo vai trò.</p><SignIn routing="hash" fallbackRedirectUrl="/" /></div></main>;
+  const { signIn } = useAuthActions();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setPending(true);
+    try {
+      await signIn('password', { email: email.trim().toLowerCase(), password, flow: 'signIn' });
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <main className="auth-page">
+      <div className="auth-card">
+        <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
+        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <h1>Đăng nhập không gian nội bộ</h1>
+        <p>Đăng nhập bằng email và mật khẩu do nhà trường cấp. Không có đăng ký công khai. Quên mật khẩu: liên hệ Quản trị viên.</p>
+        <form className="password-form sign-in-form" onSubmit={submit}>
+          <label>
+            Email
+            <input required type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label>
+            Mật khẩu
+            <input required type="password" autoComplete="current-password" minLength="12" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <p className="form-message" role="status" aria-live="polite">
+            {error}
+          </p>
+          <button className="primary-button" disabled={pending}>
+            {pending ? 'Đang đăng nhập…' : 'Đăng nhập'}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
 }
 
 function MissingKeyView() {
-  return <main className="auth-page"><div className="auth-card setup-card"><img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" /><p className="eyebrow">Lê Văn Tám CRM</p><h1>Đã sẵn sàng kết nối Clerk</h1><p>Frontend auth scaffold đã được cài. Thêm <code>VITE_CLERK_PUBLISHABLE_KEY</code> vào file <code>.env.local</code> (không commit file này) để bật màn hình đăng nhập.</p><div className="setup-list"><span>✓ Vite + React shell</span><span>✓ Signed-in / signed-out boundaries</span><span>✓ Role đọc từ <code>publicMetadata.role</code></span></div></div></main>;
+  return (
+    <main className="auth-page">
+      <div className="auth-card setup-card">
+        <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
+        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <h1>Cần cấu hình hệ thống</h1>
+        <p>Hệ thống chưa được cấu hình để xác thực người dùng. Vui lòng liên hệ quản trị viên để được hỗ trợ.</p>
+      </div>
+    </main>
+  );
 }
 
 function Root() {
-  if (!clerkKey || clerkKey.includes('replace_me')) return <MissingKeyView />;
   if (!convex) return <MissingKeyView />;
-  return <ClerkProvider publishableKey={clerkKey}><ConvexProviderWithClerk client={convex} useAuth={useAuth}><AuthBoundary /></ConvexProviderWithClerk></ClerkProvider>;
+  return (
+    <ConvexAuthProvider client={convex}>
+      <AuthLoading>
+        <LoadingView label="Đang kiểm tra phiên đăng nhập…" />
+      </AuthLoading>
+      <Unauthenticated>
+        <SignedOutView />
+      </Unauthenticated>
+      <Authenticated>
+        <AuthenticatedApp />
+      </Authenticated>
+    </ConvexAuthProvider>
+  );
 }
 
-function AuthBoundary() {
-  const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) return <main className="auth-page"><div className="auth-card"><p className="eyebrow">Lê Văn Tám CRM</p><h1>Đang kiểm tra phiên đăng nhập…</h1></div></main>;
-  return isSignedIn ? <AuthenticatedApp /> : <SignedOutView />;
+function LoadingView({ label }) {
+  return (
+    <main className="auth-page">
+      <div className="auth-card">
+        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <h1>{label}</h1>
+      </div>
+    </main>
+  );
 }
-
-function LoadingView({ label }) { return <main className="auth-page"><div className="auth-card"><p className="eyebrow">Lê Văn Tám CRM</p><h1>{label}</h1></div></main>; }
 
 createRoot(document.getElementById('root')).render(<Root />);

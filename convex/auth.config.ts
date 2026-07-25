@@ -1,12 +1,10 @@
-import { AuthConfig } from "convex/server";
-
-// Configure CLERK_JWT_ISSUER_DOMAIN in the Convex deployment environment.
-// It is the Clerk Frontend API URL, not the publishable or secret key.
+// Convex Auth issues JWTs from this deployment's site URL (CONVEX_SITE_URL).
+// JWT_PRIVATE_KEY and JWKS must be configured on the deployment environment.
 export default {
   providers: [
     {
-      domain: process.env.CLERK_JWT_ISSUER_DOMAIN!,
+      domain: process.env.CONVEX_SITE_URL,
       applicationID: "convex",
     },
   ],
-} satisfies AuthConfig;
+};

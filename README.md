@@ -1,21 +1,102 @@
 # LVT CRM
 
-CRM nội bộ cho Trường THCS Lê Văn Tám. Repository này giữ nguyên prototype trong `public/demo/` và bổ sung lớp xác thực Clerk + dữ liệu/ủy quyền Convex cho hồ sơ người dùng và quản trị hệ thống.
+CRM nội bộ cho Trường THCS Lê Văn Tám. Stack: **Vite + React 19**, backend **Convex self-hosted** (local Docker) với **Convex Auth (Password provider)** — đăng nhập email + mật khẩu, hồ sơ do admin cấp.
 
-## Trạng thái triển khai
+**URL vận hành hiện tại (dev/staging qua tunnel):** https://lvt.vscgroup.io.vn  
+Frontend: Vite dev (`--host 0.0.0.0`). Backend: Convex local `http://127.0.0.1:3210` (proxy qua domain khi hostname = `lvt.vscgroup.io.vn`).
 
-- **Frontend:** Vite + React 19, Clerk React, Convex React provider.
-- **Backend:** Convex schema/functions cho users, roles, departments và audit logs.
-- **Authorization:** mọi query/mutation quản trị đều kiểm tra identity trong Convex và role `admin` trong bảng `users`; frontend chỉ dùng để hiển thị, không phải ranh giới bảo mật.
-- **Clerk:** tạo user bằng username + mật khẩu tạm thời, cập nhật user, ban/unban và reset mật khẩu được gọi server-side từ Convex action. Không self-signup, không email reset; secret key không đi qua browser.
-- **Production:** không tự triển khai từ repository này. Cần hoàn tất checklist domain, Clerk production instance, Convex production deployment và review quyền trước khi deploy.
+## Phạm vi hiện tại
+
+- Xác thực **email + password only**. Không public signup, không email verification, không tự khôi phục mật khẩu (quên MK → liên hệ Admin).
+- **Hai vai trò hệ thống** trên `users.role`:
+  - `admin` — **Quản trị viên**: mọi quyền cao nhất; thấy toàn bộ menu Quản trị hệ thống + menu Cài đặt quản lý.
+  - `user` — **Người dùng**: menu theo **nhóm quyền** do admin gán; Cài đặt chỉ còn **Thông tin cá nhân** (hồ sơ + đổi mật khẩu).
+- Admin quản lý: người dùng, phòng ban, nhóm quyền, chức vụ (CRUD + gán user).
+- Mật khẩu băm bởi Convex Auth (Scrypt); plaintext không lưu / không ghi audit. Tài khoản tạo/reset có `mustChangePassword=true`.
+- Module nghiệp vụ (Báo cáo, Công tác, …) vẫn placeholder; quyền menu đã được mô hình hóa.
+
+## Mô hình phân quyền
+
+### Vai trò hệ thống (`users.role`)
+
+| Key | Tên UI | Quyền |
+|-----|--------|--------|
+| `admin` | Quản trị viên | Full access; bỏ qua nhóm quyền khi resolve menu |
+| `user` | Người dùng | Menu = `permissionGroups.menuAccess` (mặc định ẩn nếu chưa gán nhóm) |
+
+Chỉ admin mới thấy các mục Cài đặt quản lý. User thường chỉ thấy **Thông tin cá nhân**.
+
+### Nhóm quyền (`permissionGroups`)
+
+Mỗi nhóm quy định quyền trên 5 menu **Quản trị hệ thống**:
+
+| Menu id | Nhãn |
+|---------|------|
+| `reports` | Báo cáo |
+| `duties` | Công tác |
+| `work` | Công việc |
+| `homeroom` | Lớp chủ nhiệm |
+| `people-review` | Đánh giá nhân sự |
+
+Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (chỉ xem) · **`edit`** (thêm/sửa nội dung khi module sẵn sàng).
+
+Gán user: form Quản lý người dùng **hoặc** nút **Thêm user** trong Quản lý nhóm quyền.
+
+### Phòng ban (`departments`)
+
+CRUD phòng ban (tên + mã). Gán user khi tạo user hoặc từ màn phòng ban. Xóa = soft-delete (`active=false`) + gỡ gán user.
+
+### Chức vụ (`positions`)
+
+CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho **quy trình duyệt** (workflow sau):
+
+| Cấp | Ý nghĩa duyệt |
+|-----|----------------|
+| 5★ | Duyệt được cấp 4, 3, 2, 1 |
+| 4★ | Duyệt được 3, 2, 1 (không duyệt 5) |
+| 3★ / 2★ | Duyệt cấp thấp hơn |
+| 1★ | Không duyệt được ai |
+
+- Cùng cấp không duyệt nhau; chỉ **cấp cao hơn** duyệt cấp thấp hơn (`canApproveLevel` trong `convex/lib.ts`).
+- Task nhiều cấp duyệt: cấp cao hơn được **duyệt thay** cấp thấp; mỗi lần duyệt ghi `approvalLogs` (actor, level, task, on-behalf, thời điểm).
+- Gán user: form user hoặc nút **Thêm user** trong Quản lý chức vụ.
+
+### Menu Cài đặt (chỉ admin)
+
+1. Quản lý người dùng  
+2. Quản lý phòng ban  
+3. Quản lý nhóm quyền  
+4. Quản lý chức vụ  
+
+User thường: Cài đặt → **Thông tin cá nhân** (tên, email, vai trò, PB, chức vụ, nhóm quyền, đổi MK).
+
+## Schema chính
+
+| Bảng | Mục đích |
+|------|----------|
+| `users` (+ authTables) | Hồ sơ, `role`, `departmentId`, `permissionGroupId`, `positionId`, status, `mustChangePassword` |
+| `departments` | Phòng ban (`code` unique) |
+| `permissionGroups` | Nhóm quyền + `menuAccess[]` |
+| `positions` | Chức vụ + `level` 1–5 |
+| `roles` | Legacy seed admin permissions (tùy chọn; gate admin thực tế = `role === "admin"`) |
+| `auditLogs` | Audit thao tác admin |
+| `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
+
+Backend modules: `convex/users.ts`, `departments.ts`, `permissionGroups.ts`, `positions.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+
+## Convex Auth beta
+
+`@convex-dev/auth` đang **beta**:
+
+- JWT access token vẫn hợp lệ đến khi hết hạn (~1 giờ) sau khi session bị revoke; refresh/session vô hiệu theo `invalidateSessions`.
+- Không có managed IdP; backup volume Docker và first-admin là trách nhiệm vận hành.
+- Trước production cứng: security review + kế hoạch rollback/migration.
 
 ## Yêu cầu
 
 - Node.js 20+ và npm.
-- Một Clerk application (development hoặc production).
-- Một Convex deployment.
-- Người triển khai có quyền cấu hình Clerk/Convex. Không cần và không được commit secret.
+- Docker/Colima cho Convex local.
+- Admin key local. **Không** commit secret, password, token, `.env` thật.
 
 ## Clone và chạy local
 
@@ -26,150 +107,176 @@ npm install
 cp .env.example .env.local
 ```
 
-Điền **chỉ** hai biến public vào `.env.local`:
+### Convex local (Docker/Colima)
+
+```bash
+colima start --cpu 4 --memory 8 --disk 60 --vm-type=vz --mount-type=virtiofs
+docker compose -f infra/convex-local/docker-compose.yml up -d
+```
+
+| Service | URL |
+|--------|-----|
+| Backend/API | `http://127.0.0.1:3210` |
+| Site proxy (auth HTTP) | `http://127.0.0.1:3211` |
+| Dashboard | `http://127.0.0.1:6791` |
+
+`.env.local` (gitignored):
 
 ```dotenv
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
-VITE_CONVEX_URL=https://<deployment>.convex.cloud
+VITE_CONVEX_URL=http://127.0.0.1:3210
+CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210
+CONVEX_SELF_HOSTED_ADMIN_KEY=<admin key from local deployment>
+# optional site origin for auth routes
+# VITE_CONVEX_SITE_URL=http://127.0.0.1:3211
 ```
 
-`.env.local` bị ignore. Không đặt `CLERK_SECRET_KEY` trong file Vite hoặc bất kỳ file nào được bundle.
+**Lưu ý shell:** admin key thường chứa ký tự `|`. Không `source .env.local` trực tiếp trong bash (pipe bị hiểu nhầm). Dùng export an toàn hoặc load qua script/Python.
+
+Không đưa admin key vào source, bundle Vite, hoặc browser.
+
+### Convex Auth keys (deployment env)
+
+Cần `JWT_PRIVATE_KEY` và `JWKS` trên **deployment** (không phải Vite):
 
 ```bash
+node --input-type=module -e '
+import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
+const keys = await generateKeyPair("RS256", { extractable: true });
+const privateKey = await exportPKCS8(keys.privateKey);
+const publicKey = await exportJWK(keys.publicKey);
+const jwks = JSON.stringify({ keys: [{ use: "sig", ...publicKey }] });
+process.stdout.write(`JWT_PRIVATE_KEY="${privateKey.trimEnd().replace(/\n/g, " ")}"\n`);
+process.stdout.write(`JWKS=${jwks}\n`);
+'
+```
+
+```bash
+npx convex env set JWT_PRIVATE_KEY "..."
+npx convex env set JWKS "..."
+npx convex env set SITE_URL http://localhost:5173
+# production tunnel ví dụ: SITE_URL=https://lvt.vscgroup.io.vn
+```
+
+`auth.config.ts` dùng `process.env.CONVEX_SITE_URL` (local proxy `http://127.0.0.1:3211`).
+
+### Đẩy functions + seed + frontend
+
+```bash
+# Push functions (self-hosted). -y bỏ confirm.
+npx convex deploy -y
+# hoặc: npx convex dev
+
+npx convex run seed:seed
+
 npm run dev
+# production-like build:
+npm run build
 ```
 
-Nếu thiếu key, ứng dụng hiện trang hướng dẫn cấu hình thay vì crash. Nếu đã đăng nhập nhưng chưa có hồ sơ Convex, `users.storeCurrent` tạo hồ sơ mặc định `user`; không tự cấp quyền admin.
+**Seed tạo:**
 
-## Cấu hình Clerk + Convex
+- Phòng ban mẫu: BGH, Tổ Toán, Tổ Ngữ văn, Hành chính  
+- Nhóm quyền: **Cơ bản**, **Toàn quyền nghiệp vụ**  
+- Chức vụ: Hiệu trưởng 5★ … Nhân viên 1★  
+- Đồng bộ legacy `roles` key `admin` (permissions audit); deactivate key `manager` / `user` cũ  
 
-1. Trong Clerk Dashboard tạo application và bật phương thức đăng nhập phù hợp.
-2. Bật tích hợp Convex theo hướng dẫn chính thức của Convex.
-3. Lấy Clerk **Frontend API URL** (issuer domain), ví dụ `https://verb-noun-00.clerk.accounts.dev`.
-4. Cấu hình biến `CLERK_JWT_ISSUER_DOMAIN` trên Convex deployment. `convex/auth.config.ts` dùng issuer này với `applicationID: "convex"`.
-5. Cấu hình `CLERK_SECRET_KEY` **trên Convex Dashboard**, không đặt trong frontend. Đây là secret để action gọi Clerk Backend API.
-6. Trong Clerk, cấu hình redirect/origin cho URL local của Vite (thường `http://localhost:5173`).
+### First admin (operator-only)
 
-Các URL chính thức được dùng làm API boundary:
-
-- Convex + Clerk: <https://docs.convex.dev/auth/clerk>
-- Lưu user trong Convex: <https://docs.convex.dev/auth/database-auth>
-- Clerk create user: <https://clerk.com/docs/reference/backend-api/tag/Users#operation/CreateUser>
-- Clerk `banUser()` / `unbanUser()`: <https://clerk.com/docs/reference/backend/user/ban-user>
-- Clerk `updateUser()`: <https://clerk.com/docs/reference/backend/user/update-user>
-
-## Backend model và quyền
-
-`convex/schema.ts` định nghĩa:
-
-- `users`: `clerkUserId`, email, tên, role, phòng ban, `pending|active|disabled`, cờ `mustChangePassword`, timestamps.
-- `roles`: key và danh sách permission.
-- `departments`: mã, tên và trạng thái.
-- `auditLogs`: actor, action, target, details và thời điểm.
-
-`convex/lib.ts` cung cấp `identityOrThrow()` và `adminOrThrow()`. Các operation quản trị không được gọi trực tiếp từ browser nếu không qua kiểm tra này.
-
-`convex/users.ts` cung cấp:
-
-- `current`, `storeCurrent`: liên kết identity JWT `subject` (Clerk user ID) với bản ghi app.
-- `list`, `bootstrap`: đọc dữ liệu quản trị sau khi xác thực admin.
-- `create`: admin tạo Clerk user bằng username + mật khẩu tạm thời, đồng thời tạo hồ sơ app; không gửi invitation/email.
-- `update`: cập nhật tên/role/phòng ban trong Clerk metadata và Convex.
-- `setDisabled`: gọi Clerk ban/unban (Clerk ban thu hồi sessions và chặn đăng nhập), rồi đồng bộ trạng thái Convex.
-- `resetPassword`: đặt mật khẩu tạm thời qua Clerk Backend API, sign out các session khác và đặt `mustChangePassword=true`.
-
-`convex/seed.ts` là internal mutation tạo role/phòng ban mẫu, không tự chạy và không chứa dữ liệu người thật.
-
-### Bootstrap admin an toàn
-
-Không có “admin mặc định” hoặc mật khẩu mặc định trong source. Quy trình đề xuất:
-
-1. Đăng nhập tài khoản Clerk đầu tiên.
-2. Xác định Clerk `userId` qua Clerk Dashboard.
-3. Tạo/patch bản ghi `users` đầu tiên bằng một migration/internal operation được review riêng, đặt `role=admin`, `status=active`, `mustChangePassword=false`.
-4. Chạy seed role/phòng ban nếu cần.
-5. Sau bootstrap, mọi thao tác quản trị dùng `adminOrThrow` và được ghi audit.
-
-Không expose internal mutation cho client để “tự nhận admin”. Nếu cần migration, thực hiện trong môi trường Convex đã xác thực và review diff/target trước khi chạy.
-
-## Tạo user, reset và must-change-password
-
-Admin chủ động tạo từng user bằng username và mật khẩu tạm thời dùng chung theo quy trình nội bộ. Mật khẩu này không được ghi vào Git, audit log hoặc gửi tự động qua email. Không có self-signup và không có email reset; user liên hệ admin khi quên mật khẩu.
-
-Clerk không cung cấp một cờ universal bảo đảm bắt buộc đổi mật khẩu ở mọi sign-in flow. Vì vậy app dùng contract minh bạch:
-
-- Convex lưu `mustChangePassword` và đặt metadata tương ứng trên Clerk khi reset.
-- Frontend chặn phần workspace khi cờ này là `true`, hiển thị hướng dẫn mở Clerk User Menu để đổi mật khẩu.
-- Việc đổi mật khẩu thực tế và xác nhận mật khẩu thuộc Clerk UI/instance policy. Sau khi hoàn tất, một flow đồng bộ được triển khai có thể clear cờ; không coi metadata frontend là authorization.
-- Admin reset không gửi mật khẩu qua audit log; không log secret trong lỗi.
-
-Nếu instance yêu cầu đảm bảo cứng hơn (ví dụ password reset ticket riêng hoặc custom sign-in flow), phải thiết kế và kiểm thử với Clerk docs/instance trước khi bật production; không tự suy diễn API.
-
-## Seed và Convex commands
-
-Sau khi cài Convex CLI và đã liên kết deployment:
+Không có admin/password mặc định, không public bootstrap.
 
 ```bash
-npx convex dev
+npx convex run internal.users.provisionFirstAdmin \
+  '{"email":"admin@example.school","name":"Quản trị viên","temporaryPassword":"<temp-at-least-12-chars>"}'
 ```
 
-Lệnh trên sinh `convex/_generated/` và sync schema/functions. Chạy seed internal mutation theo cách được Convex Dashboard/CLI của deployment hiện tại hỗ trợ; không chạy seed lên production nếu chưa review target.
+- Chỉ thành công khi **chưa có** active admin.
+- `role=admin`, `mustChangePassword=true`.
+- Truyền password tạm qua kênh nội bộ; không commit/chat plaintext.
+- Đăng nhập → bắt buộc đổi MK trước khi vào CRM.
 
-Deploy backend sau khi QA:
+## Admin user lifecycle
+
+1. Admin tạo user: email (unique, trim+lowercase), tên, **role** (`admin`|`user`), phòng ban / chức vụ / nhóm quyền (tùy chọn), temporary password ≥12. `createAccount` (provider `password`).
+2. `mustChangePassword=true`; audit không chứa password.
+3. User `signIn` only. Flag còn true → chỉ form đổi MK; server chặn thao tác admin.
+4. `changeOwnPassword` → `modifyAccountCredentials`, `invalidateSessions` (giữ session hiện tại), clear flag.
+5. Admin reset MK → flag + credentials + revoke mọi session target.
+6. Disable → `disabled` + invalidate; `beforeSessionCreation` từ chối user không active.
+7. Remove → soft-delete (`disabled` + revoke). Không xóa auth tables trực tiếp. Cấm tự xóa active account.
+8. Public `signUp` / `reset` / email verification bị từ chối trong `convex/auth.ts`.
+
+## Authorization (server)
+
+- Identity: `getAuthUserId` từ JWT Convex Auth.
+- Admin gate: `status === "active"`, `role === "admin"`, không còn `mustChangePassword` (`adminOrThrow` / `adminPermissionOrThrow` trong `lib.ts`). Permission string giữ cho audit/call-site; admin = full privilege.
+- Menu user: `resolveUserMenuAccess` / query `users.sessionContext`.
+- Client chỉ là UX; mọi mutation/action admin re-check server-side.
+
+## Generated files & scripts
+
+`convex/_generated/` và `convex/tsconfig.json` giữ trong tree. Sau khi đổi schema/function:
 
 ```bash
-npm run convex:deploy
-```
-
-Các lệnh deploy cần credentials của người vận hành được cấp qua CLI/dashboard. Không đưa token vào script, log, commit hoặc chat.
-
-## Admin UI và prototype
-
-- Dashboard authenticated vẫn nhúng `public/demo/index.html` nguyên bản.
-- Menu placeholder Báo cáo, Công tác, Công việc, Lớp chủ nhiệm, Đánh giá nhân sự và settings vẫn được giữ.
-- Menu người dùng dùng query/action Convex khi role backend là admin; không còn dùng dữ liệu cục bộ làm nguồn sự thật.
-- UI không dùng `publicMetadata.role` để cấp quyền. Metadata chỉ là dữ liệu Clerk hỗ trợ hiển thị/đồng bộ.
-
-## QA và security gate
-
-```bash
-npm install
-npm run check
+npm run check          # scripts/check-files.mjs
 npm run build
 git diff --check
+npx convex deploy -y   # cần CONVEX_SELF_HOSTED_* 
 ```
 
-Trước push/deploy, kiểm tra:
+`npm run typecheck` = `convex codegen --typecheck enable` (cần credentials).
 
-- `git status --short` và `git diff --stat`.
-- Không có `.env*` thật, Clerk secret, webhook secret, deploy key, password, session secret, database dump hay user data.
-- Không sửa `/Users/vsc_agent/deployments/lvt-crm-local` khi chưa có deployment approval và checklist domain/config.
-- Convex auth config dùng issuer domain đúng môi trường; Clerk secret chỉ ở Convex environment.
-- Test tạo username trùng, ban/unban, reset password, non-admin rejection và audit log trên development deployment.
+## Deploy (self-hosted hiện tại)
 
-## Deployment và rollback
+1. Docker Convex up; `.env.local` có URL + admin key.
+2. `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL` đã set trên deployment.
+3. `npx convex deploy -y`
+4. `npx convex run seed:seed`
+5. Frontend: `npm run dev` (tunnel/domain) hoặc serve `dist/` sau `npm run build`.
+6. Host `lvt.vscgroup.io.vn`: client dùng `window.location.origin` làm Convex URL (xem `src/main.jsx`).
 
-### Frontend
+## Backup local
 
-Build static assets bằng `npm run build`, cấu hình host với `VITE_CLERK_PUBLISHABLE_KEY` và `VITE_CONVEX_URL` của **cùng một môi trường** trước build. Không dùng development Clerk key với production Convex hoặc ngược lại. Chỉ deploy khi custom domain, HTTPS, Clerk allowed origins/redirects và Convex production URL đã được xác minh.
+- Volume Docker `infra/convex-local` (`data`) = DB. Sao lưu trước khi reset stack.
+- Không commit dump có PII/hash.
 
-### Rollback
+## Chuyển sang Convex Pro
 
-- Frontend: redeploy artifact/commit cuối cùng đã QA.
-- Convex: dùng lịch sử deployment/migration của Convex để rollback theo quy trình chính thức; không xóa database bằng script tùy tiện.
-- Clerk: không “unban” hàng loạt hoặc thay metadata hàng loạt khi rollback ứng dụng; review audit logs và thực hiện operation mục tiêu.
-- Nếu schema đã có dữ liệu production, rollback code phải tương thích schema. Tạo migration forward nếu rollback ngược schema không an toàn.
+1. Deployment Pro + `JWT_PRIVATE_KEY` / `JWKS` / `SITE_URL` (không commit key).
+2. `VITE_CONVEX_URL` → Pro; deploy keys chỉ CI/máy deploy.
+3. Migrate users, authAccounts (hash), departments, permissionGroups, positions, auditLogs, approvalLogs.
+4. Smoke: login, admin CRUD, gán PB/nhóm/chức vụ, reset MK, forced change, menu theo nhóm quyền.
+5. Giữ local tới khi backup + migration OK. Không dùng admin key local cho Pro.
 
-## Giới hạn đã biết
+## Production checklist
 
-- Chưa có production deployment trong repository này.
-- Chưa có webhook Clerk → Convex; `storeCurrent` và các action quản trị là synchronization path hiện tại. Webhook nên được thêm khi cần đồng bộ delete/update ngoài app.
-- Chưa có custom password-change callback để tự clear `mustChangePassword`; cờ này là UI contract được document rõ ở trên.
-- Không coi giao diện ẩn menu, Clerk public metadata hoặc client state là security boundary.
+- [ ] Không có `.env*` thật, JWT private key, password, deploy token, DB dump, PII trong `git diff`.
+- [ ] Auth keys chỉ trên deployment env; có quy trình rotate.
+- [ ] First admin qua internal action; password tạm đã rotate.
+- [ ] Public signup/reset/email verification disabled.
+- [ ] Vai trò chỉ `admin`|`user`; user cũ `manager` đã migrate.
+- [ ] Test: CRUD user/PB/nhóm quyền/chức vụ; gán user; menu ẩn/xem/sửa; profile + đổi MK; self-disable/delete blocked; audit.
+- [ ] Hiểu JWT TTL vs session invalidation (beta).
+- [ ] `SITE_URL` / origins khớp domain thật.
 
-### Quy trình tài khoản demo và admin
+## Rollback
 
-- Tài khoản demo hiện hữu được giữ dữ liệu/menu dummy và nên được đổi username thành `demo` trong Clerk + Convex migration có review.
-- Tạo tài khoản `admin` bằng cùng quy trình server-side, dùng mật khẩu mặc định nội bộ do người vận hành truyền lúc seed; không hard-code mật khẩu trong source.
-- Đặt `role=admin`, `status=active`, `mustChangePassword=true` cho admin lần đầu; sau đăng nhập admin phải đổi mật khẩu.
-- Chỉ `admin` mới được gọi các action quản lý user. Không dùng hidden menu, Clerk metadata hay client state làm quyền bảo mật.
+- **Frontend:** redeploy commit QA trước với `VITE_CONVEX_URL` tương ứng.
+- **Convex functions:** deploy revision trước; không xóa DB bừa bãi.
+- **Auth data:** hash trong `authAccounts`; schema rollback cần migration. Remove = soft-delete.
+- **Clerk (legacy):** đã gỡ khỏi app.
+
+## Known limitations
+
+- Convex Auth beta.
+- Đổi email đăng nhập chưa hỗ trợ qua UI (account id = email).
+- Session invalidate không kick JWT ngay (chờ hết hạn access token).
+- Module nghiệp vụ (báo cáo, công việc, …) vẫn placeholder; `view`/`edit` sẵn sàng khi module có nội dung.
+- Workflow duyệt task đầy đủ chưa UI — chỉ helper + bảng `approvalLogs`.
+- Production “hard” (Convex Pro + CDN static) chưa bắt buộc; stack hiện tại self-hosted + Vite/tunnel.
+
+## Tham chiếu
+
+- <https://labs.convex.dev/auth>
+- <https://labs.convex.dev/auth/config/passwords>
+- <https://labs.convex.dev/auth/api_reference/server>
+- <https://docs.convex.dev/auth/convex-auth>

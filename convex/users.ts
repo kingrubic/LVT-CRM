@@ -1,123 +1,709 @@
+import {
+  createAccount,
+  getAuthSessionId,
+  getAuthUserId,
+  invalidateSessions,
+  modifyAccountCredentials,
+} from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { adminOrThrow, identityOrThrow } from "./lib";
+import {
+  action,
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
+import {
+  adminPermissionOrThrow,
+  authUserIdOrThrow,
+  currentUserOrThrow,
+  isSystemRole,
+  normalizeEmail,
+  resolveUserMenuAccess,
+} from "./lib";
 
-const userArgs = { username: v.string(), email: v.optional(v.string()), name: v.string(), role: v.string(), departmentId: v.optional(v.string()) };
+const userArgs = {
+  email: v.string(),
+  name: v.string(),
+  role: v.string(),
+  departmentId: v.optional(v.string()),
+  permissionGroupId: v.optional(v.string()),
+  positionId: v.optional(v.string()),
+};
+
+function cleanUserInput(args: {
+  email: string;
+  name: string;
+  role: string;
+  departmentId?: string;
+  permissionGroupId?: string;
+  positionId?: string;
+}) {
+  const name = args.name.trim();
+  const email = normalizeEmail(args.email);
+  const role = args.role.trim();
+  const departmentId = args.departmentId?.trim() || undefined;
+  const permissionGroupId = args.permissionGroupId?.trim() || undefined;
+  const positionId = args.positionId?.trim() || undefined;
+  if (!name || name.length > 120) throw new Error("INVALID_NAME");
+  if (!isSystemRole(role)) throw new Error("INVALID_ROLE");
+  if (!email || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254) throw new Error("INVALID_EMAIL");
+  // Admins do not need a permission group (they always have full access).
+  if (role === "admin" && permissionGroupId) {
+    // Allow storing it but not required; keep as-is for optional metadata.
+  }
+  return { name, email, role, departmentId, permissionGroupId, positionId };
+}
+
+function assertPasswordLength(password: string, code = "PASSWORD_TOO_SHORT") {
+  if (!password || password.length < 12) throw new Error(code);
+}
+
+async function auditBestEffort(
+  ctx: { runMutation: (ref: any, args: any) => Promise<any> },
+  entry: {
+    actorUserId: string;
+    action: string;
+    targetUserId?: string;
+    targetEmail?: string;
+    details?: string;
+  },
+) {
+  try {
+    await ctx.runMutation(internal.users.audit, entry);
+  } catch {
+    /* An audit outage must not conceal the primary operation result. */
+  }
+}
 
 export const current = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await identityOrThrow(ctx);
-    return await ctx.db.query("users").withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject)).unique();
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    return await ctx.db.get(userId);
+  },
+});
+
+/** Session payload for navigation: user + resolved menu access + related labels. */
+export const sessionContext = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const user = await ctx.db.get(userId);
+    if (!user) return null;
+
+    const menuAccess = await resolveUserMenuAccess(ctx, user);
+    const [departments, groups, positions] = await Promise.all([
+      ctx.db.query("departments").collect(),
+      ctx.db.query("permissionGroups").collect(),
+      ctx.db.query("positions").collect(),
+    ]);
+
+    const department = user.departmentId
+      ? departments.find((d) => d._id === user.departmentId)
+      : undefined;
+    const permissionGroup = user.permissionGroupId
+      ? groups.find((g) => g._id === user.permissionGroupId)
+      : undefined;
+    const position = user.positionId
+      ? positions.find((p) => p._id === user.positionId)
+      : undefined;
+
+    return {
+      user,
+      isAdmin: user.role === "admin",
+      menuAccess,
+      department: department
+        ? { _id: department._id, name: department.name, code: department.code }
+        : null,
+      permissionGroup: permissionGroup
+        ? { _id: permissionGroup._id, name: permissionGroup.name }
+        : null,
+      position: position
+        ? { _id: position._id, name: position.name, level: position.level, code: position.code }
+        : null,
+    };
   },
 });
 
 export const bootstrap = query({
   args: {},
   handler: async (ctx) => {
-    const { user } = await adminOrThrow(ctx);
-    const [users, departments, roles] = await Promise.all([ctx.db.query("users").collect(), ctx.db.query("departments").collect(), ctx.db.query("roles").collect()]);
-    return { currentUser: user, users, departments, roles };
+    const { user } = await adminPermissionOrThrow(ctx, "users:read");
+    const [users, departments, permissionGroups, positions] = await Promise.all([
+      ctx.db.query("users").collect(),
+      ctx.db.query("departments").collect(),
+      ctx.db.query("permissionGroups").collect(),
+      ctx.db.query("positions").collect(),
+    ]);
+    return {
+      currentUser: user,
+      users,
+      departments,
+      permissionGroups,
+      positions,
+      systemRoles: [
+        { key: "admin", name: "Quản trị viên" },
+        { key: "user", name: "Người dùng" },
+      ],
+    };
   },
 });
 
-export const storeCurrent = mutation({
+export const list = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await identityOrThrow(ctx);
-    const now = Date.now();
-    const email = identity.email;
-    const username = identity.preferredUsername ?? identity.nickname ?? email ?? identity.subject;
-    const name = identity.name ?? email ?? "Người dùng";
-    const byClerk = await ctx.db.query("users").withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject)).unique();
-    if (byClerk) { await ctx.db.patch("users", byClerk._id, { username, name, email, updatedAt: now }); return byClerk._id; }
-    const pending = await ctx.db.query("users").withIndex("by_username", (q) => q.eq("username", username)).unique();
-    if (pending?.status === "pending") { await ctx.db.patch("users", pending._id, { clerkUserId: identity.subject, name, email, status: "active", updatedAt: now }); return pending._id; }
-    throw new Error("USER_NOT_PROVISIONED");
+    await adminPermissionOrThrow(ctx, "users:read");
+    return await ctx.db.query("users").collect();
   },
 });
 
-export const list = query({ args: {}, handler: async (ctx) => { await adminOrThrow(ctx); return await ctx.db.query("users").collect(); } });
-export const requireAdmin = internalQuery({ args: {}, handler: async (ctx) => (await adminOrThrow(ctx)).user._id });
-export const byId = internalQuery({ args: { id: v.id("users") }, handler: async (ctx, args) => { await adminOrThrow(ctx); return await ctx.db.get("users", args.id); } });
+export const requireAdmin = internalQuery({
+  args: { permission: v.string() },
+  handler: async (ctx, args) => (await adminPermissionOrThrow(ctx, args.permission)).user._id,
+});
 
-export const createPending = internalMutation({
-  args: { ...userArgs, actorClerkUserId: v.string() },
-  handler: async (ctx, args) => { const now = Date.now(); return await ctx.db.insert("users", { username: args.username, email: args.email, name: args.name, role: args.role, departmentId: args.departmentId, status: "pending", mustChangePassword: true, createdBy: args.actorClerkUserId, updatedBy: args.actorClerkUserId, createdAt: now, updatedAt: now }); },
+export const byId = internalQuery({
+  args: { id: v.id("users") },
+  handler: async (ctx, args) => {
+    await adminPermissionOrThrow(ctx, "users:read");
+    return await ctx.db.get(args.id);
+  },
+});
+
+export const byEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const email = normalizeEmail(args.email);
+    return await ctx.db.query("users").withIndex("email", (q) => q.eq("email", email)).unique();
+  },
+});
+
+export const currentForPasswordChange = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => await ctx.db.get(args.userId),
+});
+
+export const hasActiveAdmin = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    return users.some((user) => user.role === "admin" && user.status === "active");
+  },
+});
+
+export const assertRoleAndAssignments = internalQuery({
+  args: {
+    role: v.string(),
+    departmentId: v.optional(v.string()),
+    permissionGroupId: v.optional(v.string()),
+    positionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!isSystemRole(args.role)) throw new Error("INVALID_ROLE");
+    if (args.departmentId) {
+      const department = (await ctx.db.query("departments").collect()).find(
+        (item) => item._id === args.departmentId,
+      );
+      if (!department?.active) throw new Error("INVALID_DEPARTMENT");
+    }
+    if (args.permissionGroupId) {
+      const group = (await ctx.db.query("permissionGroups").collect()).find(
+        (item) => item._id === args.permissionGroupId,
+      );
+      if (!group?.active) throw new Error("INVALID_PERMISSION_GROUP");
+    }
+    if (args.positionId) {
+      const position = (await ctx.db.query("positions").collect()).find(
+        (item) => item._id === args.positionId,
+      );
+      if (!position?.active) throw new Error("INVALID_POSITION");
+    }
+    return true;
+  },
+});
+
+/** @deprecated Prefer assertRoleAndAssignments; kept for internal callers during migration. */
+export const assertRoleAndDepartment = internalQuery({
+  args: { role: v.string(), departmentId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (!isSystemRole(args.role)) throw new Error("INVALID_ROLE");
+    if (args.departmentId) {
+      const department = (await ctx.db.query("departments").collect()).find(
+        (item) => item._id === args.departmentId,
+      );
+      if (!department?.active) throw new Error("INVALID_DEPARTMENT");
+    }
+    return true;
+  },
 });
 
 export const patchById = internalMutation({
-  args: { id: v.id("users"), actorClerkUserId: v.string(), clerkUserId: v.optional(v.string()), username: v.optional(v.string()), email: v.optional(v.string()), role: v.optional(v.string()), departmentId: v.optional(v.string()), name: v.optional(v.string()), status: v.optional(v.string()), mustChangePassword: v.optional(v.boolean()), lastPasswordResetAt: v.optional(v.number()) },
-  handler: async (ctx, args) => { const { id, actorClerkUserId, ...patch } = args; await ctx.db.patch("users", id, { ...patch, updatedBy: actorClerkUserId, updatedAt: Date.now() }); },
-});
+  args: {
+    id: v.id("users"),
+    actorUserId: v.string(),
+    email: v.optional(v.string()),
+    role: v.optional(v.string()),
+    departmentId: v.optional(v.union(v.string(), v.null())),
+    permissionGroupId: v.optional(v.union(v.string(), v.null())),
+    positionId: v.optional(v.union(v.string(), v.null())),
+    name: v.optional(v.string()),
+    status: v.optional(v.string()),
+    mustChangePassword: v.optional(v.boolean()),
+    lastPasswordResetAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { id, actorUserId, ...raw } = args;
+    const patch: Record<string, unknown> = {};
 
-export const deleteById = internalMutation({
-  args: { id: v.id("users") },
-  handler: async (ctx, args) => { await ctx.db.delete(args.id); },
+    if (raw.email !== undefined) {
+      const email = normalizeEmail(raw.email);
+      const duplicate = await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", email))
+        .unique();
+      if (duplicate && duplicate._id !== id) throw new Error("EMAIL_TAKEN");
+      patch.email = email;
+    }
+    if (raw.role !== undefined) {
+      if (!isSystemRole(raw.role)) throw new Error("INVALID_ROLE");
+      patch.role = raw.role;
+    }
+    if (raw.name !== undefined) patch.name = raw.name;
+    if (raw.status !== undefined) patch.status = raw.status;
+    if (raw.mustChangePassword !== undefined) patch.mustChangePassword = raw.mustChangePassword;
+    if (raw.lastPasswordResetAt !== undefined) patch.lastPasswordResetAt = raw.lastPasswordResetAt;
+
+    if (raw.departmentId !== undefined) {
+      if (raw.departmentId === null || raw.departmentId === "") {
+        patch.departmentId = undefined;
+      } else {
+        const department = (await ctx.db.query("departments").collect()).find(
+          (item) => item._id === raw.departmentId,
+        );
+        if (!department?.active) throw new Error("INVALID_DEPARTMENT");
+        patch.departmentId = raw.departmentId;
+      }
+    }
+    if (raw.permissionGroupId !== undefined) {
+      if (raw.permissionGroupId === null || raw.permissionGroupId === "") {
+        patch.permissionGroupId = undefined;
+      } else {
+        const group = (await ctx.db.query("permissionGroups").collect()).find(
+          (item) => item._id === raw.permissionGroupId,
+        );
+        if (!group?.active) throw new Error("INVALID_PERMISSION_GROUP");
+        patch.permissionGroupId = raw.permissionGroupId;
+      }
+    }
+    if (raw.positionId !== undefined) {
+      if (raw.positionId === null || raw.positionId === "") {
+        patch.positionId = undefined;
+      } else {
+        const position = (await ctx.db.query("positions").collect()).find(
+          (item) => item._id === raw.positionId,
+        );
+        if (!position?.active) throw new Error("INVALID_POSITION");
+        patch.positionId = raw.positionId;
+      }
+    }
+
+    await ctx.db.patch(id, { ...patch, updatedBy: actorUserId, updatedAt: Date.now() });
+  },
 });
 
 export const audit = internalMutation({
-  args: { actorClerkUserId: v.string(), action: v.string(), targetClerkUserId: v.optional(v.string()), targetEmail: v.optional(v.string()), details: v.optional(v.string()) },
+  args: {
+    actorUserId: v.string(),
+    action: v.string(),
+    targetUserId: v.optional(v.string()),
+    targetEmail: v.optional(v.string()),
+    details: v.optional(v.string()),
+  },
   handler: async (ctx, args) => ctx.db.insert("auditLogs", { ...args, at: Date.now() }),
 });
 
-// Clerk's supported Backend API is deliberately called through an action so its secret never reaches the browser.
-async function clerkRequest(path: string, init: RequestInit = {}) {
-  const secret = process.env.CLERK_SECRET_KEY;
-  if (!secret) throw new Error("CLERK_SECRET_KEY is not configured in Convex");
-  const response = await fetch(`https://api.clerk.com/v1${path}`, { ...init, headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json", ...(init.headers ?? {}) } });
-  const body = await response.text();
-  if (!response.ok) throw new Error(`CLERK_API_${response.status}: ${body.slice(0, 300)}`);
-  return body ? JSON.parse(body) : null;
-}
-
 export const create = action({
   args: { ...userArgs, temporaryPassword: v.string() },
-  handler: async (ctx, args) => {
-    const identity = await identityOrThrow(ctx); await ctx.runQuery(internal.users.requireAdmin, {});
-    if (args.temporaryPassword.length < 12) throw new Error("TEMP_PASSWORD_TOO_SHORT");
-    const clerk = await clerkRequest("/users", { method: "POST", body: JSON.stringify({ username: args.username, password: args.temporaryPassword, first_name: args.name, email_address: args.email ? [args.email] : undefined, public_metadata: { role: args.role, departmentId: args.departmentId, mustChangePassword: true } }) });
-    const id = await ctx.runMutation(internal.users.createPending, { username: args.username, email: args.email, name: args.name, role: args.role, departmentId: args.departmentId, actorClerkUserId: identity.subject });
-    await ctx.runMutation(internal.users.patchById, { id, actorClerkUserId: identity.subject, clerkUserId: clerk.id, status: "active" });
-    await ctx.runMutation(internal.users.audit, { actorClerkUserId: identity.subject, action: "user.create", targetClerkUserId: clerk.id, targetEmail: args.email, details: JSON.stringify({ username: args.username, role: args.role, departmentId: args.departmentId }) }); return id;
+  handler: async (ctx, args): Promise<Id<"users">> => {
+    const actorId = await authUserIdOrThrow(ctx);
+    await ctx.runQuery(internal.users.requireAdmin, { permission: "users:write" });
+    const input = cleanUserInput(args);
+    assertPasswordLength(args.temporaryPassword, "TEMP_PASSWORD_TOO_SHORT");
+
+    if (await ctx.runQuery(internal.users.byEmail, { email: input.email })) {
+      throw new Error("EMAIL_TAKEN");
+    }
+    await ctx.runQuery(internal.users.assertRoleAndAssignments, {
+      role: input.role,
+      departmentId: input.departmentId,
+      permissionGroupId: input.permissionGroupId,
+      positionId: input.positionId,
+    });
+
+    const now = Date.now();
+    let userId: Id<"users">;
+    try {
+      const created = await createAccount(ctx, {
+        provider: "password",
+        account: { id: input.email, secret: args.temporaryPassword },
+        profile: {
+          email: input.email,
+          name: input.name,
+          role: input.role,
+          departmentId: input.departmentId,
+          permissionGroupId: input.permissionGroupId,
+          positionId: input.positionId,
+          status: "active",
+          mustChangePassword: true,
+          createdBy: actorId,
+          updatedBy: actorId,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+      userId = created.user._id;
+    } catch (error) {
+      const message = String((error as Error)?.message ?? error);
+      if (message.includes("already exists") || message.includes("Account already")) {
+        await auditBestEffort(ctx, {
+          actorUserId: actorId,
+          action: "user.create_failed",
+          targetEmail: input.email,
+          details: JSON.stringify({ reason: "account_exists" }),
+        });
+        throw new Error("EMAIL_TAKEN");
+      }
+      await auditBestEffort(ctx, {
+        actorUserId: actorId,
+        action: "user.create_failed",
+        targetEmail: input.email,
+      });
+      throw new Error("USER_CREATE_FAILED");
+    }
+
+    await auditBestEffort(ctx, {
+      actorUserId: actorId,
+      action: "user.create",
+      targetUserId: userId,
+      targetEmail: input.email,
+      details: JSON.stringify({
+        role: input.role,
+        departmentId: input.departmentId,
+        permissionGroupId: input.permissionGroupId,
+        positionId: input.positionId,
+      }),
+    });
+    return userId;
   },
 });
 
 export const update = action({
   args: { id: v.id("users"), ...userArgs },
   handler: async (ctx, args) => {
-    const identity = await identityOrThrow(ctx); await ctx.runQuery(internal.users.requireAdmin, {}); const target = await ctx.runQuery(internal.users.byId, { id: args.id }); if (!target) throw new Error("USER_NOT_FOUND");
-    if (target.clerkUserId) await clerkRequest(`/users/${encodeURIComponent(target.clerkUserId)}`, { method: "PATCH", body: JSON.stringify({ first_name: args.name, username: args.username, public_metadata: { role: args.role, departmentId: args.departmentId, mustChangePassword: target.mustChangePassword } }) });
-    await ctx.runMutation(internal.users.patchById, { id: args.id, actorClerkUserId: identity.subject, username: args.username, email: args.email, role: args.role, departmentId: args.departmentId, name: args.name }); await ctx.runMutation(internal.users.audit, { actorClerkUserId: identity.subject, action: "user.update", targetClerkUserId: target.clerkUserId, targetEmail: args.email });
+    const actorId = await authUserIdOrThrow(ctx);
+    await ctx.runQuery(internal.users.requireAdmin, { permission: "users:write" });
+    const target = await ctx.runQuery(internal.users.byId, { id: args.id });
+    if (!target) throw new Error("USER_NOT_FOUND");
+    const input = cleanUserInput(args);
+
+    const duplicateEmail = await ctx.runQuery(internal.users.byEmail, { email: input.email });
+    if (duplicateEmail && duplicateEmail._id !== target._id) throw new Error("EMAIL_TAKEN");
+
+    // Password account id is the original email. Renaming email identity is not supported
+    // without a dedicated account-migration path; reject rather than leave credentials orphaned.
+    if (target.email && normalizeEmail(target.email) !== input.email) {
+      throw new Error("EMAIL_CHANGE_UNSUPPORTED");
+    }
+
+    await ctx.runQuery(internal.users.assertRoleAndAssignments, {
+      role: input.role,
+      departmentId: input.departmentId,
+      permissionGroupId: input.permissionGroupId,
+      positionId: input.positionId,
+    });
+
+    try {
+      await ctx.runMutation(internal.users.patchById, {
+        id: args.id,
+        actorUserId: actorId,
+        name: input.name,
+        email: input.email,
+        role: input.role,
+        departmentId: input.departmentId ?? null,
+        permissionGroupId: input.permissionGroupId ?? null,
+        positionId: input.positionId ?? null,
+      });
+    } catch {
+      await auditBestEffort(ctx, {
+        actorUserId: actorId,
+        action: "user.update_sync_pending",
+        targetUserId: target._id,
+        targetEmail: input.email,
+      });
+      throw new Error("USER_UPDATE_FAILED");
+    }
+    await auditBestEffort(ctx, {
+      actorUserId: actorId,
+      action: "user.update",
+      targetUserId: target._id,
+      targetEmail: input.email,
+    });
   },
 });
 
 export const setDisabled = action({
   args: { id: v.id("users"), disabled: v.boolean() },
   handler: async (ctx, args) => {
-    const identity = await identityOrThrow(ctx); await ctx.runQuery(internal.users.requireAdmin, {}); const target = await ctx.runQuery(internal.users.byId, { id: args.id }); if (!target) throw new Error("USER_NOT_FOUND");
-    if (target.clerkUserId) await clerkRequest(`/users/${encodeURIComponent(target.clerkUserId)}/${args.disabled ? "ban" : "unban"}`, { method: "POST" });
-    await ctx.runMutation(internal.users.patchById, { id: args.id, actorClerkUserId: identity.subject, status: args.disabled ? "disabled" : "active" }); await ctx.runMutation(internal.users.audit, { actorClerkUserId: identity.subject, action: args.disabled ? "user.disable" : "user.enable", targetClerkUserId: target.clerkUserId, targetEmail: target.email });
+    const actorId = await authUserIdOrThrow(ctx);
+    await ctx.runQuery(internal.users.requireAdmin, { permission: "users:disable" });
+    const target = await ctx.runQuery(internal.users.byId, { id: args.id });
+    if (!target) throw new Error("USER_NOT_FOUND");
+    if (args.disabled && target._id === actorId && target.status === "active") {
+      throw new Error("CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT");
+    }
+
+    if (args.disabled) {
+      await ctx.runMutation(internal.users.patchById, {
+        id: args.id,
+        actorUserId: actorId,
+        status: "disabled",
+      });
+      try {
+        await invalidateSessions(ctx, { userId: args.id });
+      } catch {
+        await auditBestEffort(ctx, {
+          actorUserId: actorId,
+          action: "user.disable_session_revoke_failed",
+          targetUserId: target._id,
+          targetEmail: target.email,
+        });
+        throw new Error("USER_DISABLED_SESSION_REVOKE_PENDING");
+      }
+    } else {
+      await ctx.runMutation(internal.users.patchById, {
+        id: args.id,
+        actorUserId: actorId,
+        status: "active",
+      });
+    }
+
+    await auditBestEffort(ctx, {
+      actorUserId: actorId,
+      action: args.disabled ? "user.disable" : "user.enable",
+      targetUserId: target._id,
+      targetEmail: target.email,
+    });
   },
 });
 
 export const remove = action({
   args: { id: v.id("users") },
   handler: async (ctx, args) => {
-    const identity = await identityOrThrow(ctx); await ctx.runQuery(internal.users.requireAdmin, {});
-    const target = await ctx.runQuery(internal.users.byId, { id: args.id }); if (!target) throw new Error("USER_NOT_FOUND");
-    if (target.clerkUserId) await clerkRequest(`/users/${encodeURIComponent(target.clerkUserId)}`, { method: "DELETE" });
-    await ctx.runMutation(internal.users.deleteById, { id: args.id });
-    await ctx.runMutation(internal.users.audit, { actorClerkUserId: identity.subject, action: "user.delete", targetClerkUserId: target.clerkUserId, targetEmail: target.email });
+    const actorId = await authUserIdOrThrow(ctx);
+    await ctx.runQuery(internal.users.requireAdmin, { permission: "users:delete" });
+    const target = await ctx.runQuery(internal.users.byId, { id: args.id });
+    if (!target) throw new Error("USER_NOT_FOUND");
+    if (target._id === actorId && target.status === "active") {
+      throw new Error("CANNOT_DELETE_OWN_ACTIVE_ACCOUNT");
+    }
+
+    // Convex Auth has no documented account-delete helper. Keep the user row and
+    // auth account intact, but perform a safe soft-delete: disable + revoke all
+    // sessions. Direct writes to authTables are intentionally forbidden.
+    try {
+      await ctx.runMutation(internal.users.patchById, {
+        id: args.id,
+        actorUserId: actorId,
+        status: "disabled",
+      });
+      await invalidateSessions(ctx, { userId: args.id });
+    } catch {
+      await auditBestEffort(ctx, {
+        actorUserId: actorId,
+        action: "user.remove_failed",
+        targetUserId: target._id,
+        targetEmail: target.email,
+      });
+      throw new Error("USER_REMOVE_FAILED");
+    }
+    await auditBestEffort(ctx, {
+      actorUserId: actorId,
+      action: "user.remove",
+      targetUserId: target._id,
+      targetEmail: target.email,
+      details: JSON.stringify({ mode: "soft_delete" }),
+    });
   },
 });
 
 export const resetPassword = action({
   args: { id: v.id("users"), temporaryPassword: v.string() },
   handler: async (ctx, args) => {
-    const identity = await identityOrThrow(ctx); await ctx.runQuery(internal.users.requireAdmin, {}); if (args.temporaryPassword.length < 12) throw new Error("TEMP_PASSWORD_TOO_SHORT"); const target = await ctx.runQuery(internal.users.byId, { id: args.id }); if (!target) throw new Error("USER_NOT_FOUND"); if (!target.clerkUserId) throw new Error("USER_NOT_ACTIVATED");
-    await clerkRequest(`/users/${encodeURIComponent(target.clerkUserId)}`, { method: "PATCH", body: JSON.stringify({ password: args.temporaryPassword, sign_out_of_other_sessions: true, public_metadata: { mustChangePassword: true, role: target.role, departmentId: target.departmentId } }) });
-    await ctx.runMutation(internal.users.patchById, { id: args.id, actorClerkUserId: identity.subject, mustChangePassword: true, lastPasswordResetAt: Date.now() }); await ctx.runMutation(internal.users.audit, { actorClerkUserId: identity.subject, action: "user.password_reset", targetClerkUserId: target.clerkUserId, targetEmail: target.email });
+    const actorId = await authUserIdOrThrow(ctx);
+    await ctx.runQuery(internal.users.requireAdmin, { permission: "users:password" });
+    assertPasswordLength(args.temporaryPassword, "TEMP_PASSWORD_TOO_SHORT");
+    const target = await ctx.runQuery(internal.users.byId, { id: args.id });
+    if (!target) throw new Error("USER_NOT_FOUND");
+    if (!target.email) throw new Error("USER_EMAIL_MISSING");
+
+    // Flag locally first: a failed credential update leaves the account blocked rather than falsely cleared.
+    await ctx.runMutation(internal.users.patchById, {
+      id: args.id,
+      actorUserId: actorId,
+      mustChangePassword: true,
+      lastPasswordResetAt: Date.now(),
+    });
+
+    try {
+      await modifyAccountCredentials(ctx, {
+        provider: "password",
+        account: { id: normalizeEmail(target.email), secret: args.temporaryPassword },
+      });
+      await invalidateSessions(ctx, { userId: args.id });
+    } catch {
+      await auditBestEffort(ctx, {
+        actorUserId: actorId,
+        action: "user.password_reset_failed",
+        targetUserId: target._id,
+        targetEmail: target.email,
+      });
+      throw new Error("PASSWORD_RESET_FAILED");
+    }
+
+    await auditBestEffort(ctx, {
+      actorUserId: actorId,
+      action: "user.password_reset",
+      targetUserId: target._id,
+      targetEmail: target.email,
+    });
+  },
+});
+
+export const changeOwnPassword = action({
+  args: { newPassword: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await authUserIdOrThrow(ctx);
+    assertPasswordLength(args.newPassword, "PASSWORD_TOO_SHORT");
+    const user = await ctx.runQuery(internal.users.currentForPasswordChange, { userId });
+    if (!user || user.status !== "active") throw new Error("USER_NOT_ACTIVE");
+    if (!user.email) throw new Error("USER_EMAIL_MISSING");
+
+    try {
+      await modifyAccountCredentials(ctx, {
+        provider: "password",
+        account: { id: normalizeEmail(user.email), secret: args.newPassword },
+      });
+      const sessionId = await getAuthSessionId(ctx);
+      await invalidateSessions(ctx, {
+        userId,
+        except: sessionId ? [sessionId] : undefined,
+      });
+    } catch {
+      await auditBestEffort(ctx, {
+        actorUserId: userId,
+        action: "user.password_change_failed",
+        targetUserId: userId,
+        targetEmail: user.email,
+      });
+      throw new Error("PASSWORD_CHANGE_FAILED");
+    }
+
+    try {
+      await ctx.runMutation(internal.users.patchById, {
+        id: user._id,
+        actorUserId: userId,
+        mustChangePassword: false,
+      });
+    } catch {
+      await auditBestEffort(ctx, {
+        actorUserId: userId,
+        action: "user.password_change_sync_pending",
+        targetUserId: userId,
+        targetEmail: user.email,
+      });
+      throw new Error("PASSWORD_CHANGED_SYNC_PENDING");
+    }
+
+    await auditBestEffort(ctx, {
+      actorUserId: userId,
+      action: "user.password_change",
+      targetUserId: userId,
+      targetEmail: user.email,
+    });
+  },
+});
+
+/**
+ * Operator-only first-admin bootstrap.
+ *
+ * Callable only as an internal function (Convex dashboard / CLI with deployment admin key).
+ * Refuses if any active admin already exists. Does not expose a public HTTP/bootstrap endpoint.
+ * Temporary password must be rotated on first sign-in (mustChangePassword=true).
+ *
+ * Example (self-hosted, after env is loaded):
+ *   npx convex run internal.users.provisionFirstAdmin \
+ *     '{"email":"admin@example.school","name":"Quản trị","temporaryPassword":"<temp-12+>"}'
+ */
+export const provisionFirstAdmin = internalAction({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    temporaryPassword: v.string(),
+  },
+  handler: async (ctx, args): Promise<Id<"users">> => {
+    if (await ctx.runQuery(internal.users.hasActiveAdmin, {})) {
+      throw new Error("ADMIN_ALREADY_EXISTS");
+    }
+    const input = cleanUserInput({
+      email: args.email,
+      name: args.name,
+      role: "admin",
+    });
+    assertPasswordLength(args.temporaryPassword, "TEMP_PASSWORD_TOO_SHORT");
+
+    if (await ctx.runQuery(internal.users.byEmail, { email: input.email })) {
+      throw new Error("EMAIL_TAKEN");
+    }
+    const now = Date.now();
+    const created = await createAccount(ctx, {
+      provider: "password",
+      account: { id: input.email, secret: args.temporaryPassword },
+      profile: {
+        email: input.email,
+        name: input.name,
+        role: "admin",
+        status: "active",
+        mustChangePassword: true,
+        createdBy: "operator:provisionFirstAdmin",
+        updatedBy: "operator:provisionFirstAdmin",
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+
+    await auditBestEffort(ctx, {
+      actorUserId: "operator:provisionFirstAdmin",
+      action: "user.provision_first_admin",
+      targetUserId: created.user._id,
+      targetEmail: input.email,
+    });
+    return created.user._id;
+  },
+});
+
+// Gate normal CRM operations for authenticated callers that must change password.
+export const assertOperational = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await currentUserOrThrow(ctx);
+    if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
+    if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
+    return user._id;
   },
 });
