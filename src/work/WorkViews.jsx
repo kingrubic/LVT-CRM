@@ -30,6 +30,7 @@ function workStatusLabel(status) {
   return {
     pending: 'Chờ duyệt',
     approved: 'Đã duyệt',
+    rejected: 'Không duyệt',
     unassigned: 'Chưa giao việc',
     in_progress: 'Đang thực hiện',
     completed: 'Đã hoàn thành',
@@ -412,7 +413,10 @@ export function WorkManagement() {
                 <strong>{document.approvalCount}/{document.approvalTotal}</strong>
               </div>
               <div className="work-approval-avatars">
-                {document.approvers.map((person) => <span className={person.approved ? 'approved' : ''} title={`${person.name} · ${person.approved ? 'Đã duyệt' : 'Chờ duyệt'}`} key={person._id}>{String(person.name).slice(0, 1).toUpperCase()}</span>)}
+                {document.approvers.map((person) => {
+                  const decision = person.approved ? 'Đã duyệt' : person.rejected ? 'Không duyệt' : 'Chờ duyệt';
+                  return <span className={person.approved ? 'approved' : person.rejected ? 'rejected' : ''} title={`${person.name} · ${decision}`} key={person._id}>{String(person.name).slice(0, 1).toUpperCase()}</span>;
+                })}
               </div>
             </div>
           </article>
@@ -461,18 +465,20 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
 export function WorkUserView() {
   const data = useQuery(anyApi.work.listMine);
   const approveDocument = useMutation(anyApi.work.approveDocument);
+  const rejectDocument = useMutation(anyApi.work.rejectDocument);
   const createPersonalTask = useMutation(anyApi.work.createPersonalTask);
   const completePersonalTask = useMutation(anyApi.work.completePersonalTask);
   const [assigning, setAssigning] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState('');
+  const [decidingId, setDecidingId] = useState(null);
+  const [feedback, setFeedback] = useState({ type: '', text: '' });
   const isApprover = (data?.level || 0) >= 4;
   const isAssigner = data?.level === 2 || data?.level === 3;
   const isExecutor = data?.level === 1;
 
   const stats = useMemo(() => {
     if (!data) return { total: 0, done: 0 };
-    if (isApprover) return { total: data.approvals.length, done: data.approvals.filter((item) => item.status === 'approved').length };
+    if (isApprover) return { total: data.approvals.length, done: data.approvals.filter((item) => item.status === 'approved' || item.status === 'rejected').length };
     if (isExecutor) return { total: data.personalTasks.length, done: data.personalTasks.filter((item) => item.status === 'completed').length };
     return { total: data.departmentWorks.length, done: data.departmentWorks.filter((item) => item.status === 'completed').length };
   }, [data, isApprover, isExecutor]);
@@ -481,15 +487,33 @@ export function WorkUserView() {
 
   const handleAssign = async ({ title, deadline, assigneeUserIds }) => {
     setSaving(true);
-    setFeedback('');
+    setFeedback({ type: '', text: '' });
     try {
       await createPersonalTask({ workItemId: assigning._id, title, deadline, assigneeUserIds });
       setAssigning(null);
-      setFeedback('Đã giao đầu mục công việc cá nhân.');
+      setFeedback({ type: 'success', text: 'Đã giao đầu mục công việc cá nhân.' });
     } catch {
-      setFeedback('Không thể giao công việc. Vui lòng kiểm tra người thực hiện và hạn chót.');
+      setFeedback({ type: 'error', text: 'Không thể giao công việc. Vui lòng kiểm tra người thực hiện và hạn chót.' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDecision = async (documentId, decision) => {
+    setDecidingId(documentId);
+    setFeedback({ type: '', text: '' });
+    try {
+      if (decision === 'approve') {
+        await approveDocument({ documentId });
+        setFeedback({ type: 'success', text: 'Bạn đã duyệt công văn.' });
+      } else {
+        await rejectDocument({ documentId });
+        setFeedback({ type: 'success', text: 'Bạn đã xác nhận không duyệt công văn.' });
+      }
+    } catch {
+      setFeedback({ type: 'error', text: 'Không thể cập nhật quyết định duyệt công văn lúc này.' });
+    } finally {
+      setDecidingId(null);
     }
   };
 
@@ -513,12 +537,13 @@ export function WorkUserView() {
         </div>
       </header>
 
-      {feedback ? <div className="work-feedback success">{feedback}</div> : null}
+      {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
 
       {isApprover ? (
         <div className="work-user-list">
           {!data.approvals.length ? <div className="work-empty"><span>✓</span><h3>Không có công văn cần xử lý</h3><p>Khi Admin chỉ định bạn duyệt, hồ sơ sẽ xuất hiện tại đây.</p></div> : data.approvals.map((document) => {
             const ownApproval = document.approvers.find((person) => String(person._id) === String(data.userId));
+            const canDecide = document.status === 'pending' && ownApproval && !ownApproval.approved && !ownApproval.rejected;
             return (
               <article className="work-user-card approval-card" key={document._id}>
                 <div className="work-user-card-top">
@@ -531,11 +556,6 @@ export function WorkUserView() {
                 <h3>{document.fileName}</h3>
                 <div className="work-card-meta"><span>Duyệt <strong>{document.approvalCount}/{document.approvalTotal}</strong></span></div>
                 {document.fileUrl ? <a className="work-file-link" href={document.fileUrl} target="_blank" rel="noreferrer">↗ Mở {document.fileName}</a> : null}
-                {document.status === 'pending' && ownApproval && !ownApproval.approved ? (
-                  <button type="button" className="work-primary-button" onClick={async () => { try { await approveDocument({ documentId: document._id }); } catch { setFeedback('Không thể duyệt công văn lúc này.'); } }}>
-                    ✓ Tôi duyệt công văn này
-                  </button>
-                ) : null}
                 <div className="work-document-assignments">
                   {document.assignments.map((assignment) => (
                     <section key={assignment._id || assignment.departmentId}>
@@ -548,6 +568,16 @@ export function WorkUserView() {
                     </section>
                   ))}
                 </div>
+                {canDecide ? (
+                  <div className="work-approval-actions">
+                    <button type="button" className="work-primary-button" disabled={decidingId === document._id} onClick={() => void handleDecision(document._id, 'approve')}>
+                      ✓ Tôi duyệt công văn này
+                    </button>
+                    <button type="button" className="work-reject-button" disabled={decidingId === document._id} onClick={() => void handleDecision(document._id, 'reject')}>
+                      × Tôi không duyệt công văn này
+                    </button>
+                  </div>
+                ) : null}
               </article>
             );
           })}
@@ -582,7 +612,7 @@ export function WorkUserView() {
               <h3>{task.title}</h3>
               <p>{task.documentContent}</p>
               <div className="work-card-meta"><span>Hạn hoàn thành <strong>{formatWorkDate(task.deadline)}</strong></span></div>
-              {task.status === 'pending' ? <button type="button" className="work-primary-button" onClick={async () => { try { await completePersonalTask({ taskId: task._id }); } catch { setFeedback('Không thể hoàn thành đầu mục này.'); } }}>✓ Đã hoàn thành</button> : null}
+              {task.status === 'pending' ? <button type="button" className="work-primary-button" onClick={async () => { try { await completePersonalTask({ taskId: task._id }); } catch { setFeedback({ type: 'error', text: 'Không thể hoàn thành đầu mục này.' }); } }}>✓ Đã hoàn thành</button> : null}
               {task.status === 'overdue' ? <small className="work-overdue-note">Đã quá hạn — đầu mục được khóa, không thể xác nhận.</small> : null}
             </article>
           ))}

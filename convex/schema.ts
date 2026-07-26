@@ -191,7 +191,8 @@ export default defineSchema({
     ),
     approverUserIds: v.array(v.string()),
     approvedByUserIds: v.array(v.string()),
-    status: v.string(), // pending | approved
+    rejectedByUserIds: v.optional(v.array(v.string())),
+    status: v.string(), // pending | approved | rejected
     active: v.boolean(),
     createdBy: v.string(),
     updatedBy: v.optional(v.string()),

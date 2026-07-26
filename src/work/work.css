@@ -146,7 +146,8 @@
 
 .work-primary-button,
 .work-outline-button,
-.work-ghost-button {
+.work-ghost-button,
+.work-reject-button {
   min-height: 38px;
   padding: 0 14px;
   border-radius: 9px;
@@ -190,8 +191,21 @@
   background: #fff;
 }
 
+.work-reject-button {
+  border: 1px solid #efc7bf;
+  color: #9b4539;
+  background: #ffebe7;
+}
+
+.work-reject-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #ffdfd9;
+  box-shadow: 4px 6px 0 rgba(155, 69, 57, .1);
+}
+
 .work-primary-button:disabled,
-.work-outline-button:disabled {
+.work-outline-button:disabled,
+.work-reject-button:disabled {
   opacity: .5;
   cursor: not-allowed;
 }
@@ -660,6 +674,11 @@
   background: #def4eb;
 }
 
+.work-status.rejected {
+  color: #9b4539;
+  background: #ffdfd9;
+}
+
 .work-status.in_progress,
 .work-status.pending_task {
   color: #2c5d91;
@@ -792,6 +811,22 @@
 .work-approval-avatars span.approved {
   color: #fff;
   background: var(--work-teal);
+}
+
+.work-approval-avatars span.rejected {
+  color: #fff;
+  background: var(--work-coral);
+}
+
+.work-approval-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid #e6ecee;
 }
 
 .work-progress {
@@ -1086,7 +1121,8 @@
   .work-page-actions h3 { font-size: 16px; }
   .work-primary-button,
   .work-outline-button,
-  .work-ghost-button { min-height: 36px; padding: 0 10px; }
+  .work-ghost-button,
+  .work-reject-button { min-height: 36px; padding: 0 10px; }
   .work-editor { padding: 15px; }
   .work-department-assignments > header { align-items: flex-start; }
   .work-department-assignments > header .work-outline-button { max-width: 145px; white-space: normal; }
@@ -1098,6 +1134,7 @@
   .work-user-card-top > div { display: grid; gap: 5px; }
   .work-task-row { align-items: flex-start; }
   .work-task-row .work-status { flex: 0 0 auto; }
+  .work-approval-actions > button { flex: 1 1 210px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

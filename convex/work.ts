@@ -105,6 +105,7 @@ async function catalog(ctx: any) {
 }
 
 async function documentView(ctx: any, document: any, catalogData: any) {
+  const rejectedByUserIds = document.rejectedByUserIds || [];
   const assignments = documentAssignments(document).map((assignment: any) => ({
     departmentId: assignment.departmentId,
     departmentName:
@@ -122,6 +123,7 @@ async function documentView(ctx: any, document: any, catalogData: any) {
       email: user.email || "",
       level: activePositionLevel(user, catalogData.positions),
       approved: document.approvedByUserIds.some((id: string) => String(id) === String(user._id)),
+      rejected: rejectedByUserIds.some((id: string) => String(id) === String(user._id)),
     }));
   return {
     _id: document._id,
@@ -248,6 +250,7 @@ export const createDocument = mutation({
       assignments,
       approverUserIds,
       approvedByUserIds: [],
+      rejectedByUserIds: [],
       status: "pending",
       active: true,
       createdBy: actor.user._id,
@@ -351,6 +354,9 @@ export const approveDocument = mutation({
       throw new Error("WORK_APPROVER_FORBIDDEN");
     }
     if (document.approvedByUserIds.some((id: string) => String(id) === String(access.user._id))) return;
+    if (document.status !== "pending" || (document.rejectedByUserIds || []).length) {
+      throw new Error("WORK_DOCUMENT_ALREADY_DECIDED");
+    }
     const approvedByUserIds = [...document.approvedByUserIds, access.user._id];
     const status = document.approverUserIds.every((id: string) =>
       approvedByUserIds.some((approvedId: string) => String(approvedId) === String(id)),
@@ -366,6 +372,41 @@ export const approveDocument = mutation({
       targetEmail: access.user.email,
       action: "work.document.approve",
       details: JSON.stringify({ documentId: args.documentId, status }),
+      at: Date.now(),
+    });
+  },
+});
+
+export const rejectDocument = mutation({
+  args: { documentId: v.id("officeDocuments") },
+  handler: async (ctx, args) => {
+    const access = await requireWorkAccess(ctx);
+    if (access.isAdmin) throw new Error("ADMIN_USE_MANAGEMENT");
+    if (access.level < 4) throw new Error("WORK_APPROVER_REQUIRED");
+    const document = await ctx.db.get(args.documentId);
+    if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
+    if (!document.approverUserIds.some((id: string) => String(id) === String(access.user._id))) {
+      throw new Error("WORK_APPROVER_FORBIDDEN");
+    }
+    const rejectedByUserIds = document.rejectedByUserIds || [];
+    if (rejectedByUserIds.some((id: string) => String(id) === String(access.user._id))) return;
+    if (
+      document.status !== "pending" ||
+      document.approvedByUserIds.some((id: string) => String(id) === String(access.user._id))
+    ) {
+      throw new Error("WORK_DOCUMENT_ALREADY_DECIDED");
+    }
+    await ctx.db.patch(args.documentId, {
+      rejectedByUserIds: [...rejectedByUserIds, access.user._id],
+      status: "rejected",
+      updatedBy: access.user._id,
+      updatedAt: Date.now(),
+    });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: access.user._id,
+      targetEmail: access.user.email,
+      action: "work.document.reject",
+      details: JSON.stringify({ documentId: args.documentId, status: "rejected" }),
       at: Date.now(),
     });
   },
@@ -626,7 +667,9 @@ export const badge = query({
     if (access.level >= 4) {
       count += activeDocuments.filter((document: any) =>
         document.approverUserIds.some((id: string) => String(id) === String(access.user._id)) &&
-        !document.approvedByUserIds.some((id: string) => String(id) === String(access.user._id)),
+        document.status === "pending" &&
+        !document.approvedByUserIds.some((id: string) => String(id) === String(access.user._id)) &&
+        !(document.rejectedByUserIds || []).some((id: string) => String(id) === String(access.user._id)),
       ).length;
       count += activeWorkItems.filter((item: any) => {
         const document = docsById.get(String(item.documentId));
