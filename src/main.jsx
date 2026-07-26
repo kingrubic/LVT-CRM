@@ -87,6 +87,8 @@ function messageFor(error) {
     WORK_UPLOAD_FAILED: 'Không thể tải tệp công văn lên.',
     INVALID_WORK_DEADLINE: 'Hạn chót công việc không hợp lệ.',
     INVALID_WORK_CONTENT: 'Nội dung công việc bắt buộc và tối đa 2.000 ký tự.',
+    WORK_DEPARTMENTS_REQUIRED: 'Vui lòng thêm ít nhất một phòng ban nhận việc.',
+    WORK_DEPARTMENT_DUPLICATE: 'Mỗi phòng ban chỉ được nhận một đầu việc trong cùng công văn.',
     WORK_APPROVERS_REQUIRED: 'Vui lòng chọn ít nhất một người duyệt.',
     INVALID_WORK_APPROVER: 'Người duyệt phải là user đang hoạt động cấp 4 hoặc 5 sao.',
     WORK_APPROVER_REQUIRED: 'Chỉ user cấp 4 hoặc 5 sao mới được duyệt công văn.',

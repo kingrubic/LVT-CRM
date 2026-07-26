@@ -251,7 +251,9 @@
 .work-editor select,
 .work-editor textarea,
 .work-modal input[type="text"],
-.work-modal input[type="date"] {
+.work-modal input[type="date"],
+.work-modal select,
+.work-modal textarea {
   width: 100%;
   min-height: 42px;
   padding: 0 11px;
@@ -271,10 +273,19 @@
   line-height: 1.5;
 }
 
+.work-modal textarea {
+  min-height: 125px;
+  padding: 11px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
 .work-editor input:focus,
 .work-editor select:focus,
 .work-editor textarea:focus,
-.work-modal input:focus {
+.work-modal input:focus,
+.work-modal select:focus,
+.work-modal textarea:focus {
   border-color: #65b5a8;
   box-shadow: 0 0 0 3px rgba(19, 143, 123, .1);
 }
@@ -437,6 +448,120 @@
   border-top: 1px solid #e4ebee;
 }
 
+.work-department-assignments {
+  overflow: hidden;
+  margin-top: 17px;
+  border: 1px solid #dce5e9;
+  border-radius: 12px;
+  background: #f8fafb;
+}
+
+.work-department-assignments > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 13px;
+  border-bottom: 1px solid #e2e9ed;
+  background: #fff;
+}
+
+.work-department-assignments > header span {
+  display: block;
+  margin-bottom: 3px;
+  color: #7b8f9f;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.work-department-assignments > header h4 {
+  margin: 0;
+  color: var(--work-navy);
+  font-size: 13px;
+}
+
+.work-assignment-table {
+  overflow-x: auto;
+}
+
+.work-assignment-table-head,
+.work-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(140px, .7fr) minmax(260px, 1.6fr) 120px 30px;
+  align-items: center;
+  gap: 12px;
+  min-width: 680px;
+  padding: 10px 12px;
+}
+
+.work-assignment-table-head {
+  color: #8796a2;
+  background: #edf2f4;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.work-assignment-row {
+  border-top: 1px solid #e6ecef;
+  color: #617585;
+  background: #fff;
+  font-size: 9px;
+}
+
+.work-assignment-row strong {
+  color: #38556c;
+  font-size: 10px;
+}
+
+.work-assignment-row > span {
+  overflow: hidden;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-assignment-row time {
+  color: #9b6a17;
+  font-weight: 800;
+}
+
+.work-assignment-row button {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #a24e3f;
+  background: #ffede9;
+  font-size: 16px;
+}
+
+.work-assignment-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 80px;
+  padding: 14px;
+  color: #8495a1;
+  text-align: center;
+}
+
+.work-assignment-empty > span {
+  color: var(--work-gold);
+  font-size: 22px;
+}
+
+.work-assignment-empty p {
+  margin: 0;
+  font-size: 9px;
+}
+
 .work-feedback {
   margin-top: 12px;
   padding: 10px 12px;
@@ -586,6 +711,48 @@
 .work-file-link {
   color: #16786b;
   text-decoration: none;
+}
+
+.work-document-assignments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.work-document-assignments > section {
+  padding: 10px 11px;
+  border: 1px solid #dfe8eb;
+  border-radius: 10px;
+  background: #f8faf9;
+}
+
+.work-document-assignments > section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.work-document-assignments > section > header strong {
+  color: #385a6e;
+  font-size: 10px;
+}
+
+.work-document-assignments p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 8px 0 6px;
+  color: #617786;
+  font-size: 9px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.work-document-assignments small {
+  color: #8e9ca5;
+  font-size: 8px;
 }
 
 .work-approval-summary {
@@ -862,7 +1029,9 @@
 }
 
 .work-modal input[type="text"],
-.work-modal input[type="date"] {
+.work-modal input[type="date"],
+.work-modal select,
+.work-modal textarea {
   margin-top: 5px;
 }
 
@@ -919,6 +1088,8 @@
   .work-outline-button,
   .work-ghost-button { min-height: 36px; padding: 0 10px; }
   .work-editor { padding: 15px; }
+  .work-department-assignments > header { align-items: flex-start; }
+  .work-department-assignments > header .work-outline-button { max-width: 145px; white-space: normal; }
   .work-document-meta { grid-template-columns: 1fr; gap: 3px; }
   .work-document-meta strong,
   .work-document-meta a { margin-bottom: 6px; }

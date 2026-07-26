@@ -103,6 +103,68 @@ function DepartmentProgress({ status, taskCount }) {
   );
 }
 
+function DepartmentAssignmentModal({ departments, selectedDepartmentIds, onClose, onDone }) {
+  const [departmentId, setDepartmentId] = useState('');
+  const [content, setContent] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [error, setError] = useState('');
+  const availableDepartments = departments.filter(
+    (department) => !selectedDepartmentIds.includes(String(department._id)),
+  );
+  const submit = (event) => {
+    event.preventDefault();
+    if (!departmentId || !content.trim() || !deadline) {
+      setError('Vui lòng điền đủ phòng ban, nội dung công việc và hạn chót.');
+      return;
+    }
+    const department = departments.find(
+      (item) => String(item._id) === String(departmentId),
+    );
+    onDone({
+      departmentId,
+      departmentName: department?.name || 'Chưa gán phòng ban',
+      content: content.trim(),
+      deadline,
+    });
+  };
+  return (
+    <div className="work-modal-backdrop" role="presentation">
+      <form className="work-modal department-assignment-modal" onSubmit={submit}>
+        <button type="button" className="work-modal-close" onClick={onClose} aria-label="Đóng">×</button>
+        <span className="work-kicker">Phân công · Phòng ban</span>
+        <h3>Thêm phòng ban nhận việc</h3>
+        <p className="work-modal-context">Mỗi phòng ban có nội dung và hạn hoàn thành riêng.</p>
+        <label className="work-field-label" htmlFor="assignment-department">Phòng ban nhận việc</label>
+        <select id="assignment-department" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} required>
+          <option value="">Chọn phòng ban</option>
+          {availableDepartments.map((department) => (
+            <option key={department._id} value={department._id}>{department.name}</option>
+          ))}
+        </select>
+        <label className="work-field-label" htmlFor="assignment-content">
+          Nội dung công việc <small>{content.length}/2000</small>
+        </label>
+        <textarea
+          id="assignment-content"
+          value={content}
+          maxLength={2000}
+          rows={6}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder="Nhập yêu cầu cụ thể dành cho phòng ban này…"
+          required
+        />
+        <label className="work-field-label" htmlFor="assignment-deadline">Hạn chót hoàn thành</label>
+        <input id="assignment-deadline" type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
+        {error ? <div className="work-feedback error">{error}</div> : null}
+        <div className="work-modal-actions">
+          <button type="button" className="work-ghost-button" onClick={onClose}>Hủy</button>
+          <button type="submit" className="work-primary-button" disabled={!availableDepartments.length}>Xong</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function WorkManagement() {
   const options = useQuery(anyApi.work.formOptions);
   const documents = useQuery(anyApi.work.listAdmin);
@@ -110,18 +172,15 @@ export function WorkManagement() {
   const createDocument = useMutation(anyApi.work.createDocument);
   const [open, setOpen] = useState(true);
   const [file, setFile] = useState(null);
-  const [departmentId, setDepartmentId] = useState('');
-  const [content, setContent] = useState('');
-  const [deadline, setDeadline] = useState('');
+  const [departmentAssignments, setDepartmentAssignments] = useState([]);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
   const [approverIds, setApproverIds] = useState([]);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const [saving, setSaving] = useState(false);
 
   const reset = () => {
     setFile(null);
-    setDepartmentId('');
-    setContent('');
-    setDeadline('');
+    setDepartmentAssignments([]);
     setApproverIds([]);
   };
 
@@ -129,8 +188,8 @@ export function WorkManagement() {
     event.preventDefault();
     setFeedback({ type: '', text: '' });
     if (!file) return setFeedback({ type: 'error', text: 'Vui lòng tải công văn lên trước.' });
-    if (!departmentId || !deadline || !approverIds.length || !content.trim()) {
-      return setFeedback({ type: 'error', text: 'Vui lòng điền đủ phòng ban, nội dung, hạn chót và người duyệt.' });
+    if (!departmentAssignments.length || !approverIds.length) {
+      return setFeedback({ type: 'error', text: 'Vui lòng thêm ít nhất một phòng ban nhận việc và chọn người duyệt.' });
     }
     setSaving(true);
     try {
@@ -147,9 +206,11 @@ export function WorkManagement() {
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
-        departmentId,
-        content,
-        deadline,
+        assignments: departmentAssignments.map(({ departmentId: id, content: assignmentContent, deadline: assignmentDeadline }) => ({
+          departmentId: id,
+          content: assignmentContent,
+          deadline: assignmentDeadline,
+        })),
         approverUserIds: approverIds,
       });
       setFeedback({ type: 'success', text: 'Đã tạo công văn và gửi đến người duyệt.' });
@@ -208,24 +269,8 @@ export function WorkManagement() {
                   if (error) setFeedback({ type: 'error', text: error });
                 }}
               />
-              <label className="work-field-label" htmlFor="work-content">Nội dung công việc <small>{content.length}/2000</small></label>
-              <textarea
-                id="work-content"
-                maxLength={2000}
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                placeholder="Tóm tắt yêu cầu cần phòng ban tiếp nhận thực hiện…"
-                rows={6}
-              />
             </div>
             <div className="work-editor-column">
-              <label className="work-field-label" htmlFor="work-department">Phân công · Phòng ban nhận việc</label>
-              <select id="work-department" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
-                <option value="">Chọn phòng ban</option>
-                {options.departments.map((department) => <option key={department._id} value={department._id}>{department.name}</option>)}
-              </select>
-              <label className="work-field-label" htmlFor="work-deadline">Hạn chót hoàn thành</label>
-              <input id="work-deadline" type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
               <div className="work-approver-block">
                 <div className="work-field-label">
                   <span>Duyệt công văn</span>
@@ -251,6 +296,49 @@ export function WorkManagement() {
               </div>
             </div>
           </div>
+          <section className="work-department-assignments">
+            <header>
+              <div>
+                <span>PHÂN CÔNG</span>
+                <h4>Phòng ban nhận việc</h4>
+              </div>
+              <button type="button" className="work-outline-button" onClick={() => setAssignmentModalOpen(true)}>
+                ＋ Thêm phòng ban nhận việc
+              </button>
+            </header>
+            {departmentAssignments.length ? (
+              <div className="work-assignment-table">
+                <div className="work-assignment-table-head">
+                  <span>Phòng ban</span>
+                  <span>Nội dung công việc</span>
+                  <span>Hạn chót</span>
+                  <span />
+                </div>
+                {departmentAssignments.map((assignment) => (
+                  <div className="work-assignment-row" key={assignment.departmentId}>
+                    <strong>{assignment.departmentName}</strong>
+                    <span>{assignment.content}</span>
+                    <time>{formatWorkDate(assignment.deadline)}</time>
+                    <button
+                      type="button"
+                      onClick={() => setDepartmentAssignments((current) =>
+                        current.filter((item) => item.departmentId !== assignment.departmentId)
+                      )}
+                      aria-label={`Xóa ${assignment.departmentName}`}
+                      title="Xóa phòng ban"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="work-assignment-empty">
+                <span>⌁</span>
+                <p>Chưa có phòng ban nhận việc. Mỗi phòng ban sẽ có nội dung và hạn chót riêng.</p>
+              </div>
+            )}
+          </section>
           {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
           <div className="work-editor-actions">
             <button type="button" className="work-ghost-button" onClick={reset}>Xóa biểu mẫu</button>
@@ -259,20 +347,42 @@ export function WorkManagement() {
         </form>
       ) : null}
 
+      {assignmentModalOpen ? (
+        <DepartmentAssignmentModal
+          departments={options.departments}
+          selectedDepartmentIds={departmentAssignments.map((assignment) => String(assignment.departmentId))}
+          onClose={() => setAssignmentModalOpen(false)}
+          onDone={(assignment) => {
+            setDepartmentAssignments((current) => [...current, assignment]);
+            setAssignmentModalOpen(false);
+          }}
+        />
+      ) : null}
+
       <div className="work-document-grid">
         {documents.length ? documents.map((document) => (
           <article className="work-document-card" key={document._id}>
             <div className="work-document-topline">
               <span className={`work-file-badge ${document.fileType.includes('pdf') ? 'pdf' : 'doc'}`}>{document.fileName.split('.').pop().toUpperCase()}</span>
               <WorkStatus status={document.status} />
-              <time>Hạn {formatWorkDate(document.deadline)}</time>
+              <time>{document.assignmentCount} phòng ban nhận việc</time>
             </div>
-            <h3>{document.content}</h3>
+            <h3>{document.fileName}</h3>
             <div className="work-document-meta">
-              <span>Phòng ban nhận việc</span>
-              <strong>{document.departmentName}</strong>
               <span>Tệp đính kèm</span>
               {document.fileUrl ? <a href={document.fileUrl} target="_blank" rel="noreferrer">{document.fileName} · {fileSizeLabel(document.fileSize)}</a> : <strong>{document.fileName}</strong>}
+            </div>
+            <div className="work-document-assignments">
+              {document.assignments.map((assignment) => (
+                <section key={assignment._id || assignment.departmentId}>
+                  <header>
+                    <strong>{assignment.departmentName}</strong>
+                    <WorkStatus status={assignment.status || 'unassigned'} />
+                  </header>
+                  <p>{assignment.content}</p>
+                  <small>Hạn {formatWorkDate(assignment.deadline)} · {assignment.taskCount || 0} đầu mục cá nhân</small>
+                </section>
+              ))}
             </div>
             <div className="work-approval-summary">
               <div className="work-approval-summary-head">
@@ -283,7 +393,6 @@ export function WorkManagement() {
                 {document.approvers.map((person) => <span className={person.approved ? 'approved' : ''} title={`${person.name} · ${person.approved ? 'Đã duyệt' : 'Chờ duyệt'}`} key={person._id}>{String(person.name).slice(0, 1).toUpperCase()}</span>)}
               </div>
             </div>
-            <DepartmentProgress status={document.workStatus} taskCount={document.taskCount} />
           </article>
         )) : (
           <div className="work-empty"><span>✦</span><h3>Chưa có công văn nào</h3><p>Bấm “Thêm công văn” để bắt đầu giao việc.</p></div>
@@ -393,19 +502,30 @@ export function WorkUserView() {
                 <div className="work-user-card-top">
                   <div>
                     <span className="work-file-badge doc">{document.fileName.split('.').pop().toUpperCase()}</span>
-                    <span className="work-card-eyebrow">Công văn · {document.departmentName}</span>
+                    <span className="work-card-eyebrow">Công văn · {document.assignmentCount} phòng ban</span>
                   </div>
                   <WorkStatus status={document.status} />
                 </div>
-                <h3>{document.content}</h3>
-                <div className="work-card-meta"><span>Hạn phòng ban <strong>{formatWorkDate(document.deadline)}</strong></span><span>Duyệt <strong>{document.approvalCount}/{document.approvalTotal}</strong></span></div>
+                <h3>{document.fileName}</h3>
+                <div className="work-card-meta"><span>Duyệt <strong>{document.approvalCount}/{document.approvalTotal}</strong></span></div>
                 {document.fileUrl ? <a className="work-file-link" href={document.fileUrl} target="_blank" rel="noreferrer">↗ Mở {document.fileName}</a> : null}
                 {document.status === 'pending' && ownApproval && !ownApproval.approved ? (
                   <button type="button" className="work-primary-button" onClick={async () => { try { await approveDocument({ documentId: document._id }); } catch { setFeedback('Không thể duyệt công văn lúc này.'); } }}>
                     ✓ Tôi duyệt công văn này
                   </button>
                 ) : null}
-                <DepartmentProgress status={document.workStatus} taskCount={document.taskCount} />
+                <div className="work-document-assignments">
+                  {document.assignments.map((assignment) => (
+                    <section key={assignment._id || assignment.departmentId}>
+                      <header>
+                        <strong>{assignment.departmentName}</strong>
+                        <WorkStatus status={assignment.status || 'unassigned'} />
+                      </header>
+                      <p>{assignment.content}</p>
+                      <small>Hạn {formatWorkDate(assignment.deadline)} · {assignment.taskCount || 0} đầu mục cá nhân</small>
+                    </section>
+                  ))}
+                </div>
               </article>
             );
           })}

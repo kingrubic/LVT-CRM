@@ -176,9 +176,19 @@ export default defineSchema({
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
+    /** Legacy first assignment fields retained for existing rows. */
     departmentId: v.string(),
     content: v.string(),
     deadline: v.string(), // YYYY-MM-DD
+    assignments: v.optional(
+      v.array(
+        v.object({
+          departmentId: v.string(),
+          content: v.string(),
+          deadline: v.string(),
+        }),
+      ),
+    ),
     approverUserIds: v.array(v.string()),
     approvedByUserIds: v.array(v.string()),
     status: v.string(), // pending | approved

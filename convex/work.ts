@@ -70,6 +70,24 @@ function taskStatus(task: any, userId: string, today = todayInVietnam()) {
   return "pending";
 }
 
+function documentAssignments(document: any) {
+  if (Array.isArray(document.assignments) && document.assignments.length) {
+    return document.assignments;
+  }
+  return [{
+    departmentId: document.departmentId,
+    content: document.content,
+    deadline: document.deadline,
+  }];
+}
+
+function overallCompletionStatus(statuses: string[]) {
+  if (!statuses.length || statuses.every((status) => status === "unassigned")) return "unassigned";
+  if (statuses.every((status) => status === "completed")) return "completed";
+  if (statuses.some((status) => status === "not_completed")) return "not_completed";
+  return "in_progress";
+}
+
 async function catalog(ctx: any) {
   const [users, departments, positions] = await Promise.all([
     ctx.db.query("users").collect(),
@@ -87,7 +105,14 @@ async function catalog(ctx: any) {
 }
 
 async function documentView(ctx: any, document: any, catalogData: any) {
-  const department = catalogData.departmentMap.get(String(document.departmentId));
+  const assignments = documentAssignments(document).map((assignment: any) => ({
+    departmentId: assignment.departmentId,
+    departmentName:
+      catalogData.departmentMap.get(String(assignment.departmentId))?.name ||
+      "Chưa gán phòng ban",
+    content: assignment.content,
+    deadline: assignment.deadline,
+  }));
   const approvers = document.approverUserIds
     .map((id: string) => catalogData.activeUsers.find((user: any) => String(user._id) === String(id)))
     .filter(Boolean)
@@ -108,7 +133,9 @@ async function documentView(ctx: any, document: any, catalogData: any) {
     deadline: document.deadline,
     status: document.status,
     departmentId: document.departmentId,
-    departmentName: department?.name || "Chưa gán phòng ban",
+    departmentName: assignments[0]?.departmentName || "Chưa gán phòng ban",
+    assignments,
+    assignmentCount: assignments.length,
     approvers,
     approvalCount: document.approvedByUserIds.length,
     approvalTotal: document.approverUserIds.length,
@@ -162,9 +189,13 @@ export const createDocument = mutation({
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
-    departmentId: v.string(),
-    content: v.string(),
-    deadline: v.string(),
+    assignments: v.array(
+      v.object({
+        departmentId: v.string(),
+        content: v.string(),
+        deadline: v.string(),
+      }),
+    ),
     approverUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
@@ -177,11 +208,22 @@ export const createDocument = mutation({
     if (!Number.isFinite(args.fileSize) || args.fileSize <= 0 || args.fileSize > MAX_FILE_SIZE) {
       throw new Error("WORK_FILE_TOO_LARGE");
     }
-    const content = assertContent(args.content);
-    const deadline = assertDate(args.deadline);
-    const department = await ctx.db.query("departments").collect();
-    const selectedDepartment = department.find((item: any) => String(item._id) === String(args.departmentId));
-    if (!selectedDepartment?.active) throw new Error("INVALID_DEPARTMENT");
+    if (!args.assignments.length) throw new Error("WORK_DEPARTMENTS_REQUIRED");
+    const assignments = args.assignments.map((assignment) => ({
+      departmentId: assignment.departmentId.trim(),
+      content: assertContent(assignment.content),
+      deadline: assertDate(assignment.deadline),
+    }));
+    if (new Set(assignments.map((assignment) => assignment.departmentId)).size !== assignments.length) {
+      throw new Error("WORK_DEPARTMENT_DUPLICATE");
+    }
+    const departments = await ctx.db.query("departments").collect();
+    for (const assignment of assignments) {
+      const department = departments.find(
+        (item: any) => String(item._id) === String(assignment.departmentId),
+      );
+      if (!department?.active) throw new Error("INVALID_DEPARTMENT");
+    }
 
     const users = await ctx.db.query("users").collect();
     const approverUserIds = [...new Set(args.approverUserIds.map((id) => id.trim()).filter(Boolean))];
@@ -194,14 +236,16 @@ export const createDocument = mutation({
       }
     }
     const now = Date.now();
+    const firstAssignment = assignments[0];
     const documentId = await ctx.db.insert("officeDocuments", {
       fileId: args.fileId,
       fileName,
       fileType: args.fileType.trim() || "application/octet-stream",
       fileSize: args.fileSize,
-      departmentId: args.departmentId,
-      content,
-      deadline,
+      departmentId: firstAssignment.departmentId,
+      content: firstAssignment.content,
+      deadline: firstAssignment.deadline,
+      assignments,
       approverUserIds,
       approvedByUserIds: [],
       status: "pending",
@@ -211,21 +255,27 @@ export const createDocument = mutation({
       createdAt: now,
       updatedAt: now,
     });
-    await ctx.db.insert("workItems", {
-      documentId,
-      departmentId: args.departmentId,
-      content,
-      deadline,
-      active: true,
-      createdBy: actor.user._id,
-      updatedBy: actor.user._id,
-      createdAt: now,
-      updatedAt: now,
-    });
+    for (const assignment of assignments) {
+      await ctx.db.insert("workItems", {
+        documentId,
+        departmentId: assignment.departmentId,
+        content: assignment.content,
+        deadline: assignment.deadline,
+        active: true,
+        createdBy: actor.user._id,
+        updatedBy: actor.user._id,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
       action: "work.document.create",
-      details: JSON.stringify({ documentId, departmentId: args.departmentId, deadline, approverCount: approverUserIds.length }),
+      details: JSON.stringify({
+        documentId,
+        assignmentCount: assignments.length,
+        approverCount: approverUserIds.length,
+      }),
       at: now,
     });
     return documentId;
@@ -246,16 +296,42 @@ export const listAdmin = query({
     const activeWorkItems = workItems.filter((item: any) => item.active);
     const views = await Promise.all(
       activeDocuments.map(async (document: any) => {
-        const item = activeWorkItems.find((workItem: any) => String(workItem.documentId) === String(document._id));
-        const tasks = activeWorkItems.length
-          ? personalTasks.filter((task: any) => String(task.workItemId) === String(item?._id) && task.active)
-          : [];
+        const items = activeWorkItems.filter(
+          (workItem: any) => String(workItem.documentId) === String(document._id),
+        );
+        const assignmentViews = items.map((item: any) => {
+          const tasks = personalTasks.filter(
+            (task: any) => String(task.workItemId) === String(item._id) && task.active,
+          );
+          return {
+            _id: item._id,
+            departmentId: item.departmentId,
+            departmentName:
+              String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "") ||
+              "Chưa gán phòng ban",
+            content: item.content,
+            deadline: item.deadline,
+            status: completionStatus(tasks),
+            taskCount: tasks.length,
+            taskCompletedCount: tasks.filter((task: any) =>
+              task.assigneeUserIds.every((id: string) =>
+                task.completedUserIds.some(
+                  (completedId: string) => String(completedId) === String(id),
+                ),
+              ),
+            ).length,
+          };
+        });
         return {
           ...(await documentView(ctx, document, catalogData)),
-          workItemId: item?._id || null,
-          workStatus: item ? completionStatus(tasks) : "unassigned",
-          taskCount: tasks.length,
-          taskCompletedCount: tasks.filter((task: any) => task.assigneeUserIds.every((id: string) => task.completedUserIds.includes(id))).length,
+          assignments: assignmentViews,
+          workStatus: overallCompletionStatus(
+            assignmentViews.map((assignment: any) => assignment.status),
+          ),
+          taskCount: assignmentViews.reduce(
+            (total: number, assignment: any) => total + assignment.taskCount,
+            0,
+          ),
         };
       }),
     );
@@ -403,12 +479,33 @@ export const listMine = query({
       : [];
     const approvalViews = await Promise.all(
       visibleApprovalDocs.map(async (document: any) => {
-        const item = activeWorkItems.find((workItem: any) => String(workItem.documentId) === String(document._id));
-        const tasks = item ? tasksByItem.get(String(item._id)) || [] : [];
+        const items = activeWorkItems.filter(
+          (workItem: any) => String(workItem.documentId) === String(document._id),
+        );
+        const assignments = items.map((item: any) => {
+          const tasks = tasksByItem.get(String(item._id)) || [];
+          return {
+            _id: item._id,
+            departmentId: item.departmentId,
+            departmentName:
+              String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "") ||
+              "Chưa gán phòng ban",
+            content: item.content,
+            deadline: item.deadline,
+            status: completionStatus(tasks),
+            taskCount: tasks.length,
+          };
+        });
         return {
           ...(await documentView(ctx, document, catalogData)),
-          workStatus: completionStatus(tasks),
-          taskCount: tasks.length,
+          assignments,
+          workStatus: overallCompletionStatus(
+            assignments.map((assignment: any) => assignment.status),
+          ),
+          taskCount: assignments.reduce(
+            (total: number, assignment: any) => total + assignment.taskCount,
+            0,
+          ),
         };
       }),
     );
