@@ -20,6 +20,7 @@ import type * as positions from "../positions.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
+import type * as work from "../work.js";
 
 import type {
   ApiFromModules,
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   reports: typeof reports;
   seed: typeof seed;
   users: typeof users;
+  work: typeof work;
 }>;
 
 /**

@@ -11,9 +11,9 @@ Frontend: Vite dev (`--host 0.0.0.0`). Backend: Convex local `http://127.0.0.1:3
 - **Hai vai trò hệ thống** trên `users.role`:
   - `admin` — **Quản trị viên**: mọi quyền cao nhất; thấy toàn bộ menu Quản trị hệ thống + menu Cài đặt quản lý.
   - `user` — **Người dùng**: menu theo **nhóm quyền** do admin gán; Cài đặt chỉ còn **Thông tin cá nhân** (hồ sơ + đổi mật khẩu).
-- Admin quản lý: người dùng, phòng ban, nhóm quyền, chức vụ (CRUD + gán user).
+- Admin quản lý: người dùng, phòng ban, nhóm quyền, chức vụ, bán trú và công việc (CRUD + gán user).
 - Mật khẩu băm bởi Convex Auth (Scrypt); plaintext không lưu / không ghi audit. Tài khoản tạo/reset có `mustChangePassword=true`.
-- Module nghiệp vụ (Báo cáo, Công tác, …) vẫn placeholder; quyền menu đã được mô hình hóa.
+- Module Công tác, Báo cáo và Công việc đã có luồng dữ liệu; các menu khác tiếp tục dùng placeholder theo phạm vi triển khai.
 
 ## Mô hình phân quyền
 
@@ -63,10 +63,12 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Menu Cài đặt (chỉ admin)
 
-1. Quản lý người dùng  
-2. Quản lý phòng ban  
-3. Quản lý nhóm quyền  
-4. Quản lý chức vụ  
+1. Quản lý người dùng
+2. Quản lý phòng ban
+3. Quản lý nhóm quyền
+4. Quản lý chức vụ
+5. Quản lý bán trú
+6. Quản lý công việc (tải công văn, chọn phòng ban nhận việc, chọn người duyệt 4–5 sao)
 
 User thường: Cài đặt → **Thông tin cá nhân** (tên, email, vai trò, PB, chức vụ, nhóm quyền, đổi MK).
 
@@ -78,11 +80,14 @@ User thường: Cài đặt → **Thông tin cá nhân** (tên, email, vai trò,
 | `departments` | Phòng ban (`code` unique) |
 | `permissionGroups` | Nhóm quyền + `menuAccess[]` |
 | `positions` | Chức vụ + `level` 1–5 |
+| `officeDocuments` | Công văn, tệp đính kèm, người duyệt và trạng thái duyệt |
+| `workItems` | Công việc phòng ban sau khi công văn được duyệt |
+| `personalTasks` | Đầu mục cá nhân, người thực hiện, deadline và trạng thái hoàn thành |
 | `roles` | Legacy seed admin permissions (tùy chọn; gate admin thực tế = `role === "admin"`) |
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `departments.ts`, `permissionGroups.ts`, `positions.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `departments.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
 
 ## Convex Auth beta
 

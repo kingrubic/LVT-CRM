@@ -8,6 +8,7 @@ import './styles.css';
 import DutyReportsView from './reports/DutyReportsView';
 import BoardingManagement from './boarding/BoardingManagement';
 import BoardingReportsView from './boarding/BoardingReportsView';
+import { WorkManagement, WorkUserView } from './work/WorkViews';
 import './management/managementTheme.css';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
@@ -28,6 +29,7 @@ const ADMIN_SETTINGS = [
   ['roles', 'Quản lý nhóm quyền'],
   ['positions', 'Quản lý chức vụ'],
   ['boarding', 'Quản lý bán trú'],
+  ['work-management', 'Quản lý công việc'],
 ];
 const ROLE_LABELS = { admin: 'Quản trị viên', user: 'Người dùng' };
 const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', edit: 'Sửa' };
@@ -80,6 +82,22 @@ function messageFor(error) {
     NOT_A_PARTICIPANT: 'Bạn không nằm trong danh sách tham gia công tác này.',
     NOT_A_SUBORDINATE: 'Bạn chỉ được cập nhật trạng thái của cấp dưới cùng phòng ban.',
     ATTENDANCE_OUTSIDE_WINDOW: 'Chỉ xác nhận tham gia trong thời gian diễn ra công tác.',
+    INVALID_WORK_FILE: 'Tệp công văn không đúng định dạng được hỗ trợ.',
+    WORK_FILE_TOO_LARGE: 'Tệp công văn không được vượt quá 20MB.',
+    WORK_UPLOAD_FAILED: 'Không thể tải tệp công văn lên.',
+    INVALID_WORK_DEADLINE: 'Hạn chót công việc không hợp lệ.',
+    INVALID_WORK_CONTENT: 'Nội dung công việc bắt buộc và tối đa 2.000 ký tự.',
+    WORK_APPROVERS_REQUIRED: 'Vui lòng chọn ít nhất một người duyệt.',
+    INVALID_WORK_APPROVER: 'Người duyệt phải là user đang hoạt động cấp 4 hoặc 5 sao.',
+    WORK_APPROVER_REQUIRED: 'Chỉ user cấp 4 hoặc 5 sao mới được duyệt công văn.',
+    WORK_APPROVER_FORBIDDEN: 'Bạn không nằm trong danh sách duyệt công văn này.',
+    WORK_NOT_APPROVED: 'Công văn chưa được duyệt đủ.',
+    INVALID_PERSONAL_WORK_TITLE: 'Tên công việc cá nhân bắt buộc và tối đa 200 ký tự.',
+    WORK_ASSIGNEES_REQUIRED: 'Vui lòng chọn người thực hiện.',
+    INVALID_WORK_ASSIGNEE: 'Người thực hiện phải cùng phòng ban và có cấp sao thấp hơn bạn.',
+    WORK_ASSIGNER_REQUIRED: 'Chỉ user cấp 2 hoặc 3 mới được chỉ định công việc.',
+    WORK_EXECUTOR_REQUIRED: 'Chỉ user cấp 1 sao mới được hoàn thành đầu mục.',
+    PERSONAL_WORK_OVERDUE: 'Đầu mục đã quá hạn và không thể xác nhận.',
   };
 
   // Prefer longest known code match inside the raw error text (handles Convex wrappers).
@@ -128,6 +146,7 @@ function AuthenticatedApp() {
 function AppShell({ session }) {
   const { signOut } = useAuthActions();
   const { user, isAdmin, menuAccess } = session;
+  const workBadge = useQuery(anyApi.work.badge, isAdmin || menuAccess?.work !== 'hidden' ? {} : 'skip');
   const visibleSystemMenus = useMemo(() => {
     if (isAdmin) return SYSTEM_MENUS;
     return SYSTEM_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
@@ -193,7 +212,7 @@ function AppShell({ session }) {
           ) : (
             visibleSystemMenus.map(([id, label]) => (
               <React.Fragment key={id}>
-                <NavButton id={id} label={label} active={active} onClick={choose} />
+                <NavButton id={id} label={label} badge={id === 'work' ? workBadge?.count : 0} active={active} onClick={choose} />
                 {id === 'reports' && active === 'reports' ? (
                   <ReportSubmenu
                     active={reportSection}
@@ -262,8 +281,12 @@ function AppShell({ session }) {
           <PositionManagement />
         ) : active === 'boarding' && isAdmin ? (
           <BoardingManagement />
+        ) : active === 'work-management' && isAdmin ? (
+          <WorkManagement />
         ) : active === 'duties' ? (
           isAdmin ? <DutiesAdminView currentUserId={user._id} /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
+        ) : active === 'work' ? (
+          isAdmin ? <WorkManagement /> : <WorkUserView />
         ) : active === 'reports' ? (
           reportSection === 'boarding' ? <BoardingReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
@@ -293,11 +316,12 @@ function ReportSubmenu({ active, onChoose }) {
   );
 }
 
-function NavButton({ id, label, icon = '→', active, onClick, nested }) {
+function NavButton({ id, label, icon = '→', active, onClick, nested, badge = 0 }) {
   return (
     <button type="button" className={`shell-nav-button ${active === id ? 'active' : ''} ${nested ? 'nested' : ''}`} onClick={() => onClick(id)}>
       <span className="nav-icon">{icon}</span>
       <span>{label}</span>
+      {badge > 0 ? <b className="nav-badge">{badge > 99 ? '99+' : badge}</b> : null}
     </button>
   );
 }
