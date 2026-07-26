@@ -440,7 +440,7 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
         <h3>Chỉ định đầu mục</h3>
         <p className="work-modal-context">{work.departmentName} · Hạn phòng ban {formatWorkDate(work.deadline)}</p>
         <label className="work-field-label" htmlFor="personal-title">Tên công việc <small>{title.length}/200</small></label>
-        <input id="personal-title" maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: Tổng hợp danh sách hồ sơ…" required />
+        <input id="personal-title" type="text" maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: Tổng hợp danh sách hồ sơ…" required />
         <label className="work-field-label" htmlFor="personal-deadline">Hạn chót hoàn thành</label>
         <input id="personal-deadline" type="date" min={new Date().toISOString().slice(0, 10)} value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
         <div className="work-field-label">Người thực hiện <small>{assigneeIds.length} người</small></div>
