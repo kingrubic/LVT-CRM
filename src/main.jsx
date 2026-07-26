@@ -3,7 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
 import { anyApi } from 'convex/server';
+import '@fontsource-variable/montserrat';
 import './styles.css';
+import DutyReportsView from './reports/DutyReportsView';
+import BoardingManagement from './boarding/BoardingManagement';
+import BoardingReportsView from './boarding/BoardingReportsView';
+import './management/managementTheme.css';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl = window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : configuredConvexUrl;
@@ -22,9 +27,10 @@ const ADMIN_SETTINGS = [
   ['locations', 'Quản lý địa điểm'],
   ['roles', 'Quản lý nhóm quyền'],
   ['positions', 'Quản lý chức vụ'],
+  ['boarding', 'Quản lý bán trú'],
 ];
 const ROLE_LABELS = { admin: 'Quản trị viên', user: 'Người dùng' };
-const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', edit: 'Sửa' };
+const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', edit: 'Sửa' };
 
 function messageFor(error) {
   // Convex often wraps codes: "[Request ID] Server Error\nCODE", "Uncaught Error: CODE", etc.
@@ -72,6 +78,7 @@ function messageFor(error) {
     INVALID_PARTICIPANT: 'Người tham gia không hợp lệ.',
     DUTY_NOT_FOUND: 'Không tìm thấy công tác.',
     NOT_A_PARTICIPANT: 'Bạn không nằm trong danh sách tham gia công tác này.',
+    NOT_A_SUBORDINATE: 'Bạn chỉ được cập nhật trạng thái của cấp dưới cùng phòng ban.',
     ATTENDANCE_OUTSIDE_WINDOW: 'Chỉ xác nhận tham gia trong thời gian diễn ra công tác.',
   };
 
@@ -131,6 +138,8 @@ function AppShell({ session }) {
     : visibleSystemMenus[0]?.[0] || 'profile';
   const [active, setActive] = useState(defaultActive);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [reportSection, setReportSection] = useState('duties');
 
   useEffect(() => {
     const allowed = new Set([
@@ -164,7 +173,7 @@ function AppShell({ session }) {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className={`shell-sidebar ${mobileOpen ? 'is-open' : ''}`}>
         <div className="school-brand">
           <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
@@ -183,7 +192,18 @@ function AppShell({ session }) {
             <p className="nav-empty">Chưa được gán menu. Liên hệ quản trị viên.</p>
           ) : (
             visibleSystemMenus.map(([id, label]) => (
-              <NavButton key={id} id={id} label={label} active={active} onClick={choose} />
+              <React.Fragment key={id}>
+                <NavButton id={id} label={label} active={active} onClick={choose} />
+                {id === 'reports' && active === 'reports' ? (
+                  <ReportSubmenu
+                    active={reportSection}
+                    onChoose={(section) => {
+                      setReportSection(section);
+                      setMobileOpen(false);
+                    }}
+                  />
+                ) : null}
+              </React.Fragment>
             ))
           )}
           <p className="nav-label admin-label">Cài đặt</p>
@@ -206,6 +226,16 @@ function AppShell({ session }) {
       </aside>
       <main className="shell-main">
         <header className="shell-header">
+          <button
+            type="button"
+            className="sidebar-collapse-button"
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            aria-label={sidebarCollapsed ? 'Hiện menu bên trái' : 'Ẩn menu bên trái'}
+            aria-expanded={!sidebarCollapsed}
+            title={sidebarCollapsed ? 'Hiện menu bên trái' : 'Ẩn menu bên trái'}
+          >
+            {sidebarCollapsed ? '›' : '‹'}
+          </button>
           <button className="mobile-menu" onClick={() => setMobileOpen((open) => !open)} aria-label="Mở menu" aria-expanded={mobileOpen}>
             ☰
           </button>
@@ -230,8 +260,12 @@ function AppShell({ session }) {
           <PermissionGroupManagement />
         ) : active === 'positions' && isAdmin ? (
           <PositionManagement />
+        ) : active === 'boarding' && isAdmin ? (
+          <BoardingManagement />
         ) : active === 'duties' ? (
-          isAdmin ? <DutiesAdminView /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
+          isAdmin ? <DutiesAdminView currentUserId={user._id} /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
+        ) : active === 'reports' ? (
+          reportSection === 'boarding' ? <BoardingReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
           <ProfileView session={session} />
         ) : (
@@ -242,6 +276,19 @@ function AppShell({ session }) {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+function ReportSubmenu({ active, onChoose }) {
+  return (
+    <div className="report-submenu" aria-label="Loại báo cáo">
+      <button type="button" className={active === 'duties' ? 'active' : ''} onClick={() => onChoose('duties')}>
+        <span>◷</span> Công tác
+      </button>
+      <button type="button" className={active === 'boarding' ? 'active' : ''} onClick={() => onChoose('boarding')}>
+        <span>⌂</span> Bán trú
+      </button>
     </div>
   );
 }
@@ -303,6 +350,36 @@ function MultiCheckList({ options, values, onChange, getLabel, emptyText = 'Khô
   );
 }
 
+function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel, emptyText }) {
+  const [open, setOpen] = useState(false);
+  const selectedCount = values?.length || 0;
+  return (
+    <div className={`multi-check-group ${open ? 'is-open' : ''}`}>
+      <button
+        type="button"
+        className="multi-check-toggle"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+      >
+        <span>{title}</span>
+        <span className="multi-check-summary">
+          {selectedCount ? `${selectedCount} đã chọn` : 'Chưa chọn'}
+          <span className="multi-check-chevron" aria-hidden="true">⌄</span>
+        </span>
+      </button>
+      {open ? (
+        <MultiCheckList
+          options={options}
+          values={values}
+          onChange={onChange}
+          getLabel={getLabel}
+          emptyText={emptyText}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function emptyDutyForm() {
   return {
     startDate: '',
@@ -317,12 +394,13 @@ function emptyDutyForm() {
   };
 }
 
-function DutiesAdminView() {
+function DutiesAdminView({ currentUserId }) {
   const options = useQuery(anyApi.duties.formOptions);
   const list = useQuery(anyApi.duties.listAdmin);
   const create = useMutation(anyApi.duties.create);
   const update = useMutation(anyApi.duties.update);
   const remove = useMutation(anyApi.duties.remove);
+  const setOwnAttendance = useMutation(anyApi.duties.setAttendance);
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
@@ -453,37 +531,40 @@ function DutiesAdminView() {
           <small>{form.content.length}/200</small>
         </label>
 
-        <label>
-          Địa điểm
-          <MultiCheckList
+        <div className="duty-field">
+          <span className="duty-field-label">Địa điểm</span>
+          <CollapsibleMultiCheckList
+            title="Chọn địa điểm"
             options={options.locations}
             values={form.locationIds}
             onChange={(ids) => setField('locationIds', ids)}
             emptyText="Chưa có địa điểm. Tạo trong Quản lý địa điểm."
           />
-        </label>
+        </div>
 
-        <label>
-          Phòng ban tham gia
-          <MultiCheckList
+        <div className="duty-field">
+          <span className="duty-field-label">Phòng ban tham gia</span>
+          <CollapsibleMultiCheckList
+            title="Chọn phòng ban"
             options={options.departments}
             values={form.departmentIds}
             onChange={(ids) => setField('departmentIds', ids)}
             getLabel={(d) => `${d.name}${d.code ? ` (${d.code})` : ''}`}
             emptyText="Chưa có phòng ban."
           />
-        </label>
+        </div>
 
-        <label>
-          Cá nhân tham gia
-          <MultiCheckList
+        <div className="duty-field">
+          <span className="duty-field-label">Cá nhân tham gia</span>
+          <CollapsibleMultiCheckList
+            title="Chọn cá nhân"
             options={options.users}
             values={form.participantUserIds}
             onChange={(ids) => setField('participantUserIds', ids)}
             getLabel={(u) => `${u.name || '—'} · ${u.email || ''}`}
             emptyText="Chưa có người dùng."
           />
-        </label>
+        </div>
 
         <button className="primary-button" disabled={Boolean(pending)}>
           {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : '+ Thêm công tác'}
@@ -538,14 +619,54 @@ function DutiesAdminView() {
                       <p className="muted">Chưa có người tham gia (chọn phòng ban hoặc cá nhân khi tạo công tác).</p>
                     ) : (
                       <ul className="member-list">
-                        {item.participants.map((p) => (
-                          <li key={p._id}>
-                            <span>
-                              <strong>{p.name || '—'}</strong> · {p.email || ''}
-                            </span>
-                            <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
-                          </li>
-                        ))}
+                        {item.participants.map((p) => {
+                          const isCurrentUser = String(p._id) === String(currentUserId);
+                          return (
+                            <li key={p._id} className={isCurrentUser ? 'admin-self-row' : undefined}>
+                              <span>
+                                <strong>{p.name || '—'} {isCurrentUser ? <em className="current-user-tag">Bạn</em> : null}</strong>
+                                <small>{p.email || ''}</small>
+                              </span>
+                              {isCurrentUser ? (
+                                <span className="subordinate-actions admin-self-attendance">
+                                  <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
+                                  <button
+                                    type="button"
+                                    className={`attend-btn ${p.status === 'attended' ? 'active' : ''}`}
+                                    disabled={Boolean(pending) || !item.timing.isOngoing}
+                                    title={!item.timing.isOngoing ? 'Chỉ xác nhận trong thời gian diễn ra công tác' : 'Xác nhận đã tham gia'}
+                                    onClick={() =>
+                                      void run(
+                                        `admin-att-${item._id}-yes`,
+                                        () => setOwnAttendance({ dutyId: item._id, status: 'attended' }),
+                                        'Đã ghi nhận trạng thái của bạn: Đã tham gia.',
+                                      )
+                                    }
+                                  >
+                                    Đã tham gia
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`attend-btn absent ${p.status === 'absent' ? 'active' : ''}`}
+                                    disabled={Boolean(pending) || !item.timing.isOngoing}
+                                    title={!item.timing.isOngoing ? 'Chỉ xác nhận trong thời gian diễn ra công tác' : 'Xác nhận chưa tham gia'}
+                                    onClick={() =>
+                                      void run(
+                                        `admin-att-${item._id}-no`,
+                                        () => setOwnAttendance({ dutyId: item._id, status: 'absent' }),
+                                        'Đã ghi nhận trạng thái của bạn: Chưa tham gia.',
+                                      )
+                                    }
+                                  >
+                                    Chưa tham gia
+                                  </button>
+                                </span>
+                              ) : (
+                                <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </div>
@@ -559,9 +680,73 @@ function DutiesAdminView() {
   );
 }
 
+function ViewAllDutyParticipants({ participants }) {
+  const [expanded, setExpanded] = useState(false);
+  const groups = useMemo(() => {
+    const byDepartment = new Map();
+    for (const participant of participants || []) {
+      const departmentName = participant.departmentName || 'Chưa gán phòng ban';
+      const people = byDepartment.get(departmentName) || [];
+      people.push(participant);
+      byDepartment.set(departmentName, people);
+    }
+    return [...byDepartment.entries()]
+      .map(([departmentName, people]) => ({ departmentName, people }))
+      .sort((a, b) => a.departmentName.localeCompare(b.departmentName, 'vi'));
+  }, [participants]);
+
+  if (!participants?.length) return null;
+
+  return (
+    <div className="view-all-participants">
+      <button
+        type="button"
+        className="view-all-participants-toggle"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+      >
+        <span>
+          <strong>Nhân sự tham gia</strong>
+          <small>{participants.length} người · {groups.length} phòng ban</small>
+        </span>
+        <i aria-hidden="true">{expanded ? '⌃' : '⌄'}</i>
+      </button>
+      {expanded ? (
+        <div className="view-all-department-list">
+          {groups.map((group) => (
+            <section className="view-all-department" key={group.departmentName}>
+              <header>
+                <strong>{group.departmentName}</strong>
+                <span>{group.people.length}</span>
+              </header>
+              <ul className="member-list">
+                {group.people.map((participant) => (
+                  <li key={participant._id}>
+                    <span>
+                      <strong>{participant.name || participant.email || '—'}</strong>
+                      <small>
+                        {participant.email || ''}
+                        {participant.positionName ? ` · ${participant.positionName}` : ''}
+                      </small>
+                    </span>
+                    <span className={`attendance-pill ${participant.status}`}>
+                      {statusLabel(participant.status)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function DutiesUserView({ access }) {
   const data = useQuery(anyApi.duties.listMine);
   const setAttendance = useMutation(anyApi.duties.setAttendance);
+  const setSubordinateAttendance = useMutation(anyApi.duties.setAttendanceForUser);
   const { pending, feedback, run } = useFeedback();
   const canEdit = access === 'edit' || data?.canEdit;
 
@@ -572,12 +757,14 @@ function DutiesUserView({ access }) {
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Công tác</span>
-          <h2>Công tác của tôi</h2>
+          <h2>{data.canViewAll ? 'Công tác toàn hệ thống' : 'Công tác của tôi'}</h2>
           <p>
-            Danh sách sắp theo thời hạn gần nhất. Công tác của phòng ban bạn thuộc về và công tác được gán cá nhân đều hiển thị tại đây.
-            {canEdit
+            {data.canViewAll
+              ? 'Bạn đang dùng quyền Xem tối cao: có thể xem công tác và trạng thái tham gia của mọi user, được nhóm theo phòng ban.'
+              : 'Danh sách sắp theo thời hạn gần nhất. Lịch cá nhân và lịch của cấp dưới cùng phòng ban (theo cấp Chức vụ) đều hiển thị tại đây.'}
+            {!data.canViewAll && canEdit
               ? ' Bạn có quyền xác nhận tham gia trong thời gian diễn ra sự kiện.'
-              : ' Bạn đang ở chế độ chỉ xem — không hiện nút/trạng thái tham gia.'}
+              : ' Đây là chế độ chỉ xem — không thể thay đổi dữ liệu.'}
           </p>
         </div>
       </div>
@@ -606,7 +793,7 @@ function DutiesUserView({ access }) {
                   <div><span className="meta-label">Phòng ban tham gia</span><span>{item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span></div>
                   <div><span className="meta-label">Cá nhân tham gia</span><span>{item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span></div>
                 </div>
-                {canEdit ? (
+                {item.isMine && canEdit ? (
                   <div className="attendance-actions">
                     <span className={`attendance-pill ${item.myStatus}`}>{statusLabel(item.myStatus)}</span>
                     <button
@@ -641,6 +828,78 @@ function DutiesUserView({ access }) {
                       </small>
                     ) : null}
                   </div>
+                ) : null}
+                {item.subordinateParticipants?.length ? (
+                  <div className="subordinate-attendance">
+                    <div className="subordinate-heading">
+                      <strong>Cấp dưới cùng phòng ban</strong>
+                      <span>{item.subordinateParticipants.length} người</span>
+                    </div>
+                    <ul className="member-list">
+                      {item.subordinateParticipants.map((participant) => {
+                        const canMark = Boolean(
+                          data.canManageSubordinates &&
+                          item.timing.canMarkAttendance,
+                        );
+                        return (
+                          <li key={participant._id} className="subordinate-row">
+                            <span>
+                              <strong>{participant.name || '—'}</strong>
+                              <small>
+                                {participant.email || ''}
+                                {participant.positionName ? ` · ${participant.positionName}` : ''}
+                              </small>
+                            </span>
+                            <span className="subordinate-actions">
+                              <span className={`attendance-pill ${participant.status}`}>{statusLabel(participant.status)}</span>
+                              <button
+                                type="button"
+                                className={`attend-btn ${participant.status === 'attended' ? 'active' : ''}`}
+                                disabled={Boolean(pending) || !canMark}
+                                title={!canMark ? 'Chỉ cấp trên cùng phòng ban mới được cập nhật trong thời gian diễn ra' : 'Xác nhận đã tham gia'}
+                                onClick={() =>
+                                  run(
+                                    `sub-att-${item._id}-${participant._id}-yes`,
+                                    () => setSubordinateAttendance({ dutyId: item._id, userId: participant._id, status: 'attended' }),
+                                    `Đã ghi nhận ${participant.name || 'người tham gia'}: Đã tham gia.`,
+                                  )
+                                }
+                              >
+                                Đã tham gia
+                              </button>
+                              <button
+                                type="button"
+                                className={`attend-btn absent ${participant.status === 'absent' ? 'active' : ''}`}
+                                disabled={Boolean(pending) || !canMark}
+                                title={!canMark ? 'Chỉ cấp trên cùng phòng ban mới được cập nhật trong thời gian diễn ra' : 'Xác nhận chưa tham gia'}
+                                onClick={() =>
+                                  run(
+                                    `sub-att-${item._id}-${participant._id}-no`,
+                                    () => setSubordinateAttendance({ dutyId: item._id, userId: participant._id, status: 'absent' }),
+                                    `Đã ghi nhận ${participant.name || 'người tham gia'}: Chưa tham gia.`,
+                                  )
+                                }
+                              >
+                                Chưa tham gia
+                              </button>
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {!data.canManageSubordinates ? (
+                      <small className="muted">Bạn đang ở chế độ chỉ xem hoặc chưa được gán cấp chức vụ cao hơn.</small>
+                    ) : !item.timing.canMarkAttendance ? (
+                      <small className="muted">
+                        {item.timing.isUpcoming
+                          ? 'Chưa đến giờ diễn ra — chưa thể cập nhật cấp dưới.'
+                          : 'Đã kết thúc — không thể cập nhật cấp dưới.'}
+                      </small>
+                    ) : null}
+                  </div>
+                ) : null}
+                {data.canViewAll ? (
+                  <ViewAllDutyParticipants participants={item.visibleParticipants} />
                 ) : null}
               </div>
             </article>
@@ -772,7 +1031,7 @@ function UserManagement() {
   if (data === undefined) return <LoadingView label="Đang tải danh sách người dùng…" />;
 
   return (
-    <section className="admin-view">
+    <section className="admin-view modern-management users-management">
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Quản trị người dùng</span>
@@ -1046,7 +1305,7 @@ function DepartmentManagement() {
   if (data === undefined) return <LoadingView label="Đang tải phòng ban…" />;
 
   return (
-    <section className="admin-view">
+    <section className="admin-view modern-management departments-management">
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Phòng ban</span>
@@ -1164,7 +1423,7 @@ function LocationManagement() {
   if (data === undefined) return <LoadingView label="Đang tải địa điểm…" />;
 
   return (
-    <section className="admin-view">
+    <section className="admin-view modern-management locations-management">
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Địa điểm</span>
@@ -1308,13 +1567,13 @@ function PermissionGroupManagement() {
   if (data === undefined) return <LoadingView label="Đang tải nhóm quyền…" />;
 
   return (
-    <section className="admin-view">
+    <section className="admin-view modern-management permission-groups-management">
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Nhóm quyền</span>
           <h2>Quản lý nhóm quyền</h2>
           <p>
-            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn (không thấy menu), Xem (chỉ xem), Sửa (thêm/sửa nội dung).
+            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem, Xem tối cao (xem mọi user nhưng không chỉnh sửa), hoặc Sửa.
           </p>
         </div>
       </div>
@@ -1350,12 +1609,13 @@ function PermissionGroupManagement() {
             <span>Menu</span>
             <span>Ẩn</span>
             <span>Xem</span>
+            <span>Xem tối cao</span>
             <span>Sửa</span>
           </div>
           {menus.map((menu) => (
             <div className="perm-matrix-row" key={menu.id}>
               <span>{menu.label}</span>
-              {['hidden', 'view', 'edit'].map((level) => (
+              {['hidden', 'view', 'view_all', 'edit'].map((level) => (
                 <label key={level} className="radio-cell">
                   <input
                     type="radio"
@@ -1469,7 +1729,7 @@ function PositionManagement() {
   if (data === undefined) return <LoadingView label="Đang tải chức vụ…" />;
 
   return (
-    <section className="admin-view">
+    <section className="admin-view modern-management positions-management">
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Chức vụ</span>
@@ -1729,14 +1989,22 @@ function MustChangePasswordView() {
 }
 
 function PlaceholderView({ title, access, isAdmin }) {
+  const accessLabel = isAdmin
+    ? 'Quản trị'
+    : access === 'edit'
+      ? 'Được sửa'
+      : access === 'view_all'
+        ? 'Xem tối cao'
+        : 'Chỉ xem';
   return (
     <section className="placeholder-view">
       <span className="placeholder-icon">⌁</span>
-      <span className="status-pill blue">{isAdmin ? 'Quản trị' : access === 'edit' ? 'Được sửa' : 'Chỉ xem'}</span>
+      <span className="status-pill blue">{accessLabel}</span>
       <h2>{title}</h2>
       <p>
         Nội dung nghiệp vụ đang được hoàn thiện.
         {!isAdmin && access === 'view' ? ' Bạn chỉ có quyền xem mục này.' : ''}
+        {!isAdmin && access === 'view_all' ? ' Bạn có thể xem dữ liệu của mọi user nhưng không thể chỉnh sửa.' : ''}
         {!isAdmin && access === 'edit' ? ' Bạn có quyền thêm/sửa nội dung khi module sẵn sàng.' : ''}
       </p>
     </section>

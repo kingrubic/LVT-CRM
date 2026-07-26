@@ -9,7 +9,12 @@ import {
   type MenuAccess,
 } from "./lib";
 
-const accessValidator = v.union(v.literal("hidden"), v.literal("view"), v.literal("edit"));
+const accessValidator = v.union(
+  v.literal("hidden"),
+  v.literal("view"),
+  v.literal("view_all"),
+  v.literal("edit"),
+);
 
 function cleanGroup(args: {
   name: string;

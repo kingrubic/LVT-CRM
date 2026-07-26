@@ -9,8 +9,12 @@ const required = [
   "convex/departments.ts",
   "convex/locations.ts",
   "convex/duties.ts",
+  "convex/reports.ts",
+  "convex/boarding.ts",
   "convex/permissionGroups.ts",
   "convex/positions.ts",
+  "src/boarding/BoardingManagement.jsx",
+  "src/boarding/BoardingReportsView.jsx",
   "README.md",
   ".env.example",
 ];
@@ -86,6 +90,7 @@ for (const marker of [
   "positions",
   "approvalLogs",
   "menuAccess",
+  "boardingPeriods",
 ]) {
   if (!schema.includes(marker)) throw new Error(`Schema auth marker missing: ${marker}`);
 }
@@ -112,6 +117,11 @@ for (const marker of [
   "LocationManagement",
   "DutiesAdminView",
   "DutiesUserView",
+  "DutyReportsView",
+  "BoardingManagement",
+  "BoardingReportsView",
+  "ReportSubmenu",
+  "Quản lý bán trú",
   "PermissionGroupManagement",
   "PositionManagement",
   "Quản lý địa điểm",
@@ -123,6 +133,16 @@ for (const marker of [
   "ProfileView",
 ]) {
   if (!client.includes(marker)) throw new Error(`Admin/password UI marker missing: ${marker}`);
+}
+
+const reports = readFileSync("src/reports/DutyReportsView.jsx", "utf8");
+for (const marker of ["DutyReportsView", "Báo cáo · Công tác", "Tuần", "Tháng", "Quý", "Năm"]) {
+  if (!reports.includes(marker)) throw new Error(`Reports UI marker missing: ${marker}`);
+}
+
+const boarding = readFileSync("convex/boarding.ts", "utf8");
+for (const marker of ["listAdmin", "listMine", "BOARDING_PERIOD_EXISTS", "participantUserIds", "boarding_period.create"]) {
+  if (!boarding.includes(marker)) throw new Error(`Boarding marker missing: ${marker}`);
 }
 if (client.includes("@clerk") || client.includes("ClerkProvider") || client.includes("VITE_CLERK")) {
   throw new Error("Clerk client imports/env must be removed");

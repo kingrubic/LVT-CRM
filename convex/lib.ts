@@ -14,7 +14,7 @@ export const SYSTEM_MENU_DEFS = [
 ] as const;
 
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
-export type MenuAccess = "hidden" | "view" | "edit";
+export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
 export type SystemRole = "admin" | "user";
 
 export const SYSTEM_ROLES: { key: SystemRole; name: string }[] = [
@@ -49,6 +49,29 @@ export function canApproveLevel(approverLevel: number, targetLevel: number): boo
   if (!Number.isInteger(approverLevel) || !Number.isInteger(targetLevel)) return false;
   if (approverLevel < 1 || approverLevel > 5 || targetLevel < 1 || targetLevel > 5) return false;
   return approverLevel > targetLevel;
+}
+
+export function activePositionLevel(
+  user: { positionId?: string },
+  positions: { _id: string; level: number; active: boolean }[],
+): number {
+  if (!user.positionId) return 0;
+  const position = positions.find((item) => String(item._id) === String(user.positionId));
+  return position?.active ? Number(position.level) || 0 : 0;
+}
+
+export function isSameDepartmentSubordinate(
+  actor: { _id: string; departmentId?: string; positionId?: string },
+  target: { _id: string; departmentId?: string; positionId?: string },
+  positions: { _id: string; level: number; active: boolean }[],
+): boolean {
+  if (String(actor._id) === String(target._id)) return false;
+  if (!actor.departmentId || !target.departmentId) return false;
+  if (String(actor.departmentId) !== String(target.departmentId)) return false;
+  return canApproveLevel(
+    activePositionLevel(actor, positions),
+    activePositionLevel(target, positions),
+  );
 }
 
 /** Higher rank may approve on behalf of any lower required rank on a multi-step task. */

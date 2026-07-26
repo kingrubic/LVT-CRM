@@ -38,7 +38,7 @@ Mỗi nhóm quy định quyền trên 5 menu **Quản trị hệ thống**:
 | `homeroom` | Lớp chủ nhiệm |
 | `people-review` | Đánh giá nhân sự |
 
-Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (chỉ xem) · **`edit`** (thêm/sửa nội dung khi module sẵn sàng).
+Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (chỉ xem phạm vi thông thường) · **`view_all`** (xem mọi user, không chỉnh sửa) · **`edit`** (thêm/sửa nội dung khi module sẵn sàng).
 
 Gán user: form Quản lý người dùng **hoặc** nút **Thêm user** trong Quản lý nhóm quyền.
 

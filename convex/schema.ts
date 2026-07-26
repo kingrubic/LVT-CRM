@@ -7,6 +7,7 @@ const timestamps = { createdAt: v.number(), updatedAt: v.number() };
 const menuAccessLevel = v.union(
   v.literal("hidden"),
   v.literal("view"),
+  v.literal("view_all"),
   v.literal("edit"),
 );
 
@@ -61,7 +62,7 @@ export default defineSchema({
   permissionGroups: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
-    /** One entry per system menu: hidden | view | edit */
+    /** One entry per system menu: hidden | view | view_all | edit */
     menuAccess: v.array(
       v.object({
         menu: v.string(),
@@ -82,6 +83,16 @@ export default defineSchema({
     active: v.boolean(),
     ...timestamps,
   }).index("by_code", ["code"]),
+  /** Boarding-school participation periods, configured once per semester/school year. */
+  boardingPeriods: defineTable({
+    semester: v.number(), // 1 | 2
+    schoolYear: v.string(), // YYYY-YYYY
+    participantUserIds: v.array(v.string()),
+    active: v.boolean(),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  }).index("by_school_year_semester", ["schoolYear", "semester"]),
   /**
    * Legacy roles table kept optional for migration of older deployments.
    * New auth uses users.role (admin|user) + permissionGroups.

@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as boarding from "../boarding.js";
 import type * as departments from "../departments.js";
 import type * as duties from "../duties.js";
 import type * as http from "../http.js";
@@ -16,6 +17,7 @@ import type * as lib from "../lib.js";
 import type * as locations from "../locations.js";
 import type * as permissionGroups from "../permissionGroups.js";
 import type * as positions from "../positions.js";
+import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
 
@@ -27,6 +29,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  boarding: typeof boarding;
   departments: typeof departments;
   duties: typeof duties;
   http: typeof http;
@@ -34,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   locations: typeof locations;
   permissionGroups: typeof permissionGroups;
   positions: typeof positions;
+  reports: typeof reports;
   seed: typeof seed;
   users: typeof users;
 }>;

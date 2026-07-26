@@ -1,8 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
+  activePositionLevel,
   adminPermissionOrThrow,
   currentUserOrThrow,
+  isSameDepartmentSubordinate,
   resolveUserMenuAccess,
   type MenuAccess,
 } from "./lib";
@@ -237,31 +239,72 @@ export const listMine = query({
   args: {},
   handler: async (ctx) => {
     const { user, access, isAdmin } = await requireDutiesAccess(ctx, "view");
-    const [duties, locations, departments, users, myAttendances] = await Promise.all([
+    const [duties, locations, departments, users, positions, attendances] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
       ctx.db.query("departments").collect(),
       ctx.db.query("users").collect(),
-      ctx.db
-        .query("dutyAttendances")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .collect(),
+      ctx.db.query("positions").collect(),
+      ctx.db.query("dutyAttendances").collect(),
     ]);
 
-    const attMap = new Map(myAttendances.map((a) => [String(a.dutyId), a.status]));
+    const attMap = new Map(attendances.map((a) => [`${String(a.dutyId)}:${String(a.userId)}`, a.status]));
     const canEdit = isAdmin || access === "edit";
+    const canViewAll = !isAdmin && access === "view_all";
+    const actorLevel = activePositionLevel(user, positions);
+    const subordinateUsers = users.filter(
+      (target) => target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
+    );
+    const subordinateIds = new Set(subordinateUsers.map((target) => String(target._id)));
     const now = Date.now();
     const userNameMap = new Map(users.map((u) => [String(u._id), String(u.name || u.email || u._id)]));
+    const positionNameMap = new Map(positions.map((position) => [String(position._id), String(position.name || "")]));
+    const departmentNameMap = new Map(
+      departments.map((department) => [String(department._id), String(department.name || "")]),
+    );
 
-    const mine = duties.filter((d) => d.active && (isAdmin || userIsParticipant(user, d)));
+    const mine = duties.filter((d) => {
+      if (!d.active || isAdmin || canViewAll) return d.active;
+      return [user, ...subordinateUsers].some((visibleUser) => userIsParticipant(visibleUser, d));
+    });
     return {
       canEdit,
       isAdmin,
       access,
+      canViewAll,
+      canManageSubordinates: !isAdmin && canEdit && actorLevel > 0,
+      departmentId: user.departmentId || null,
+      positionLevel: actorLevel,
       duties: mine
         .map((duty) => {
           const timing = dutyTiming(duty, now);
           const participants = resolveParticipantUsers(users, duty);
+          const isMine = userIsParticipant(user, duty);
+          const subordinateParticipants = participants
+            .filter((participant) => subordinateIds.has(String(participant._id)))
+            .map((participant) => ({
+              _id: participant._id,
+              name: participant.name,
+              email: participant.email,
+              departmentId: participant.departmentId,
+              positionId: participant.positionId,
+              positionLevel: activePositionLevel(participant, positions),
+              positionName: positionNameMap.get(String(participant.positionId)) || "",
+              status: (attMap.get(`${String(duty._id)}:${String(participant._id)}`) as string) || "pending",
+            }));
+          const visibleParticipants = canViewAll
+            ? participants.map((participant) => ({
+                _id: participant._id,
+                name: participant.name,
+                email: participant.email,
+                departmentName:
+                  departmentNameMap.get(String(participant.departmentId)) || "Chưa gán phòng ban",
+                positionName: positionNameMap.get(String(participant.positionId)) || "",
+                status:
+                  (attMap.get(`${String(duty._id)}:${String(participant._id)}`) as string) ||
+                  "pending",
+              }))
+            : [];
           return {
             _id: duty._id,
             startDate: duty.startDate,
@@ -276,7 +319,10 @@ export const listMine = query({
               .map((id) => userNameMap.get(String(id)))
               .filter((name): name is string => Boolean(name)),
             // For user view: show individual assignees as selected; department members implied by dept list
-            myStatus: (attMap.get(String(duty._id)) as string) || "pending",
+            myStatus: (attMap.get(`${String(duty._id)}:${String(user._id)}`) as string) || "pending",
+            isMine,
+            subordinateParticipants,
+            visibleParticipants,
             timing: {
               isOngoing: timing.isOngoing,
               isOverdue: timing.isOverdue,
@@ -385,12 +431,12 @@ export const setAttendance = mutation({
     status: v.union(v.literal("attended"), v.literal("absent")),
   },
   handler: async (ctx, args) => {
-    const { user, access, isAdmin } = await requireDutiesAccess(ctx, "edit");
-    if (!isAdmin && access !== "edit") throw new Error("FORBIDDEN: duties edit required");
+    const { user, access } = await requireDutiesAccess(ctx, "edit");
+    if (access !== "edit") throw new Error("FORBIDDEN: duties edit required");
 
     const duty = await ctx.db.get(args.dutyId);
     if (!duty?.active) throw new Error("DUTY_NOT_FOUND");
-    if (!isAdmin && !userIsParticipant(user, duty)) throw new Error("NOT_A_PARTICIPANT");
+    if (!userIsParticipant(user, duty)) throw new Error("NOT_A_PARTICIPANT");
 
     const timing = dutyTiming(duty);
     if (!timing.isOngoing) throw new Error("ATTENDANCE_OUTSIDE_WINDOW");
@@ -421,6 +467,61 @@ export const setAttendance = mutation({
       actorUserId: user._id,
       action: "duty.attendance",
       targetUserId: user._id,
+      details: JSON.stringify({ dutyId: args.dutyId, status: args.status }),
+      at: now,
+    });
+  },
+});
+
+export const setAttendanceForUser = mutation({
+  args: {
+    dutyId: v.id("duties"),
+    userId: v.id("users"),
+    status: v.union(v.literal("attended"), v.literal("absent")),
+  },
+  handler: async (ctx, args) => {
+    const { user, access, isAdmin } = await requireDutiesAccess(ctx, "edit");
+    if (!isAdmin && access !== "edit") throw new Error("FORBIDDEN: duties edit required");
+
+    const duty = await ctx.db.get(args.dutyId);
+    if (!duty?.active) throw new Error("DUTY_NOT_FOUND");
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.status !== "active") throw new Error("USER_NOT_FOUND");
+    const positions = await ctx.db.query("positions").collect();
+    if (!isAdmin && !isSameDepartmentSubordinate(user, target, positions)) {
+      throw new Error("NOT_A_SUBORDINATE");
+    }
+    if (!userIsParticipant(target, duty)) throw new Error("NOT_A_PARTICIPANT");
+
+    const timing = dutyTiming(duty);
+    if (!timing.isOngoing) throw new Error("ATTENDANCE_OUTSIDE_WINDOW");
+
+    const existing = await ctx.db
+      .query("dutyAttendances")
+      .withIndex("by_duty_user", (q) => q.eq("dutyId", args.dutyId).eq("userId", args.userId))
+      .unique();
+    const now = Date.now();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        status: args.status,
+        updatedAt: now,
+        updatedBy: user._id,
+      });
+    } else {
+      await ctx.db.insert("dutyAttendances", {
+        dutyId: args.dutyId,
+        userId: args.userId,
+        status: args.status,
+        updatedAt: now,
+        updatedBy: user._id,
+      });
+    }
+
+    await ctx.db.insert("auditLogs", {
+      actorUserId: user._id,
+      action: "duty.attendance_for_subordinate",
+      targetUserId: target._id,
+      targetEmail: target.email,
       details: JSON.stringify({ dutyId: args.dutyId, status: args.status }),
       at: now,
     });
