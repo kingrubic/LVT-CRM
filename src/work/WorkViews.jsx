@@ -5,6 +5,15 @@ import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
 
+function publicUploadUrl(shortLivedUrl) {
+  const uploadUrl = new URL(shortLivedUrl, window.location.origin);
+  const isInternalHost = uploadUrl.hostname === '127.0.0.1' || uploadUrl.hostname === 'localhost';
+  if (window.location.hostname === 'lvt.vscgroup.io.vn' && isInternalHost) {
+    return `${window.location.origin}${uploadUrl.pathname}${uploadUrl.search}${uploadUrl.hash}`;
+  }
+  return uploadUrl.toString();
+}
+
 function formatWorkDate(value) {
   if (!value) return '—';
   const [year, month, day] = value.split('-');
@@ -192,17 +201,21 @@ export function WorkManagement() {
       return setFeedback({ type: 'error', text: 'Vui lòng thêm ít nhất một phòng ban nhận việc và chọn người duyệt.' });
     }
     setSaving(true);
+    let stage = 'upload';
     try {
       const uploadUrl = await generateUploadUrl({});
-      const response = await fetch(uploadUrl, {
+      const response = await fetch(publicUploadUrl(uploadUrl), {
         method: 'POST',
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
         body: file,
       });
-      if (!response.ok) throw new Error('WORK_UPLOAD_FAILED');
-      const { storageId } = await response.json();
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.storageId) {
+        throw new Error(`WORK_UPLOAD_FAILED:${response.status}`);
+      }
+      stage = 'save';
       await createDocument({
-        fileId: storageId,
+        fileId: result.storageId,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
@@ -216,7 +229,16 @@ export function WorkManagement() {
       setFeedback({ type: 'success', text: 'Đã tạo công văn và gửi đến người duyệt.' });
       reset();
     } catch (error) {
-      setFeedback({ type: 'error', text: error?.message?.includes('WORK_') ? 'Không thể tạo công văn. Vui lòng kiểm tra tệp và thông tin nhập.' : 'Không thể tải công văn lên. Vui lòng thử lại.' });
+      setFeedback({
+        type: 'error',
+        text: stage === 'upload'
+          ? 'Không thể tải tệp công văn lên. Vui lòng thử lại.'
+          : 'Tệp đã tải lên nhưng không thể lưu công văn. Vui lòng kiểm tra thông tin phân công và người duyệt.',
+      });
+      console.error('Work document submission failed', {
+        stage,
+        message: String(error?.message || error),
+      });
     } finally {
       setSaving(false);
     }
