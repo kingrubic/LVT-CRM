@@ -955,6 +955,10 @@
   margin-top: 15px;
 }
 
+.approval-card .work-approval-actions > button {
+  margin-top: 0;
+}
+
 .work-task-list {
   display: grid;
   gap: 5px;
