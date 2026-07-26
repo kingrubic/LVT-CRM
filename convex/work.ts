@@ -595,6 +595,11 @@ export const listMine = query({
               .map((user: any) => ({
                 _id: user._id,
                 name: user.name || user.email || "Chưa đặt tên",
+                positionName:
+                  catalogData.positions.find(
+                    (position: any) => String(position._id) === String(user.positionId),
+                  )?.name ||
+                  "Chưa gán chức vụ",
                 email: user.email || "",
                 level: activePositionLevel(user, catalogData.positions),
               }))
