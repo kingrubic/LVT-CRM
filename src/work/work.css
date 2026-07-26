@@ -195,6 +195,7 @@
   border: 1px solid #efc7bf;
   color: #9b4539;
   background: #ffebe7;
+  box-shadow: 4px 5px 0 rgba(155, 69, 57, .1);
 }
 
 .work-reject-button:hover:not(:disabled) {
@@ -830,7 +831,13 @@
 }
 
 .work-approval-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
   min-width: 220px;
+  min-height: 44px;
+  line-height: 1.2;
 }
 
 .work-progress {
