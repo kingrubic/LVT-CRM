@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { adminPermissionOrThrow, assertPositionLevel, canApproveLevel, currentUserOrThrow } from "./lib";
+import {
+  adminPermissionOrThrow,
+  assertPositionLevel,
+  canApproveLevel,
+  currentUserOrThrow,
+  hasActiveNameConflict,
+} from "./lib";
 
 function cleanPosition(args: { name: string; code: string; level: number }) {
   const name = args.name.trim();
@@ -9,6 +15,13 @@ function cleanPosition(args: { name: string; code: string; level: number }) {
   if (!code || code.length > 32 || !/^[A-Z0-9_-]+$/.test(code)) throw new Error("INVALID_CODE");
   assertPositionLevel(args.level);
   return { name, code, level: args.level };
+}
+
+async function assertPositionNameAvailable(ctx: { db: any }, name: string, excludeId?: string) {
+  const positions = await ctx.db.query("positions").collect();
+  if (hasActiveNameConflict(positions, name, excludeId)) {
+    throw new Error("POSITION_NAME_TAKEN");
+  }
 }
 
 export const list = query({
@@ -40,6 +53,7 @@ export const create = mutation({
     const input = cleanPosition(args);
     const existing = await ctx.db.query("positions").withIndex("by_code", (q) => q.eq("code", input.code)).unique();
     if (existing) throw new Error("CODE_TAKEN");
+    await assertPositionNameAvailable(ctx, input.name);
     const now = Date.now();
     const id = await ctx.db.insert("positions", {
       ...input,
@@ -72,6 +86,7 @@ export const update = mutation({
     const input = cleanPosition(args);
     const duplicate = await ctx.db.query("positions").withIndex("by_code", (q) => q.eq("code", input.code)).unique();
     if (duplicate && duplicate._id !== args.id) throw new Error("CODE_TAKEN");
+    await assertPositionNameAvailable(ctx, input.name, args.id);
     const now = Date.now();
     await ctx.db.patch(args.id, {
       ...input,

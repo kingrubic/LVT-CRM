@@ -186,7 +186,7 @@ Không có admin/password mặc định, không public bootstrap.
 
 ```bash
 npx convex run internal.users.provisionFirstAdmin \
-  '{"email":"admin@example.school","name":"Quản trị viên","temporaryPassword":"<temp-at-least-12-chars>"}'
+  '{"email":"admin@example.school","name":"Quản trị viên","temporaryPassword":"<temp-at-least-8-chars>"}'
 ```
 
 - Chỉ thành công khi **chưa có** active admin.
@@ -196,7 +196,7 @@ npx convex run internal.users.provisionFirstAdmin \
 
 ## Admin user lifecycle
 
-1. Admin tạo user: email (unique, trim+lowercase), tên, **role** (`admin`|`user`), phòng ban / chức vụ / nhóm quyền (tùy chọn), temporary password ≥12. `createAccount` (provider `password`).
+1. Admin tạo user: email (unique, trim+lowercase), tên, **role** (`admin`|`user`), phòng ban / chức vụ / nhóm quyền (tùy chọn), temporary password ≥8. `createAccount` (provider `password`).
 2. `mustChangePassword=true`; audit không chứa password.
 3. User `signIn` only. Flag còn true → chỉ form đổi MK; server chặn thao tác admin.
 4. `changeOwnPassword` → `modifyAccountCredentials`, `invalidateSessions` (giữ session hiện tại), clear flag.

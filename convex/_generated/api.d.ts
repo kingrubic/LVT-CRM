@@ -10,8 +10,10 @@
 
 import type * as auth from "../auth.js";
 import type * as departments from "../departments.js";
+import type * as duties from "../duties.js";
 import type * as http from "../http.js";
 import type * as lib from "../lib.js";
+import type * as locations from "../locations.js";
 import type * as permissionGroups from "../permissionGroups.js";
 import type * as positions from "../positions.js";
 import type * as seed from "../seed.js";
@@ -26,8 +28,10 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   departments: typeof departments;
+  duties: typeof duties;
   http: typeof http;
   lib: typeof lib;
+  locations: typeof locations;
   permissionGroups: typeof permissionGroups;
   positions: typeof positions;
   seed: typeof seed;

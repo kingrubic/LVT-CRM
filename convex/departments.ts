@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { adminPermissionOrThrow } from "./lib";
+import { adminPermissionOrThrow, hasActiveNameConflict } from "./lib";
 
 function cleanDepartment(args: { name: string; code: string }) {
   const name = args.name.trim();
@@ -8,6 +8,13 @@ function cleanDepartment(args: { name: string; code: string }) {
   if (!name || name.length > 120) throw new Error("INVALID_NAME");
   if (!code || code.length > 32 || !/^[A-Z0-9_-]+$/.test(code)) throw new Error("INVALID_CODE");
   return { name, code };
+}
+
+async function assertDepartmentNameAvailable(ctx: { db: any }, name: string, excludeId?: string) {
+  const departments = await ctx.db.query("departments").collect();
+  if (hasActiveNameConflict(departments, name, excludeId)) {
+    throw new Error("DEPARTMENT_NAME_TAKEN");
+  }
 }
 
 export const list = query({
@@ -39,6 +46,7 @@ export const create = mutation({
     const input = cleanDepartment(args);
     const existing = await ctx.db.query("departments").withIndex("by_code", (q) => q.eq("code", input.code)).unique();
     if (existing) throw new Error("CODE_TAKEN");
+    await assertDepartmentNameAvailable(ctx, input.name);
     const now = Date.now();
     const id = await ctx.db.insert("departments", {
       ...input,
@@ -70,6 +78,7 @@ export const update = mutation({
     const input = cleanDepartment(args);
     const duplicate = await ctx.db.query("departments").withIndex("by_code", (q) => q.eq("code", input.code)).unique();
     if (duplicate && duplicate._id !== args.id) throw new Error("CODE_TAKEN");
+    await assertDepartmentNameAvailable(ctx, input.name, args.id);
     const now = Date.now();
     await ctx.db.patch(args.id, {
       ...input,

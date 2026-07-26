@@ -47,6 +47,13 @@ export default defineSchema({
     active: v.boolean(),
     ...timestamps,
   }).index("by_code", ["code"]),
+  /** Physical / organizational locations used by school workflows. */
+  locations: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    active: v.boolean(),
+    ...timestamps,
+  }).index("by_name", ["name"]),
   /**
    * Permission groups (Nhóm quyền) control which system menus a regular user can see/edit.
    * Admin users ignore this and always see management + all menus.
@@ -116,4 +123,36 @@ export default defineSchema({
     .index("by_at", ["at"])
     .index("by_task", ["taskId"])
     .index("by_actor", ["actorUserId"]),
+  /**
+   * School duties / work events (Công tác).
+   * Participants = users in selected departments ∪ explicit participantUserIds.
+   */
+  duties: defineTable({
+    startDate: v.string(), // YYYY-MM-DD
+    endDate: v.string(),
+    startTime: v.string(), // HH:mm
+    endTime: v.string(),
+    allDay: v.boolean(),
+    content: v.string(),
+    locationIds: v.array(v.string()),
+    departmentIds: v.array(v.string()),
+    participantUserIds: v.array(v.string()),
+    active: v.boolean(),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_active_end", ["active", "endDate"])
+    .index("by_start", ["startDate"]),
+  dutyAttendances: defineTable({
+    dutyId: v.string(),
+    userId: v.string(),
+    /** attended | absent | pending (no record treated as pending) */
+    status: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index("by_duty", ["dutyId"])
+    .index("by_user", ["userId"])
+    .index("by_duty_user", ["dutyId", "userId"]),
 });

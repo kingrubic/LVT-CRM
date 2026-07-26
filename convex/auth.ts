@@ -28,7 +28,7 @@ const PasswordSignInOnly = Password({
     return { email };
   },
   validatePasswordRequirements(password: string) {
-    if (!password || password.length < 12) throw new Error("PASSWORD_TOO_SHORT");
+    if (!password || password.length < 8) throw new Error("PASSWORD_TOO_SHORT");
   },
 });
 

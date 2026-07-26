@@ -19,6 +19,7 @@ const SYSTEM_MENUS = [
 const ADMIN_SETTINGS = [
   ['users', 'Quản lý người dùng'],
   ['departments', 'Quản lý phòng ban'],
+  ['locations', 'Quản lý địa điểm'],
   ['roles', 'Quản lý nhóm quyền'],
   ['positions', 'Quản lý chức vụ'],
 ];
@@ -26,41 +27,73 @@ const ROLE_LABELS = { admin: 'Quản trị viên', user: 'Người dùng' };
 const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', edit: 'Sửa' };
 
 function messageFor(error) {
-  const code = String(error?.message || 'UNKNOWN_ERROR').replace(/^Uncaught Error: /, '').replace(/^Error: /, '');
+  // Convex often wraps codes: "[Request ID] Server Error\nCODE", "Uncaught Error: CODE", etc.
+  const raw = String(error?.data ?? error?.message ?? error ?? 'UNKNOWN_ERROR');
   const messages = {
-    USER_NOT_ACTIVE: 'Tài khoản không còn hoạt động.',
-    EMAIL_TAKEN: 'Email đã được sử dụng.',
-    TEMP_PASSWORD_TOO_SHORT: 'Mật khẩu tạm thời phải có ít nhất 12 ký tự.',
-    PASSWORD_TOO_SHORT: 'Mật khẩu mới phải có ít nhất 12 ký tự.',
-    CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể khóa tài khoản quản trị đang đăng nhập.',
-    CANNOT_DELETE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể xóa tài khoản quản trị đang đăng nhập.',
-    USER_REMOVE_FAILED: 'Không thể vô hiệu hóa tài khoản hoàn toàn. Hãy kiểm tra audit log và thử lại.',
-    USER_CREATE_FAILED: 'Không thể tạo tài khoản. Hãy kiểm tra audit log.',
-    USER_UPDATE_FAILED: 'Không thể cập nhật tài khoản. Hãy kiểm tra audit log.',
-    PASSWORD_CHANGED_SYNC_PENDING: 'Mật khẩu đã đổi nhưng CRM chưa đồng bộ. Vui lòng liên hệ quản trị viên.',
-    PASSWORD_RESET_FAILED: 'Không thể đặt lại mật khẩu. Hãy kiểm tra audit log.',
+    USER_NOT_ACTIVE: 'Tài khoản không còn hoạt động. Vui lòng liên hệ quản trị viên.',
+    EMAIL_TAKEN: 'Email này đã được sử dụng. Vui lòng chọn email khác.',
+    TEMP_PASSWORD_TOO_SHORT: 'Mật khẩu tạm thời phải có ít nhất 8 ký tự.',
+    PASSWORD_TOO_SHORT: 'Mật khẩu mới phải có ít nhất 8 ký tự.',
+    CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể khóa chính tài khoản đang đăng nhập.',
+    CANNOT_DELETE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể xóa chính tài khoản đang đăng nhập.',
+    USER_REMOVE_FAILED: 'Không thể xóa tài khoản. Vui lòng thử lại hoặc liên hệ kỹ thuật.',
+    USER_CREATE_FAILED: 'Không thể tạo tài khoản. Vui lòng thử lại.',
+    USER_UPDATE_FAILED: 'Không thể cập nhật tài khoản. Vui lòng thử lại.',
+    PASSWORD_CHANGED_SYNC_PENDING: 'Mật khẩu đã đổi nhưng hệ thống chưa cập nhật xong. Vui lòng liên hệ quản trị viên.',
+    PASSWORD_RESET_FAILED: 'Không thể đặt lại mật khẩu. Vui lòng thử lại.',
     PASSWORD_CHANGE_FAILED: 'Không thể đổi mật khẩu. Vui lòng thử lại.',
-    EMAIL_CHANGE_UNSUPPORTED: 'Đổi email đăng nhập chưa được hỗ trợ. Tạo tài khoản mới nếu cần.',
-    PUBLIC_SIGNUP_DISABLED: 'Không cho phép tự đăng ký.',
+    EMAIL_CHANGE_UNSUPPORTED: 'Hiện chưa hỗ trợ đổi email đăng nhập. Vui lòng tạo tài khoản mới nếu cần.',
+    PUBLIC_SIGNUP_DISABLED: 'Hệ thống không cho phép tự đăng ký.',
     'Invalid credentials': 'Email hoặc mật khẩu không đúng.',
     INVALID_EMAIL: 'Email không hợp lệ.',
     INVALID_ROLE: 'Vai trò chỉ được chọn Quản trị viên hoặc Người dùng.',
-    INVALID_DEPARTMENT: 'Phòng ban không hợp lệ hoặc đã ngưng.',
-    INVALID_PERMISSION_GROUP: 'Nhóm quyền không hợp lệ hoặc đã ngưng.',
-    INVALID_POSITION: 'Chức vụ không hợp lệ hoặc đã ngưng.',
+    INVALID_DEPARTMENT: 'Phòng ban không hợp lệ hoặc đã ngưng sử dụng.',
+    INVALID_PERMISSION_GROUP: 'Nhóm quyền không hợp lệ hoặc đã ngưng sử dụng.',
+    INVALID_POSITION: 'Chức vụ không hợp lệ hoặc đã ngưng sử dụng.',
     INVALID_POSITION_LEVEL: 'Cấp bậc chức vụ phải từ 1 đến 5 sao.',
-    INVALID_CODE: 'Mã không hợp lệ (chữ in hoa, số, gạch ngang/gạch dưới).',
-    INVALID_NAME: 'Tên không hợp lệ.',
-    CODE_TAKEN: 'Mã đã được sử dụng.',
+    INVALID_CODE: 'Mã không hợp lệ. Chỉ dùng chữ in hoa, số, gạch ngang hoặc gạch dưới.',
+    INVALID_NAME: 'Tên không hợp lệ. Vui lòng nhập lại.',
+    CODE_TAKEN: 'Mã này đã được sử dụng. Vui lòng chọn mã khác.',
+    DEPARTMENT_NAME_TAKEN: 'Đã có phòng ban trùng tên, vui lòng đặt tên khác.',
+    LOCATION_NAME_TAKEN: 'Đã có địa điểm trùng tên, vui lòng đặt tên khác.',
+    PERMISSION_GROUP_NAME_TAKEN: 'Đã có nhóm quyền trùng tên, vui lòng đặt tên khác.',
+    POSITION_NAME_TAKEN: 'Đã có chức vụ trùng tên, vui lòng đặt tên khác.',
     DEPARTMENT_NOT_FOUND: 'Không tìm thấy phòng ban.',
+    LOCATION_NOT_FOUND: 'Không tìm thấy địa điểm.',
     PERMISSION_GROUP_NOT_FOUND: 'Không tìm thấy nhóm quyền.',
     POSITION_NOT_FOUND: 'Không tìm thấy chức vụ.',
     USER_NOT_FOUND: 'Không tìm thấy người dùng.',
+    INVALID_DESCRIPTION: 'Mô tả quá dài hoặc không hợp lệ.',
+    INVALID_DATE: 'Ngày không hợp lệ.',
+    INVALID_TIME: 'Giờ không hợp lệ.',
+    INVALID_CONTENT: 'Nội dung bắt buộc và tối đa 200 ký tự.',
+    END_BEFORE_START: 'Thời gian kết thúc phải sau thời gian bắt đầu.',
+    INVALID_LOCATION: 'Địa điểm không hợp lệ hoặc đã ngưng.',
+    INVALID_PARTICIPANT: 'Người tham gia không hợp lệ.',
+    DUTY_NOT_FOUND: 'Không tìm thấy công tác.',
+    NOT_A_PARTICIPANT: 'Bạn không nằm trong danh sách tham gia công tác này.',
+    ATTENDANCE_OUTSIDE_WINDOW: 'Chỉ xác nhận tham gia trong thời gian diễn ra công tác.',
   };
-  if (messages[code]) return messages[code];
-  if (/invalid credentials|invalidsecret/i.test(code)) return messages['Invalid credentials'];
-  if (/FORBIDDEN/i.test(code)) return 'Bạn không có quyền thực hiện thao tác này.';
-  return 'Không thể hoàn tất thao tác. Vui lòng thử lại hoặc kiểm tra audit log.';
+
+  // Prefer longest known code match inside the raw error text (handles Convex wrappers).
+  const knownCodes = Object.keys(messages).sort((a, b) => b.length - a.length);
+  for (const key of knownCodes) {
+    if (raw.includes(key)) return messages[key];
+  }
+
+  const stripped = raw
+    .replace(/^Uncaught Error:\s*/i, '')
+    .replace(/^Error:\s*/i, '')
+    .replace(/^\[Request ID:[^\]]+\]\s*/i, '')
+    .replace(/^Server Error\s*/i, '')
+    .trim()
+    .split(/[\n\r]/)[0]
+    .trim();
+  if (messages[stripped]) return messages[stripped];
+
+  if (/invalid credentials|invalidsecret/i.test(raw)) return messages['Invalid credentials'];
+  if (/FORBIDDEN/i.test(raw)) return 'Bạn không có quyền thực hiện thao tác này.';
+  return 'Không thể hoàn tất thao tác. Vui lòng thử lại hoặc liên hệ quản trị viên.';
 }
 
 function StarRating({ level, max = 5 }) {
@@ -191,10 +224,14 @@ function AppShell({ session }) {
           <UserManagement />
         ) : active === 'departments' && isAdmin ? (
           <DepartmentManagement />
+        ) : active === 'locations' && isAdmin ? (
+          <LocationManagement />
         ) : active === 'roles' && isAdmin ? (
           <PermissionGroupManagement />
         ) : active === 'positions' && isAdmin ? (
           <PositionManagement />
+        ) : active === 'duties' ? (
+          isAdmin ? <DutiesAdminView /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
           <ProfileView session={session} />
         ) : (
@@ -215,6 +252,402 @@ function NavButton({ id, label, icon = '→', active, onClick, nested }) {
       <span className="nav-icon">{icon}</span>
       <span>{label}</span>
     </button>
+  );
+}
+
+function formatViDate(isoDate) {
+  if (!isoDate) return '—';
+  const [y, m, d] = isoDate.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function statusLabel(status) {
+  if (status === 'attended') return 'Đã tham gia';
+  if (status === 'absent') return 'Chưa tham gia';
+  return 'Chưa xác nhận';
+}
+
+function DutyTimingTags({ timing }) {
+  if (!timing) return null;
+  // Chỉ 1 trạng thái: quá hạn > đang diễn ra > gần đến hạn
+  let tag = null;
+  if (timing.isOverdue) tag = <span className="duty-tag overdue">Đã quá hạn</span>;
+  else if (timing.isOngoing) tag = <span className="duty-tag live">Đang diễn ra</span>;
+  else if (timing.nearDeadline) tag = <span className="duty-tag near">Gần đến hạn</span>;
+  if (!tag) return null;
+  return <span className="tag-row">{tag}</span>;
+}
+
+function MultiCheckList({ options, values, onChange, getLabel, emptyText = 'Không có lựa chọn' }) {
+  const selected = new Set(values || []);
+  const toggle = (id) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange([...next]);
+  };
+  if (!options?.length) return <p className="muted multi-empty">{emptyText}</p>;
+  return (
+    <div className="multi-check-list">
+      {options.map((item) => {
+        const id = item._id;
+        const label = getLabel ? getLabel(item) : item.name;
+        return (
+          <label key={id} className="multi-check-item">
+            <input type="checkbox" checked={selected.has(id)} onChange={() => toggle(id)} />
+            <span>{label}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+function emptyDutyForm() {
+  return {
+    startDate: '',
+    endDate: '',
+    startTime: '08:00',
+    endTime: '17:00',
+    allDay: false,
+    content: '',
+    locationIds: [],
+    departmentIds: [],
+    participantUserIds: [],
+  };
+}
+
+function DutiesAdminView() {
+  const options = useQuery(anyApi.duties.formOptions);
+  const list = useQuery(anyApi.duties.listAdmin);
+  const create = useMutation(anyApi.duties.create);
+  const update = useMutation(anyApi.duties.update);
+  const remove = useMutation(anyApi.duties.remove);
+  const [form, setForm] = useState(emptyDutyForm);
+  const [editing, setEditing] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const { pending, feedback, run } = useFeedback();
+
+  const setField = (field, value) => {
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'allDay' && value) {
+        next.endDate = prev.startDate || prev.endDate;
+      }
+      if (field === 'startDate' && prev.allDay) {
+        next.endDate = value;
+      }
+      return next;
+    });
+  };
+
+  const startEdit = (item) => {
+    setEditing(item);
+    setExpanded(item._id);
+    setForm({
+      startDate: item.startDate,
+      endDate: item.endDate,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      allDay: Boolean(item.allDay),
+      content: item.content || '',
+      locationIds: [...(item.locationIds || [])],
+      departmentIds: [...(item.departmentIds || [])],
+      participantUserIds: [...(item.participantUserIds || [])],
+    });
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const payload = {
+      startDate: form.startDate,
+      endDate: form.allDay ? form.startDate : form.endDate,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      allDay: form.allDay,
+      content: form.content,
+      locationIds: form.locationIds,
+      departmentIds: form.departmentIds,
+      participantUserIds: form.participantUserIds,
+    };
+    if (editing) {
+      const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
+      if (ok) {
+        setEditing(null);
+        setForm(emptyDutyForm());
+      }
+    } else {
+      const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
+      if (ok) setForm(emptyDutyForm());
+    }
+  };
+
+  if (options === undefined || list === undefined) return <LoadingView label="Đang tải công tác…" />;
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Công tác</span>
+          <h2>Quản lý công tác</h2>
+          <p>Thêm, sửa, xóa công tác. Gán địa điểm, phòng ban và cá nhân tham gia. Xem trạng thái tham gia của từng người.</p>
+        </div>
+      </div>
+      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
+        {feedback.text}
+      </div>
+
+      <form className="admin-form duty-form" onSubmit={submit}>
+        <div className="form-heading">
+          <strong>{editing ? 'Sửa công tác' : 'Thêm công tác'}</strong>
+          {editing && (
+            <button type="button" className="text-button" onClick={() => { setEditing(null); setForm(emptyDutyForm()); }}>
+              Hủy chỉnh sửa
+            </button>
+          )}
+        </div>
+
+        <label>
+          Từ ngày
+          <div className="inline-fields">
+            <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
+            <label className="check-inline">
+              <input type="checkbox" checked={form.allDay} onChange={(e) => setField('allDay', e.target.checked)} />
+              Cả ngày
+            </label>
+          </div>
+        </label>
+
+        <label className={form.allDay ? 'field-disabled' : undefined}>
+          Đến ngày
+          <input
+            required
+            type="date"
+            value={form.allDay ? form.startDate : form.endDate}
+            disabled={form.allDay}
+            onChange={(e) => setField('endDate', e.target.value)}
+          />
+          {form.allDay ? <small>Đã chọn Cả ngày — Đến ngày trùng Từ ngày.</small> : null}
+        </label>
+
+        <label>
+          Từ giờ
+          <input required type="time" value={form.startTime} onChange={(e) => setField('startTime', e.target.value)} />
+        </label>
+
+        <label>
+          Đến giờ
+          <input required type="time" value={form.endTime} onChange={(e) => setField('endTime', e.target.value)} />
+        </label>
+
+        <label>
+          Nội dung
+          <textarea
+            required
+            maxLength={200}
+            rows={3}
+            value={form.content}
+            onChange={(e) => setField('content', e.target.value)}
+            placeholder="Nội dung công tác (tối đa 200 ký tự)"
+          />
+          <small>{form.content.length}/200</small>
+        </label>
+
+        <label>
+          Địa điểm
+          <MultiCheckList
+            options={options.locations}
+            values={form.locationIds}
+            onChange={(ids) => setField('locationIds', ids)}
+            emptyText="Chưa có địa điểm. Tạo trong Quản lý địa điểm."
+          />
+        </label>
+
+        <label>
+          Phòng ban tham gia
+          <MultiCheckList
+            options={options.departments}
+            values={form.departmentIds}
+            onChange={(ids) => setField('departmentIds', ids)}
+            getLabel={(d) => `${d.name}${d.code ? ` (${d.code})` : ''}`}
+            emptyText="Chưa có phòng ban."
+          />
+        </label>
+
+        <label>
+          Cá nhân tham gia
+          <MultiCheckList
+            options={options.users}
+            values={form.participantUserIds}
+            onChange={(ids) => setField('participantUserIds', ids)}
+            getLabel={(u) => `${u.name || '—'} · ${u.email || ''}`}
+            emptyText="Chưa có người dùng."
+          />
+        </label>
+
+        <button className="primary-button" disabled={Boolean(pending)}>
+          {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : '+ Thêm công tác'}
+        </button>
+      </form>
+
+      <div className="card-list duty-list">
+        <h3 className="list-title">Danh sách công tác</h3>
+        {list.length === 0 ? (
+          <p className="muted">Chưa có công tác nào.</p>
+        ) : (
+          list.map((item) => {
+            const open = expanded === item._id;
+            return (
+              <article className={`mgmt-card duty-card ${open ? 'is-open' : ''}`} key={item._id}>
+                <button type="button" className="duty-card-toggle" onClick={() => setExpanded(open ? null : item._id)}>
+                  <div className="duty-card-main">
+                    <strong>{item.content}</strong>
+                    <DutyTimingTags timing={item.timing} />
+                    <div className="duty-meta-grid">
+                      <span>Từ ngày: {formatViDate(item.startDate)}</span>
+                      <span>Đến ngày: {formatViDate(item.endDate)}</span>
+                      <span>Từ giờ: {item.startTime}</span>
+                      <span>Đến giờ: {item.endTime}</span>
+                      <span>Địa điểm: {item.locationNames?.length ? item.locationNames.join(', ') : '—'}</span>
+                      <span>Phòng ban: {item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span>
+                      <span>Cá nhân: {item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span>
+                      <span>Tham gia: {item.participants?.length || 0} người</span>
+                    </div>
+                  </div>
+                  <span className="duty-expand-hint">{open ? 'Thu gọn' : 'Chi tiết'}</span>
+                </button>
+                <div className="row-actions duty-actions">
+                  <button type="button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    disabled={Boolean(pending)}
+                    onClick={() => {
+                      if (window.confirm('Xóa công tác này?')) {
+                        void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
+                      }
+                    }}
+                  >
+                    Xóa
+                  </button>
+                </div>
+                {open && (
+                  <div className="duty-detail">
+                    <h4>Người tham gia & trạng thái</h4>
+                    {!item.participants?.length ? (
+                      <p className="muted">Chưa có người tham gia (chọn phòng ban hoặc cá nhân khi tạo công tác).</p>
+                    ) : (
+                      <ul className="member-list">
+                        {item.participants.map((p) => (
+                          <li key={p._id}>
+                            <span>
+                              <strong>{p.name || '—'}</strong> · {p.email || ''}
+                            </span>
+                            <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DutiesUserView({ access }) {
+  const data = useQuery(anyApi.duties.listMine);
+  const setAttendance = useMutation(anyApi.duties.setAttendance);
+  const { pending, feedback, run } = useFeedback();
+  const canEdit = access === 'edit' || data?.canEdit;
+
+  if (data === undefined) return <LoadingView label="Đang tải danh sách công tác…" />;
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Công tác</span>
+          <h2>Công tác của tôi</h2>
+          <p>
+            Danh sách sắp theo thời hạn gần nhất. Công tác của phòng ban bạn thuộc về và công tác được gán cá nhân đều hiển thị tại đây.
+            {canEdit
+              ? ' Bạn có quyền xác nhận tham gia trong thời gian diễn ra sự kiện.'
+              : ' Bạn đang ở chế độ chỉ xem — không hiện nút/trạng thái tham gia.'}
+          </p>
+        </div>
+      </div>
+      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
+        {feedback.text}
+      </div>
+
+      <div className="card-list duty-list">
+        {!data.duties?.length ? (
+          <p className="muted">Không có công tác nào được gán cho bạn.</p>
+        ) : (
+          data.duties.map((item) => (
+            <article className="mgmt-card duty-card user-duty-card" key={item._id}>
+              <div className="duty-card-main">
+                <div className="duty-title-row">
+                  <strong>{item.content}</strong>
+                  <DutyTimingTags timing={item.timing} />
+                </div>
+                <div className="duty-meta-grid view-only">
+                  <div><span className="meta-label">Từ ngày</span><span>{formatViDate(item.startDate)}</span></div>
+                  <div><span className="meta-label">Đến ngày</span><span>{formatViDate(item.endDate)}</span></div>
+                  <div><span className="meta-label">Từ giờ</span><span>{item.startTime}</span></div>
+                  <div><span className="meta-label">Đến giờ</span><span>{item.endTime}</span></div>
+                  <div><span className="meta-label">Nội dung</span><span>{item.content}</span></div>
+                  <div><span className="meta-label">Địa điểm</span><span>{item.locationNames?.length ? item.locationNames.join(', ') : '—'}</span></div>
+                  <div><span className="meta-label">Phòng ban tham gia</span><span>{item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span></div>
+                  <div><span className="meta-label">Cá nhân tham gia</span><span>{item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span></div>
+                </div>
+                {canEdit ? (
+                  <div className="attendance-actions">
+                    <span className={`attendance-pill ${item.myStatus}`}>{statusLabel(item.myStatus)}</span>
+                    <button
+                      type="button"
+                      className={`attend-btn ${item.myStatus === 'attended' ? 'active' : ''}`}
+                      disabled={Boolean(pending) || !item.timing.canMarkAttendance}
+                      title={!item.timing.canMarkAttendance ? 'Chỉ bấm được khi công tác đang diễn ra' : 'Xác nhận đã tham gia'}
+                      onClick={() =>
+                        run(`att-${item._id}-yes`, () => setAttendance({ dutyId: item._id, status: 'attended' }), 'Đã ghi nhận: Đã tham gia.')
+                      }
+                    >
+                      Đã tham gia
+                    </button>
+                    <button
+                      type="button"
+                      className={`attend-btn absent ${item.myStatus === 'absent' ? 'active' : ''}`}
+                      disabled={Boolean(pending) || !item.timing.canMarkAttendance}
+                      title={!item.timing.canMarkAttendance ? 'Chỉ bấm được khi công tác đang diễn ra' : 'Xác nhận chưa tham gia'}
+                      onClick={() =>
+                        run(`att-${item._id}-no`, () => setAttendance({ dutyId: item._id, status: 'absent' }), 'Đã ghi nhận: Chưa tham gia.')
+                      }
+                    >
+                      Chưa tham gia
+                    </button>
+                    {!item.timing.canMarkAttendance ? (
+                      <small className="muted">
+                        {item.timing.isUpcoming
+                          ? 'Chưa đến giờ diễn ra — chưa thể xác nhận tham gia.'
+                          : item.timing.isOverdue
+                            ? 'Đã kết thúc — không thể đổi trạng thái tham gia.'
+                            : ''}
+                      </small>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -273,12 +706,14 @@ function UserManagement() {
 
   const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
+  const isAdminRole = form.role === 'admin';
   const payload = () => ({
     name: form.name,
     email: form.email,
     role: form.role,
     departmentId: form.departmentId || undefined,
-    permissionGroupId: form.permissionGroupId || undefined,
+    // Admin ignores permission groups — never persist a selection.
+    permissionGroupId: isAdminRole ? undefined : form.permissionGroupId || undefined,
     positionId: form.positionId || undefined,
   });
 
@@ -377,7 +812,18 @@ function UserManagement() {
         </label>
         <label>
           Vai trò
-          <select value={form.role} onChange={(e) => setField('role', e.target.value)}>
+          <select
+            value={form.role}
+            onChange={(e) => {
+              const role = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                role,
+                // Nhóm quyền không áp dụng cho quản trị viên.
+                permissionGroupId: role === 'admin' ? '' : prev.permissionGroupId,
+              }));
+            }}
+          >
             {systemRoles.map((role) => (
               <option key={role.key} value={role.key}>
                 {role.name}
@@ -408,23 +854,32 @@ function UserManagement() {
             ))}
           </select>
         </label>
-        <label>
+        <label className={isAdminRole ? 'field-disabled' : undefined}>
           Nhóm quyền
-          <select value={form.permissionGroupId} onChange={(e) => setField('permissionGroupId', e.target.value)}>
-            <option value="">Chưa gán</option>
-            {groups.map((g) => (
-              <option key={g._id} value={g._id}>
-                {g.name}
-              </option>
-            ))}
+          <select
+            value={isAdminRole ? '' : form.permissionGroupId}
+            onChange={(e) => setField('permissionGroupId', e.target.value)}
+            disabled={isAdminRole}
+          >
+            <option value="">{isAdminRole ? 'Không áp dụng (Quản trị viên)' : 'Chưa gán'}</option>
+            {!isAdminRole &&
+              groups.map((g) => (
+                <option key={g._id} value={g._id}>
+                  {g.name}
+                </option>
+              ))}
           </select>
-          <small>Chỉ áp dụng cho Người dùng. Quản trị viên bỏ qua nhóm quyền.</small>
+          <small>
+            {isAdminRole
+              ? 'Quản trị viên có mọi quyền — không cần gán nhóm quyền.'
+              : 'Chỉ áp dụng cho Người dùng. Quyết định menu Ẩn / Xem / Sửa.'}
+          </small>
         </label>
         {!editing && (
           <label>
             Mật khẩu tạm thời
-            <input required minLength="12" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
-            <small>Ít nhất 12 ký tự. Không gửi qua email hoặc chat công khai.</small>
+            <input required minLength="8" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
+            <small>Ít nhất 8 ký tự. Không gửi qua email hoặc chat công khai.</small>
           </label>
         )}
         <button className="primary-button" disabled={Boolean(pending)}>
@@ -448,7 +903,7 @@ function UserManagement() {
           </div>
           <label>
             Mật khẩu tạm thời mới
-            <input required minLength="12" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
+            <input required minLength="8" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
           </label>
           <button className="primary-button" disabled={Boolean(pending)}>
             {pending ? 'Đang đặt lại…' : 'Đặt lại mật khẩu'}
@@ -672,6 +1127,127 @@ function DepartmentManagement() {
             )}
           </article>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function LocationManagement() {
+  const data = useQuery(anyApi.locations.list);
+  const create = useMutation(anyApi.locations.create);
+  const update = useMutation(anyApi.locations.update);
+  const remove = useMutation(anyApi.locations.remove);
+  const [form, setForm] = useState({ name: '', description: '' });
+  const [editing, setEditing] = useState(null);
+  const { pending, feedback, run } = useFeedback();
+
+  const locations = (data?.locations || []).filter((item) => item.active);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const payload = {
+      name: form.name,
+      description: form.description.trim() ? form.description : undefined,
+    };
+    if (editing) {
+      const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật địa điểm.');
+      if (ok) {
+        setEditing(null);
+        setForm({ name: '', description: '' });
+      }
+    } else {
+      const ok = await run('save', () => create(payload), 'Đã thêm địa điểm.');
+      if (ok) setForm({ name: '', description: '' });
+    }
+  };
+
+  if (data === undefined) return <LoadingView label="Đang tải địa điểm…" />;
+
+  return (
+    <section className="admin-view">
+      <div className="section-intro">
+        <div>
+          <span className="status-pill blue">Địa điểm</span>
+          <h2>Quản lý địa điểm</h2>
+          <p>Thêm, sửa, xóa địa điểm dùng trong các nghiệp vụ nhà trường.</p>
+        </div>
+      </div>
+      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
+        {feedback.text}
+      </div>
+      <form className="admin-form" onSubmit={submit}>
+        <div className="form-heading">
+          <strong>{editing ? `Sửa: ${editing.name}` : 'Thêm địa điểm'}</strong>
+          {editing && (
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setEditing(null);
+                setForm({ name: '', description: '' });
+              }}
+            >
+              Hủy
+            </button>
+          )}
+        </div>
+        <label>
+          Tên địa điểm
+          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </label>
+        <label>
+          Mô tả
+          <textarea
+            maxLength="1000"
+            rows={3}
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            placeholder="Mô tả ngắn về địa điểm (tùy chọn)"
+          />
+        </label>
+        <button className="primary-button" disabled={Boolean(pending)}>
+          {editing ? 'Lưu' : '+ Thêm địa điểm'}
+        </button>
+      </form>
+      <div className="card-list">
+        {locations.length === 0 ? (
+          <p className="muted">Chưa có địa điểm nào. Thêm địa điểm đầu tiên ở form trên.</p>
+        ) : (
+          locations.map((item) => (
+            <article className="mgmt-card" key={item._id}>
+              <div className="mgmt-card-head">
+                <div>
+                  <strong>{item.name}</strong>
+                  {item.description ? <span className="muted-block">{item.description}</span> : <span className="muted-block">Không có mô tả</span>}
+                </div>
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(item);
+                      setForm({ name: item.name, description: item.description || '' });
+                    }}
+                    disabled={Boolean(pending)}
+                  >
+                    Sửa
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    onClick={() => {
+                      if (window.confirm(`Xóa địa điểm ${item.name}?`)) {
+                        void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa địa điểm.');
+                      }
+                    }}
+                    disabled={Boolean(pending)}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
       </div>
     </section>
   );
@@ -907,10 +1483,9 @@ function PositionManagement() {
         {feedback.text}
       </div>
       <div className="notice approval-note">
-        <strong>Quy tắc duyệt</strong>
-        <span>
-          5★ duyệt 4–1 · 4★ duyệt 3–1 (không duyệt 5) · 1★ không duyệt ai. Nhiều cấp duyệt: cấp cao hơn được duyệt thay cấp thấp và ghi log.
-        </span>
+        <strong>Quy tắc duyệt:</strong>
+        <span>Người có cấp sao cao hơn sẽ được phép duyệt người có cấp sao thấp hơn.</span>
+        <span>Ví dụ: 5 sao duyệt cho 4 sao trở xuống, 4 sao duyệt cho 3 sao trở xuống… 1 sao không thể duyệt cho ai.</span>
       </div>
       <form className="admin-form" onSubmit={submit}>
         <div className="form-heading">
@@ -1013,7 +1588,7 @@ function ProfileView({ session }) {
   const submit = async (event) => {
     event.preventDefault();
     setFeedback('');
-    if (password.length < 12) return setFeedback('Mật khẩu mới phải có ít nhất 12 ký tự.');
+    if (password.length < 8) return setFeedback('Mật khẩu mới phải có ít nhất 8 ký tự.');
     if (password !== confirmation) return setFeedback('Xác nhận mật khẩu không khớp.');
     setPending(true);
     try {
@@ -1082,11 +1657,11 @@ function ProfileView({ session }) {
           <h3>Đổi mật khẩu</h3>
           <label>
             Mật khẩu mới
-            <input required minLength="12" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input required minLength="8" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <label>
             Xác nhận mật khẩu
-            <input required minLength="12" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
+            <input required minLength="8" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
           </label>
           <p className="form-message" role="status" aria-live="polite">
             {feedback}
@@ -1110,7 +1685,7 @@ function MustChangePasswordView() {
   const submit = async (event) => {
     event.preventDefault();
     setFeedback('');
-    if (password.length < 12) return setFeedback('Mật khẩu mới phải có ít nhất 12 ký tự.');
+    if (password.length < 8) return setFeedback('Mật khẩu mới phải có ít nhất 8 ký tự.');
     if (password !== confirmation) return setFeedback('Xác nhận mật khẩu không khớp.');
     setPending(true);
     try {
@@ -1133,11 +1708,11 @@ function MustChangePasswordView() {
       <form className="password-form" onSubmit={submit}>
         <label>
           Mật khẩu mới
-          <input required minLength="12" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input required minLength="8" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         <label>
           Xác nhận mật khẩu
-          <input required minLength="12" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
+          <input required minLength="8" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
         </label>
         <p className="form-message" role="status" aria-live="polite">
           {feedback}
@@ -1216,7 +1791,7 @@ function SignedOutView() {
           </label>
           <label>
             Mật khẩu
-            <input required type="password" autoComplete="current-password" minLength="12" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input required type="password" autoComplete="current-password" minLength="8" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <p className="form-message" role="status" aria-live="polite">
             {error}

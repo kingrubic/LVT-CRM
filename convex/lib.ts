@@ -94,6 +94,33 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** Normalize display names for duplicate checks (trim + Vietnamese-aware lower case). */
+export function normalizeDisplayName(name: string): string {
+  return name.trim().toLocaleLowerCase("vi");
+}
+
+export function namesMatch(a: string, b: string): boolean {
+  return normalizeDisplayName(a) === normalizeDisplayName(b);
+}
+
+/**
+ * True if another active row already uses this name.
+ * Soft-deleted (active=false) names may be reused.
+ */
+export function hasActiveNameConflict(
+  rows: { _id: string; name: string; active?: boolean }[],
+  name: string,
+  excludeId?: string,
+): boolean {
+  const target = normalizeDisplayName(name);
+  return rows.some(
+    (row) =>
+      row.active !== false &&
+      row._id !== excludeId &&
+      normalizeDisplayName(row.name) === target,
+  );
+}
+
 export async function resolveUserMenuAccess(
   ctx: DbCtx,
   user: { role: string; permissionGroupId?: string },

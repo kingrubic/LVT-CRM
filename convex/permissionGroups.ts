@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import {
   adminPermissionOrThrow,
   defaultMenuAccess,
+  hasActiveNameConflict,
   normalizeMenuAccess,
   SYSTEM_MENU_DEFS,
   type MenuAccess,
@@ -27,6 +28,13 @@ function cleanGroup(args: {
     }
   }
   return { name, description, menuAccess };
+}
+
+async function assertGroupNameAvailable(ctx: { db: any }, name: string, excludeId?: string) {
+  const groups = await ctx.db.query("permissionGroups").collect();
+  if (hasActiveNameConflict(groups, name, excludeId)) {
+    throw new Error("PERMISSION_GROUP_NAME_TAKEN");
+  }
 }
 
 export const list = query({
@@ -63,6 +71,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const actor = await adminPermissionOrThrow(ctx, "permissionGroups:write");
     const input = cleanGroup(args);
+    await assertGroupNameAvailable(ctx, input.name);
     const now = Date.now();
     const id = await ctx.db.insert("permissionGroups", {
       ...input,
@@ -99,6 +108,7 @@ export const update = mutation({
       description: args.description,
       menuAccess: args.menuAccess || current.menuAccess,
     });
+    await assertGroupNameAvailable(ctx, input.name, args.id);
     const now = Date.now();
     await ctx.db.patch(args.id, {
       ...input,

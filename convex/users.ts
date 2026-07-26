@@ -58,8 +58,10 @@ function cleanUserInput(args: {
   return { name, email, role, departmentId, permissionGroupId, positionId };
 }
 
+const MIN_PASSWORD_LENGTH = 8;
+
 function assertPasswordLength(password: string, code = "PASSWORD_TOO_SHORT") {
-  if (!password || password.length < 12) throw new Error(code);
+  if (!password || password.length < MIN_PASSWORD_LENGTH) throw new Error(code);
 }
 
 async function auditBestEffort(
@@ -648,7 +650,7 @@ export const changeOwnPassword = action({
  *
  * Example (self-hosted, after env is loaded):
  *   npx convex run internal.users.provisionFirstAdmin \
- *     '{"email":"admin@example.school","name":"Quản trị","temporaryPassword":"<temp-12+>"}'
+ *     '{"email":"admin@example.school","name":"Quản trị","temporaryPassword":"<temp-8+>"}'
  */
 export const provisionFirstAdmin = internalAction({
   args: {
@@ -694,6 +696,41 @@ export const provisionFirstAdmin = internalAction({
       targetEmail: input.email,
     });
     return created.user._id;
+  },
+});
+
+/**
+ * Operator-only password reset for an existing account.
+ * This is intentionally internal-only; normal admin resets use resetPassword.
+ */
+export const operatorResetPassword = internalAction({
+  args: {
+    email: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async (ctx, args): Promise<Id<"users">> => {
+    assertPasswordLength(args.newPassword, "PASSWORD_TOO_SHORT");
+    const email = normalizeEmail(args.email);
+    const user = await ctx.runQuery(internal.users.byEmail, { email });
+    if (!user || user.status !== "active") throw new Error("USER_NOT_FOUND");
+
+    await modifyAccountCredentials(ctx, {
+      provider: "password",
+      account: { id: email, secret: args.newPassword },
+    });
+    await invalidateSessions(ctx, { userId: user._id });
+    await ctx.runMutation(internal.users.patchById, {
+      id: user._id,
+      actorUserId: "operator:operatorResetPassword",
+      mustChangePassword: false,
+    });
+    await auditBestEffort(ctx, {
+      actorUserId: "operator:operatorResetPassword",
+      action: "user.operator_password_reset",
+      targetUserId: user._id,
+      targetEmail: email,
+    });
+    return user._id;
   },
 });
 
