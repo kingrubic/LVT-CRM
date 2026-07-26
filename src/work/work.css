@@ -601,6 +601,10 @@
   gap: 13px;
 }
 
+.work-user-view > .work-user-list {
+  margin-top: 20px;
+}
+
 .work-document-card,
 .work-user-card {
   position: relative;
