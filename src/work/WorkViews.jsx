@@ -448,7 +448,8 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
           {users.map((person) => (
             <label key={person._id} className={assigneeIds.includes(person._id) ? 'is-selected' : ''}>
               <input type="checkbox" checked={assigneeIds.includes(person._id)} onChange={() => setAssigneeIds((current) => current.includes(person._id) ? current.filter((id) => id !== person._id) : [...current, person._id])} />
-              <span><strong>{person.name}</strong><small>{person.positionName || 'Chưa gán chức vụ'} · {person.level} sao · {person.email}</small></span>
+              <span className="work-person-avatar" aria-hidden="true">{String(person.name).trim().slice(0, 1).toUpperCase()}</span>
+              <span><strong>{person.name}</strong><small>{person.positionName || 'Chưa gán chức vụ'}</small></span>
             </label>
           ))}
           {!users.length ? <p className="work-muted">Không có user cấp thấp hơn cùng phòng ban.</p> : null}
