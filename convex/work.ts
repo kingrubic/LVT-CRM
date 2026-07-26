@@ -70,6 +70,15 @@ function taskStatus(task: any, userId: string, today = todayInVietnam()) {
   return "pending";
 }
 
+function taskOverallStatus(task: any, today = todayInVietnam()) {
+  const completed = task.assigneeUserIds.every((id: string) =>
+    task.completedUserIds.some((completedId: string) => String(completedId) === String(id)),
+  );
+  if (completed) return "completed";
+  if (task.deadline < today) return "overdue";
+  return "pending";
+}
+
 function documentAssignments(document: any) {
   if (Array.isArray(document.assignments) && document.assignments.length) {
     return document.assignments;
@@ -555,7 +564,7 @@ export const listMine = query({
         const document = docsById.get(String(item.documentId));
         if (!document) return null;
         return {
-          ...(await workItemViewWithContext(ctx, document, item, tasksByItem.get(String(item._id)) || [], catalogData, String(access.user._id))),
+          ...(await workItemViewWithContext(ctx, document, item, tasksByItem.get(String(item._id)) || [], catalogData)),
           canAssign: access.level === 2 || access.level === 3,
         };
       }),
@@ -618,7 +627,6 @@ async function workItemViewWithContext(
   item: any,
   tasks: any[],
   catalogData: any,
-  actorId: string,
 ) {
   const department = catalogData.departmentMap.get(String(item.departmentId));
   return {
@@ -644,7 +652,7 @@ async function workItemViewWithContext(
           level: activePositionLevel(user, catalogData.positions),
           status: taskStatus(task, String(user._id)),
         })),
-      status: taskStatus(task, actorId),
+      status: taskOverallStatus(task),
     })),
     document: await documentView(ctx, document, catalogData),
   };
