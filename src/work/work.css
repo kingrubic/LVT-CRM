@@ -829,6 +829,10 @@
   border-top: 1px solid #e6ecee;
 }
 
+.work-approval-actions > button {
+  min-width: 220px;
+}
+
 .work-progress {
   margin-top: 14px;
   padding-top: 13px;
@@ -1134,7 +1138,11 @@
   .work-user-card-top > div { display: grid; gap: 5px; }
   .work-task-row { align-items: flex-start; }
   .work-task-row .work-status { flex: 0 0 auto; }
-  .work-approval-actions > button { flex: 1 1 210px; }
+  .work-approval-actions > button {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
