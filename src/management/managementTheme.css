@@ -194,6 +194,17 @@
   line-height: 1.5;
 }
 
+.users-management .admin-form > label {
+  align-self: start;
+  align-content: start;
+}
+
+.users-management .admin-form > label input,
+.users-management .admin-form > label select {
+  height: 44px;
+  min-height: 44px;
+}
+
 .modern-management .admin-form > .primary-button {
   grid-column: 1 / -1;
   justify-self: end;
