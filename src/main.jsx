@@ -142,6 +142,15 @@ function AuthenticatedApp() {
   if (session.user.status !== 'active') {
     return <AccessDeniedView message="Tài khoản này đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên." />;
   }
+  if (session.user.mustChangePassword) {
+    return (
+      <main className="auth-page">
+        <div className="auth-card password-gate-card">
+          <MustChangePasswordView />
+        </div>
+      </main>
+    );
+  }
   return <AppShell session={session} />;
 }
 
@@ -182,16 +191,6 @@ function AppShell({ session }) {
     setActive(id);
     setMobileOpen(false);
   };
-
-  if (user.mustChangePassword) {
-    return (
-      <main className="auth-page">
-        <div className="auth-card password-gate-card">
-          <MustChangePasswordView />
-        </div>
-      </main>
-    );
-  }
 
   return (
     <div className={`shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
