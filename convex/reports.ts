@@ -193,6 +193,7 @@ export const dutyCalendar = query({
 /** Calendar data for the Work report. Visibility follows the user's report permission and rank. */
 export const workCalendar = query({
   args: {
+    userId: v.optional(v.id("users")),
     startDate: v.string(),
     endDate: v.string(),
   },
@@ -211,13 +212,15 @@ export const workCalendar = query({
       throw new Error("FORBIDDEN: reports menu hidden");
     }
 
-    const [documents, workItems, personalTasks, departments, positions] = await Promise.all([
+    const [users, documents, workItems, personalTasks, departments, positions] = await Promise.all([
+      ctx.db.query("users").collect(),
       ctx.db.query("officeDocuments").collect(),
       ctx.db.query("workItems").collect(),
       ctx.db.query("personalTasks").collect(),
       ctx.db.query("departments").collect(),
       ctx.db.query("positions").collect(),
     ]);
+    const activeUsers = users.filter((user) => user.status === "active");
     const activeDocuments = documents.filter((document) => document.active);
     const activeWorkItems = workItems.filter((item) => item.active);
     const activeTasks = personalTasks.filter((task) => task.active);
@@ -232,9 +235,23 @@ export const workCalendar = query({
 
     const canViewAll =
       isOperationalManagerRole(actor.role) || menuAccess.reports === "view_all";
-    const level = isOperationalManagerRole(actor.role)
-      ? 5
-      : activePositionLevel(actor, positions);
+    const actorLevel = isOperationalManagerRole(actor.role)
+      ? 5 : activePositionLevel(actor, positions);
+    const visibleUsers = canViewAll
+      ? activeUsers
+      : actorLevel === 2 || actorLevel === 3
+        ? activeUsers.filter(
+            (user) => String(user._id) === String(actor._id) || isSameDepartmentSubordinate(actor, user, positions),
+          )
+        : activeUsers.filter((user) => String(user._id) === String(actor._id));
+    const selectedUserId = String(args.userId || actor._id);
+    const selectedUser = visibleUsers.find((user) => String(user._id) === selectedUserId);
+    if (!selectedUser) throw new Error("REPORT_USER_FORBIDDEN");
+    const selectedMenuAccess = await resolveUserMenuAccess(ctx, selectedUser);
+    const selectedCanViewAll =
+      isOperationalManagerRole(selectedUser.role) || selectedMenuAccess.reports === "view_all";
+    const selectedLevel = isOperationalManagerRole(selectedUser.role)
+      ? 5 : activePositionLevel(selectedUser, positions);
     const inRange = (deadline: string) => deadline >= startDate && deadline <= endDate;
     const events: Array<{
       _id: string;
@@ -249,7 +266,7 @@ export const workCalendar = query({
       documentName: string;
     }> = [];
 
-    if (canViewAll) {
+    if (selectedCanViewAll) {
       for (const document of activeDocuments) {
         if (!inRange(document.deadline) || !["approved", "pending"].includes(document.status)) continue;
         events.push({
@@ -265,12 +282,12 @@ export const workCalendar = query({
           documentName: document.fileName || "Công văn",
         });
       }
-    } else if (level === 2 || level === 3) {
+    } else if (selectedLevel === 2 || selectedLevel === 3) {
       for (const item of activeWorkItems) {
         const document = documentsById.get(String(item.documentId));
         if (
           document?.status !== "approved" ||
-          String(item.departmentId) !== String(actor.departmentId || "") ||
+          String(item.departmentId) !== String(selectedUser.departmentId || "") ||
           !inRange(item.deadline)
         ) continue;
         events.push({
@@ -287,18 +304,18 @@ export const workCalendar = query({
           documentName: document.fileName || "Công văn",
         });
       }
-    } else if (level === 1) {
+    } else if (selectedLevel === 1) {
       for (const task of activeTasks) {
         const item = activeWorkItems.find((workItem) => String(workItem._id) === String(task.workItemId));
         const document = item ? documentsById.get(String(item.documentId)) : undefined;
         if (
           !item ||
           document?.status !== "approved" ||
-          !task.assigneeUserIds.some((userId) => String(userId) === String(actor._id)) ||
+          !task.assigneeUserIds.some((userId) => String(userId) === String(selectedUser._id)) ||
           !inRange(task.deadline)
         ) continue;
         const completed = task.completedUserIds.some(
-          (userId) => String(userId) === String(actor._id),
+          (userId) => String(userId) === String(selectedUser._id),
         );
         events.push({
           _id: String(task._id),
@@ -318,7 +335,26 @@ export const workCalendar = query({
 
     events.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.content.localeCompare(b.content, "vi"));
     return {
-      visibilityScope: canViewAll ? "all" : level === 2 || level === 3 ? "department" : "personal",
+      people: visibleUsers
+        .map((user) => {
+          const department = user.departmentId ? departmentsById.get(String(user.departmentId)) : undefined;
+          const position = user.positionId ? positions.find((item) => String(item._id) === String(user.positionId)) : undefined;
+          return {
+            _id: user._id,
+            name: user.name || user.email || "Chưa đặt tên",
+            email: user.email || "",
+            isSelf: String(user._id) === String(actor._id),
+            departmentName: department?.name || "",
+            positionName: position?.name || "",
+            positionLevel: activePositionLevel(user, positions),
+          };
+        })
+        .sort(
+          (a, b) => Number(b.isSelf) - Number(a.isSelf) || b.positionLevel - a.positionLevel || a.name.localeCompare(b.name, "vi"),
+        ),
+      selectedUserId: selectedUser._id,
+      selectedUserName: selectedUser.name || selectedUser.email || "Chưa đặt tên",
+      visibilityScope: selectedCanViewAll ? "all" : selectedLevel === 2 || selectedLevel === 3 ? "department" : "personal",
       events,
     };
   },

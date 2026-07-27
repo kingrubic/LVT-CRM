@@ -70,6 +70,16 @@ function statusSummary(status, scope) {
   return labels[status] || statusLabel(status);
 }
 function eventTime(event) { return `Hạn ${event.deadline}`; }
+function PersonAvatar({ name }) {
+  const initials = String(name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0])
+    .join('')
+    .toLocaleUpperCase('vi');
+  return <span className="report-person-avatar">{initials || '?'}</span>;
+}
 
 function CalendarEvent({ event, compact = false, onSelect }) {
   return (
@@ -139,13 +149,14 @@ function PeriodCalendar({ mode, anchor, events, onSelect }) {
   return <div className={`report-period-grid mode-${mode}`}>{Array.from({ length: count }, (_, index) => <MiniMonth key={`${anchor.getFullYear()}-${firstMonth + index}`} date={new Date(anchor.getFullYear(), firstMonth + index, 1)} events={events} onSelect={onSelect} />)}</div>;
 }
 
-function EventDetail({ event, onClose }) {
+function EventDetail({ event, personName, onClose }) {
   if (!event) return null;
   return <aside className="report-event-detail">
     <button type="button" className="report-detail-close" onClick={onClose} aria-label="Đóng chi tiết">×</button>
     <span className={`report-detail-status status-${event.status}`}>{statusLabel(event.status)}</span>
     <h3>{event.content}</h3>
     <dl>
+      <div><dt>Nhân sự</dt><dd>{personName}</dd></div>
       <div><dt>Loại công việc</dt><dd>{event.kindLabel}</dd></div>
       <div><dt>Hạn hoàn thành</dt><dd>{event.deadline}</dd></div>
       <div><dt>Phòng ban</dt><dd>{event.departmentName}</dd></div>
@@ -157,12 +168,23 @@ function EventDetail({ event, onClose }) {
 export default function WorkReportsView() {
   const [mode, setMode] = useState('month');
   const [anchor, setAnchor] = useState(() => new Date());
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [peopleCollapsed, setPeopleCollapsed] = useState(false);
   const range = useMemo(() => viewRange(mode, anchor), [mode, anchor]);
-  const data = useQuery(anyApi.reports.workCalendar, { startDate: toIsoDate(range.start), endDate: toIsoDate(range.end) });
+  const queryArgs = {
+    startDate: toIsoDate(range.start),
+    endDate: toIsoDate(range.end),
+    ...(selectedUserId ? { userId: selectedUserId } : {}),
+  };
+  const data = useQuery(anyApi.reports.workCalendar, queryArgs);
   const events = data?.events || [];
 
-  useEffect(() => { setSelectedEvent(null); }, [mode, anchor]);
+  useEffect(() => {
+    if (data?.selectedUserId && !selectedUserId) setSelectedUserId(data.selectedUserId);
+  }, [data?.selectedUserId, selectedUserId]);
+
+  useEffect(() => { setSelectedEvent(null); }, [mode, anchor, selectedUserId]);
 
   const movePeriod = (direction) => {
     if (mode === 'week') setAnchor((current) => addDays(current, direction * 7));
@@ -175,6 +197,22 @@ export default function WorkReportsView() {
     : data?.visibilityScope === 'department'
       ? ['unassigned', 'pending', 'completed', 'overdue']
       : ['pending', 'completed', 'overdue'];
+  const peopleGroups = useMemo(() => {
+    const groups = new Map();
+    for (const person of data?.people || []) {
+      const departmentName = person.departmentName || 'Chưa gán phòng ban';
+      const people = groups.get(departmentName) || [];
+      people.push(person);
+      groups.set(departmentName, people);
+    }
+    return [...groups.entries()]
+      .map(([departmentName, people]) => ({ departmentName, people }))
+      .sort((a, b) => {
+        const aHasSelf = a.people.some((person) => person.isSelf);
+        const bHasSelf = b.people.some((person) => person.isSelf);
+        return Number(bHasSelf) - Number(aHasSelf) || a.departmentName.localeCompare(b.departmentName, 'vi');
+      });
+  }, [data?.people]);
 
   return <section className="duty-reports-view work-reports-view">
     <header className="report-hero">
@@ -185,10 +223,27 @@ export default function WorkReportsView() {
       </div>
       <div className="report-hero-mark" aria-hidden="true"><span>{anchor.getDate()}</span><small>THÁNG {anchor.getMonth() + 1}</small></div>
     </header>
-    {data === undefined ? <div className="report-loading"><span /><p>Đang dựng lịch công việc…</p></div> : <div className="report-workspace work-report-workspace">
+    {data === undefined ? <div className="report-loading"><span /><p>Đang dựng lịch công việc…</p></div> : <div className={`report-workspace ${peopleCollapsed ? 'people-collapsed' : ''}`}>
+      <aside className="report-people-panel">
+        <div className="report-panel-heading"><span>Nhân sự</span><strong>{data.people.length}</strong></div>
+        <p>{data.people.length > 1 ? 'Chọn một người để xem lịch công việc.' : 'Lịch công việc của bạn.'}</p>
+        <div className="report-people-list">
+          {peopleGroups.map((group) => <section className="report-people-group" key={group.departmentName}>
+            <header><span>{group.departmentName}</span><small>{group.people.length}</small></header>
+            <div className="report-people-group-list">
+              {group.people.map((person) => <button type="button" className={`report-person ${String(person._id) === String(data.selectedUserId) ? 'active' : ''}`} key={person._id} onClick={() => setSelectedUserId(person._id)}>
+                <PersonAvatar name={person.name} />
+                <span><strong>{person.name}</strong><small>{person.isSelf ? 'Lịch của tôi' : person.positionName || 'Chưa gán chức vụ'}</small></span>
+                <i aria-hidden="true">›</i>
+              </button>)}
+            </div>
+          </section>)}
+        </div>
+      </aside>
       <main className="report-calendar-panel">
         <div className="report-calendar-toolbar">
-          <div className="report-calendar-title"><span>{data.visibilityScope === 'all' ? 'Công văn toàn trường' : data.visibilityScope === 'department' ? 'Công việc phòng ban' : 'Công việc của tôi'}</span><h3>{range.title}</h3></div>
+          <button type="button" className="report-panel-toggle" onClick={() => setPeopleCollapsed((collapsed) => !collapsed)} aria-label={peopleCollapsed ? 'Hiện cột nhân sự' : 'Ẩn cột nhân sự'} aria-expanded={!peopleCollapsed} title={peopleCollapsed ? 'Hiện cột nhân sự' : 'Ẩn cột nhân sự'}><span aria-hidden="true">{peopleCollapsed ? '›' : '‹'}</span><small>{peopleCollapsed ? 'Nhân sự' : 'Ẩn nhân sự'}</small></button>
+          <div className="report-calendar-title"><span>Lịch công việc của {data.selectedUserName}</span><h3>{range.title}</h3></div>
           <div className="report-toolbar-actions">
             <div className="report-period-nav"><button type="button" onClick={() => movePeriod(-1)} aria-label="Kỳ trước">‹</button><button type="button" className="today-button" onClick={() => setAnchor(new Date())}>Hôm nay</button><button type="button" onClick={() => movePeriod(1)} aria-label="Kỳ sau">›</button></div>
             <div className="report-mode-switch">{VIEW_OPTIONS.map(([id, label]) => <button type="button" className={mode === id ? 'active' : ''} key={id} onClick={() => setMode(id)}>{label}</button>)}</div>
@@ -204,7 +259,7 @@ export default function WorkReportsView() {
           {!events.length ? <div className="report-empty-overlay"><span>✦</span><strong>Kỳ này đang trống lịch</strong><small>Hãy chuyển sang kỳ khác để xem công việc.</small></div> : null}
         </div>
       </main>
-      <EventDetail event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      <EventDetail event={selectedEvent} personName={data.selectedUserName} onClose={() => setSelectedEvent(null)} />
     </div>}
   </section>;
 }
