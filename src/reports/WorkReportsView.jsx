@@ -185,7 +185,7 @@ export default function WorkReportsView() {
       </div>
       <div className="report-hero-mark" aria-hidden="true"><span>{anchor.getDate()}</span><small>THÁNG {anchor.getMonth() + 1}</small></div>
     </header>
-    {data === undefined ? <div className="report-loading"><span /><p>Đang dựng lịch công việc…</p></div> : <div className="report-workspace people-collapsed">
+    {data === undefined ? <div className="report-loading"><span /><p>Đang dựng lịch công việc…</p></div> : <div className="report-workspace work-report-workspace">
       <main className="report-calendar-panel">
         <div className="report-calendar-toolbar">
           <div className="report-calendar-title"><span>{data.visibilityScope === 'all' ? 'Công văn toàn trường' : data.visibilityScope === 'department' ? 'Công việc phòng ban' : 'Công việc của tôi'}</span><h3>{range.title}</h3></div>

@@ -115,6 +115,10 @@
   gap: 0;
 }
 
+.report-workspace.work-report-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .report-workspace.people-collapsed .report-people-panel {
   min-width: 0;
   padding-right: 0;
