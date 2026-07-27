@@ -1,5 +1,11 @@
 import { v } from "convex/values";
-import { adminPermissionOrThrow, activePositionLevel, currentUserOrThrow, resolveUserMenuAccess } from "./lib";
+import {
+  activePositionLevel,
+  currentUserOrThrow,
+  isOperationalManagerRole,
+  operationalManagerPermissionOrThrow,
+  resolveUserMenuAccess,
+} from "./lib";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -35,15 +41,15 @@ async function requireWorkAccess(ctx: any) {
   if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
   if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
   const menuAccess = await resolveUserMenuAccess(ctx, user);
-  if (user.role !== "admin" && menuAccess.work === "hidden") {
+  if (!isOperationalManagerRole(user.role) && menuAccess.work === "hidden") {
     throw new Error("FORBIDDEN: work menu hidden");
   }
   const positions = await ctx.db.query("positions").collect();
   return {
     user,
-    access: user.role === "admin" ? "edit" : menuAccess.work,
-    isAdmin: user.role === "admin",
-    level: user.role === "admin" ? 5 : activePositionLevel(user, positions),
+    access: isOperationalManagerRole(user.role) ? "edit" : menuAccess.work,
+    isAdmin: isOperationalManagerRole(user.role),
+    level: isOperationalManagerRole(user.role) ? 5 : activePositionLevel(user, positions),
     positions,
   };
 }
@@ -157,7 +163,7 @@ async function documentView(ctx: any, document: any, catalogData: any) {
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await adminPermissionOrThrow(ctx, "work:write");
+    await operationalManagerPermissionOrThrow(ctx, "work:write");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -165,7 +171,7 @@ export const generateUploadUrl = mutation({
 export const formOptions = query({
   args: {},
   handler: async (ctx) => {
-    await adminPermissionOrThrow(ctx, "work:write");
+    await operationalManagerPermissionOrThrow(ctx, "work:write");
     const { activeUsers, departments, positions } = await catalog(ctx);
     return {
       departments: departments
@@ -210,7 +216,7 @@ export const createDocument = mutation({
     approverUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await adminPermissionOrThrow(ctx, "work:write");
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
     const fileName = args.fileName.trim();
     const extension = extensionOf(fileName);
     if (!fileName || fileName.length > 255 || !ACCEPTED_EXTENSIONS.has(extension)) {
@@ -297,7 +303,7 @@ export const createDocument = mutation({
 export const listAdmin = query({
   args: {},
   handler: async (ctx) => {
-    await adminPermissionOrThrow(ctx, "work:write");
+    await operationalManagerPermissionOrThrow(ctx, "work:write");
     const [documents, workItems, personalTasks, catalogData] = await Promise.all([
       ctx.db.query("officeDocuments").collect(),
       ctx.db.query("workItems").collect(),

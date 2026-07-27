@@ -4,7 +4,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 export type DbCtx = QueryCtx | MutationCtx;
 
-/** System menus under "Quản trị hệ thống" controlled by permission groups. */
+/** Primary feature menus controlled by permission groups for regular users. */
 export const SYSTEM_MENU_DEFS = [
   { id: "reports", label: "Báo cáo" },
   { id: "duties", label: "Công tác" },
@@ -15,15 +15,20 @@ export const SYSTEM_MENU_DEFS = [
 
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
 export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
-export type SystemRole = "admin" | "user";
+export type SystemRole = "admin" | "moderator" | "user";
 
 export const SYSTEM_ROLES: { key: SystemRole; name: string }[] = [
-  { key: "admin", name: "Quản trị viên" },
-  { key: "user", name: "Người dùng" },
+  { key: "admin", name: "Administrator" },
+  { key: "moderator", name: "Moderator" },
+  { key: "user", name: "User" },
 ];
 
 export function isSystemRole(role: string): role is SystemRole {
-  return role === "admin" || role === "user";
+  return role === "admin" || role === "moderator" || role === "user";
+}
+
+export function isOperationalManagerRole(role: string): role is "admin" | "moderator" {
+  return role === "admin" || role === "moderator";
 }
 
 export function defaultMenuAccess(): { menu: string; access: MenuAccess }[] {
@@ -96,7 +101,7 @@ export async function currentUserOrThrow(ctx: DbCtx) {
   return user;
 }
 
-/** Quản trị viên: full access to all admin operations. */
+/** Administrator-only gate for supreme settings and user lifecycle operations. */
 export async function adminOrThrow(ctx: DbCtx) {
   const user = await currentUserOrThrow(ctx);
   if (user.status !== "active" || user.role !== "admin") throw new Error("FORBIDDEN: admin role required");
@@ -111,6 +116,21 @@ export async function adminOrThrow(ctx: DbCtx) {
 export async function adminPermissionOrThrow(ctx: DbCtx, permission: string) {
   const user = await adminOrThrow(ctx);
   return { user, role: { key: "admin" as const, permissions: [permission, "*"] } };
+}
+
+/** Administrator/Moderator gate for operational management modules. */
+export async function operationalManagerOrThrow(ctx: DbCtx) {
+  const user = await currentUserOrThrow(ctx);
+  if (user.status !== "active" || !isOperationalManagerRole(user.role)) {
+    throw new Error("FORBIDDEN: operational manager role required");
+  }
+  if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
+  return user;
+}
+
+export async function operationalManagerPermissionOrThrow(ctx: DbCtx, permission: string) {
+  const user = await operationalManagerOrThrow(ctx);
+  return { user, role: { key: user.role, permissions: [permission, "*"] } };
 }
 
 export function normalizeEmail(email: string): string {
@@ -149,7 +169,7 @@ export async function resolveUserMenuAccess(
   user: { role: string; permissionGroupId?: string },
 ): Promise<Record<string, MenuAccess>> {
   const full = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "edit" as MenuAccess]));
-  if (user.role === "admin") return full;
+  if (isOperationalManagerRole(user.role)) return full;
 
   const empty = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "hidden" as MenuAccess]));
   if (!user.permissionGroupId) return empty;

@@ -20,9 +20,11 @@ import {
   adminPermissionOrThrow,
   authUserIdOrThrow,
   currentUserOrThrow,
+  isOperationalManagerRole,
   isSystemRole,
   normalizeEmail,
   resolveUserMenuAccess,
+  SYSTEM_ROLES,
 } from "./lib";
 
 const userArgs = {
@@ -46,15 +48,12 @@ function cleanUserInput(args: {
   const email = normalizeEmail(args.email);
   const role = args.role.trim();
   const departmentId = args.departmentId?.trim() || undefined;
-  const permissionGroupId = args.permissionGroupId?.trim() || undefined;
   const positionId = args.positionId?.trim() || undefined;
   if (!name || name.length > 120) throw new Error("INVALID_NAME");
   if (!isSystemRole(role)) throw new Error("INVALID_ROLE");
+  const permissionGroupId =
+    role === "user" ? args.permissionGroupId?.trim() || undefined : undefined;
   if (!email || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254) throw new Error("INVALID_EMAIL");
-  // Admins do not need a permission group (they always have full access).
-  if (role === "admin" && permissionGroupId) {
-    // Allow storing it but not required; keep as-is for optional metadata.
-  }
   return { name, email, role, departmentId, permissionGroupId, positionId };
 }
 
@@ -119,6 +118,8 @@ export const sessionContext = query({
     return {
       user,
       isAdmin: user.role === "admin",
+      isModerator: user.role === "moderator",
+      isOperationalManager: isOperationalManagerRole(user.role),
       menuAccess,
       department: department
         ? { _id: department._id, name: department.name, code: department.code }
@@ -149,10 +150,7 @@ export const bootstrap = query({
       departments,
       permissionGroups,
       positions,
-      systemRoles: [
-        { key: "admin", name: "Quản trị viên" },
-        { key: "user", name: "Người dùng" },
-      ],
+      systemRoles: SYSTEM_ROLES,
     };
   },
 });

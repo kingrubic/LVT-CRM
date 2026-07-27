@@ -67,6 +67,8 @@ for (const marker of [
   "positionId",
   "sessionContext",
   "isSystemRole",
+  "isOperationalManagerRole",
+  "SYSTEM_ROLES",
 ]) {
   if (!source.includes(marker)) throw new Error(`Security/lifecycle marker missing: ${marker}`);
 }
@@ -108,8 +110,12 @@ for (const marker of [
   "users.resetPassword",
   "users.changeOwnPassword",
   "window.confirm",
-  "Quản trị viên",
-  "Người dùng",
+  "Administrator",
+  "Moderator",
+  "User",
+  "Chức năng chính",
+  "Quản trị hệ thống",
+  "Cài đặt tối cao",
   "Nhóm quyền",
   "Chức vụ",
   "Thông tin cá nhân",
@@ -152,7 +158,15 @@ if (client.includes('flow: "signUp"') || client.includes("Sign up")) {
 }
 
 const lib = readFileSync("convex/lib.ts", "utf8");
-for (const marker of ["canApproveLevel", "SYSTEM_MENU_DEFS", "resolveUserMenuAccess", 'role !== "admin"']) {
+for (const marker of [
+  "canApproveLevel",
+  "SYSTEM_MENU_DEFS",
+  "resolveUserMenuAccess",
+  "isOperationalManagerRole",
+  "operationalManagerPermissionOrThrow",
+  '"moderator"',
+  'role !== "admin"',
+]) {
   if (!lib.includes(marker)) throw new Error(`lib marker missing: ${marker}`);
 }
 

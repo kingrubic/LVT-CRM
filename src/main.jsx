@@ -15,23 +15,25 @@ const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl = window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : configuredConvexUrl;
 const convex = publicConvexUrl ? new ConvexReactClient(publicConvexUrl) : null;
 
-const SYSTEM_MENUS = [
+const PRIMARY_MENUS = [
   ['reports', 'Báo cáo'],
   ['duties', 'Công tác'],
   ['work', 'Công việc'],
   ['homeroom', 'Lớp chủ nhiệm'],
   ['people-review', 'Đánh giá nhân sự'],
 ];
-const ADMIN_SETTINGS = [
+const SYSTEM_MANAGEMENT_MENUS = [
+  ['boarding', 'Quản lý bán trú'],
+  ['work-management', 'Quản lý công việc'],
+];
+const SUPREME_SETTINGS = [
   ['users', 'Quản lý người dùng'],
   ['departments', 'Quản lý phòng ban'],
   ['locations', 'Quản lý địa điểm'],
   ['roles', 'Quản lý nhóm quyền'],
   ['positions', 'Quản lý chức vụ'],
-  ['boarding', 'Quản lý bán trú'],
-  ['work-management', 'Quản lý công việc'],
 ];
-const ROLE_LABELS = { admin: 'Quản trị viên', user: 'Người dùng' };
+const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
 const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', edit: 'Sửa' };
 
 function messageFor(error) {
@@ -54,7 +56,7 @@ function messageFor(error) {
     PUBLIC_SIGNUP_DISABLED: 'Hệ thống không cho phép tự đăng ký.',
     'Invalid credentials': 'Email hoặc mật khẩu không đúng.',
     INVALID_EMAIL: 'Email không hợp lệ.',
-    INVALID_ROLE: 'Vai trò chỉ được chọn Quản trị viên hoặc Người dùng.',
+    INVALID_ROLE: 'Vai trò chỉ được chọn Administrator, Moderator hoặc User.',
     INVALID_DEPARTMENT: 'Phòng ban không hợp lệ hoặc đã ngưng sử dụng.',
     INVALID_PERMISSION_GROUP: 'Nhóm quyền không hợp lệ hoặc đã ngưng sử dụng.',
     INVALID_POSITION: 'Chức vụ không hợp lệ hoặc đã ngưng sử dụng.',
@@ -156,16 +158,17 @@ function AuthenticatedApp() {
 
 function AppShell({ session }) {
   const { signOut } = useAuthActions();
-  const { user, isAdmin, menuAccess } = session;
-  const workBadge = useQuery(anyApi.work.badge, isAdmin || menuAccess?.work !== 'hidden' ? {} : 'skip');
-  const visibleSystemMenus = useMemo(() => {
-    if (isAdmin) return SYSTEM_MENUS;
-    return SYSTEM_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
-  }, [isAdmin, menuAccess]);
+  const { user, isAdmin, isModerator, isOperationalManager, menuAccess } = session;
+  const canManageOperations = Boolean(isOperationalManager || isAdmin || isModerator);
+  const workBadge = useQuery(anyApi.work.badge, canManageOperations || menuAccess?.work !== 'hidden' ? {} : 'skip');
+  const visiblePrimaryMenus = useMemo(() => {
+    if (canManageOperations) return PRIMARY_MENUS;
+    return PRIMARY_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
+  }, [canManageOperations, menuAccess]);
 
-  const defaultActive = isAdmin
+  const defaultActive = canManageOperations
     ? 'reports'
-    : visibleSystemMenus[0]?.[0] || 'profile';
+    : visiblePrimaryMenus[0]?.[0] || 'profile';
   const [active, setActive] = useState(defaultActive);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -173,17 +176,18 @@ function AppShell({ session }) {
 
   useEffect(() => {
     const allowed = new Set([
-      ...visibleSystemMenus.map(([id]) => id),
-      ...(isAdmin ? ADMIN_SETTINGS.map(([id]) => id) : []),
+      ...visiblePrimaryMenus.map(([id]) => id),
+      ...(canManageOperations ? SYSTEM_MANAGEMENT_MENUS.map(([id]) => id) : []),
+      ...(isAdmin ? SUPREME_SETTINGS.map(([id]) => id) : []),
       'profile',
       'settings',
     ]);
     if (!allowed.has(active)) setActive(defaultActive);
-  }, [active, defaultActive, isAdmin, visibleSystemMenus]);
+  }, [active, canManageOperations, defaultActive, isAdmin, visiblePrimaryMenus]);
 
   const title = useMemo(() => {
     if (active === 'profile' || active === 'settings') return 'Thông tin cá nhân';
-    const all = [...SYSTEM_MENUS, ...ADMIN_SETTINGS];
+    const all = [...PRIMARY_MENUS, ...SYSTEM_MANAGEMENT_MENUS, ...SUPREME_SETTINGS];
     return all.find(([id]) => id === active)?.[1] || 'Lê Văn Tám CRM';
   }, [active]);
 
@@ -207,11 +211,11 @@ function AppShell({ session }) {
           </div>
         </div>
         <nav className="shell-nav" aria-label="Điều hướng CRM">
-          <p className="nav-label">Quản trị hệ thống</p>
-          {visibleSystemMenus.length === 0 && !isAdmin ? (
+          <p className="nav-label">Chức năng chính</p>
+          {visiblePrimaryMenus.length === 0 && !canManageOperations ? (
             <p className="nav-empty">Chưa được gán menu. Liên hệ quản trị viên.</p>
           ) : (
-            visibleSystemMenus.map(([id, label]) => (
+            visiblePrimaryMenus.map(([id, label]) => (
               <React.Fragment key={id}>
                 <NavButton id={id} label={label} badge={id === 'work' ? workBadge?.count : 0} active={active} onClick={choose} />
                 {id === 'reports' && active === 'reports' ? (
@@ -226,21 +230,32 @@ function AppShell({ session }) {
               </React.Fragment>
             ))
           )}
-          <p className="nav-label admin-label">Cài đặt</p>
+          <NavButton id="profile" label="Thông tin cá nhân" active={active} onClick={choose} />
+          {canManageOperations ? (
+            <>
+              <p className="nav-label admin-label">Quản trị hệ thống</p>
+              {SYSTEM_MANAGEMENT_MENUS.map(([id, label]) => (
+                <NavButton key={id} id={id} label={label} active={active} onClick={choose} nested />
+              ))}
+            </>
+          ) : null}
           {isAdmin ? (
-            ADMIN_SETTINGS.map(([id, label]) => (
-              <NavButton key={id} id={id} label={label} active={active} onClick={choose} nested />
-            ))
-          ) : (
-            <NavButton id="profile" label="Thông tin cá nhân" active={active} onClick={choose} nested />
-          )}
+            <>
+              <p className="nav-label admin-label">Cài đặt tối cao</p>
+              {SUPREME_SETTINGS.map(([id, label]) => (
+                <NavButton key={id} id={id} label={label} active={active} onClick={choose} nested />
+              ))}
+            </>
+          ) : null}
         </nav>
         <div className="sidebar-note">
-          <b>{isAdmin ? 'Vai trò quản trị' : 'Người dùng'}</b>
+          <b>{ROLE_LABELS[user.role] || user.role}</b>
           <span>
             {isAdmin
-              ? 'Quản trị viên có mọi quyền cao nhất. Menu Cài đặt chỉ hiển thị cho quản trị.'
-              : 'Quyền menu phụ thuộc nhóm quyền do admin gán. Quên mật khẩu: liên hệ Admin.'}
+              ? 'Toàn quyền hệ thống, bao gồm Cài đặt tối cao và quản lý tài khoản.'
+              : isModerator
+                ? 'Toàn quyền nghiệp vụ và Quản trị hệ thống; không truy cập Cài đặt tối cao.'
+                : 'Quyền chức năng phụ thuộc nhóm quyền. Quên mật khẩu: liên hệ Administrator.'}
           </span>
         </div>
       </aside>
@@ -280,14 +295,14 @@ function AppShell({ session }) {
           <PermissionGroupManagement />
         ) : active === 'positions' && isAdmin ? (
           <PositionManagement />
-        ) : active === 'boarding' && isAdmin ? (
+        ) : active === 'boarding' && canManageOperations ? (
           <BoardingManagement />
-        ) : active === 'work-management' && isAdmin ? (
+        ) : active === 'work-management' && canManageOperations ? (
           <WorkManagement />
         ) : active === 'duties' ? (
-          isAdmin ? <DutiesAdminView currentUserId={user._id} /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
+          canManageOperations ? <DutiesAdminView currentUserId={user._id} /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
         ) : active === 'work' ? (
-          isAdmin ? <WorkManagement /> : <WorkUserView />
+          canManageOperations ? <WorkManagement /> : <WorkUserView />
         ) : active === 'reports' ? (
           reportSection === 'boarding' ? <BoardingReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
@@ -295,8 +310,8 @@ function AppShell({ session }) {
         ) : (
           <PlaceholderView
             title={title}
-            access={isAdmin ? 'edit' : menuAccess?.[active] || 'view'}
-            isAdmin={isAdmin}
+            access={canManageOperations ? 'edit' : menuAccess?.[active] || 'view'}
+            isAdmin={canManageOperations}
           />
         )}
       </main>
@@ -984,20 +999,21 @@ function UserManagement() {
   const positions = (data?.positions || []).filter((p) => p.active);
   const users = data?.users || [];
   const systemRoles = data?.systemRoles || [
-    { key: 'admin', name: 'Quản trị viên' },
-    { key: 'user', name: 'Người dùng' },
+    { key: 'admin', name: 'Administrator' },
+    { key: 'moderator', name: 'Moderator' },
+    { key: 'user', name: 'User' },
   ];
 
   const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  const isAdminRole = form.role === 'admin';
+  const usesPermissionGroup = form.role === 'user';
   const payload = () => ({
     name: form.name,
     email: form.email,
     role: form.role,
     departmentId: form.departmentId || undefined,
-    // Admin ignores permission groups — never persist a selection.
-    permissionGroupId: isAdminRole ? undefined : form.permissionGroupId || undefined,
+    // Administrator and Moderator have full feature access and ignore permission groups.
+    permissionGroupId: usesPermissionGroup ? form.permissionGroupId || undefined : undefined,
     positionId: form.positionId || undefined,
   });
 
@@ -1026,7 +1042,7 @@ function UserManagement() {
     setForm({
       name: item.name || '',
       email: item.email || '',
-      role: item.role === 'admin' ? 'admin' : 'user',
+      role: ['admin', 'moderator', 'user'].includes(item.role) ? item.role : 'user',
       departmentId: item.departmentId || '',
       permissionGroupId: item.permissionGroupId || '',
       positionId: item.positionId || '',
@@ -1062,7 +1078,7 @@ function UserManagement() {
           <span className="status-pill blue">Quản trị người dùng</span>
           <h2>Quản lý người dùng</h2>
           <p>
-            Vai trò chỉ gồm Quản trị viên (mọi quyền) và Người dùng (theo nhóm quyền). Quên mật khẩu: liên hệ Admin để khôi phục — không có tự phục hồi.
+            Administrator có toàn quyền; Moderator quản trị toàn bộ nghiệp vụ nhưng không truy cập Cài đặt tối cao; User phụ thuộc nhóm quyền.
           </p>
         </div>
       </div>
@@ -1103,8 +1119,8 @@ function UserManagement() {
               setForm((prev) => ({
                 ...prev,
                 role,
-                // Nhóm quyền không áp dụng cho quản trị viên.
-                permissionGroupId: role === 'admin' ? '' : prev.permissionGroupId,
+                // Nhóm quyền chỉ áp dụng cho User.
+                permissionGroupId: role === 'user' ? prev.permissionGroupId : '',
               }));
             }}
           >
@@ -1114,7 +1130,7 @@ function UserManagement() {
               </option>
             ))}
           </select>
-          <small>Quản trị viên có mọi quyền. Người dùng phụ thuộc nhóm quyền.</small>
+          <small>Administrator và Moderator không dùng nhóm quyền. User phụ thuộc nhóm quyền được gán.</small>
         </label>
         <label>
           Phòng ban
@@ -1138,15 +1154,15 @@ function UserManagement() {
             ))}
           </select>
         </label>
-        <label className={isAdminRole ? 'field-disabled' : undefined}>
+        <label className={!usesPermissionGroup ? 'field-disabled' : undefined}>
           Nhóm quyền
           <select
-            value={isAdminRole ? '' : form.permissionGroupId}
+            value={usesPermissionGroup ? form.permissionGroupId : ''}
             onChange={(e) => setField('permissionGroupId', e.target.value)}
-            disabled={isAdminRole}
+            disabled={!usesPermissionGroup}
           >
-            <option value="">{isAdminRole ? 'Không áp dụng (Quản trị viên)' : 'Chưa gán'}</option>
-            {!isAdminRole &&
+            <option value="">{usesPermissionGroup ? 'Chưa gán' : `Không áp dụng (${ROLE_LABELS[form.role]})`}</option>
+            {usesPermissionGroup &&
               groups.map((g) => (
                 <option key={g._id} value={g._id}>
                   {g.name}
@@ -1154,9 +1170,9 @@ function UserManagement() {
               ))}
           </select>
           <small>
-            {isAdminRole
-              ? 'Quản trị viên có mọi quyền — không cần gán nhóm quyền.'
-              : 'Chỉ áp dụng cho Người dùng. Quyết định menu Ẩn / Xem / Sửa.'}
+            {usesPermissionGroup
+              ? 'Chỉ áp dụng cho User. Quyết định menu Ẩn / Xem / Xem tối cao / Sửa.'
+              : `${ROLE_LABELS[form.role]} có toàn quyền chức năng — không cần gán nhóm quyền.`}
           </small>
         </label>
         {!editing && (
@@ -1538,7 +1554,7 @@ function LocationManagement() {
 }
 
 function defaultAccessForm() {
-  return Object.fromEntries(SYSTEM_MENUS.map(([id]) => [id, 'hidden']));
+  return Object.fromEntries(PRIMARY_MENUS.map(([id]) => [id, 'hidden']));
 }
 
 function PermissionGroupManagement() {
@@ -1554,7 +1570,7 @@ function PermissionGroupManagement() {
   const { pending, feedback, run } = useFeedback();
 
   const groups = (data?.groups || []).filter((g) => g.active);
-  const menus = data?.menus || SYSTEM_MENUS.map(([id, label]) => ({ id, label }));
+  const menus = data?.menus || PRIMARY_MENUS.map(([id, label]) => ({ id, label }));
   const users = data?.users || [];
 
   const toMenuAccess = (accessMap) => menus.map((m) => ({ menu: m.id, access: accessMap[m.id] || 'hidden' }));
@@ -1864,7 +1880,7 @@ function PositionManagement() {
 
 function ProfileView({ session }) {
   const changeOwnPassword = useAction(anyApi.users.changeOwnPassword);
-  const { user, department, permissionGroup, position, isAdmin } = session;
+  const { user, department, permissionGroup, position, isOperationalManager } = session;
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
@@ -1894,7 +1910,7 @@ function ProfileView({ session }) {
         <div>
           <span className="status-pill blue">Hồ sơ</span>
           <h2>Thông tin cá nhân</h2>
-          <p>Xem thông tin tài khoản và đổi mật khẩu. Nếu quên mật khẩu, liên hệ Quản trị viên để khôi phục.</p>
+          <p>Xem thông tin tài khoản và đổi mật khẩu. Nếu quên mật khẩu, liên hệ Administrator để khôi phục.</p>
         </div>
       </div>
       <div className="profile-grid">
@@ -1929,7 +1945,7 @@ function ProfileView({ session }) {
                 )}
               </dd>
             </div>
-            {!isAdmin && (
+            {!isOperationalManager && (
               <div>
                 <dt>Nhóm quyền</dt>
                 <dd>{permissionGroup?.name || 'Chưa gán'}</dd>

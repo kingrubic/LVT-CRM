@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
-  adminPermissionOrThrow,
   currentUserOrThrow,
+  isOperationalManagerRole,
+  operationalManagerPermissionOrThrow,
   resolveUserMenuAccess,
 } from "./lib";
 
@@ -66,7 +67,7 @@ async function assertUniquePeriod(
 export const listAdmin = query({
   args: {},
   handler: async (ctx) => {
-    await adminPermissionOrThrow(ctx, "boarding:write");
+    await operationalManagerPermissionOrThrow(ctx, "boarding:write");
     const [periods, users, departments, positions] = await Promise.all([
       ctx.db.query("boardingPeriods").collect(),
       ctx.db.query("users").collect(),
@@ -123,7 +124,7 @@ export const create = mutation({
     participantUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await adminPermissionOrThrow(ctx, "boarding:write");
+    const actor = await operationalManagerPermissionOrThrow(ctx, "boarding:write");
     const input = cleanInput(args);
     await assertParticipants(ctx, input.participantUserIds);
     await assertUniquePeriod(ctx, input.schoolYear, input.semester);
@@ -159,7 +160,7 @@ export const update = mutation({
     participantUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await adminPermissionOrThrow(ctx, "boarding:write");
+    const actor = await operationalManagerPermissionOrThrow(ctx, "boarding:write");
     const current = await ctx.db.get(args.id);
     if (!current?.active) throw new Error("BOARDING_PERIOD_NOT_FOUND");
     const input = cleanInput(args);
@@ -193,7 +194,7 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("boardingPeriods") },
   handler: async (ctx, args) => {
-    const actor = await adminPermissionOrThrow(ctx, "boarding:write");
+    const actor = await operationalManagerPermissionOrThrow(ctx, "boarding:write");
     const current = await ctx.db.get(args.id);
     if (!current?.active) throw new Error("BOARDING_PERIOD_NOT_FOUND");
     const now = Date.now();
@@ -218,7 +219,7 @@ export const listMine = query({
     if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
     if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
     const menuAccess = await resolveUserMenuAccess(ctx, user);
-    if (user.role !== "admin" && menuAccess.reports === "hidden") {
+    if (!isOperationalManagerRole(user.role) && menuAccess.reports === "hidden") {
       throw new Error("FORBIDDEN: reports menu hidden");
     }
     const periods = await ctx.db.query("boardingPeriods").collect();
@@ -251,7 +252,7 @@ export const report = query({
     if (actor.status !== "active") throw new Error("USER_NOT_ACTIVE");
     if (actor.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
     const menuAccess = await resolveUserMenuAccess(ctx, actor);
-    if (actor.role !== "admin" && menuAccess.reports === "hidden") {
+    if (!isOperationalManagerRole(actor.role) && menuAccess.reports === "hidden") {
       throw new Error("FORBIDDEN: reports menu hidden");
     }
 
@@ -261,7 +262,8 @@ export const report = query({
       ctx.db.query("departments").collect(),
       ctx.db.query("positions").collect(),
     ]);
-    const canViewAll = actor.role === "admin" || menuAccess.reports === "view_all";
+    const canViewAll =
+      isOperationalManagerRole(actor.role) || menuAccess.reports === "view_all";
     const visibleUsers = canViewAll
       ? users.filter((user) => user.status === "active")
       : [actor];

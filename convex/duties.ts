@@ -2,9 +2,10 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
   activePositionLevel,
-  adminPermissionOrThrow,
   currentUserOrThrow,
+  isOperationalManagerRole,
   isSameDepartmentSubordinate,
+  operationalManagerPermissionOrThrow,
   resolveUserMenuAccess,
   type MenuAccess,
 } from "./lib";
@@ -147,7 +148,9 @@ async function requireDutiesAccess(ctx: any, min: "view" | "edit" = "view") {
   if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
   const menuAccess = await resolveUserMenuAccess(ctx, user);
   const access = (menuAccess.duties || "hidden") as MenuAccess;
-  if (user.role === "admin") return { user, access: "edit" as MenuAccess, isAdmin: true };
+  if (isOperationalManagerRole(user.role)) {
+    return { user, access: "edit" as MenuAccess, isAdmin: true };
+  }
   if (access === "hidden") throw new Error("FORBIDDEN: duties menu hidden");
   if (min === "edit" && access !== "edit") throw new Error("FORBIDDEN: duties edit required");
   return { user, access, isAdmin: false };
@@ -156,7 +159,7 @@ async function requireDutiesAccess(ctx: any, min: "view" | "edit" = "view") {
 export const formOptions = query({
   args: {},
   handler: async (ctx) => {
-    await adminPermissionOrThrow(ctx, "duties:write");
+    await operationalManagerPermissionOrThrow(ctx, "duties:write");
     const [locations, departments, users] = await Promise.all([
       ctx.db.query("locations").collect(),
       ctx.db.query("departments").collect(),
@@ -187,7 +190,7 @@ export const formOptions = query({
 export const listAdmin = query({
   args: {},
   handler: async (ctx) => {
-    await adminPermissionOrThrow(ctx, "duties:write");
+    await operationalManagerPermissionOrThrow(ctx, "duties:write");
     const [duties, locations, departments, users, attendances] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
@@ -352,7 +355,7 @@ export const create = mutation({
     participantUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await adminPermissionOrThrow(ctx, "duties:write");
+    const actor = await operationalManagerPermissionOrThrow(ctx, "duties:write");
     const input = cleanDutyInput(args);
     await assertRefs(ctx, input);
     const now = Date.now();
@@ -388,7 +391,7 @@ export const update = mutation({
     participantUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await adminPermissionOrThrow(ctx, "duties:write");
+    const actor = await operationalManagerPermissionOrThrow(ctx, "duties:write");
     const current = await ctx.db.get(args.id);
     if (!current || !current.active) throw new Error("DUTY_NOT_FOUND");
     const input = cleanDutyInput(args);
@@ -411,7 +414,7 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("duties") },
   handler: async (ctx, args) => {
-    const actor = await adminPermissionOrThrow(ctx, "duties:write");
+    const actor = await operationalManagerPermissionOrThrow(ctx, "duties:write");
     const current = await ctx.db.get(args.id);
     if (!current) throw new Error("DUTY_NOT_FOUND");
     const now = Date.now();

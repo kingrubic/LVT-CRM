@@ -24,7 +24,7 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     // Legacy field retained as optional during migration; email is the only login identity.
     username: v.optional(v.string()),
-    /** System role: only "admin" | "user". Admin has full power; user uses permission group. */
+    /** System role: admin | moderator | user. Only regular users use permission groups. */
     role: v.string(),
     departmentId: v.optional(v.string()),
     permissionGroupId: v.optional(v.string()),
@@ -57,7 +57,7 @@ export default defineSchema({
   }).index("by_name", ["name"]),
   /**
    * Permission groups (Nhóm quyền) control which system menus a regular user can see/edit.
-   * Admin users ignore this and always see management + all menus.
+   * Administrator and Moderator ignore this and always see all primary features.
    */
   permissionGroups: defineTable({
     name: v.string(),
@@ -95,7 +95,7 @@ export default defineSchema({
   }).index("by_school_year_semester", ["schoolYear", "semester"]),
   /**
    * Legacy roles table kept optional for migration of older deployments.
-   * New auth uses users.role (admin|user) + permissionGroups.
+   * New auth uses users.role (admin|moderator|user) + permissionGroups.
    */
   roles: defineTable({
     name: v.string(),

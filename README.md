@@ -8,10 +8,11 @@ Frontend: Vite dev (`--host 0.0.0.0`). Backend: Convex local `http://127.0.0.1:3
 ## Phạm vi hiện tại
 
 - Xác thực **email + password only**. Không public signup, không email verification, không tự khôi phục mật khẩu (quên MK → liên hệ Admin).
-- **Hai vai trò hệ thống** trên `users.role`:
-  - `admin` — **Quản trị viên**: mọi quyền cao nhất; thấy toàn bộ menu Quản trị hệ thống + menu Cài đặt quản lý.
-  - `user` — **Người dùng**: menu theo **nhóm quyền** do admin gán; Cài đặt chỉ còn **Thông tin cá nhân** (hồ sơ + đổi mật khẩu).
-- Admin quản lý: người dùng, phòng ban, nhóm quyền, chức vụ, bán trú và công việc (CRUD + gán user).
+- **Ba vai trò hệ thống** trên `users.role`:
+  - `admin` — **Administrator**: toàn quyền, bao gồm **Cài đặt tối cao** và quản lý tài khoản.
+  - `moderator` — **Moderator**: toàn quyền nghiệp vụ và **Quản trị hệ thống**, không thấy/không truy cập **Cài đặt tối cao**.
+  - `user` — **User**: các chức năng chính theo **nhóm quyền** do Administrator gán.
+- Administrator quản lý thông số tối cao; Administrator và Moderator cùng quản lý bán trú, công việc và các module nghiệp vụ.
 - Mật khẩu băm bởi Convex Auth (Scrypt); plaintext không lưu / không ghi audit. Tài khoản tạo/reset có `mustChangePassword=true`.
 - Module Công tác, Báo cáo và Công việc đã có luồng dữ liệu; các menu khác tiếp tục dùng placeholder theo phạm vi triển khai.
 
@@ -21,14 +22,15 @@ Frontend: Vite dev (`--host 0.0.0.0`). Backend: Convex local `http://127.0.0.1:3
 
 | Key | Tên UI | Quyền |
 |-----|--------|--------|
-| `admin` | Quản trị viên | Full access; bỏ qua nhóm quyền khi resolve menu |
-| `user` | Người dùng | Menu = `permissionGroups.menuAccess` (mặc định ẩn nếu chưa gán nhóm) |
+| `admin` | Administrator | Toàn quyền, gồm Cài đặt tối cao và lifecycle tài khoản |
+| `moderator` | Moderator | Toàn quyền chức năng và quản trị nghiệp vụ; không truy cập Cài đặt tối cao |
+| `user` | User | Menu = `permissionGroups.menuAccess` (mặc định ẩn nếu chưa gán nhóm) |
 
-Chỉ admin mới thấy các mục Cài đặt quản lý. User thường chỉ thấy **Thông tin cá nhân**.
+Chỉ Administrator thấy **Cài đặt tối cao**. Moderator thấy **Chức năng chính** và **Quản trị hệ thống**. User thấy **Chức năng chính** theo nhóm quyền.
 
 ### Nhóm quyền (`permissionGroups`)
 
-Mỗi nhóm quy định quyền trên 5 menu **Quản trị hệ thống**:
+Mỗi nhóm quy định quyền trên 5 menu **Chức năng chính**:
 
 | Menu id | Nhãn |
 |---------|------|
@@ -61,16 +63,11 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 - Task nhiều cấp duyệt: cấp cao hơn được **duyệt thay** cấp thấp; mỗi lần duyệt ghi `approvalLogs` (actor, level, task, on-behalf, thời điểm).
 - Gán user: form user hoặc nút **Thêm user** trong Quản lý chức vụ.
 
-### Menu Cài đặt (chỉ admin)
+### Cấu trúc menu
 
-1. Quản lý người dùng
-2. Quản lý phòng ban
-3. Quản lý nhóm quyền
-4. Quản lý chức vụ
-5. Quản lý bán trú
-6. Quản lý công việc (tải công văn, chọn phòng ban nhận việc, chọn người duyệt 4–5 sao)
-
-User thường: Cài đặt → **Thông tin cá nhân** (tên, email, vai trò, PB, chức vụ, nhóm quyền, đổi MK).
+1. **Chức năng chính**: Báo cáo, Công tác, Công việc, Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
+2. **Quản trị hệ thống**: Quản lý bán trú, Quản lý công việc (Administrator và Moderator).
+3. **Cài đặt tối cao**: Quản lý người dùng, phòng ban, địa điểm, nhóm quyền, chức vụ (chỉ Administrator).
 
 ## Schema chính
 
@@ -201,7 +198,7 @@ npx convex run internal.users.provisionFirstAdmin \
 
 ## Admin user lifecycle
 
-1. Admin tạo user: email (unique, trim+lowercase), tên, **role** (`admin`|`user`), phòng ban / chức vụ / nhóm quyền (tùy chọn), temporary password ≥8. `createAccount` (provider `password`).
+1. Administrator tạo user: email (unique, trim+lowercase), tên, **role** (`admin`|`moderator`|`user`), phòng ban / chức vụ / nhóm quyền (tùy chọn), temporary password ≥8. `createAccount` (provider `password`).
 2. `mustChangePassword=true`; audit không chứa password.
 3. User `signIn` only. Flag còn true → chỉ form đổi MK; server chặn thao tác admin.
 4. `changeOwnPassword` → `modifyAccountCredentials`, `invalidateSessions` (giữ session hiện tại), clear flag.
@@ -213,7 +210,8 @@ npx convex run internal.users.provisionFirstAdmin \
 ## Authorization (server)
 
 - Identity: `getAuthUserId` từ JWT Convex Auth.
-- Admin gate: `status === "active"`, `role === "admin"`, không còn `mustChangePassword` (`adminOrThrow` / `adminPermissionOrThrow` trong `lib.ts`). Permission string giữ cho audit/call-site; admin = full privilege.
+- Supreme gate: `status === "active"`, `role === "admin"`, không còn `mustChangePassword` (`adminOrThrow` / `adminPermissionOrThrow`); chỉ dùng cho Cài đặt tối cao và lifecycle tài khoản.
+- Operational manager gate: vai trò `admin` hoặc `moderator` (`operationalManagerOrThrow` / `operationalManagerPermissionOrThrow`); dùng cho quản trị bán trú, công việc và nghiệp vụ.
 - Menu user: `resolveUserMenuAccess` / query `users.sessionContext`.
 - Client chỉ là UX; mọi mutation/action admin re-check server-side.
 
@@ -258,7 +256,7 @@ npx convex deploy -y   # cần CONVEX_SELF_HOSTED_*
 - [ ] Auth keys chỉ trên deployment env; có quy trình rotate.
 - [ ] First admin qua internal action; password tạm đã rotate.
 - [ ] Public signup/reset/email verification disabled.
-- [ ] Vai trò chỉ `admin`|`user`; user cũ `manager` đã migrate.
+- [ ] Vai trò chỉ `admin`|`moderator`|`user`; user cũ `manager` đã migrate.
 - [ ] Test: CRUD user/PB/nhóm quyền/chức vụ; gán user; menu ẩn/xem/sửa; profile + đổi MK; self-disable/delete blocked; audit.
 - [ ] Hiểu JWT TTL vs session invalidation (beta).
 - [ ] `SITE_URL` / origins khớp domain thật.

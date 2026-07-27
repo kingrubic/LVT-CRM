@@ -3,6 +3,7 @@ import { query } from "./_generated/server";
 import {
   activePositionLevel,
   currentUserOrThrow,
+  isOperationalManagerRole,
   isSameDepartmentSubordinate,
   resolveUserMenuAccess,
 } from "./lib";
@@ -46,7 +47,7 @@ export const dutyCalendar = query({
     if (actor.status !== "active") throw new Error("USER_NOT_ACTIVE");
     if (actor.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
     const menuAccess = await resolveUserMenuAccess(ctx, actor);
-    if (actor.role !== "admin" && menuAccess.reports === "hidden") {
+    if (!isOperationalManagerRole(actor.role) && menuAccess.reports === "hidden") {
       throw new Error("FORBIDDEN: reports menu hidden");
     }
 
@@ -59,7 +60,8 @@ export const dutyCalendar = query({
     ]);
 
     const activeUsers = users.filter((user) => user.status === "active");
-    const canViewAll = actor.role === "admin" || menuAccess.reports === "view_all";
+    const canViewAll =
+      isOperationalManagerRole(actor.role) || menuAccess.reports === "view_all";
     const visibleUsers =
       canViewAll
         ? activeUsers
