@@ -9,9 +9,13 @@ import DutyReportsView from './reports/DutyReportsView';
 import BoardingManagement from './boarding/BoardingManagement';
 import BoardingReportsView from './boarding/BoardingReportsView';
 import { WorkManagement, WorkUserView } from './work/WorkViews';
+import DisplaySettings from './settings/DisplaySettings';
+import NotificationsView from './notifications/NotificationsView';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import './profile/profile.css';
+import './settings/displaySettings.css';
+import './notifications/notifications.css';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl = window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : configuredConvexUrl;
@@ -19,6 +23,7 @@ const convex = publicConvexUrl ? new ConvexReactClient(publicConvexUrl) : null;
 
 const PRIMARY_MENUS = [
   ['reports', 'Báo cáo'],
+  ['notifications', 'Thông báo'],
   ['duties', 'Công tác'],
   ['work', 'Công việc'],
   ['homeroom', 'Lớp chủ nhiệm'],
@@ -30,11 +35,12 @@ const SYSTEM_MANAGEMENT_MENUS = [
   ['work-management', 'Quản lý công việc'],
 ];
 const SUPREME_SETTINGS = [
-  ['users', 'Quản lý người dùng'],
-  ['departments', 'Quản lý phòng ban'],
-  ['locations', 'Quản lý địa điểm'],
-  ['roles', 'Quản lý nhóm quyền'],
-  ['positions', 'Quản lý chức vụ'],
+  ['users', 'Thiết lập người dùng'],
+  ['departments', 'Thiết lập phòng ban'],
+  ['locations', 'Thiết lập địa điểm'],
+  ['roles', 'Thiết lập nhóm quyền'],
+  ['positions', 'Thiết lập chức vụ'],
+  ['display-settings', 'Thiết lập hiển thị'],
 ];
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
 const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', edit: 'Sửa' };
@@ -87,6 +93,7 @@ function messageFor(error) {
     NOT_A_PARTICIPANT: 'Bạn không nằm trong danh sách tham gia công tác này.',
     NOT_A_SUBORDINATE: 'Bạn chỉ được cập nhật trạng thái của cấp dưới cùng phòng ban.',
     ATTENDANCE_OUTSIDE_WINDOW: 'Chỉ xác nhận tham gia trong thời gian diễn ra công tác.',
+    ATTENDANCE_CONFIRMATION_DISABLED: 'Xác nhận tham gia đang được tắt trong thiết lập hiển thị.',
     INVALID_WORK_FILE: 'Tệp công văn không đúng định dạng được hỗ trợ.',
     WORK_FILE_TOO_LARGE: 'Tệp công văn không được vượt quá 20MB.',
     WORK_UPLOAD_FAILED: 'Không thể tải tệp công văn lên.',
@@ -244,7 +251,7 @@ function AppShell({ session }) {
           ) : null}
           {isAdmin ? (
             <>
-              <p className="nav-label admin-label">Cài đặt tối cao</p>
+              <p className="nav-label admin-label">Thiết lập tối cao</p>
               {SUPREME_SETTINGS.map(([id, label]) => (
                 <NavButton key={id} id={id} label={label} active={active} onClick={choose} nested />
               ))}
@@ -255,9 +262,9 @@ function AppShell({ session }) {
           <b>{ROLE_LABELS[user.role] || user.role}</b>
           <span>
             {isAdmin
-              ? 'Toàn quyền hệ thống, bao gồm Cài đặt tối cao và quản lý tài khoản.'
+              ? 'Toàn quyền hệ thống, bao gồm Thiết lập tối cao và quản lý tài khoản.'
               : isModerator
-                ? 'Toàn quyền nghiệp vụ và Quản trị hệ thống; không truy cập Cài đặt tối cao.'
+                ? 'Toàn quyền nghiệp vụ và Quản trị hệ thống; không truy cập Thiết lập tối cao.'
                 : 'Quyền chức năng phụ thuộc nhóm quyền. Quên mật khẩu: liên hệ Administrator.'}
           </span>
         </div>
@@ -298,6 +305,10 @@ function AppShell({ session }) {
           <PermissionGroupManagement />
         ) : active === 'positions' && isAdmin ? (
           <PositionManagement />
+        ) : active === 'display-settings' && isAdmin ? (
+          <DisplaySettings />
+        ) : active === 'notifications' ? (
+          <NotificationsView />
         ) : active === 'duties-management' && canManageOperations ? (
           <DutiesAdminView currentUserId={user._id} />
         ) : active === 'boarding' && canManageOperations ? (
@@ -443,7 +454,8 @@ function emptyDutyForm() {
 
 function DutiesAdminView({ currentUserId, allowManage = true }) {
   const options = useQuery(anyApi.duties.formOptions, allowManage ? {} : 'skip');
-  const list = useQuery(anyApi.duties.listAdmin);
+  const listData = useQuery(anyApi.duties.listAdmin);
+  const list = listData?.duties || [];
   const create = useMutation(anyApi.duties.create);
   const update = useMutation(anyApi.duties.update);
   const remove = useMutation(anyApi.duties.remove);
@@ -509,7 +521,7 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
     }
   };
 
-  if ((allowManage && options === undefined) || list === undefined) return <LoadingView label="Đang tải công tác…" />;
+  if ((allowManage && options === undefined) || listData === undefined) return <LoadingView label="Đang tải công tác…" />;
 
   return (
     <section className="work-management duty-workspace">
@@ -623,7 +635,7 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
             options={options.locations}
             values={form.locationIds}
             onChange={(ids) => setField('locationIds', ids)}
-            emptyText="Chưa có địa điểm. Tạo trong Quản lý địa điểm."
+            emptyText="Chưa có địa điểm. Tạo trong Thiết lập địa điểm."
           />
         </div>
 
@@ -727,7 +739,7 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
                                 <small>{p.email || ''}</small>
                               </span>
                               {isCurrentUser ? (
-                                <span className="subordinate-actions admin-self-attendance">
+                                listData?.attendanceConfirmationEnabled !== false ? <span className="subordinate-actions admin-self-attendance">
                                   <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
                                   <button
                                     type="button"
@@ -759,9 +771,11 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
                                   >
                                     Chưa tham gia
                                   </button>
-                                </span>
+                                  </span> : null
                               ) : (
-                                <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
+                                listData?.attendanceConfirmationEnabled !== false
+                                  ? <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
+                                  : null
                               )}
                             </li>
                           );
@@ -779,7 +793,7 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
   );
 }
 
-function ViewAllDutyParticipants({ participants }) {
+function ViewAllDutyParticipants({ participants, showAttendance = true }) {
   const [expanded, setExpanded] = useState(false);
   const groups = useMemo(() => {
     const byDepartment = new Map();
@@ -828,9 +842,11 @@ function ViewAllDutyParticipants({ participants }) {
                         {participant.positionName ? ` · ${participant.positionName}` : ''}
                       </small>
                     </span>
-                    <span className={`attendance-pill ${participant.status}`}>
-                      {statusLabel(participant.status)}
-                    </span>
+                    {showAttendance ? (
+                      <span className={`attendance-pill ${participant.status}`}>
+                        {statusLabel(participant.status)}
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -853,6 +869,7 @@ function DutiesUserView({ access }) {
   const assignedDuties = data.duties.filter((item) => item.isMine);
   const confirmedDuties = assignedDuties.filter((item) => item.myStatus !== 'pending');
   const isGlobalView = data.canViewAll || data.isAdmin;
+  const attendanceEnabled = data.attendanceConfirmationEnabled !== false;
 
   return (
     <section className="work-user-view duty-workspace">
@@ -866,17 +883,19 @@ function DutiesUserView({ access }) {
               : data.canViewAll
               ? 'Bạn đang dùng quyền Xem tối cao: có thể xem công tác và trạng thái tham gia của mọi user, được nhóm theo phòng ban.'
               : 'Danh sách sắp theo thời hạn gần nhất. Lịch cá nhân và lịch của cấp dưới cùng phòng ban (theo cấp Chức vụ) đều hiển thị tại đây.'}
-            {!data.canViewAll && canEdit
+            {!data.canViewAll && canEdit && data.attendanceConfirmationEnabled
               ? ' Bạn có quyền xác nhận tham gia trong thời gian diễn ra sự kiện.'
-              : ' Đây là chế độ chỉ xem — không thể thay đổi dữ liệu.'}
+              : data.attendanceConfirmationEnabled
+                ? ' Đây là chế độ chỉ xem — không thể thay đổi dữ liệu.'
+                : ' Xác nhận tham gia đang tắt; công tác được phân công mặc định là đã tham gia.'}
           </p>
         </div>
         <div className="work-hero-stamp">
           <strong>
-            {isGlobalView ? data.duties.length : confirmedDuties.length}
-            {!isGlobalView ? <small>/{assignedDuties.length}</small> : null}
+            {isGlobalView ? data.duties.length : attendanceEnabled ? confirmedDuties.length : assignedDuties.length}
+            {!isGlobalView && attendanceEnabled ? <small>/{assignedDuties.length}</small> : null}
           </strong>
-          <span>{isGlobalView ? 'CÔNG TÁC' : 'ĐÃ XÁC NHẬN'}</span>
+          <span>{isGlobalView || !attendanceEnabled ? 'CÔNG TÁC' : 'ĐÃ XÁC NHẬN'}</span>
         </div>
       </header>
 
@@ -915,7 +934,7 @@ function DutiesUserView({ access }) {
                   <div><span className="meta-label">Phòng ban tham gia</span><span>{item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span></div>
                   <div><span className="meta-label">Cá nhân tham gia</span><span>{item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span></div>
                 </div>
-                {item.isMine && canEdit ? (
+                {item.isMine && canEdit && data.attendanceConfirmationEnabled ? (
                   <div className="attendance-actions">
                     <span className={`attendance-pill ${item.myStatus}`}>{statusLabel(item.myStatus)}</span>
                     <button
@@ -951,7 +970,7 @@ function DutiesUserView({ access }) {
                     ) : null}
                   </div>
                 ) : null}
-                {item.subordinateParticipants?.length ? (
+                {data.attendanceConfirmationEnabled && item.subordinateParticipants?.length ? (
                   <div className="subordinate-attendance">
                     <div className="subordinate-heading">
                       <strong>Cấp dưới cùng phòng ban</strong>
@@ -1021,7 +1040,10 @@ function DutiesUserView({ access }) {
                   </div>
                 ) : null}
                 {data.canViewAll ? (
-                  <ViewAllDutyParticipants participants={item.visibleParticipants} />
+                  <ViewAllDutyParticipants
+                    participants={item.visibleParticipants}
+                    showAttendance={data.attendanceConfirmationEnabled}
+                  />
                 ) : null}
               </div>
             </article>
@@ -1158,7 +1180,7 @@ function UserManagement() {
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Quản trị người dùng</span>
-          <h2>Quản lý người dùng</h2>
+          <h2>Thiết lập người dùng</h2>
           <p>
             Administrator có toàn quyền; Moderator quản trị toàn bộ nghiệp vụ nhưng không truy cập Cài đặt tối cao; User phụ thuộc nhóm quyền.
           </p>
@@ -1432,7 +1454,7 @@ function DepartmentManagement() {
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Phòng ban</span>
-          <h2>Quản lý phòng ban</h2>
+          <h2>Thiết lập phòng ban</h2>
           <p>Thêm, sửa, xóa phòng ban. Sau khi tạo có thể gán user vào phòng ban.</p>
         </div>
       </div>
@@ -1550,7 +1572,7 @@ function LocationManagement() {
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Địa điểm</span>
-          <h2>Quản lý địa điểm</h2>
+          <h2>Thiết lập địa điểm</h2>
           <p>Thêm, sửa, xóa địa điểm dùng trong các nghiệp vụ nhà trường.</p>
         </div>
       </div>
@@ -1694,7 +1716,7 @@ function PermissionGroupManagement() {
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Nhóm quyền</span>
-          <h2>Quản lý nhóm quyền</h2>
+          <h2>Thiết lập nhóm quyền</h2>
           <p>
             Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem, Xem tối cao (xem mọi user nhưng không chỉnh sửa), hoặc Sửa.
           </p>
@@ -1856,7 +1878,7 @@ function PositionManagement() {
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Chức vụ</span>
-          <h2>Quản lý chức vụ</h2>
+          <h2>Thiết lập chức vụ</h2>
           <p>
             Cấp bậc 1–5 sao quyết định quy trình duyệt: cấp cao hơn duyệt được cấp thấp hơn; có thể duyệt thay cấp thấp hơn (ghi log người duyệt và thời điểm).
           </p>

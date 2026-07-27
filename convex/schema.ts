@@ -166,6 +166,13 @@ export default defineSchema({
     .index("by_duty", ["dutyId"])
     .index("by_user", ["userId"])
     .index("by_duty_user", ["dutyId", "userId"]),
+  /** Admin-configurable display and workflow switches. */
+  systemSettings: defineTable({
+    key: v.string(),
+    value: v.boolean(),
+    updatedBy: v.string(),
+    ...timestamps,
+  }).index("by_key", ["key"]),
   /**
    * Official documents assigned to a department. A document is visible to
    * its selected approvers first, then to the assigned department after all

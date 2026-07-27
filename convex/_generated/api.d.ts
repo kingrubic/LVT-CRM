@@ -15,10 +15,12 @@ import type * as duties from "../duties.js";
 import type * as http from "../http.js";
 import type * as lib from "../lib.js";
 import type * as locations from "../locations.js";
+import type * as notifications from "../notifications.js";
 import type * as permissionGroups from "../permissionGroups.js";
 import type * as positions from "../positions.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
+import type * as settings from "../settings.js";
 import type * as users from "../users.js";
 import type * as work from "../work.js";
 
@@ -36,10 +38,12 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   lib: typeof lib;
   locations: typeof locations;
+  notifications: typeof notifications;
   permissionGroups: typeof permissionGroups;
   positions: typeof positions;
   reports: typeof reports;
   seed: typeof seed;
+  settings: typeof settings;
   users: typeof users;
   work: typeof work;
 }>;

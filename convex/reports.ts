@@ -3,6 +3,9 @@ import { query } from "./_generated/server";
 import {
   activePositionLevel,
   currentUserOrThrow,
+  DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+  DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+  getBooleanSystemSetting,
   isOperationalManagerRole,
   isSameDepartmentSubordinate,
   resolveUserMenuAccess,
@@ -51,12 +54,17 @@ export const dutyCalendar = query({
       throw new Error("FORBIDDEN: reports menu hidden");
     }
 
-    const [users, positions, departments, locations, duties] = await Promise.all([
+    const [users, positions, departments, locations, duties, attendanceConfirmationEnabled] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("positions").collect(),
       ctx.db.query("departments").collect(),
       ctx.db.query("locations").collect(),
       ctx.db.query("duties").collect(),
+      getBooleanSystemSetting(
+        ctx,
+        DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+        DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+      ),
     ]);
 
     const activeUsers = users.filter((user) => user.status === "active");
@@ -142,7 +150,8 @@ export const dutyCalendar = query({
           ? "individual"
           : "department",
         attendanceStatus:
-          (attendanceMap.get(String(duty._id)) as string) || "pending",
+          (attendanceMap.get(String(duty._id)) as string) ||
+          (attendanceConfirmationEnabled ? "pending" : "attended"),
       }))
       .sort(
         (a, b) =>
@@ -156,6 +165,7 @@ export const dutyCalendar = query({
       selectedUserId: selectedUser._id,
       selectedUserName:
         selectedUser.name || selectedUser.email || "Chưa đặt tên",
+      attendanceConfirmationEnabled,
       events,
     };
   },

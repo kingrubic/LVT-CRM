@@ -7,11 +7,16 @@ export type DbCtx = QueryCtx | MutationCtx;
 /** Primary feature menus controlled by permission groups for regular users. */
 export const SYSTEM_MENU_DEFS = [
   { id: "reports", label: "Báo cáo" },
+  { id: "notifications", label: "Thông báo" },
   { id: "duties", label: "Công tác" },
   { id: "work", label: "Công việc" },
   { id: "homeroom", label: "Lớp chủ nhiệm" },
   { id: "people-review", label: "Đánh giá nhân sự" },
 ] as const;
+
+/** System setting key controlling whether duty attendance confirmation is shown. */
+export const DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY = "dutyAttendanceConfirmationEnabled";
+export const DUTY_ATTENDANCE_CONFIRMATION_DEFAULT = true;
 
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
 export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
@@ -99,6 +104,18 @@ export async function currentUserOrThrow(ctx: DbCtx) {
   const user = await ctx.db.get(userId);
   if (!user) throw new Error("UNAUTHENTICATED");
   return user;
+}
+
+export async function getBooleanSystemSetting(
+  ctx: DbCtx,
+  key: string,
+  fallback: boolean,
+): Promise<boolean> {
+  const row = await ctx.db
+    .query("systemSettings")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  return row?.value ?? fallback;
 }
 
 /** Administrator-only gate for supreme settings and user lifecycle operations. */

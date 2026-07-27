@@ -3,6 +3,9 @@ import { mutation, query } from "./_generated/server";
 import {
   activePositionLevel,
   currentUserOrThrow,
+  DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+  DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+  getBooleanSystemSetting,
   isOperationalManagerRole,
   isSameDepartmentSubordinate,
   operationalManagerPermissionOrThrow,
@@ -191,12 +194,17 @@ export const listAdmin = query({
   args: {},
   handler: async (ctx) => {
     await operationalManagerPermissionOrThrow(ctx, "duties:write");
-    const [duties, locations, departments, users, attendances] = await Promise.all([
+    const [duties, locations, departments, users, attendances, attendanceConfirmationEnabled] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
       ctx.db.query("departments").collect(),
       ctx.db.query("users").collect(),
       ctx.db.query("dutyAttendances").collect(),
+      getBooleanSystemSetting(
+        ctx,
+        DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+        DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+      ),
     ]);
 
     const activeDuties = duties.filter((d) => d.active);
@@ -208,8 +216,10 @@ export const listAdmin = query({
       attByDuty.set(a.dutyId, list);
     }
 
-    return activeDuties
-      .map((duty) => {
+    return {
+      attendanceConfirmationEnabled,
+      duties: activeDuties
+        .map((duty) => {
         const timing = dutyTiming(duty, now);
         const participants = resolveParticipantUsers(users, duty);
         const attMap = new Map((attByDuty.get(duty._id) || []).map((a) => [a.userId, a.status]));
@@ -230,11 +240,12 @@ export const listAdmin = query({
             name: u.name,
             email: u.email,
             departmentId: u.departmentId,
-            status: (attMap.get(u._id) as string) || "pending",
+            status: (attMap.get(u._id) as string) || (attendanceConfirmationEnabled ? "pending" : "attended"),
           })),
         };
       })
-      .sort((a, b) => a.timing.deadlineMs - b.timing.deadlineMs);
+      .sort((a, b) => a.timing.deadlineMs - b.timing.deadlineMs),
+    };
   },
 });
 
@@ -242,13 +253,18 @@ export const listMine = query({
   args: {},
   handler: async (ctx) => {
     const { user, access, isAdmin } = await requireDutiesAccess(ctx, "view");
-    const [duties, locations, departments, users, positions, attendances] = await Promise.all([
+    const [duties, locations, departments, users, positions, attendances, attendanceConfirmationEnabled] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
       ctx.db.query("departments").collect(),
       ctx.db.query("users").collect(),
       ctx.db.query("positions").collect(),
       ctx.db.query("dutyAttendances").collect(),
+      getBooleanSystemSetting(
+        ctx,
+        DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+        DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+      ),
     ]);
 
     const attMap = new Map(attendances.map((a) => [`${String(a.dutyId)}:${String(a.userId)}`, a.status]));
@@ -275,7 +291,8 @@ export const listMine = query({
       isAdmin,
       access,
       canViewAll,
-      canManageSubordinates: !isAdmin && canEdit && actorLevel > 0,
+      attendanceConfirmationEnabled,
+      canManageSubordinates: attendanceConfirmationEnabled && !isAdmin && canEdit && actorLevel > 0,
       departmentId: user.departmentId || null,
       positionLevel: actorLevel,
       duties: mine
@@ -293,7 +310,9 @@ export const listMine = query({
               positionId: participant.positionId,
               positionLevel: activePositionLevel(participant, positions),
               positionName: positionNameMap.get(String(participant.positionId)) || "",
-              status: (attMap.get(`${String(duty._id)}:${String(participant._id)}`) as string) || "pending",
+              status:
+                (attMap.get(`${String(duty._id)}:${String(participant._id)}`) as string) ||
+                (attendanceConfirmationEnabled ? "pending" : "attended"),
             }));
           const visibleParticipants = canViewAll
             ? participants.map((participant) => ({
@@ -305,7 +324,7 @@ export const listMine = query({
                 positionName: positionNameMap.get(String(participant.positionId)) || "",
                 status:
                   (attMap.get(`${String(duty._id)}:${String(participant._id)}`) as string) ||
-                  "pending",
+                  (attendanceConfirmationEnabled ? "pending" : "attended"),
               }))
             : [];
           return {
@@ -322,7 +341,9 @@ export const listMine = query({
               .map((id) => userNameMap.get(String(id)))
               .filter((name): name is string => Boolean(name)),
             // For user view: show individual assignees as selected; department members implied by dept list
-            myStatus: (attMap.get(`${String(duty._id)}:${String(user._id)}`) as string) || "pending",
+            myStatus:
+              (attMap.get(`${String(duty._id)}:${String(user._id)}`) as string) ||
+              (attendanceConfirmationEnabled ? "pending" : "attended"),
             isMine,
             subordinateParticipants,
             visibleParticipants,
@@ -332,7 +353,7 @@ export const listMine = query({
               nearDeadline: timing.nearDeadline,
               isUpcoming: timing.isUpcoming,
               deadlineMs: timing.end,
-              canMarkAttendance: timing.isOngoing,
+              canMarkAttendance: attendanceConfirmationEnabled && timing.isOngoing,
             },
             participantCount: participants.length,
           };
@@ -434,6 +455,12 @@ export const setAttendance = mutation({
     status: v.union(v.literal("attended"), v.literal("absent")),
   },
   handler: async (ctx, args) => {
+    const attendanceConfirmationEnabled = await getBooleanSystemSetting(
+      ctx,
+      DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+      DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+    );
+    if (!attendanceConfirmationEnabled) throw new Error("ATTENDANCE_CONFIRMATION_DISABLED");
     const { user, access } = await requireDutiesAccess(ctx, "edit");
     if (access !== "edit") throw new Error("FORBIDDEN: duties edit required");
 
@@ -483,6 +510,12 @@ export const setAttendanceForUser = mutation({
     status: v.union(v.literal("attended"), v.literal("absent")),
   },
   handler: async (ctx, args) => {
+    const attendanceConfirmationEnabled = await getBooleanSystemSetting(
+      ctx,
+      DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+      DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+    );
+    if (!attendanceConfirmationEnabled) throw new Error("ATTENDANCE_CONFIRMATION_DISABLED");
     const { user, access, isAdmin } = await requireDutiesAccess(ctx, "edit");
     if (!isAdmin && access !== "edit") throw new Error("FORBIDDEN: duties edit required");
 

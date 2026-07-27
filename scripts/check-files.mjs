@@ -130,7 +130,7 @@ for (const marker of [
   "Quản lý bán trú",
   "PermissionGroupManagement",
   "PositionManagement",
-  "Quản lý địa điểm",
+  "Thiết lập địa điểm",
   "Cả ngày",
   "Gần đến hạn",
   "Đã quá hạn",

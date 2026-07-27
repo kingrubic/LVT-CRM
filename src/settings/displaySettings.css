@@ -1,0 +1,175 @@
+.display-settings-view {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 30px 34px 56px;
+}
+
+.display-settings-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 34px 38px;
+  border-radius: 24px;
+  color: #f8fbff;
+  background: linear-gradient(115deg, #123463, #126b77 58%, #1b8b78);
+  box-shadow: 0 22px 48px rgba(22, 72, 105, .2);
+}
+
+.display-settings-kicker,
+.display-settings-section-label {
+  display: inline-flex;
+  padding: 7px 12px;
+  border: 1px solid rgba(198, 245, 234, .55);
+  border-radius: 999px;
+  color: #c9f4e9;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.display-settings-hero h2 {
+  margin: 18px 0 8px;
+  font-size: clamp(30px, 4vw, 48px);
+  letter-spacing: -.045em;
+}
+
+.display-settings-hero p {
+  max-width: 650px;
+  margin: 0;
+  color: rgba(239, 252, 252, .82);
+  line-height: 1.65;
+}
+
+.display-settings-mark {
+  display: grid;
+  place-items: center;
+  width: 118px;
+  height: 118px;
+  flex: 0 0 auto;
+  border-radius: 30px;
+  color: #14325b;
+  background: #fffef6;
+  box-shadow: 10px 12px 0 rgba(8, 36, 63, .16);
+  transform: rotate(4deg);
+}
+
+.display-settings-mark strong {
+  font-size: 30px;
+  letter-spacing: -.04em;
+}
+
+.display-settings-mark span {
+  margin-top: -24px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.display-settings-mark.is-off strong { color: #a16657; }
+
+.display-settings-card {
+  margin-top: 22px;
+  padding: 32px;
+  border: 1px solid #e4eaf0;
+  border-radius: 24px;
+  background: #fffefb;
+  box-shadow: 0 14px 34px rgba(40, 73, 97, .08);
+}
+
+.display-settings-card-heading h3 {
+  margin: 14px 0 8px;
+  color: #19365d;
+  font-size: 24px;
+}
+
+.display-settings-card-heading p {
+  max-width: 760px;
+  margin: 0;
+  color: #738194;
+  line-height: 1.65;
+}
+
+.display-settings-card .display-settings-section-label {
+  color: #267e6e;
+  border-color: #c5e5dc;
+  background: #edf9f5;
+}
+
+.display-toggle {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid #d8e6e7;
+  border-radius: 18px;
+  color: #23425f;
+  background: #f6fbfa;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.display-toggle:hover:not(:disabled) {
+  border-color: #73bbae;
+  box-shadow: 0 10px 20px rgba(47, 142, 123, .1);
+  transform: translateY(-1px);
+}
+
+.display-toggle:disabled { cursor: wait; opacity: .7; }
+.display-toggle.is-off { border-color: #eadfda; background: #fff9f7; }
+
+.display-toggle-track {
+  display: flex;
+  align-items: center;
+  width: 58px;
+  height: 32px;
+  flex: 0 0 auto;
+  padding: 4px;
+  border-radius: 999px;
+  background: #b9c7cd;
+  transition: background .2s ease;
+}
+
+.display-toggle-track span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 6px rgba(22, 50, 70, .2);
+  transition: transform .2s ease;
+}
+
+.display-toggle.is-on .display-toggle-track { background: #159b83; }
+.display-toggle.is-on .display-toggle-track span { transform: translateX(26px); }
+.display-toggle-copy { display: grid; gap: 4px; }
+.display-toggle-copy strong { font-size: 15px; }
+.display-toggle-copy small { color: #7a8994; font-size: 12px; }
+
+.display-settings-note {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 13px 15px;
+  border-radius: 13px;
+  color: #537080;
+  background: #f4f8fb;
+  font-size: 12px;
+}
+
+.display-settings-note span { color: #168e79; font-size: 16px; }
+.display-settings-note p { margin: 0; line-height: 1.55; }
+.display-settings-feedback { margin-top: 14px; color: #167962; font-size: 12px; font-weight: 700; }
+.display-settings-loading { padding: 60px; color: #62748a; text-align: center; }
+
+@media (max-width: 720px) {
+  .display-settings-view { padding: 20px 16px 36px; }
+  .display-settings-hero { align-items: flex-start; padding: 26px 24px; }
+  .display-settings-mark { width: 82px; height: 82px; border-radius: 22px; }
+  .display-settings-mark strong { font-size: 22px; }
+  .display-settings-mark span { margin-top: -16px; font-size: 8px; }
+  .display-settings-card { padding: 24px 20px; }
+}

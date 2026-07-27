@@ -268,14 +268,16 @@ function PersonAvatar({ name }) {
   return <span className="report-person-avatar">{initials || '?'}</span>;
 }
 
-function EventDetail({ event, personName, onClose }) {
+function EventDetail({ event, personName, onClose, showAttendance = true }) {
   if (!event) return null;
   return (
     <aside className="report-event-detail">
       <button type="button" className="report-detail-close" onClick={onClose} aria-label="Đóng chi tiết">×</button>
-      <span className={`report-detail-status status-${event.attendanceStatus}`}>
-        {statusLabel(event.attendanceStatus)}
-      </span>
+      {showAttendance ? (
+        <span className={`report-detail-status status-${event.attendanceStatus}`}>
+          {statusLabel(event.attendanceStatus)}
+        </span>
+      ) : null}
       <h3>{event.content}</h3>
       <dl>
         <div><dt>Nhân sự</dt><dd>{personName}</dd></div>
@@ -320,6 +322,7 @@ export default function DutyReportsView() {
   };
 
   const events = data?.events || [];
+  const attendanceEnabled = data?.attendanceConfirmationEnabled !== false;
   const attendedCount = events.filter((event) => event.attendanceStatus === 'attended').length;
   const pendingCount = events.filter((event) => event.attendanceStatus === 'pending').length;
   const peopleGroups = useMemo(() => {
@@ -435,10 +438,10 @@ export default function DutyReportsView() {
               </div>
             </div>
 
-            <div className="report-summary-row">
+            <div className={`report-summary-row ${attendanceEnabled ? '' : 'attendance-hidden'}`}>
               <div><strong>{events.length}</strong><span>Công tác trong kỳ</span></div>
-              <div className="attended"><strong>{attendedCount}</strong><span>Đã tham gia</span></div>
-              <div className="pending"><strong>{pendingCount}</strong><span>Chưa xác nhận</span></div>
+              {attendanceEnabled ? <div className="attended"><strong>{attendedCount}</strong><span>Đã tham gia</span></div> : null}
+              {attendanceEnabled ? <div className="pending"><strong>{pendingCount}</strong><span>Chưa xác nhận</span></div> : null}
               <span className="report-summary-note">Dữ liệu cập nhật theo lịch được phân công</span>
             </div>
 
@@ -463,6 +466,7 @@ export default function DutyReportsView() {
           <EventDetail
             event={selectedEvent}
             personName={data.selectedUserName}
+            showAttendance={attendanceEnabled}
             onClose={() => setSelectedEvent(null)}
           />
         </div>
