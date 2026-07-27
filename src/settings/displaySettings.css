@@ -78,6 +78,44 @@
   box-shadow: 0 14px 34px rgba(40, 73, 97, .08);
 }
 
+.notification-settings-card { margin-top: 18px; }
+.notification-source-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.notification-source-settings .display-toggle { margin-top: 22px; }
+
+.notification-milestone-editor {
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid #dfe8ea;
+  border-radius: 18px;
+  background: #f8fbfb;
+}
+
+.notification-milestone-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 17px 19px;
+  border-bottom: 1px solid #e3ebed;
+  background: #fff;
+}
+
+.notification-milestone-heading > div:first-child { display: grid; gap: 4px; }
+.notification-milestone-heading > div:first-child span { color: #82939f; font-size: 9px; font-weight: 900; letter-spacing: .1em; }
+.notification-milestone-heading > div:first-child strong { color: #244563; font-size: 14px; }
+.notification-milestone-add { display: flex; align-items: end; gap: 8px; }
+.notification-milestone-add label { display: grid; gap: 4px; color: #748793; font-size: 9px; font-weight: 800; }
+.notification-milestone-add input { width: 112px; min-height: 38px; padding: 0 10px; border: 1px solid #d5e0e4; border-radius: 9px; color: #244563; background: #fbfdfd; font: inherit; font-size: 11px; }
+.notification-milestone-add > button,
+.notification-settings-actions > button { min-height: 38px; padding: 0 13px; border: 0; border-radius: 9px; color: #fff; background: #1b766f; font-size: 10px; font-weight: 850; }
+.notification-milestone-list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 66px; padding: 15px 18px; }
+.notification-milestone-list > span { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 11px; border: 1px solid #c9e0dc; border-radius: 999px; color: #1c7568; background: #eaf7f3; font-size: 10px; }
+.notification-milestone-list button { display: grid; place-items: center; width: 19px; height: 19px; padding: 0; border: 0; border-radius: 50%; color: #8b6a63; background: #fff; font-size: 14px; line-height: 1; }
+.notification-settings-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 17px; }
+.notification-settings-actions > span { color: #167962; font-size: 11px; font-weight: 700; }
+.notification-settings-actions > button { min-height: 43px; padding: 0 17px; background: #174c75; }
+.notification-settings-actions > button:disabled { opacity: .55; cursor: not-allowed; }
+
 .display-settings-card-heading h3 {
   margin: 14px 0 8px;
   color: #19365d;
@@ -172,4 +210,12 @@
   .display-settings-mark strong { font-size: 22px; }
   .display-settings-mark span { margin-top: -16px; font-size: 8px; }
   .display-settings-card { padding: 24px 20px; }
+  .notification-source-settings { grid-template-columns: 1fr; }
+  .notification-source-settings .display-toggle + .display-toggle { margin-top: 0; }
+  .notification-milestone-heading { display: grid; align-items: stretch; }
+  .notification-milestone-add { align-items: end; }
+  .notification-milestone-add label { flex: 1; }
+  .notification-milestone-add input { width: 100%; box-sizing: border-box; }
+  .notification-settings-actions { display: grid; justify-content: stretch; }
+  .notification-settings-actions > button { width: 100%; }
 }

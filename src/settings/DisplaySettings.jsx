@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 
@@ -11,8 +11,30 @@ function feedbackMessage(error) {
 export default function DisplaySettings() {
   const data = useQuery(anyApi.settings.displaySettings);
   const update = useMutation(anyApi.settings.updateDisplaySettings);
+  const updateNotifications = useMutation(anyApi.settings.updateNotificationSettings);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationFeedback, setNotificationFeedback] = useState('');
+  const [notificationForm, setNotificationForm] = useState({
+    dutiesEnabled: true,
+    workEnabled: true,
+    milestonesHours: [48, 24, 12, 0],
+  });
+  const [newMilestone, setNewMilestone] = useState('');
+
+  useEffect(() => {
+    if (!data) return;
+    setNotificationForm({
+      dutiesEnabled: data.notificationDutiesEnabled !== false,
+      workEnabled: data.notificationWorkEnabled !== false,
+      milestonesHours: data.notificationMilestonesHours || [48, 24, 12, 0],
+    });
+  }, [
+    data?.notificationDutiesEnabled,
+    data?.notificationWorkEnabled,
+    data?.notificationMilestonesHours,
+  ]);
 
   if (data === undefined) {
     return (
@@ -33,6 +55,37 @@ export default function DisplaySettings() {
       setFeedback(feedbackMessage(error));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addMilestone = () => {
+    const value = Number(newMilestone);
+    if (!Number.isInteger(value) || value < 0 || value > 720) {
+      setNotificationFeedback('Mốc thông báo phải là số giờ nguyên từ 0 đến 720.');
+      return;
+    }
+    setNotificationForm((current) => ({
+      ...current,
+      milestonesHours: [...new Set([...current.milestonesHours, value])].sort((a, b) => b - a),
+    }));
+    setNewMilestone('');
+    setNotificationFeedback('');
+  };
+
+  const saveNotifications = async () => {
+    if (!notificationForm.milestonesHours.length) {
+      setNotificationFeedback('Cần giữ lại ít nhất một mốc thông báo.');
+      return;
+    }
+    setNotificationSaving(true);
+    setNotificationFeedback('');
+    try {
+      await updateNotifications(notificationForm);
+      setNotificationFeedback('Đã lưu thiết lập thông báo.');
+    } catch (error) {
+      setNotificationFeedback(feedbackMessage(error));
+    } finally {
+      setNotificationSaving(false);
     }
   };
 
@@ -82,6 +135,102 @@ export default function DisplaySettings() {
           </p>
         </div>
         {feedback ? <div className="display-settings-feedback" role="status">{feedback}</div> : null}
+      </div>
+
+      <div className="display-settings-card notification-settings-card">
+        <div className="display-settings-card-heading">
+          <span className="display-settings-section-label">THÔNG BÁO</span>
+          <h3>Thông báo gần đến hạn</h3>
+          <p>
+            Chọn nguồn cần nhắc và cấu hình các mốc số giờ trước hạn. Mốc 0 giờ là thông báo
+            ngay khi công tác hoặc công việc đến hạn.
+          </p>
+        </div>
+
+        <div className="notification-source-settings">
+          <button
+            type="button"
+            className={`display-toggle ${notificationForm.dutiesEnabled ? 'is-on' : 'is-off'}`}
+            onClick={() => setNotificationForm((current) => ({ ...current, dutiesEnabled: !current.dutiesEnabled }))}
+            aria-pressed={notificationForm.dutiesEnabled}
+          >
+            <span className="display-toggle-track"><span /></span>
+            <span className="display-toggle-copy">
+              <strong>Công tác</strong>
+              <small>{notificationForm.dutiesEnabled ? 'Đang gửi thông báo gần đến hạn.' : 'Đã tắt thông báo công tác.'}</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`display-toggle ${notificationForm.workEnabled ? 'is-on' : 'is-off'}`}
+            onClick={() => setNotificationForm((current) => ({ ...current, workEnabled: !current.workEnabled }))}
+            aria-pressed={notificationForm.workEnabled}
+          >
+            <span className="display-toggle-track"><span /></span>
+            <span className="display-toggle-copy">
+              <strong>Công việc</strong>
+              <small>{notificationForm.workEnabled ? 'Đang gửi thông báo gần đến hạn.' : 'Đã tắt thông báo công việc.'}</small>
+            </span>
+          </button>
+        </div>
+
+        <div className="notification-milestone-editor">
+          <div className="notification-milestone-heading">
+            <div>
+              <span>MỐC THÔNG BÁO</span>
+              <strong>{notificationForm.milestonesHours.length} mốc đang cấu hình</strong>
+            </div>
+            <div className="notification-milestone-add">
+              <label>
+                <span>Số giờ</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="720"
+                  step="1"
+                  value={newMilestone}
+                  onChange={(event) => setNewMilestone(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addMilestone();
+                    }
+                  }}
+                  placeholder="Ví dụ: 6"
+                />
+              </label>
+              <button type="button" onClick={addMilestone}>+ Thêm mốc</button>
+            </div>
+          </div>
+          <div className="notification-milestone-list">
+            {notificationForm.milestonesHours.map((hours) => (
+              <span key={hours}>
+                <strong>{hours === 0 ? 'Đến hạn' : `${hours} giờ`}</strong>
+                <button
+                  type="button"
+                  aria-label={`Xóa mốc ${hours} giờ`}
+                  onClick={() => setNotificationForm((current) => ({
+                    ...current,
+                    milestonesHours: current.milestonesHours.filter((value) => value !== hours),
+                  }))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="notification-settings-actions">
+          <span>{notificationFeedback}</span>
+          <button
+            type="button"
+            onClick={saveNotifications}
+            disabled={notificationSaving || !notificationForm.milestonesHours.length}
+          >
+            {notificationSaving ? 'Đang lưu…' : 'Lưu thiết lập thông báo'}
+          </button>
+        </div>
       </div>
     </section>
   );

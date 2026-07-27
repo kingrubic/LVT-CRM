@@ -150,6 +150,16 @@ const boarding = readFileSync("convex/boarding.ts", "utf8");
 for (const marker of ["listAdmin", "listMine", "BOARDING_PERIOD_EXISTS", "participantUserIds", "boarding_period.create"]) {
   if (!boarding.includes(marker)) throw new Error(`Boarding marker missing: ${marker}`);
 }
+
+const notifications = readFileSync("convex/notifications.ts", "utf8");
+for (const marker of ["feed", "markRead", "markAllRead", "notificationReads", "NOTIFICATION_MILESTONES_SETTING_KEY"]) {
+  if (!notifications.includes(marker)) throw new Error(`Notification marker missing: ${marker}`);
+}
+
+const notificationUi = readFileSync("src/notifications/NotificationsView.jsx", "utf8");
+for (const marker of ["Công tác gần đến hạn", "Công việc gần đến hạn", "Đánh dấu tất cả là đã đọc"]) {
+  if (!notificationUi.includes(marker)) throw new Error(`Notification UI marker missing: ${marker}`);
+}
 if (client.includes("@clerk") || client.includes("ClerkProvider") || client.includes("VITE_CLERK")) {
   throw new Error("Clerk client imports/env must be removed");
 }

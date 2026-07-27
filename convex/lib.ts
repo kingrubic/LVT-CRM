@@ -17,6 +17,11 @@ export const SYSTEM_MENU_DEFS = [
 /** System setting key controlling whether duty attendance confirmation is shown. */
 export const DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY = "dutyAttendanceConfirmationEnabled";
 export const DUTY_ATTENDANCE_CONFIRMATION_DEFAULT = true;
+export const NOTIFICATION_DUTIES_ENABLED_SETTING_KEY = "notificationDutiesEnabled";
+export const NOTIFICATION_WORK_ENABLED_SETTING_KEY = "notificationWorkEnabled";
+export const NOTIFICATION_MILESTONES_SETTING_KEY = "notificationMilestonesHours";
+export const NOTIFICATION_SOURCE_DEFAULT = true;
+export const NOTIFICATION_MILESTONES_DEFAULT = [48, 24, 12, 0] as const;
 
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
 export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
@@ -37,7 +42,10 @@ export function isOperationalManagerRole(role: string): role is "admin" | "moder
 }
 
 export function defaultMenuAccess(): { menu: string; access: MenuAccess }[] {
-  return SYSTEM_MENU_DEFS.map((item) => ({ menu: item.id, access: "hidden" as MenuAccess }));
+  return SYSTEM_MENU_DEFS.map((item) => ({
+    menu: item.id,
+    access: (item.id === "notifications" ? "view" : "hidden") as MenuAccess,
+  }));
 }
 
 export function normalizeMenuAccess(
@@ -46,7 +54,9 @@ export function normalizeMenuAccess(
   const map = new Map((entries || []).map((e) => [e.menu, e.access]));
   return SYSTEM_MENU_DEFS.map((item) => ({
     menu: item.id,
-    access: (map.get(item.id) as MenuAccess | undefined) || "hidden",
+    access:
+      (map.get(item.id) as MenuAccess | undefined) ||
+      (item.id === "notifications" ? "view" : "hidden"),
   }));
 }
 
@@ -116,6 +126,18 @@ export async function getBooleanSystemSetting(
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
   return row?.value ?? fallback;
+}
+
+export async function getNumberArraySystemSetting(
+  ctx: DbCtx,
+  key: string,
+  fallback: readonly number[],
+): Promise<number[]> {
+  const row = await ctx.db
+    .query("systemSettings")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  return row?.numberValues ? [...row.numberValues] : [...fallback];
 }
 
 /** Administrator-only gate for supreme settings and user lifecycle operations. */
@@ -188,7 +210,12 @@ export async function resolveUserMenuAccess(
   const full = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "edit" as MenuAccess]));
   if (isOperationalManagerRole(user.role)) return full;
 
-  const empty = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "hidden" as MenuAccess]));
+  const empty = Object.fromEntries(
+    SYSTEM_MENU_DEFS.map((m) => [
+      m.id,
+      (m.id === "notifications" ? "view" : "hidden") as MenuAccess,
+    ]),
+  );
   if (!user.permissionGroupId) return empty;
 
   const group = await ctx.db

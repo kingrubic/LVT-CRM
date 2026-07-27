@@ -171,6 +171,12 @@ function AppShell({ session }) {
   const { user, isAdmin, isModerator, isOperationalManager, menuAccess } = session;
   const canManageOperations = Boolean(isOperationalManager || isAdmin || isModerator);
   const workBadge = useQuery(anyApi.work.badge, canManageOperations || menuAccess?.work !== 'hidden' ? {} : 'skip');
+  const canUseNotifications = canManageOperations || menuAccess?.notifications !== 'hidden';
+  const notificationNow = useNotificationMinute();
+  const notificationFeed = useQuery(
+    anyApi.notifications.feed,
+    canUseNotifications ? { now: notificationNow } : 'skip',
+  );
   const visiblePrimaryMenus = useMemo(() => {
     if (canManageOperations) return PRIMARY_MENUS;
     return PRIMARY_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
@@ -289,6 +295,12 @@ function AppShell({ session }) {
             <h1>{title}</h1>
           </div>
           <div className="header-user">
+            {canUseNotifications ? (
+              <NotificationBell
+                data={notificationFeed}
+                onViewAll={() => choose('notifications')}
+              />
+            ) : null}
             <span className="user-greeting">{user.name || user.email || 'Người dùng'}</span>
             <button type="button" className="text-button" onClick={() => void signOut()}>
               Đăng xuất
@@ -308,7 +320,7 @@ function AppShell({ session }) {
         ) : active === 'display-settings' && isAdmin ? (
           <DisplaySettings />
         ) : active === 'notifications' ? (
-          <NotificationsView />
+          <NotificationsView data={notificationFeed} />
         ) : active === 'duties-management' && canManageOperations ? (
           <DutiesAdminView currentUserId={user._id} />
         ) : active === 'boarding' && canManageOperations ? (
@@ -333,6 +345,92 @@ function AppShell({ session }) {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+function useNotificationMinute() {
+  const minuteValue = () => Math.floor(Date.now() / 60_000) * 60_000;
+  const [currentMinute, setCurrentMinute] = useState(minuteValue);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const nextMinute = minuteValue();
+      setCurrentMinute((current) => current === nextMinute ? current : nextMinute);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return currentMinute;
+}
+
+function NotificationBell({ data, onViewAll }) {
+  const markRead = useMutation(anyApi.notifications.markRead);
+  const [open, setOpen] = useState(false);
+  const latestItems = (data?.items || []).slice(0, 10);
+  const unreadCount = data?.unreadCount || 0;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open]);
+
+  return (
+    <div className="notification-bell-wrap">
+      <button
+        type="button"
+        className={`notification-bell-button ${unreadCount > 0 ? 'has-unread' : ''}`}
+        onClick={() => setOpen((current) => !current)}
+        aria-label={`Thông báo${unreadCount ? `, ${unreadCount} chưa đọc` : ''}`}
+        aria-expanded={open}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+          <path d="M10 21h4" />
+        </svg>
+        {unreadCount > 0 ? <span className="notification-bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
+      </button>
+
+      {open ? (
+        <div className="notification-popover">
+          <header>
+            <strong>Thông báo gần nhất</strong>
+            <span>{unreadCount} CHƯA ĐỌC</span>
+          </header>
+          {latestItems.length ? (
+            <div className="notification-popover-list">
+              {latestItems.map((item) => (
+                <button
+                  type="button"
+                  className={`notification-popover-item ${item.read ? '' : 'unread'}`}
+                  key={item.key}
+                  onClick={() => {
+                    if (!item.read) void markRead({ notificationKey: item.key });
+                  }}
+                >
+                  <span>{item.kind === 'duty' ? 'Công tác' : 'Công việc'} · {item.milestoneLabel}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.description}</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="notification-popover-empty">Hiện chưa có thông báo gần đến hạn.</div>
+          )}
+          <button
+            type="button"
+            className="notification-popover-footer"
+            onClick={() => {
+              setOpen(false);
+              onViewAll();
+            }}
+          >
+            Xem toàn bộ
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1658,7 +1756,7 @@ function LocationManagement() {
 }
 
 function defaultAccessForm() {
-  return Object.fromEntries(PRIMARY_MENUS.map(([id]) => [id, 'hidden']));
+  return Object.fromEntries(PRIMARY_MENUS.map(([id]) => [id, id === 'notifications' ? 'view' : 'hidden']));
 }
 
 function PermissionGroupManagement() {
