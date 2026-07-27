@@ -11,6 +11,7 @@ import BoardingReportsView from './boarding/BoardingReportsView';
 import { WorkManagement, WorkUserView } from './work/WorkViews';
 import './management/managementTheme.css';
 import './duties/duties.css';
+import './profile/profile.css';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl = window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : configuredConvexUrl;
@@ -1985,42 +1986,67 @@ function ProfileView({ session }) {
     }
   };
 
+  const displayName = user.name || user.email || 'Chưa đặt tên';
+  const initials = displayName
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map((part) => part.slice(0, 1).toUpperCase())
+    .join('');
+  const roleLabel = ROLE_LABELS[user.role] || user.role;
+  const feedbackType = feedback === 'Đã đổi mật khẩu thành công.' ? 'success' : 'error';
+
   return (
-    <section className="admin-view">
-      <div className="section-intro">
+    <section className="work-user-view profile-workspace">
+      <header className="work-hero profile-hero">
         <div>
-          <span className="status-pill blue">Hồ sơ</span>
-          <h2>Thông tin cá nhân</h2>
-          <p>Xem thông tin tài khoản và đổi mật khẩu. Nếu quên mật khẩu, liên hệ Administrator để khôi phục.</p>
+          <span className="work-kicker">Không gian · Cá nhân</span>
+          <h2>Hồ sơ của {displayName}</h2>
+          <p>Thông tin định danh, vai trò và bảo mật tài khoản trong một không gian riêng tư, rõ ràng.</p>
         </div>
-      </div>
-      <div className="profile-grid">
-        <div className="profile-card">
-          <h3>Thông tin tài khoản</h3>
-          <dl className="profile-dl">
+        <div className="work-hero-stamp profile-hero-stamp">
+          <strong>{initials || 'LV'}</strong>
+          <span>{roleLabel}</span>
+        </div>
+      </header>
+
+      <div className="profile-modern-grid">
+        <article className="profile-paper profile-overview">
+          <header className="profile-identity">
+            <span className="profile-avatar" aria-hidden="true">{initials || 'LV'}</span>
             <div>
-              <dt>Họ tên</dt>
-              <dd>{user.name || '—'}</dd>
+              <span className="profile-eyebrow">HỒ SƠ NỘI BỘ</span>
+              <h3>{displayName}</h3>
+              <p>{user.email || 'Chưa có email đăng nhập'}</p>
+            </div>
+            <span className={`profile-role profile-role-${user.role}`}>{roleLabel}</span>
+          </header>
+
+          <dl className="profile-modern-dl">
+            <div>
+              <dt><i>01</i> Họ tên</dt>
+              <dd>{displayName}</dd>
             </div>
             <div>
-              <dt>Email đăng nhập</dt>
+              <dt><i>02</i> Email đăng nhập</dt>
               <dd>{user.email || '—'}</dd>
             </div>
             <div>
-              <dt>Vai trò</dt>
-              <dd>{ROLE_LABELS[user.role] || user.role}</dd>
+              <dt><i>03</i> Vai trò</dt>
+              <dd>{roleLabel}</dd>
             </div>
             <div>
-              <dt>Phòng ban</dt>
+              <dt><i>04</i> Phòng ban</dt>
               <dd>{department?.name || 'Chưa gán'}</dd>
             </div>
             <div>
-              <dt>Chức vụ</dt>
+              <dt><i>05</i> Chức vụ</dt>
               <dd>
                 {position ? (
-                  <>
-                    {position.name} <StarRating level={position.level} />
-                  </>
+                  <span className="profile-position">
+                    {position.name}
+                    <StarRating level={position.level} />
+                  </span>
                 ) : (
                   'Chưa gán'
                 )}
@@ -2028,27 +2054,49 @@ function ProfileView({ session }) {
             </div>
             {!isOperationalManager && (
               <div>
-                <dt>Nhóm quyền</dt>
+                <dt><i>06</i> Nhóm quyền</dt>
                 <dd>{permissionGroup?.name || 'Chưa gán'}</dd>
               </div>
             )}
           </dl>
-          <p className="muted">Quên mật khẩu? Liên hệ Admin để được đặt lại — không có tự phục hồi mật khẩu.</p>
-        </div>
-        <form className="password-form profile-password" onSubmit={submit}>
-          <h3>Đổi mật khẩu</h3>
-          <label>
-            Mật khẩu mới
+
+          <footer className="profile-help">
+            <span aria-hidden="true">?</span>
+            <p><strong>Cần hỗ trợ tài khoản?</strong> Liên hệ Administrator để được đặt lại mật khẩu an toàn.</p>
+          </footer>
+        </article>
+
+        <form className="profile-paper profile-security" onSubmit={submit}>
+          <header className="profile-panel-heading">
+            <span className="profile-shield" aria-hidden="true">✓</span>
+            <div>
+              <span className="profile-eyebrow">BẢO MẬT TÀI KHOẢN</span>
+              <h3>Đổi mật khẩu</h3>
+              <p>Sử dụng ít nhất 8 ký tự và không chia sẻ mật khẩu qua kênh công khai.</p>
+            </div>
+          </header>
+
+          <label className="profile-field">
+            <span>Mật khẩu mới</span>
             <input required minLength="8" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
-          <label>
-            Xác nhận mật khẩu
+          <label className="profile-field">
+            <span>Xác nhận mật khẩu</span>
             <input required minLength="8" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
           </label>
-          <p className="form-message" role="status" aria-live="polite">
-            {feedback}
-          </p>
-          <button className="primary-button" disabled={pending}>
+
+          <div className="profile-password-hint">
+            <span className={password.length >= 8 ? 'is-ready' : ''} />
+            <p>{password.length >= 8 ? 'Độ dài mật khẩu đã đạt yêu cầu.' : 'Mật khẩu cần có tối thiểu 8 ký tự.'}</p>
+          </div>
+
+          {feedback ? (
+            <p className={`profile-feedback ${feedbackType}`} role="status" aria-live="polite">
+              {feedback}
+            </p>
+          ) : null}
+
+          <button className="work-primary-button profile-submit" disabled={pending}>
             {pending ? 'Đang cập nhật…' : 'Đổi mật khẩu'}
           </button>
         </form>
