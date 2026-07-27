@@ -560,6 +560,20 @@
   box-shadow: inset 3px 0 var(--report-sun);
 }
 
+.report-event.status-approved,
+.report-event.status-completed {
+  color: #146655;
+  background: #e7f7f1;
+  box-shadow: inset 3px 0 var(--report-teal);
+}
+
+.report-event.status-unassigned,
+.report-event.status-overdue {
+  color: #924739;
+  background: #fff0ec;
+  box-shadow: inset 3px 0 var(--report-coral);
+}
+
 .report-event strong {
   display: -webkit-box;
   overflow: hidden;
@@ -856,6 +870,36 @@
 .report-detail-status.status-absent {
   color: #914234;
   background: #fee6e0;
+}
+
+.report-detail-status.status-approved,
+.report-detail-status.status-completed {
+  color: #126350;
+  background: #dff3eb;
+}
+
+.report-detail-status.status-unassigned,
+.report-detail-status.status-overdue {
+  color: #914234;
+  background: #fee6e0;
+}
+
+.work-report-summary {
+  grid-template-columns: repeat(auto-fit, minmax(135px, max-content)) minmax(180px, 1fr);
+}
+
+.work-report-summary .status-approved strong,
+.work-report-summary .status-completed strong {
+  color: var(--report-teal);
+}
+
+.work-report-summary .status-pending strong {
+  color: #b67b09;
+}
+
+.work-report-summary .status-unassigned strong,
+.work-report-summary .status-overdue strong {
+  color: var(--report-coral);
 }
 
 .report-event-detail h3 {

@@ -6,6 +6,7 @@ import { anyApi } from 'convex/server';
 import '@fontsource-variable/montserrat';
 import './styles.css';
 import DutyReportsView from './reports/DutyReportsView';
+import WorkReportsView from './reports/WorkReportsView';
 import BoardingManagement from './boarding/BoardingManagement';
 import BoardingReportsView from './boarding/BoardingReportsView';
 import { WorkManagement, WorkUserView } from './work/WorkViews';
@@ -334,7 +335,7 @@ function AppShell({ session }) {
         ) : active === 'work' ? (
           canManageOperations ? <WorkManagement allowCreate={false} /> : <WorkUserView />
         ) : active === 'reports' ? (
-          reportSection === 'boarding' ? <BoardingReportsView /> : <DutyReportsView />
+          reportSection === 'boarding' ? <BoardingReportsView /> : reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
           <ProfileView session={session} />
         ) : (
@@ -440,6 +441,9 @@ function ReportSubmenu({ active, onChoose }) {
     <div className="report-submenu" aria-label="Loại báo cáo">
       <button type="button" className={active === 'duties' ? 'active' : ''} onClick={() => onChoose('duties')}>
         <span>◷</span> Công tác
+      </button>
+      <button type="button" className={active === 'work' ? 'active' : ''} onClick={() => onChoose('work')}>
+        <span>✓</span> Công việc
       </button>
       <button type="button" className={active === 'boarding' ? 'active' : ''} onClick={() => onChoose('boarding')}>
         <span>⌂</span> Bán trú
