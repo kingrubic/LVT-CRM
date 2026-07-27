@@ -182,6 +182,14 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_key", ["userId", "notificationKey"]),
+  /** Per-user hides for notification cards dismissed by users with edit access. */
+  notificationDismissals: defineTable({
+    userId: v.string(),
+    notificationKey: v.string(),
+    dismissedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_key", ["userId", "notificationKey"]),
   /**
    * Official documents assigned to a department. A document is visible to
    * its selected approvers first, then to the assigned department after all

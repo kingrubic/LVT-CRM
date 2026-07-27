@@ -247,14 +247,21 @@ async function notificationItems(ctx: any, requestedNow?: number) {
       ? requestedNow
       : Date.now(),
   );
-  const reads = await ctx.db
-    .query("notificationReads")
-    .withIndex("by_user", (q: any) => q.eq("userId", user._id))
-    .collect();
+  const [reads, dismissals] = await Promise.all([
+    ctx.db
+      .query("notificationReads")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect(),
+    ctx.db
+      .query("notificationDismissals")
+      .withIndex("by_user", (q: any) => q.eq("userId", user._id))
+      .collect(),
+  ]);
   const readMap = new Map(
     reads.map((read: any) => [read.notificationKey, read.readAt]),
   );
-  const items = milestones.map((item) => ({
+  const dismissedKeys = new Set(dismissals.map((item: any) => item.notificationKey));
+  const items = milestones.filter((item) => !dismissedKeys.has(item.key)).map((item) => ({
     ...item,
     read: readMap.has(item.key),
     readAt: readMap.get(item.key) || null,
@@ -262,6 +269,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   return {
     items,
     unreadCount: items.filter((item) => !item.read).length,
+    canDelete: menuAccess.notifications === "edit",
     settings: {
       dutiesEnabled,
       workEnabled,
@@ -321,6 +329,33 @@ export const markAllRead = mutation({
           readAt: now,
         });
       }
+    }
+  },
+});
+
+export const dismiss = mutation({
+  args: { notificationKey: v.string() },
+  handler: async (ctx, args) => {
+    const { user, menuAccess } = await notificationContext(ctx);
+    if (menuAccess.notifications !== "edit") {
+      throw new Error("FORBIDDEN: notifications edit required");
+    }
+    const notificationKey = args.notificationKey.trim();
+    if (!notificationKey || notificationKey.length > 300) {
+      throw new Error("INVALID_NOTIFICATION_KEY");
+    }
+    const existing = await ctx.db
+      .query("notificationDismissals")
+      .withIndex("by_user_key", (q) =>
+        q.eq("userId", user._id).eq("notificationKey", notificationKey),
+      )
+      .unique();
+    if (!existing) {
+      await ctx.db.insert("notificationDismissals", {
+        userId: user._id,
+        notificationKey,
+        dismissedAt: Date.now(),
+      });
     }
   },
 });

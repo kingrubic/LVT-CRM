@@ -120,6 +120,19 @@
 
 .notification-card {
   position: relative;
+  width: 100%;
+  min-height: 94px;
+  border: 0;
+  border-bottom: 1px solid #edf1f2;
+  color: #547082;
+  background: transparent;
+}
+
+.notification-card:last-child { border-bottom: 0; }
+.notification-card.is-unread { background: #f3faf8; }
+.category-work .notification-card.is-unread { background: #f4f8fc; }
+.notification-card.is-read { opacity: .76; }
+.notification-card-main {
   display: flex;
   align-items: center;
   gap: 13px;
@@ -127,18 +140,13 @@
   min-height: 94px;
   padding: 15px 17px;
   border: 0;
-  border-bottom: 1px solid #edf1f2;
-  color: #547082;
+  color: inherit;
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
-
-.notification-card:last-child { border-bottom: 0; }
-.notification-card.is-unread { background: #f3faf8; }
-.category-work .notification-card.is-unread { background: #f4f8fc; }
-.notification-card.is-read { opacity: .76; }
-.notification-card:hover { background: #edf7f4; }
+.notification-card-main:hover { background: #edf7f4; }
+.notification-card:has(.notification-dismiss-button) .notification-card-main { padding-right: 47px; }
 
 .notification-icon {
   display: grid;
@@ -163,6 +171,27 @@
 .is-unread .notification-title { color: #173a57; font-weight: 900; }
 .notification-description { overflow: hidden; color: #7d8e9a; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .notification-unread-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #e34f4f; box-shadow: 0 0 0 4px rgba(227, 79, 79, .1); }
+.notification-dismiss-button {
+  position: absolute;
+  top: 50%;
+  right: 13px;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 1px solid #efd8d2;
+  border-radius: 8px;
+  color: #a75d54;
+  background: #fff8f6;
+  font-size: 17px;
+  line-height: 1;
+  opacity: .75;
+  transform: translateY(-50%);
+  transition: opacity .15s ease, background .15s ease, color .15s ease;
+}
+.notification-dismiss-button:hover:not(:disabled) { color: #943f36; background: #ffe9e5; opacity: 1; }
+.notification-dismiss-button:disabled { cursor: wait; opacity: .45; }
 
 .notification-category-empty {
   display: grid;
