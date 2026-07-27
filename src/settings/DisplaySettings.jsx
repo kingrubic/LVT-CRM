@@ -5,6 +5,9 @@ import { anyApi } from 'convex/server';
 function feedbackMessage(error) {
   const raw = String(error?.data ?? error?.message ?? error ?? '');
   if (raw.includes('FORBIDDEN')) return 'Bạn không có quyền thay đổi thiết lập này.';
+  if (raw.includes('Could not find public function')) {
+    return 'Backend chưa cập nhật function mới. Vui lòng deploy Convex rồi thử lại.';
+  }
   return 'Không thể lưu thiết lập. Vui lòng thử lại.';
 }
 
