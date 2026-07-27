@@ -6,7 +6,8 @@ import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
 
-function publicUploadUrl(shortLivedUrl) {
+function publicStorageUrl(shortLivedUrl) {
+  if (!shortLivedUrl) return '';
   const uploadUrl = new URL(shortLivedUrl, window.location.origin);
   const isInternalHost = uploadUrl.hostname === '127.0.0.1' || uploadUrl.hostname === 'localhost';
   if (window.location.hostname === 'lvt.vscgroup.io.vn' && isInternalHost) {
@@ -286,7 +287,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
     let stage = 'upload';
     try {
       const uploadUrl = await generateUploadUrl({});
-      const response = await fetch(publicUploadUrl(uploadUrl), {
+      const response = await fetch(publicStorageUrl(uploadUrl), {
         method: 'POST',
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
         body: file,
@@ -523,7 +524,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
             <h3>{document.fileName}</h3>
             <div className="work-document-meta">
               <span>Tệp đính kèm</span>
-              {document.fileUrl ? <a href={document.fileUrl} target="_blank" rel="noreferrer">{document.fileName} · {fileSizeLabel(document.fileSize)}</a> : <strong>{document.fileName}</strong>}
+              {document.fileUrl ? <a href={publicStorageUrl(document.fileUrl)} target="_blank" rel="noreferrer">{document.fileName} · {fileSizeLabel(document.fileSize)}</a> : <strong>{document.fileName}</strong>}
             </div>
             <div className="work-document-assignments">
               {document.assignments.map((assignment) => (
@@ -769,7 +770,7 @@ export function WorkUserView({ focusTarget = null }) {
                 </div>
                 <h3>{document.fileName}</h3>
                 <div className="work-card-meta"><span>Duyệt <strong>{document.approvalCount}/{document.approvalTotal}</strong></span></div>
-                {document.fileUrl ? <a className="work-file-link" href={document.fileUrl} target="_blank" rel="noreferrer">↗ Mở {document.fileName}</a> : null}
+                {document.fileUrl ? <a className="work-file-link" href={publicStorageUrl(document.fileUrl)} target="_blank" rel="noreferrer">↗ Mở {document.fileName}</a> : null}
                 <div className="work-document-assignments">
                   {document.assignments.map((assignment) => (
                     <section key={assignment._id || assignment.departmentId}>
@@ -823,7 +824,7 @@ export function WorkUserView({ focusTarget = null }) {
                   <span>Tập thể · <strong>{workStatusLabel(task.collectiveStatus)}</strong></span>
                 ) : null}
               </div>
-              {task.fileUrl ? <a className="work-file-link" href={task.fileUrl} target="_blank" rel="noreferrer">↗ Mở công văn</a> : null}
+              {task.fileUrl ? <a className="work-file-link" href={publicStorageUrl(task.fileUrl)} target="_blank" rel="noreferrer">↗ Mở công văn</a> : null}
               {task.type === 'department' && task.pendingMembers?.length ? (
                 <div className="work-member-progress">
                   <strong className="work-pending-label">Chưa hoàn thành:</strong>
