@@ -577,6 +577,7 @@
 
 .report-event strong {
   display: -webkit-box;
+  min-width: 0;
   overflow: hidden;
   font-size: 11px;
   line-height: 1.3;
@@ -609,6 +610,7 @@
 
 .report-event.compact strong {
   display: block;
+  min-width: 0;
   overflow: hidden;
   font-size: 9px;
   text-overflow: ellipsis;
@@ -937,6 +939,15 @@
   color: #42536a;
   font-size: 11px;
   line-height: 1.35;
+}
+
+.report-work-document-name {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .report-loading {

@@ -154,13 +154,13 @@ function EventDetail({ event, personName, onClose }) {
   return <aside className="report-event-detail">
     <button type="button" className="report-detail-close" onClick={onClose} aria-label="Đóng chi tiết">×</button>
     <span className={`report-detail-status status-${event.status}`}>{statusLabel(event.status)}</span>
-    <h3>{event.content}</h3>
+    <h3 className="report-work-document-name" title={event.content}>{event.content}</h3>
     <dl>
       <div><dt>Nhân sự</dt><dd>{personName}</dd></div>
       <div><dt>Loại công việc</dt><dd>{event.kindLabel}</dd></div>
       <div><dt>Hạn hoàn thành</dt><dd>{event.deadline}</dd></div>
       <div><dt>Phòng ban</dt><dd>{event.departmentName}</dd></div>
-      <div><dt>Công văn</dt><dd>{event.documentName}</dd></div>
+      <div><dt>Công văn</dt><dd className="report-work-document-name" title={event.documentName}>{event.documentName}</dd></div>
     </dl>
   </aside>;
 }
