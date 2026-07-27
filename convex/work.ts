@@ -265,7 +265,7 @@ function userItemStatus(item: any, userId: string, today = todayInVietnam()) {
     return late ? "completed_late" : "completed";
   }
   if (item.deadline < today) return "overdue";
-  return "pending";
+  return "pending_task";
 }
 
 export const generateUploadUrl = mutation({
@@ -887,8 +887,10 @@ export const listMine = query({
             : [],
           pendingMembers: type === "department"
             ? members
-                .filter((member: any) => userItemStatus(item, String(member._id)) === "pending"
-                  || userItemStatus(item, String(member._id)) === "overdue")
+                .filter((member: any) => {
+                  const status = userItemStatus(item, String(member._id));
+                  return status === "pending_task" || status === "overdue";
+                })
                 .map((member: any) => personView(member, catalogData, userItemStatus(item, String(member._id))))
             : [],
         });

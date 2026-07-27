@@ -729,6 +729,7 @@
 .work-member-chip.status-completed { color: #146553; background: #def4eb; }
 .work-member-chip.status-completed_late { color: #9a6a12; background: #fff0c9; }
 .work-member-chip.status-pending,
+.work-member-chip.status-pending_task,
 .work-member-chip.status-overdue { color: #a24e3f; background: #ffe9e4; }
 
 .work-pending-label {

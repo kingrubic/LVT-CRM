@@ -846,7 +846,7 @@ export function WorkUserView({ focusTarget = null }) {
                   </div>
                 </details>
               ) : null}
-              {task.status === 'pending' || task.status === 'overdue' ? (
+              {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' ? (
                 <button
                   type="button"
                   className="work-primary-button"
