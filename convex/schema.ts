@@ -239,8 +239,27 @@ export default defineSchema({
     departmentId: v.string(),
     assignmentType: v.optional(v.string()),
     assigneeUserIds: v.optional(v.array(v.string())),
+    /** Legacy approved markers; prefer `completions` going forward. */
     completedUserIds: v.optional(v.array(v.string())),
     completedLateUserIds: v.optional(v.array(v.string())),
+    /**
+     * Per-assignee completion review workflow.
+     * status: pending_approval | approved | rejected
+     */
+    completions: v.optional(
+      v.array(
+        v.object({
+          userId: v.string(),
+          status: v.string(),
+          submittedAt: v.number(),
+          submittedLate: v.boolean(),
+          qualityPercent: v.optional(v.number()),
+          reviewedAt: v.optional(v.number()),
+          reviewedBy: v.optional(v.string()),
+          rejectionReason: v.optional(v.string()),
+        }),
+      ),
+    ),
     content: v.string(),
     deadline: v.string(), // YYYY-MM-DD
     active: v.boolean(),
@@ -261,6 +280,20 @@ export default defineSchema({
     assigneeUserIds: v.array(v.string()),
     completedUserIds: v.array(v.string()),
     completedLateUserIds: v.optional(v.array(v.string())),
+    completions: v.optional(
+      v.array(
+        v.object({
+          userId: v.string(),
+          status: v.string(),
+          submittedAt: v.number(),
+          submittedLate: v.boolean(),
+          qualityPercent: v.optional(v.number()),
+          reviewedAt: v.optional(v.number()),
+          reviewedBy: v.optional(v.string()),
+          rejectionReason: v.optional(v.string()),
+        }),
+      ),
+    ),
     deadline: v.string(), // YYYY-MM-DD
     active: v.boolean(),
     createdBy: v.string(),

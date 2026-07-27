@@ -84,9 +84,10 @@ function PersonAvatar({ name }) {
 }
 
 function CalendarEvent({ event, compact = false, onSelect }) {
+  const qualityLabel = event.qualityPercent != null ? ` · ${event.qualityPercent}%` : '';
   return (
-    <button type="button" className={`report-event ${compact ? 'compact' : ''} status-${event.status}`} onClick={() => onSelect(event)} title={`${event.content} · ${eventTime(event)}`}>
-      <span className="report-event-time">{event.kindLabel}</span>
+    <button type="button" className={`report-event ${compact ? 'compact' : ''} status-${event.status}`} onClick={() => onSelect(event)} title={`${event.content} · ${eventTime(event)}${qualityLabel}`}>
+      <span className="report-event-time">{event.kindLabel}{qualityLabel}</span>
       <strong>{event.content}</strong>
       {!compact ? <span className="report-event-location">⌖ {event.departmentName}</span> : null}
     </button>
@@ -161,6 +162,7 @@ function EventDetail({ event, personName, onClose }) {
       <div><dt>Nhân sự</dt><dd>{personName}</dd></div>
       <div><dt>Loại công việc</dt><dd>{event.kindLabel}</dd></div>
       <div><dt>Hạn hoàn thành</dt><dd>{event.deadline}</dd></div>
+      {event.qualityPercent != null ? <div><dt>Chất lượng</dt><dd>{event.qualityPercent}%</dd></div> : null}
       <div><dt>Phòng ban</dt><dd>{event.departmentName}</dd></div>
       <div><dt>Công văn</dt><dd className="report-work-document-name" title={event.documentName}>{event.documentName}</dd></div>
     </dl>

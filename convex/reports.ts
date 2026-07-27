@@ -318,6 +318,7 @@ export const workCalendar = query({
       endDate: string;
       deadline: string;
       status: string;
+      qualityPercent?: number | null;
       kind: string;
       kindLabel: string;
       departmentName: string;
@@ -373,6 +374,9 @@ export const workCalendar = query({
           : item.deadline < today
             ? "overdue"
             : "pending";
+        const qualityPercent = (item.completions || []).find(
+          (row: any) => String(row.userId) === String(selectedUser._id) && row.status === "approved",
+        )?.qualityPercent;
         bumpKpi(kpi, status);
         events.push({
           _id: String(item._id),
@@ -381,6 +385,7 @@ export const workCalendar = query({
           endDate: item.deadline,
           deadline: item.deadline,
           status,
+          qualityPercent: qualityPercent ?? null,
           kind: type === "individual" ? "personal_task" : "department_work",
           kindLabel: type === "individual" ? "Công việc cá nhân" : "Việc phòng ban",
           departmentName:
@@ -437,6 +442,9 @@ export const workCalendar = query({
             : task.deadline < today
               ? "overdue"
               : "pending";
+          const qualityPercent = (task.completions || []).find(
+            (row: any) => String(row.userId) === String(selectedUser._id) && row.status === "approved",
+          )?.qualityPercent;
           bumpKpi(kpi, status);
           events.push({
             _id: String(task._id),
@@ -445,6 +453,7 @@ export const workCalendar = query({
             endDate: task.deadline,
             deadline: task.deadline,
             status,
+            qualityPercent: qualityPercent ?? null,
             kind: "personal_task",
             kindLabel: "Công việc cá nhân",
             departmentName:

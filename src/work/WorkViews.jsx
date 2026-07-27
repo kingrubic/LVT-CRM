@@ -37,6 +37,8 @@ function workStatusLabel(status) {
     in_progress: 'Đang thực hiện',
     completed: 'Đã hoàn thành',
     completed_late: 'Hoàn thành trễ',
+    pending_completion: 'Chờ duyệt hoàn thành',
+    rejected_completion: 'Bị từ chối hoàn thành',
     not_completed: 'Chưa hoàn thành',
     overdue: 'Quá hạn',
     pending_task: 'Chưa hoàn thành',
@@ -253,11 +255,147 @@ function IndividualAssignmentModal({ users, selectedUserIds, onClose, onDone }) 
   );
 }
 
+function CompletionSubmitModal({ title, onClose, onSubmit, saving, requirePercent }) {
+  const [qualityPercent, setQualityPercent] = useState(requirePercent ? '100' : '');
+  const [error, setError] = useState('');
+  const submit = (event) => {
+    event.preventDefault();
+    if (!requirePercent) {
+      onSubmit({});
+      return;
+    }
+    const value = Number(qualityPercent);
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      setError('Phần trăm hoàn thành phải từ 0 đến 100.');
+      return;
+    }
+    if (value < 50 && !window.confirm('% quá thấp, bạn có chắc duyệt/ghi nhận công việc này không?')) {
+      return;
+    }
+    onSubmit({ qualityPercent: Math.round(value) });
+  };
+  return (
+    <div className="work-modal-backdrop" role="presentation">
+      <form className="work-modal" onSubmit={submit}>
+        <button type="button" className="work-modal-close" onClick={onClose} aria-label="Đóng">×</button>
+        <span className="work-kicker">Hoàn thành task</span>
+        <h3>{title}</h3>
+        {requirePercent ? (
+          <>
+            <p className="work-modal-context">Admin/Mod tự ghi nhận % hoàn thành để chấm KPI.</p>
+            <label className="work-field-label" htmlFor="self-quality">Mức độ hoàn thành (%)</label>
+            <input
+              id="self-quality"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value={qualityPercent}
+              onChange={(event) => setQualityPercent(event.target.value)}
+              required
+            />
+          </>
+        ) : (
+          <p className="work-modal-context">Task sẽ chuyển sang trạng thái chờ duyệt hoàn thành.</p>
+        )}
+        {error ? <div className="work-feedback error">{error}</div> : null}
+        <div className="work-modal-actions">
+          <button type="button" className="work-ghost-button" onClick={onClose}>Hủy</button>
+          <button type="submit" className="work-primary-button" disabled={saving}>
+            {saving ? 'Đang lưu…' : requirePercent ? 'Ghi nhận hoàn thành' : 'Gửi duyệt hoàn thành'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CompletionReviewModal({ item, onClose, onSubmit, saving }) {
+  const [qualityPercent, setQualityPercent] = useState('100');
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [mode, setMode] = useState('approve');
+  const [error, setError] = useState('');
+  const submit = (event) => {
+    event.preventDefault();
+    if (mode === 'approve') {
+      const value = Number(qualityPercent);
+      if (!Number.isFinite(value) || value < 0 || value > 100) {
+        setError('Phần trăm hoàn thành phải từ 0 đến 100.');
+        return;
+      }
+      if (value < 50 && !window.confirm('% quá thấp, bạn có chắc duyệt công việc này không?')) {
+        return;
+      }
+      onSubmit({ decision: 'approve', qualityPercent: Math.round(value) });
+      return;
+    }
+    if (!rejectionReason.trim()) {
+      setError('Vui lòng nhập lý do chưa duyệt.');
+      return;
+    }
+    onSubmit({ decision: 'reject', rejectionReason: rejectionReason.trim() });
+  };
+  return (
+    <div className="work-modal-backdrop" role="presentation">
+      <form className="work-modal" onSubmit={submit}>
+        <button type="button" className="work-modal-close" onClick={onClose} aria-label="Đóng">×</button>
+        <span className="work-kicker">Duyệt hoàn thành</span>
+        <h3>{item.content}</h3>
+        <p className="work-modal-context">
+          {item.userName} · {item.departmentName} · Hạn {formatWorkDate(item.deadline)}
+          {item.submittedLate ? ' · Nộp trễ' : ''}
+        </p>
+        <div className="work-assignment-actions">
+          <button type="button" className={`work-outline-button ${mode === 'approve' ? 'is-active' : ''}`} onClick={() => setMode('approve')}>Duyệt</button>
+          <button type="button" className={`work-outline-button ${mode === 'reject' ? 'is-active' : ''}`} onClick={() => setMode('reject')}>Chưa duyệt</button>
+        </div>
+        {mode === 'approve' ? (
+          <>
+            <label className="work-field-label" htmlFor="review-quality">Mức độ hoàn thành (%) — bắt buộc</label>
+            <input
+              id="review-quality"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value={qualityPercent}
+              onChange={(event) => setQualityPercent(event.target.value)}
+              required
+            />
+          </>
+        ) : (
+          <>
+            <label className="work-field-label" htmlFor="review-reason">Lý do chưa duyệt</label>
+            <textarea
+              id="review-reason"
+              rows={4}
+              maxLength={500}
+              value={rejectionReason}
+              onChange={(event) => setRejectionReason(event.target.value)}
+              placeholder="Nêu rõ phần cần bổ sung/sửa…"
+              required
+            />
+          </>
+        )}
+        {error ? <div className="work-feedback error">{error}</div> : null}
+        <div className="work-modal-actions">
+          <button type="button" className="work-ghost-button" onClick={onClose}>Hủy</button>
+          <button type="submit" className={mode === 'approve' ? 'work-primary-button' : 'work-reject-button'} disabled={saving}>
+            {saving ? 'Đang lưu…' : mode === 'approve' ? 'Duyệt hoàn thành' : 'Trả về user'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const options = useQuery(anyApi.work.formOptions, allowCreate ? {} : 'skip');
-  const documents = useQuery(anyApi.work.listAdmin);
+  const listData = useQuery(anyApi.work.listAdmin);
   const generateUploadUrl = useMutation(anyApi.work.generateUploadUrl);
   const createDocument = useMutation(anyApi.work.createDocument);
+  const reviewWorkCompletion = useMutation(anyApi.work.reviewWorkCompletion);
+  const reviewPersonalCompletion = useMutation(anyApi.work.reviewPersonalCompletion);
   const [open, setOpen] = useState(allowCreate);
   const [file, setFile] = useState(null);
   const [assignments, setAssignments] = useState([]);
@@ -265,10 +403,16 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const [approverIds, setApproverIds] = useState([]);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const [saving, setSaving] = useState(false);
+  const [reviewing, setReviewing] = useState(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
 
   useNotificationFocus(focusTarget, {
-    acceptSourceTypes: ['approval', 'department_work', 'personal_task'],
+    acceptSourceTypes: ['approval', 'department_work', 'personal_task', 'completion_rejected'],
   });
+
+  const documents = listData?.documents || [];
+  const pendingCompletionReviews = listData?.pendingCompletionReviews || [];
+  const isAdminModMode = (listData?.assignerMode || options?.assignerMode || 'admin_mod') === 'admin_mod';
 
   const reset = () => {
     setFile(null);
@@ -337,7 +481,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
     }
   };
 
-  if ((allowCreate && options === undefined) || documents === undefined) {
+  if ((allowCreate && options === undefined) || listData === undefined) {
     return <div className="work-loading">Đang chuẩn bị sổ công việc…</div>;
   }
 
@@ -347,7 +491,40 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const selectedUserIds = assignments
     .filter((item) => item.type === 'individual')
     .flatMap((item) => item.userIds.map(String));
-  const isAdminModMode = (options?.assignerMode || 'admin_mod') === 'admin_mod';
+
+  const submitReview = async ({ decision, qualityPercent, rejectionReason }) => {
+    if (!reviewing) return;
+    setReviewSaving(true);
+    setFeedback({ type: '', text: '' });
+    try {
+      if (reviewing.kind === 'personal_task') {
+        await reviewPersonalCompletion({
+          taskId: reviewing.taskId,
+          userId: reviewing.userId,
+          decision,
+          qualityPercent,
+          rejectionReason,
+        });
+      } else {
+        await reviewWorkCompletion({
+          workItemId: reviewing.workItemId,
+          userId: reviewing.userId,
+          decision,
+          qualityPercent,
+          rejectionReason,
+        });
+      }
+      setReviewing(null);
+      setFeedback({
+        type: 'success',
+        text: decision === 'approve' ? 'Đã duyệt hoàn thành task.' : 'Đã từ chối và trả task về cho user.',
+      });
+    } catch {
+      setFeedback({ type: 'error', text: 'Không thể duyệt hoàn thành lúc này.' });
+    } finally {
+      setReviewSaving(false);
+    }
+  };
 
   return (
     <section className="work-management">
@@ -513,6 +690,36 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
         />
       ) : null}
 
+      {pendingCompletionReviews.length ? (
+        <section className="work-completion-queue">
+          <header>
+            <div>
+              <span>DUYỆT HOÀN THÀNH</span>
+              <h3>{pendingCompletionReviews.length} task đang chờ duyệt</h3>
+            </div>
+          </header>
+          <div className="work-user-list">
+            {pendingCompletionReviews.map((item) => (
+              <article className="work-user-card pending-completion-card" key={`${item.kind}-${item.taskId || item.workItemId}-${item.userId}`}>
+                <div className="work-user-card-top">
+                  <span className="work-card-eyebrow">{item.departmentName}</span>
+                  <WorkStatus status="pending_completion" />
+                </div>
+                <h3>{item.content}</h3>
+                <div className="work-card-meta">
+                  <span>Người nộp <strong>{item.userName}</strong></span>
+                  <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
+                  {item.submittedLate ? <span className="work-late-flag">Nộp trễ</span> : null}
+                </div>
+                <button type="button" className="work-primary-button" onClick={() => setReviewing(item)}>
+                  Duyệt / Chưa duyệt
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="work-document-grid">
         {documents.length ? documents.map((document) => (
           <article className="work-document-card" key={document._id} data-focus-id={document._id}>
@@ -545,6 +752,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
                       {assignment.members.map((member) => (
                         <span key={member._id} className={`work-member-chip status-${member.status}`}>
                           {member.name} · {workStatusLabel(member.status)}
+                          {member.qualityPercent != null ? ` · ${member.qualityPercent}%` : ''}
                         </span>
                       ))}
                     </div>
@@ -573,6 +781,14 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
           </div>
         )}
       </div>
+      {reviewing ? (
+        <CompletionReviewModal
+          item={reviewing}
+          onClose={() => setReviewing(null)}
+          onSubmit={submitReview}
+          saving={reviewSaving}
+        />
+      ) : null}
     </section>
   );
 }
@@ -619,17 +835,23 @@ export function WorkUserView({ focusTarget = null }) {
   const createPersonalTask = useMutation(anyApi.work.createPersonalTask);
   const completePersonalTask = useMutation(anyApi.work.completePersonalTask);
   const completeWorkItem = useMutation(anyApi.work.completeWorkItem);
+  const reviewWorkCompletion = useMutation(anyApi.work.reviewWorkCompletion);
+  const reviewPersonalCompletion = useMutation(anyApi.work.reviewPersonalCompletion);
   const [assigning, setAssigning] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [completingId, setCompletingId] = useState('');
+  const [completing, setCompleting] = useState(null);
+  const [completingSaving, setCompletingSaving] = useState(false);
+  const [reviewing, setReviewing] = useState(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
   const [decidingId, setDecidingId] = useState(null);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const isApprover = (data?.level || 0) >= 4;
   const isAssigner = data?.level === 2 || data?.level === 3;
   const isAdminMod = (data?.assignerMode || 'admin_mod') === 'admin_mod';
+  const pendingCompletionReviews = data?.pendingCompletionReviews || [];
 
   useNotificationFocus(focusTarget, {
-    acceptSourceTypes: ['approval', 'department_work', 'personal_task'],
+    acceptSourceTypes: ['approval', 'department_work', 'personal_task', 'completion_rejected'],
   });
 
   const stats = useMemo(() => {
@@ -696,29 +918,79 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
-  const handleCompleteWorkItem = async (workItemId) => {
-    setCompletingId(workItemId);
+  const handleCompleteWorkItem = async ({ qualityPercent } = {}) => {
+    if (!completing) return;
+    setCompletingSaving(true);
     setFeedback({ type: '', text: '' });
     try {
-      await completeWorkItem({ workItemId });
-      setFeedback({ type: 'success', text: 'Đã ghi nhận hoàn thành.' });
+      await completeWorkItem({
+        workItemId: completing._id,
+        ...(qualityPercent !== undefined ? { qualityPercent } : {}),
+      });
+      setCompleting(null);
+      setFeedback({
+        type: 'success',
+        text: data?.isAdmin ? 'Đã ghi nhận hoàn thành.' : 'Đã gửi duyệt hoàn thành.',
+      });
     } catch {
       setFeedback({ type: 'error', text: 'Không thể đánh dấu hoàn thành lúc này.' });
     } finally {
-      setCompletingId('');
+      setCompletingSaving(false);
     }
   };
 
-  const handleCompletePersonal = async (taskId) => {
-    setCompletingId(taskId);
+  const handleCompletePersonal = async ({ qualityPercent } = {}) => {
+    if (!completing) return;
+    setCompletingSaving(true);
     setFeedback({ type: '', text: '' });
     try {
-      await completePersonalTask({ taskId });
-      setFeedback({ type: 'success', text: 'Đã ghi nhận hoàn thành.' });
+      await completePersonalTask({
+        taskId: completing._id,
+        ...(qualityPercent !== undefined ? { qualityPercent } : {}),
+      });
+      setCompleting(null);
+      setFeedback({
+        type: 'success',
+        text: data?.isAdmin ? 'Đã ghi nhận hoàn thành.' : 'Đã gửi duyệt hoàn thành.',
+      });
     } catch {
       setFeedback({ type: 'error', text: 'Không thể hoàn thành đầu mục này.' });
     } finally {
-      setCompletingId('');
+      setCompletingSaving(false);
+    }
+  };
+
+  const submitReview = async ({ decision, qualityPercent, rejectionReason }) => {
+    if (!reviewing) return;
+    setReviewSaving(true);
+    setFeedback({ type: '', text: '' });
+    try {
+      if (reviewing.kind === 'personal_task') {
+        await reviewPersonalCompletion({
+          taskId: reviewing.taskId,
+          userId: reviewing.userId,
+          decision,
+          qualityPercent,
+          rejectionReason,
+        });
+      } else {
+        await reviewWorkCompletion({
+          workItemId: reviewing.workItemId,
+          userId: reviewing.userId,
+          decision,
+          qualityPercent,
+          rejectionReason,
+        });
+      }
+      setReviewing(null);
+      setFeedback({
+        type: 'success',
+        text: decision === 'approve' ? 'Đã duyệt hoàn thành task.' : 'Đã từ chối và trả task về cho user.',
+      });
+    } catch {
+      setFeedback({ type: 'error', text: 'Không thể duyệt hoàn thành lúc này.' });
+    } finally {
+      setReviewSaving(false);
     }
   };
 
@@ -751,6 +1023,35 @@ export function WorkUserView({ focusTarget = null }) {
       </header>
 
       {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
+
+      {pendingCompletionReviews.length ? (
+        <section className="work-completion-queue">
+          <header>
+            <div>
+              <span>DUYỆT HOÀN THÀNH</span>
+              <h3>{pendingCompletionReviews.length} task đang chờ bạn duyệt</h3>
+            </div>
+          </header>
+          <div className="work-user-list">
+            {pendingCompletionReviews.map((item) => (
+              <article className="work-user-card pending-completion-card" key={`${item.kind}-${item.taskId || item.workItemId}-${item.userId}`}>
+                <div className="work-user-card-top">
+                  <span className="work-card-eyebrow">{item.departmentName}</span>
+                  <WorkStatus status="pending_completion" />
+                </div>
+                <h3>{item.content}</h3>
+                <div className="work-card-meta">
+                  <span>Người nộp <strong>{item.userName}</strong></span>
+                  <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
+                </div>
+                <button type="button" className="work-primary-button" onClick={() => setReviewing(item)}>
+                  Duyệt / Chưa duyệt
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {isApprover ? (
         <div className="work-user-list">
@@ -823,14 +1124,24 @@ export function WorkUserView({ focusTarget = null }) {
                 {task.type === 'department' ? (
                   <span>Tập thể · <strong>{workStatusLabel(task.collectiveStatus)}</strong></span>
                 ) : null}
+                {task.qualityPercent != null ? (
+                  <span>Chất lượng <strong>{task.qualityPercent}%</strong></span>
+                ) : null}
               </div>
+              {task.rejectionReason ? (
+                <div className="work-rejection-banner" role="status">
+                  <strong>Lý do chưa duyệt</strong>
+                  <p>{task.rejectionReason}</p>
+                </div>
+              ) : null}
               {task.fileUrl ? <a className="work-file-link" href={publicStorageUrl(task.fileUrl)} target="_blank" rel="noreferrer">↗ Mở công văn</a> : null}
               {task.type === 'department' && task.pendingMembers?.length ? (
                 <div className="work-member-progress">
-                  <strong className="work-pending-label">Chưa hoàn thành:</strong>
+                  <strong className="work-pending-label">Chưa xong / chờ duyệt:</strong>
                   {task.pendingMembers.map((member) => (
                     <span key={member._id} className={`work-member-chip status-${member.status}`}>
                       {member.name}
+                      {member.qualityPercent != null ? ` · ${member.qualityPercent}%` : ''}
                     </span>
                   ))}
                 </div>
@@ -842,20 +1153,25 @@ export function WorkUserView({ focusTarget = null }) {
                     {task.members.map((member) => (
                       <span key={member._id} className={`work-member-chip status-${member.status}`}>
                         {member.name} · {workStatusLabel(member.status)}
+                        {member.qualityPercent != null ? ` · ${member.qualityPercent}%` : ''}
                       </span>
                     ))}
                   </div>
                 </details>
               ) : null}
-              {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' ? (
+              {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' || task.status === 'rejected_completion' ? (
                 <button
                   type="button"
                   className="work-primary-button"
-                  disabled={completingId === task._id}
-                  onClick={() => void handleCompleteWorkItem(task._id)}
+                  onClick={() => setCompleting({ ...task, mode: 'work_item' })}
                 >
-                  {task.status === 'overdue' ? '✓ Hoàn thành (trễ hạn)' : '✓ Đã hoàn thành'}
+                  {task.status === 'overdue' || task.status === 'rejected_completion'
+                    ? '✓ Gửi hoàn thành lại'
+                    : '✓ Đã hoàn thành'}
                 </button>
+              ) : null}
+              {task.status === 'pending_completion' ? (
+                <small className="work-overdue-note">Đang chờ Admin/Mod duyệt hoàn thành.</small>
               ) : null}
               {task.status === 'completed_late' ? (
                 <small className="work-overdue-note">Đã hoàn thành trễ hạn — sẽ ghi nhận vào KPI.</small>
@@ -879,7 +1195,13 @@ export function WorkUserView({ focusTarget = null }) {
                 {work.tasks.map((task) => (
                   <div className="work-task-row" key={task._id}>
                     <span><strong>{task.title}</strong><small>Hạn {formatWorkDate(task.deadline)} · {task.assignees.map((person) => person.name).join(', ')}</small></span>
-                    <WorkStatus status={task.status === 'completed' || task.status === 'completed_late' ? task.status : task.status === 'overdue' ? 'not_completed' : 'in_progress'} />
+                    <WorkStatus status={
+                      task.status === 'completed' || task.status === 'completed_late' || task.status === 'pending_completion' || task.status === 'rejected_completion'
+                        ? task.status
+                        : task.status === 'overdue'
+                          ? 'not_completed'
+                          : 'in_progress'
+                    } />
                   </div>
                 ))}
               </div>
@@ -896,16 +1218,27 @@ export function WorkUserView({ focusTarget = null }) {
               <div className="work-user-card-top"><span className="work-card-eyebrow">{task.departmentName}</span><WorkStatus status={task.status === 'pending' ? 'pending_task' : task.status} /></div>
               <h3>{task.title}</h3>
               <p>{task.documentContent}</p>
-              <div className="work-card-meta"><span>Hạn hoàn thành <strong>{formatWorkDate(task.deadline)}</strong></span></div>
-              {task.status === 'pending' || task.status === 'overdue' ? (
+              <div className="work-card-meta">
+                <span>Hạn hoàn thành <strong>{formatWorkDate(task.deadline)}</strong></span>
+                {task.qualityPercent != null ? <span>Chất lượng <strong>{task.qualityPercent}%</strong></span> : null}
+              </div>
+              {task.rejectionReason ? (
+                <div className="work-rejection-banner" role="status">
+                  <strong>Lý do chưa duyệt</strong>
+                  <p>{task.rejectionReason}</p>
+                </div>
+              ) : null}
+              {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' || task.status === 'rejected_completion' ? (
                 <button
                   type="button"
                   className="work-primary-button"
-                  disabled={completingId === task._id}
-                  onClick={() => void handleCompletePersonal(task._id)}
+                  onClick={() => setCompleting({ ...task, mode: 'personal_task', content: task.title })}
                 >
-                  {task.status === 'overdue' ? '✓ Hoàn thành (trễ hạn)' : '✓ Đã hoàn thành'}
+                  {task.status === 'rejected_completion' ? '✓ Gửi hoàn thành lại' : '✓ Đã hoàn thành'}
                 </button>
+              ) : null}
+              {task.status === 'pending_completion' ? (
+                <small className="work-overdue-note">Đang chờ cấp trên duyệt hoàn thành.</small>
               ) : null}
               {task.status === 'completed_late' ? (
                 <small className="work-overdue-note">Đã hoàn thành trễ hạn — sẽ ghi nhận vào KPI.</small>
@@ -916,6 +1249,23 @@ export function WorkUserView({ focusTarget = null }) {
       ) : null}
 
       {assigning ? <PersonalTaskAssignModal work={assigning} users={data.assignableUsers} onClose={() => setAssigning(null)} onSubmit={handleAssign} saving={saving} /> : null}
+      {completing ? (
+        <CompletionSubmitModal
+          title={completing.content || completing.title}
+          requirePercent={Boolean(data.isAdmin)}
+          saving={completingSaving}
+          onClose={() => setCompleting(null)}
+          onSubmit={completing.mode === 'personal_task' ? handleCompletePersonal : handleCompleteWorkItem}
+        />
+      ) : null}
+      {reviewing ? (
+        <CompletionReviewModal
+          item={reviewing}
+          onClose={() => setReviewing(null)}
+          onSubmit={submitReview}
+          saving={reviewSaving}
+        />
+      ) : null}
     </section>
   );
 }

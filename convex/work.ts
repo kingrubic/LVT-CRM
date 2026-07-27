@@ -17,8 +17,62 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const ACCEPTED_EXTENSIONS = new Set(["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg"]);
 
 function todayInVietnam() {
-  const date = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  return date.toISOString().slice(0, 10);
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function assertQualityPercent(value: number) {
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    throw new Error("INVALID_QUALITY_PERCENT");
+  }
+  return Math.round(value);
+}
+
+type CompletionRow = {
+  userId: string;
+  status: string;
+  submittedAt: number;
+  submittedLate: boolean;
+  qualityPercent?: number;
+  reviewedAt?: number;
+  reviewedBy?: string;
+  rejectionReason?: string;
+};
+
+function completionsOf(item: any): CompletionRow[] {
+  return Array.isArray(item?.completions) ? item.completions : [];
+}
+
+function completionForUser(item: any, userId: string): CompletionRow | null {
+  return completionsOf(item).find((row) => String(row.userId) === String(userId)) || null;
+}
+
+function isUserApproved(item: any, userId: string) {
+  const row = completionForUser(item, userId);
+  if (row) return row.status === "approved";
+  return (item.completedUserIds || []).some((id: string) => String(id) === String(userId));
+}
+
+function approvedUserIds(item: any) {
+  const fromCompletions = completionsOf(item)
+    .filter((row) => row.status === "approved")
+    .map((row) => String(row.userId));
+  if (fromCompletions.length) {
+    return [...new Set(fromCompletions)];
+  }
+  return (item.completedUserIds || []).map(String);
+}
+
+function upsertCompletion(item: any, next: CompletionRow) {
+  const current = completionsOf(item).filter((row) => String(row.userId) !== String(next.userId));
+  return [...current, next];
+}
+
+function syncApprovedArrays(completions: CompletionRow[]) {
+  const approved = completions.filter((row) => row.status === "approved");
+  return {
+    completedUserIds: approved.map((row) => row.userId),
+    completedLateUserIds: approved.filter((row) => row.submittedLate).map((row) => row.userId),
+  };
 }
 
 function extensionOf(fileName: string) {
@@ -63,34 +117,43 @@ async function requireWorkAccess(ctx: any) {
 
 function completionStatus(tasks: any[], today = todayInVietnam()) {
   if (!tasks.length) return "unassigned";
-  const allCompleted = tasks.every((task) =>
-    task.assigneeUserIds.every((id: string) =>
-      task.completedUserIds.some((completedId: string) => String(completedId) === String(id)),
-    ),
-  );
-  if (allCompleted) return "completed";
-  if (tasks.some((task) => task.deadline < today)) return "not_completed";
+  const statuses = tasks.map((task) => taskOverallStatus(task, today));
+  if (statuses.every((status) => status === "completed" || status === "completed_late")) {
+    return statuses.some((status) => status === "completed_late") ? "completed_late" : "completed";
+  }
+  if (statuses.some((status) => status === "pending_completion")) return "pending_completion";
+  if (statuses.some((status) => status === "overdue" || status === "rejected_completion")) {
+    return "not_completed";
+  }
   return "in_progress";
 }
 
 function memberCompletionStatus(
   members: { _id: string }[],
-  completedUserIds: string[],
+  item: any,
   deadline: string,
   today = todayInVietnam(),
 ) {
   if (!members.length) return "completed";
-  const allCompleted = members.every((member) =>
-    completedUserIds.some((id) => String(id) === String(member._id)),
-  );
+  const allCompleted = members.every((member) => isUserApproved(item, String(member._id)));
   if (allCompleted) return "completed";
+  const anyPending = members.some((member) => {
+    const row = completionForUser(item, String(member._id));
+    return row?.status === "pending_approval";
+  });
+  if (anyPending) return "pending_completion";
   if (deadline < today) return "not_completed";
   return "in_progress";
 }
 
 function taskStatus(task: any, userId: string, today = todayInVietnam()) {
-  const completed = task.completedUserIds.some((id: string) => String(id) === String(userId));
-  if (completed) {
+  const row = completionForUser(task, userId);
+  if (row?.status === "approved") {
+    return row.submittedLate ? "completed_late" : "completed";
+  }
+  if (row?.status === "pending_approval") return "pending_completion";
+  if (row?.status === "rejected") return "rejected_completion";
+  if ((task.completedUserIds || []).some((id: string) => String(id) === String(userId))) {
     const late = (task.completedLateUserIds || []).some((id: string) => String(id) === String(userId));
     return late ? "completed_late" : "completed";
   }
@@ -99,14 +162,20 @@ function taskStatus(task: any, userId: string, today = todayInVietnam()) {
 }
 
 function taskOverallStatus(task: any, today = todayInVietnam()) {
-  const completed = task.assigneeUserIds.every((id: string) =>
-    task.completedUserIds.some((completedId: string) => String(completedId) === String(id)),
-  );
+  const completed = task.assigneeUserIds.every((id: string) => isUserApproved(task, String(id)));
   if (completed) {
-    const anyLate = task.assigneeUserIds.some((id: string) =>
-      (task.completedLateUserIds || []).some((lateId: string) => String(lateId) === String(id)),
-    );
+    const anyLate = task.assigneeUserIds.some((id: string) => {
+      const row = completionForUser(task, String(id));
+      if (row) return row.status === "approved" && row.submittedLate;
+      return (task.completedLateUserIds || []).some((lateId: string) => String(lateId) === String(id));
+    });
     return anyLate ? "completed_late" : "completed";
+  }
+  if (task.assigneeUserIds.some((id: string) => completionForUser(task, String(id))?.status === "pending_approval")) {
+    return "pending_completion";
+  }
+  if (task.assigneeUserIds.some((id: string) => completionForUser(task, String(id))?.status === "rejected")) {
+    return "rejected_completion";
   }
   if (task.deadline < today) return "overdue";
   return "pending";
@@ -129,6 +198,7 @@ function overallCompletionStatus(statuses: string[]) {
   if (statuses.every((status) => status === "completed" || status === "completed_late")) {
     return statuses.some((status) => status === "completed_late") ? "completed_late" : "completed";
   }
+  if (statuses.some((status) => status === "pending_completion")) return "pending_completion";
   if (statuses.some((status) => status === "not_completed" || status === "overdue")) return "not_completed";
   return "in_progress";
 }
@@ -239,33 +309,57 @@ async function documentView(ctx: any, document: any, catalogData: any) {
 }
 
 function adminModItemStatus(item: any, members: any[], today = todayInVietnam()) {
-  const completedUserIds = item.completedUserIds || [];
   if (assignmentTypeOf(item) === "individual") {
     const assignees = item.assigneeUserIds || [];
     if (!assignees.length) return "unassigned";
-    const allDone = assignees.every((id: string) =>
-      completedUserIds.some((completedId: string) => String(completedId) === String(id)),
-    );
+    const allDone = assignees.every((id: string) => isUserApproved(item, String(id)));
     if (allDone) {
-      const anyLate = assignees.some((id: string) =>
-        (item.completedLateUserIds || []).some((lateId: string) => String(lateId) === String(id)),
-      );
+      const anyLate = assignees.some((id: string) => {
+        const row = completionForUser(item, String(id));
+        if (row) return row.status === "approved" && row.submittedLate;
+        return (item.completedLateUserIds || []).some((lateId: string) => String(lateId) === String(id));
+      });
       return anyLate ? "completed_late" : "completed";
+    }
+    if (assignees.some((id: string) => completionForUser(item, String(id))?.status === "pending_approval")) {
+      return "pending_completion";
     }
     if (item.deadline < today) return "not_completed";
     return "in_progress";
   }
-  return memberCompletionStatus(members, completedUserIds, item.deadline, today);
+  return memberCompletionStatus(members, item, item.deadline, today);
 }
 
 function userItemStatus(item: any, userId: string, today = todayInVietnam()) {
-  const completed = (item.completedUserIds || []).some((id: string) => String(id) === String(userId));
-  if (completed) {
+  const row = completionForUser(item, userId);
+  if (row?.status === "approved") {
+    return row.submittedLate ? "completed_late" : "completed";
+  }
+  if (row?.status === "pending_approval") return "pending_completion";
+  if (row?.status === "rejected") return "rejected_completion";
+  if ((item.completedUserIds || []).some((id: string) => String(id) === String(userId))) {
     const late = (item.completedLateUserIds || []).some((id: string) => String(id) === String(userId));
     return late ? "completed_late" : "completed";
   }
   if (item.deadline < today) return "overdue";
   return "pending_task";
+}
+
+function completionView(item: any, userId: string, catalogData: any) {
+  const row = completionForUser(item, userId);
+  if (!row) return null;
+  const reviewer = row.reviewedBy
+    ? catalogData.activeUsers.find((user: any) => String(user._id) === String(row.reviewedBy))
+    : null;
+  return {
+    status: row.status,
+    submittedAt: row.submittedAt,
+    submittedLate: row.submittedLate,
+    qualityPercent: row.qualityPercent ?? null,
+    rejectionReason: row.rejectionReason || "",
+    reviewedAt: row.reviewedAt || null,
+    reviewerName: reviewer ? reviewer.name || reviewer.email || "—" : null,
+  };
 }
 
 export const generateUploadUrl = mutation({
@@ -496,7 +590,7 @@ export const listAdmin = query({
                   )
                   .filter(Boolean)
               : departmentRosterMembers(item, document, catalogData, excludedIndividuals);
-            const completedUserIds = item.completedUserIds || [];
+            const approvedIds = approvedUserIds(item);
             return {
               _id: item._id,
               type,
@@ -511,11 +605,13 @@ export const listAdmin = query({
               status: adminModItemStatus(item, members),
               taskCount: members.length,
               taskCompletedCount: members.filter((member: any) =>
-                completedUserIds.some((id: string) => String(id) === String(member._id)),
+                approvedIds.some((id: string) => String(id) === String(member._id)),
               ).length,
-              members: members.map((member: any) =>
-                personView(member, catalogData, userItemStatus(item, String(member._id))),
-              ),
+              members: members.map((member: any) => ({
+                ...personView(member, catalogData, userItemStatus(item, String(member._id))),
+                qualityPercent: completionForUser(item, String(member._id))?.qualityPercent ?? null,
+                rejectionReason: completionForUser(item, String(member._id))?.rejectionReason || "",
+              })),
             };
           }
           const tasks = personalTasks.filter(
@@ -555,7 +651,73 @@ export const listAdmin = query({
         };
       }),
     );
-    return views.sort((a, b) => b.createdAt - a.createdAt);
+    const pendingCompletionReviews = [];
+    if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
+      for (const item of activeWorkItems) {
+        const document = activeDocuments.find(
+          (row: any) => String(row._id) === String(item.documentId),
+        );
+        if (!document || document.status !== "approved") continue;
+        for (const row of completionsOf(item)) {
+          if (row.status !== "pending_approval") continue;
+          const person = catalogData.activeUsers.find(
+            (user: any) => String(user._id) === String(row.userId),
+          );
+          pendingCompletionReviews.push({
+            kind: "work_item",
+            workItemId: item._id,
+            taskId: null,
+            userId: row.userId,
+            userName: person?.name || person?.email || "—",
+            content: item.content,
+            deadline: item.deadline,
+            submittedAt: row.submittedAt,
+            submittedLate: row.submittedLate,
+            type: assignmentTypeOf(item),
+            departmentName:
+              assignmentTypeOf(item) === "individual"
+                ? "Cá nhân"
+                : String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
+                  || "Chưa gán phòng ban",
+          });
+        }
+      }
+    } else {
+      for (const task of personalTasks.filter((item: any) => item.active)) {
+        for (const row of completionsOf(task)) {
+          if (row.status !== "pending_approval") continue;
+          const person = catalogData.activeUsers.find(
+            (user: any) => String(user._id) === String(row.userId),
+          );
+          const item = activeWorkItems.find(
+            (workItem: any) => String(workItem._id) === String(task.workItemId),
+          );
+          pendingCompletionReviews.push({
+            kind: "personal_task",
+            workItemId: item?._id || null,
+            taskId: task._id,
+            userId: row.userId,
+            userName: person?.name || person?.email || "—",
+            content: task.title,
+            deadline: task.deadline,
+            submittedAt: row.submittedAt,
+            submittedLate: row.submittedLate,
+            type: "individual",
+            departmentName: item
+              ? String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
+              : "",
+          });
+        }
+      }
+    }
+
+    return {
+      assignerMode,
+      documents: views.sort((a, b) => b.createdAt - a.createdAt),
+      pendingCompletionReviews: pendingCompletionReviews.sort(
+        (a, b) => a.deadline.localeCompare(b.deadline) || a.submittedAt - b.submittedAt,
+      ),
+    };
   },
 });
 
@@ -688,30 +850,65 @@ export const createPersonalTask = mutation({
 });
 
 export const completePersonalTask = mutation({
-  args: { taskId: v.id("personalTasks") },
+  args: {
+    taskId: v.id("personalTasks"),
+    qualityPercent: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const access = await requireWorkAccess(ctx);
-    if (access.isAdmin) throw new Error("WORK_EXECUTOR_REQUIRED");
     const task = await ctx.db.get(args.taskId);
     if (!task?.active) throw new Error("PERSONAL_WORK_NOT_FOUND");
     if (!task.assigneeUserIds.some((id: string) => String(id) === String(access.user._id))) {
       throw new Error("PERSONAL_WORK_FORBIDDEN");
     }
-    if (task.completedUserIds.some((id: string) => String(id) === String(access.user._id))) return;
+    const existing = completionForUser(task, String(access.user._id));
+    if (existing?.status === "approved" || existing?.status === "pending_approval") return;
+    if (!existing && isUserApproved(task, String(access.user._id))) return;
+
     const late = task.deadline < todayInVietnam();
+    const now = Date.now();
+    const bypassReview = access.isAdmin;
+    if (bypassReview) {
+      if (args.qualityPercent === undefined) throw new Error("QUALITY_PERCENT_REQUIRED");
+      const qualityPercent = assertQualityPercent(args.qualityPercent);
+      const completions = upsertCompletion(task, {
+        userId: String(access.user._id),
+        status: "approved",
+        submittedAt: now,
+        submittedLate: late,
+        qualityPercent,
+        reviewedAt: now,
+        reviewedBy: String(access.user._id),
+      });
+      const synced = syncApprovedArrays(completions);
+      await ctx.db.patch(args.taskId, {
+        completions,
+        ...synced,
+        updatedBy: access.user._id,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    const completions = upsertCompletion(task, {
+      userId: String(access.user._id),
+      status: "pending_approval",
+      submittedAt: now,
+      submittedLate: late,
+    });
     await ctx.db.patch(args.taskId, {
-      completedUserIds: [...task.completedUserIds, access.user._id],
-      completedLateUserIds: late
-        ? [...(task.completedLateUserIds || []), access.user._id]
-        : (task.completedLateUserIds || []),
+      completions,
       updatedBy: access.user._id,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
   },
 });
 
 export const completeWorkItem = mutation({
-  args: { workItemId: v.id("workItems") },
+  args: {
+    workItemId: v.id("workItems"),
+    qualityPercent: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const assignerMode = await getWorkAssignerMode(ctx);
     if (assignerMode !== WORK_ASSIGNER_MODE_ADMIN_MOD) {
@@ -738,16 +935,175 @@ export const completeWorkItem = mutation({
     }
     if (!allowed) throw new Error("WORK_ITEM_FORBIDDEN");
 
-    const completedUserIds = item.completedUserIds || [];
-    if (completedUserIds.some((id: string) => String(id) === String(access.user._id))) return;
+    const existing = completionForUser(item, String(access.user._id));
+    if (existing?.status === "approved" || existing?.status === "pending_approval") return;
+    if (!existing && isUserApproved(item, String(access.user._id))) return;
+
     const late = item.deadline < todayInVietnam();
+    const now = Date.now();
+    const bypassReview = access.isAdmin;
+    if (bypassReview) {
+      if (args.qualityPercent === undefined) throw new Error("QUALITY_PERCENT_REQUIRED");
+      const qualityPercent = assertQualityPercent(args.qualityPercent);
+      const completions = upsertCompletion(item, {
+        userId: String(access.user._id),
+        status: "approved",
+        submittedAt: now,
+        submittedLate: late,
+        qualityPercent,
+        reviewedAt: now,
+        reviewedBy: String(access.user._id),
+      });
+      const synced = syncApprovedArrays(completions);
+      await ctx.db.patch(args.workItemId, {
+        completions,
+        ...synced,
+        updatedBy: access.user._id,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    const completions = upsertCompletion(item, {
+      userId: String(access.user._id),
+      status: "pending_approval",
+      submittedAt: now,
+      submittedLate: late,
+    });
     await ctx.db.patch(args.workItemId, {
-      completedUserIds: [...completedUserIds, access.user._id],
-      completedLateUserIds: late
-        ? [...(item.completedLateUserIds || []), access.user._id]
-        : (item.completedLateUserIds || []),
+      completions,
       updatedBy: access.user._id,
-      updatedAt: Date.now(),
+      updatedAt: now,
+    });
+  },
+});
+
+export const reviewWorkCompletion = mutation({
+  args: {
+    workItemId: v.id("workItems"),
+    userId: v.string(),
+    decision: v.union(v.literal("approve"), v.literal("reject")),
+    qualityPercent: v.optional(v.number()),
+    rejectionReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireWorkAccess(ctx);
+    if (!access.isAdmin) throw new Error("WORK_COMPLETION_REVIEWER_REQUIRED");
+    const item = await ctx.db.get(args.workItemId);
+    if (!item?.active) throw new Error("WORK_ITEM_NOT_FOUND");
+    const existing = completionForUser(item, args.userId);
+    if (!existing || existing.status !== "pending_approval") {
+      throw new Error("WORK_COMPLETION_NOT_PENDING");
+    }
+    const now = Date.now();
+    if (args.decision === "approve") {
+      if (args.qualityPercent === undefined) throw new Error("QUALITY_PERCENT_REQUIRED");
+      const qualityPercent = assertQualityPercent(args.qualityPercent);
+      const completions = upsertCompletion(item, {
+        ...existing,
+        status: "approved",
+        qualityPercent,
+        reviewedAt: now,
+        reviewedBy: String(access.user._id),
+        rejectionReason: undefined,
+      });
+      const synced = syncApprovedArrays(completions);
+      await ctx.db.patch(args.workItemId, {
+        completions,
+        ...synced,
+        updatedBy: access.user._id,
+        updatedAt: now,
+      });
+      return;
+    }
+    const reason = String(args.rejectionReason || "").trim();
+    if (!reason || reason.length > 500) throw new Error("INVALID_REJECTION_REASON");
+    const completions = upsertCompletion(item, {
+      ...existing,
+      status: "rejected",
+      reviewedAt: now,
+      reviewedBy: String(access.user._id),
+      rejectionReason: reason,
+      qualityPercent: undefined,
+    });
+    const synced = syncApprovedArrays(completions);
+    await ctx.db.patch(args.workItemId, {
+      completions,
+      ...synced,
+      updatedBy: access.user._id,
+      updatedAt: now,
+    });
+  },
+});
+
+export const reviewPersonalCompletion = mutation({
+  args: {
+    taskId: v.id("personalTasks"),
+    userId: v.string(),
+    decision: v.union(v.literal("approve"), v.literal("reject")),
+    qualityPercent: v.optional(v.number()),
+    rejectionReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const assignerMode = await getWorkAssignerMode(ctx);
+    const access = await requireWorkAccess(ctx);
+    const task = await ctx.db.get(args.taskId);
+    if (!task?.active) throw new Error("PERSONAL_WORK_NOT_FOUND");
+    const existing = completionForUser(task, args.userId);
+    if (!existing || existing.status !== "pending_approval") {
+      throw new Error("WORK_COMPLETION_NOT_PENDING");
+    }
+
+    const target = await ctx.db.get(args.userId as Id<"users">);
+    const targetLevel = target ? activePositionLevel(target, access.positions) : 0;
+    let canReview = access.isAdmin;
+    if (!canReview && assignerMode === WORK_ASSIGNER_MODE_SUPERVISOR) {
+      // L2/L3 review subordinates; Admin/Mod already covered above for supervisors.
+      canReview =
+        (access.level === 2 || access.level === 3) &&
+        targetLevel > 0 &&
+        targetLevel < access.level &&
+        String(target?.departmentId || "") === String(access.user.departmentId || "");
+    }
+    if (!canReview) throw new Error("WORK_COMPLETION_REVIEWER_REQUIRED");
+
+    const now = Date.now();
+    if (args.decision === "approve") {
+      if (args.qualityPercent === undefined) throw new Error("QUALITY_PERCENT_REQUIRED");
+      const qualityPercent = assertQualityPercent(args.qualityPercent);
+      const completions = upsertCompletion(task, {
+        ...existing,
+        status: "approved",
+        qualityPercent,
+        reviewedAt: now,
+        reviewedBy: String(access.user._id),
+        rejectionReason: undefined,
+      });
+      const synced = syncApprovedArrays(completions);
+      await ctx.db.patch(args.taskId, {
+        completions,
+        ...synced,
+        updatedBy: access.user._id,
+        updatedAt: now,
+      });
+      return;
+    }
+    const reason = String(args.rejectionReason || "").trim();
+    if (!reason || reason.length > 500) throw new Error("INVALID_REJECTION_REASON");
+    const completions = upsertCompletion(task, {
+      ...existing,
+      status: "rejected",
+      reviewedAt: now,
+      reviewedBy: String(access.user._id),
+      rejectionReason: reason,
+      qualityPercent: undefined,
+    });
+    const synced = syncApprovedArrays(completions);
+    await ctx.db.patch(args.taskId, {
+      completions,
+      ...synced,
+      updatedBy: access.user._id,
+      updatedAt: now,
     });
   },
 });
@@ -864,6 +1220,7 @@ export const listMine = query({
           isMine = members.some((member: any) => String(member._id) === String(access.user._id));
         }
         if (!isMine) continue;
+        const myCompletion = completionView(item, String(access.user._id), catalogData);
         myWorkItems.push({
           _id: item._id,
           type,
@@ -880,20 +1237,59 @@ export const listMine = query({
           documentContent: document.content,
           fileName: document.fileName,
           fileUrl: await ctx.storage.getUrl(document.fileId),
+          completion: myCompletion,
+          qualityPercent: myCompletion?.qualityPercent ?? null,
+          rejectionReason: myCompletion?.status === "rejected" ? myCompletion.rejectionReason : "",
           members: type === "department"
-            ? members.map((member: any) =>
-                personView(member, catalogData, userItemStatus(item, String(member._id))),
-              )
+            ? members.map((member: any) => ({
+                ...personView(member, catalogData, userItemStatus(item, String(member._id))),
+                qualityPercent: completionForUser(item, String(member._id))?.qualityPercent ?? null,
+              }))
             : [],
           pendingMembers: type === "department"
             ? members
                 .filter((member: any) => {
                   const status = userItemStatus(item, String(member._id));
-                  return status === "pending_task" || status === "overdue";
+                  return status === "pending_task" || status === "overdue" || status === "rejected_completion"
+                    || status === "pending_completion";
                 })
-                .map((member: any) => personView(member, catalogData, userItemStatus(item, String(member._id))))
+                .map((member: any) => ({
+                  ...personView(member, catalogData, userItemStatus(item, String(member._id))),
+                  qualityPercent: completionForUser(item, String(member._id))?.qualityPercent ?? null,
+                }))
             : [],
         });
+      }
+
+      const pendingCompletionReviews = [];
+      if (access.isAdmin) {
+        for (const item of activeWorkItems) {
+          const document = docsById.get(String(item.documentId));
+          if (!document || document.status !== "approved") continue;
+          for (const row of completionsOf(item)) {
+            if (row.status !== "pending_approval") continue;
+            const person = catalogData.activeUsers.find(
+              (user: any) => String(user._id) === String(row.userId),
+            );
+            pendingCompletionReviews.push({
+              kind: "work_item",
+              workItemId: item._id,
+              taskId: null,
+              userId: row.userId,
+              userName: person?.name || person?.email || "—",
+              content: item.content,
+              deadline: item.deadline,
+              submittedAt: row.submittedAt,
+              submittedLate: row.submittedLate,
+              type: assignmentTypeOf(item),
+              departmentName:
+                assignmentTypeOf(item) === "individual"
+                  ? "Cá nhân"
+                  : String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
+                    || "Chưa gán phòng ban",
+            });
+          }
+        }
       }
 
       return {
@@ -906,6 +1302,9 @@ export const listMine = query({
         departmentWorks: [],
         personalTasks: [],
         myTasks: myWorkItems.sort((a, b) => a.deadline.localeCompare(b.deadline)),
+        pendingCompletionReviews: pendingCompletionReviews.sort(
+          (a, b) => a.deadline.localeCompare(b.deadline) || a.submittedAt - b.submittedAt,
+        ),
       };
     }
 
@@ -950,6 +1349,7 @@ export const listMine = query({
           );
           const document = item ? docsById.get(String(item.documentId)) : null;
           if (document && document.status !== "approved") return null;
+          const completion = completionView(task, String(access.user._id), catalogData);
           return {
             _id: task._id,
             title: task.title,
@@ -959,9 +1359,50 @@ export const listMine = query({
             departmentName: item
               ? String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
               : "",
+            completion,
+            qualityPercent: completion?.qualityPercent ?? null,
+            rejectionReason: completion?.status === "rejected" ? completion.rejectionReason : "",
           };
         }),
     );
+
+    const pendingCompletionReviews = [];
+    for (const task of personalTasks.filter((item: any) => item.active)) {
+      for (const row of completionsOf(task)) {
+        if (row.status !== "pending_approval") continue;
+        const target = catalogData.activeUsers.find(
+          (user: any) => String(user._id) === String(row.userId),
+        );
+        const targetLevel = target ? activePositionLevel(target, catalogData.positions) : 0;
+        const canReview = access.isAdmin
+          || (
+            (access.level === 2 || access.level === 3) &&
+            targetLevel > 0 &&
+            targetLevel < access.level &&
+            String(target?.departmentId || "") === String(access.user.departmentId || "")
+          );
+        if (!canReview) continue;
+        if (!access.isAdmin && targetLevel >= 2) continue;
+        const item = activeWorkItems.find(
+          (workItem: any) => String(workItem._id) === String(task.workItemId),
+        );
+        pendingCompletionReviews.push({
+          kind: "personal_task",
+          workItemId: item?._id || null,
+          taskId: task._id,
+          userId: row.userId,
+          userName: target?.name || target?.email || "—",
+          content: task.title,
+          deadline: task.deadline,
+          submittedAt: row.submittedAt,
+          submittedLate: row.submittedLate,
+          type: "individual",
+          departmentName: item
+            ? String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
+            : "",
+        });
+      }
+    }
 
     return {
       userId: access.user._id,
@@ -994,6 +1435,9 @@ export const listMine = query({
         a.deadline.localeCompare(b.deadline),
       ),
       myTasks: [],
+      pendingCompletionReviews: pendingCompletionReviews.sort(
+        (a, b) => a.deadline.localeCompare(b.deadline) || a.submittedAt - b.submittedAt,
+      ),
     };
   },
 });
@@ -1066,6 +1510,38 @@ export const badge = query({
       ).length;
     }
 
+    // Pending completion reviews for Admin/Mod (and L2/L3 supervisors in legacy mode).
+    if (access.isAdmin) {
+      if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
+        for (const item of activeWorkItems) {
+          const document = docsById.get(String(item.documentId));
+          if (!document || document.status !== "approved") continue;
+          count += completionsOf(item).filter((row: any) => row.status === "pending_approval").length;
+        }
+      } else {
+        for (const task of personalTasks.filter((item: any) => item.active)) {
+          count += completionsOf(task).filter((row: any) => row.status === "pending_approval").length;
+        }
+      }
+    } else if (assignerMode === WORK_ASSIGNER_MODE_SUPERVISOR && (access.level === 2 || access.level === 3)) {
+      for (const task of personalTasks.filter((item: any) => item.active)) {
+        for (const row of completionsOf(task)) {
+          if (row.status !== "pending_approval") continue;
+          const target = catalogData.activeUsers.find(
+            (user: any) => String(user._id) === String(row.userId),
+          );
+          const targetLevel = target ? activePositionLevel(target, catalogData.positions) : 0;
+          if (
+            targetLevel > 0 &&
+            targetLevel < access.level &&
+            String(target?.departmentId || "") === String(access.user.departmentId || "")
+          ) {
+            count += 1;
+          }
+        }
+      }
+    }
+
     if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
       for (const item of activeWorkItems) {
         const document = docsById.get(String(item.documentId));
@@ -1084,9 +1560,11 @@ export const badge = query({
           const members = departmentRosterMembers(item, document, catalogData, excludedIndividuals);
           isMine = members.some((member: any) => String(member._id) === String(access.user._id));
         }
-        if (isMine && userItemStatus(item, String(access.user._id)) !== "completed"
-          && userItemStatus(item, String(access.user._id)) !== "completed_late") {
-          count += 1;
+        if (isMine) {
+          const status = userItemStatus(item, String(access.user._id));
+          if (status !== "completed" && status !== "completed_late" && status !== "pending_completion") {
+            count += 1;
+          }
         }
       }
       return { count, level: access.level, assignerMode };
@@ -1103,12 +1581,14 @@ export const badge = query({
         );
       }).length;
     } else {
-      count += personalTasks.filter((task: any) =>
-        task.active &&
-        task.assigneeUserIds.some((id: string) => String(id) === String(access.user._id)) &&
-        taskStatus(task, String(access.user._id)) !== "completed" &&
-        taskStatus(task, String(access.user._id)) !== "completed_late",
-      ).length;
+      count += personalTasks.filter((task: any) => {
+        if (!task.active) return false;
+        if (!task.assigneeUserIds.some((id: string) => String(id) === String(access.user._id))) {
+          return false;
+        }
+        const status = taskStatus(task, String(access.user._id));
+        return status !== "completed" && status !== "completed_late" && status !== "pending_completion";
+      }).length;
     }
     return { count, level: access.level, assignerMode };
   },

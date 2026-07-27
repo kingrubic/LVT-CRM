@@ -22,11 +22,12 @@ const OVERDUE_VISIBILITY_MS = 24 * HOUR_MS;
 
 type NotificationSource = {
   kind: "duty" | "work";
-  sourceType: "duty" | "approval" | "department_work" | "personal_task";
+  sourceType: "duty" | "approval" | "department_work" | "personal_task" | "completion_rejected";
   sourceId: string;
   title: string;
   description: string;
   dueAt: number;
+  priority?: "high" | "normal";
 };
 
 function dutyDueAt(duty: { endDate: string; endTime: string }) {
@@ -66,7 +67,16 @@ function createMilestones(
   milestonesHours: number[],
   now: number,
 ) {
-  return sources
+  const prioritySources = sources.filter((source) => source.priority === "high");
+  const regularSources = sources.filter((source) => source.priority !== "high");
+  const priorityItems = prioritySources.map((source) => ({
+    key: `${source.kind}:${source.sourceType}:${source.sourceId}:reject`,
+    ...source,
+    milestoneHours: -1,
+    milestoneLabel: "Bị từ chối",
+    availableAt: source.dueAt,
+  }));
+  const regularItems = regularSources
     .flatMap((source) =>
       milestonesHours
         .filter((hours) => now >= source.dueAt - hours * HOUR_MS)
@@ -80,6 +90,7 @@ function createMilestones(
     )
     .filter((item) => item.dueAt >= now - OVERDUE_VISIBILITY_MS)
     .sort((a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"));
+  return [...priorityItems, ...regularItems];
 }
 
 async function notificationContext(ctx: any) {
@@ -197,6 +208,17 @@ async function notificationItems(ctx: any, requestedNow?: number) {
         (id: string) => String(id) === String(user._id),
       );
       if (completed) continue;
+      const pendingOrRejected = (item.completions || []).find(
+        (completion: any) =>
+          String(completion.userId) === String(user._id) &&
+          (completion.status === "pending_approval" || completion.status === "rejected"),
+      );
+      // Rejected has its own high-priority card; pending approval shouldn't re-ping due milestones.
+      if (pendingOrRejected?.status === "pending_approval") continue;
+      if (pendingOrRejected?.status === "rejected") {
+        // still show due? No — rejection card covers it; skip duplicate due items.
+        continue;
+      }
       const type = item.assignmentType === "individual" ? "individual" : "department";
       let isAssignee = false;
       if (type === "individual") {
@@ -279,7 +301,12 @@ async function notificationItems(ctx: any, requestedNow?: number) {
       const isCompleted = task.completedUserIds.some(
         (id: string) => String(id) === String(user._id),
       );
-      if (isAssigned && !isCompleted) {
+      const pendingRow = (task.completions || []).find(
+        (completion: any) =>
+          String(completion.userId) === String(user._id) &&
+          (completion.status === "pending_approval" || completion.status === "rejected"),
+      );
+      if (isAssigned && !isCompleted && !pendingRow) {
         workSources.push({
           kind: "work",
           sourceType: "personal_task",
@@ -289,6 +316,43 @@ async function notificationItems(ctx: any, requestedNow?: number) {
           dueAt: workDueAt(task.deadline),
         });
       }
+    }
+  }
+
+  if (canUseWork) {
+    for (const item of activeWorkItems) {
+      const row = (item.completions || []).find(
+        (completion: any) =>
+          String(completion.userId) === String(user._id) &&
+          completion.status === "rejected",
+      );
+      if (!row) continue;
+      workSources.push({
+        kind: "work",
+        sourceType: "completion_rejected",
+        sourceId: String(item._id),
+        title: `Bị từ chối: ${item.content}`,
+        description: row.rejectionReason || "Task bị trả về — hãy hoàn thành lại sớm.",
+        dueAt: row.reviewedAt || workDueAt(item.deadline),
+        priority: "high",
+      });
+    }
+    for (const task of activeTasks) {
+      const row = (task.completions || []).find(
+        (completion: any) =>
+          String(completion.userId) === String(user._id) &&
+          completion.status === "rejected",
+      );
+      if (!row) continue;
+      workSources.push({
+        kind: "work",
+        sourceType: "completion_rejected",
+        sourceId: String(task._id),
+        title: `Bị từ chối: ${task.title}`,
+        description: row.rejectionReason || "Task bị trả về — hãy hoàn thành lại sớm.",
+        dueAt: row.reviewedAt || workDueAt(task.deadline),
+        priority: "high",
+      });
     }
   }
 

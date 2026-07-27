@@ -219,6 +219,22 @@
 .notification-popover-list { display: grid; max-height: 430px; overflow-y: auto; }
 .notification-popover-item { display: grid; gap: 4px; padding: 12px 15px; border: 0; border-bottom: 1px solid #edf0f2; color: #718491; background: #fff; text-align: left; }
 .notification-popover-item.unread { background: #f1f9f7; }
+.notification-popover-item.is-rejection,
+.notification-popover-item.is-rejection.unread {
+  background: #fff1ee;
+  border-left: 3px solid #df4747;
+}
+.notification-popover-item.is-rejection > span { color: #df4747; }
+.notification-card.is-rejection {
+  border-color: #f0b4aa;
+  background: linear-gradient(180deg, #fff4f1, #fffefb);
+  box-shadow: 0 14px 28px rgba(180, 70, 55, .12);
+}
+.notification-card.is-rejection .notification-icon {
+  color: #fff;
+  background: #df4747;
+}
+.notification-card.is-rejection .notification-meta strong { color: #df4747; }
 .notification-popover-item > span { color: #b97820; font-size: 8px; font-weight: 900; text-transform: uppercase; }
 .notification-popover-item strong { overflow: hidden; color: #2b4c65; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .notification-popover-item.unread strong { color: #173b57; font-weight: 900; }

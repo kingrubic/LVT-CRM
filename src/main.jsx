@@ -112,8 +112,16 @@ function messageFor(error) {
     WORK_ASSIGNEES_REQUIRED: 'Vui lòng chọn người thực hiện.',
     INVALID_WORK_ASSIGNEE: 'Người thực hiện phải cùng phòng ban và có cấp sao thấp hơn bạn.',
     WORK_ASSIGNER_REQUIRED: 'Chỉ user cấp 2 hoặc 3 mới được chỉ định công việc.',
-    WORK_EXECUTOR_REQUIRED: 'Chỉ user cấp 1 sao mới được hoàn thành đầu mục.',
+    WORK_EXECUTOR_REQUIRED: 'Chỉ người được giao mới được hoàn thành task.',
     PERSONAL_WORK_OVERDUE: 'Đầu mục đã quá hạn và không thể xác nhận.',
+    QUALITY_PERCENT_REQUIRED: 'Vui lòng nhập mức độ hoàn thành (%).',
+    INVALID_QUALITY_PERCENT: 'Mức độ hoàn thành phải từ 0 đến 100%.',
+    INVALID_REJECTION_REASON: 'Vui lòng nhập lý do chưa duyệt (tối đa 500 ký tự).',
+    WORK_COMPLETION_REVIEWER_REQUIRED: 'Bạn không có quyền duyệt hoàn thành task này.',
+    WORK_COMPLETION_NOT_PENDING: 'Task không còn ở trạng thái chờ duyệt hoàn thành.',
+    WORK_ASSIGNMENTS_REQUIRED: 'Vui lòng thêm ít nhất một phân công.',
+    WORK_ADMIN_MOD_MODE_REQUIRED: 'Thao tác này chỉ dùng ở chế độ Admin/Mod giao việc.',
+    WORK_SUPERVISOR_MODE_REQUIRED: 'Thao tác này chỉ dùng ở chế độ Cấp trên giao việc.',
   };
 
   // Prefer longest known code match inside the raw error text (handles Convex wrappers).
@@ -349,9 +357,7 @@ function AppShell({ session }) {
             ? <DutiesAdminView currentUserId={user._id} allowManage={false} focusTarget={activeFocusTarget} />
             : <DutiesUserView access={menuAccess?.duties || 'view'} focusTarget={activeFocusTarget} />
         ) : active === 'work' ? (
-          canManageOperations
-            ? <WorkManagement allowCreate={false} focusTarget={activeFocusTarget} />
-            : <WorkUserView focusTarget={activeFocusTarget} />
+          <WorkUserView focusTarget={activeFocusTarget} />
         ) : active === 'reports' ? (
           reportSection === 'boarding' ? <BoardingReportsView /> : reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
@@ -429,12 +435,12 @@ function NotificationBell({ data, onViewAll, onOpenItem }) {
               {latestItems.map((item) => (
                 <button
                   type="button"
-                  className={`notification-popover-item ${item.read ? '' : 'unread'}`}
+                  className={`notification-popover-item ${item.read ? '' : 'unread'}${item.sourceType === 'completion_rejected' ? ' is-rejection' : ''}`}
                   key={item.key}
                   title={item.kind === 'duty' ? 'Mở công tác này' : 'Mở công việc này'}
                   onClick={() => openItem(item)}
                 >
-                  <span>{item.kind === 'duty' ? 'Công tác' : 'Công việc'} · {item.milestoneLabel}</span>
+                  <span>{item.kind === 'duty' ? 'Công tác' : item.sourceType === 'completion_rejected' ? 'Từ chối hoàn thành' : 'Công việc'} · {item.milestoneLabel}</span>
                   <strong>{item.title}</strong>
                   <small>{item.description}</small>
                 </button>

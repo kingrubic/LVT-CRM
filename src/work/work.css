@@ -684,6 +684,16 @@
   background: #fff0c9;
 }
 
+.work-status.pending_completion {
+  color: #9a6a12;
+  background: #fff3c8;
+}
+
+.work-status.rejected_completion {
+  color: #9b4539;
+  background: #ffdfd9;
+}
+
 .work-status.rejected {
   color: #9b4539;
   background: #ffdfd9;
@@ -757,6 +767,70 @@
   color: #1e405e;
   font-size: 14px;
 }
+
+.work-completion-queue {
+  margin: 18px 0 28px;
+  padding: 18px;
+  border: 1px solid #f0d58a;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fff9e8, #fffef8);
+}
+
+.work-completion-queue > header span {
+  color: #9a6a12;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.work-completion-queue > header h3 {
+  margin: 6px 0 14px;
+  color: #1e405e;
+  font-size: 18px;
+}
+
+.pending-completion-card {
+  border-color: #f0d58a !important;
+  background: #fffdf5 !important;
+}
+
+.work-rejection-banner {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #f0b4aa;
+  border-radius: 12px;
+  background: #fff1ee;
+  color: #8d3d32;
+}
+
+.work-rejection-banner strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.work-rejection-banner p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.work-late-flag {
+  color: #9a6a12;
+  font-weight: 800;
+}
+
+.work-outline-button.is-active {
+  color: #146553;
+  border-color: #146553;
+  background: #e7f6ef;
+}
+
+.work-member-chip.status-pending_completion { color: #9a6a12; background: #fff3c8; }
+.work-member-chip.status-rejected_completion { color: #9b4539; background: #ffdfd9; }
+
 
 .work-document-card h3,
 .work-user-card h3 {
