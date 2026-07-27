@@ -679,6 +679,11 @@
   background: #def4eb;
 }
 
+.work-status.completed_late {
+  color: #9a6a12;
+  background: #fff0c9;
+}
+
 .work-status.rejected {
   color: #9b4539;
   background: #ffdfd9;
@@ -695,6 +700,61 @@
 .work-status.overdue {
   color: #a24e3f;
   background: #ffe9e4;
+}
+
+.work-assignment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.work-member-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.work-member-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef3f6;
+  color: #4a6578;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.work-member-chip.status-completed { color: #146553; background: #def4eb; }
+.work-member-chip.status-completed_late { color: #9a6a12; background: #fff0c9; }
+.work-member-chip.status-pending,
+.work-member-chip.status-overdue { color: #a24e3f; background: #ffe9e4; }
+
+.work-pending-label {
+  width: 100%;
+  color: #5d7384;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.work-member-details {
+  margin-top: 10px;
+  color: #5d7384;
+  font-size: 10px;
+}
+
+.work-member-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.work-section-title {
+  margin: 8px 0 0;
+  color: #1e405e;
+  font-size: 14px;
 }
 
 .work-document-card h3,

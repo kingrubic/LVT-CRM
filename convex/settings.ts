@@ -6,11 +6,16 @@ import {
   DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
   getBooleanSystemSetting,
   getNumberArraySystemSetting,
+  getWorkAssignerMode,
   NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
   NOTIFICATION_MILESTONES_DEFAULT,
   NOTIFICATION_MILESTONES_SETTING_KEY,
   NOTIFICATION_SOURCE_DEFAULT,
   NOTIFICATION_WORK_ENABLED_SETTING_KEY,
+  WORK_ASSIGNER_MODE_ADMIN_MOD,
+  WORK_ASSIGNER_MODE_SETTING_KEY,
+  WORK_ASSIGNER_MODE_SUPERVISOR,
+  type WorkAssignerMode,
 } from "./lib";
 
 function cleanMilestones(values: number[]) {
@@ -21,6 +26,12 @@ function cleanMilestones(values: number[]) {
     throw new Error("INVALID_NOTIFICATION_MILESTONES");
   }
   return cleaned;
+}
+
+function normalizeAssignerMode(value: string): WorkAssignerMode {
+  return value === WORK_ASSIGNER_MODE_SUPERVISOR
+    ? WORK_ASSIGNER_MODE_SUPERVISOR
+    : WORK_ASSIGNER_MODE_ADMIN_MOD;
 }
 
 async function upsertBooleanSetting(ctx: any, key: string, value: boolean, userId: string, now: number) {
@@ -59,6 +70,24 @@ async function upsertNumberArraySetting(ctx: any, key: string, numberValues: num
   }
 }
 
+async function upsertStringSetting(ctx: any, key: string, stringValue: string, userId: string, now: number) {
+  const current = await ctx.db
+    .query("systemSettings")
+    .withIndex("by_key", (q: any) => q.eq("key", key))
+    .unique();
+  if (current) {
+    await ctx.db.patch(current._id, { stringValue, updatedBy: userId, updatedAt: now });
+  } else {
+    await ctx.db.insert("systemSettings", {
+      key,
+      stringValue,
+      updatedBy: userId,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
 export const displaySettings = query({
   args: {},
   handler: async (ctx) => {
@@ -68,6 +97,7 @@ export const displaySettings = query({
       notificationDutiesEnabled,
       notificationWorkEnabled,
       notificationMilestonesHours,
+      workAssignerMode,
     ] = await Promise.all([
       getBooleanSystemSetting(
         ctx,
@@ -89,12 +119,16 @@ export const displaySettings = query({
         NOTIFICATION_MILESTONES_SETTING_KEY,
         NOTIFICATION_MILESTONES_DEFAULT,
       ),
+      getWorkAssignerMode(ctx),
     ]);
     return {
       dutyAttendanceConfirmationEnabled,
       notificationDutiesEnabled,
       notificationWorkEnabled,
       notificationMilestonesHours,
+      workAssignerMode,
+      workAssignerAdminMod: workAssignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD,
+      workAssignerSupervisor: workAssignerMode === WORK_ASSIGNER_MODE_SUPERVISOR,
     };
   },
 });
@@ -180,5 +214,24 @@ export const updateDisplaySettings = mutation({
       at: now,
     });
     return value;
+  },
+});
+
+export const updateWorkAssignerMode = mutation({
+  args: {
+    mode: v.union(v.literal("admin_mod"), v.literal("supervisor")),
+  },
+  handler: async (ctx, args) => {
+    const actor = await adminPermissionOrThrow(ctx, "settings:write");
+    const mode = normalizeAssignerMode(args.mode);
+    const now = Date.now();
+    await upsertStringSetting(ctx, WORK_ASSIGNER_MODE_SETTING_KEY, mode, actor.user._id, now);
+    await ctx.db.insert("auditLogs", {
+      actorUserId: actor.user._id,
+      action: "settings.work_assigner_mode.update",
+      details: JSON.stringify({ mode }),
+      at: now,
+    });
+    return { mode };
   },
 });

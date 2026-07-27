@@ -12,8 +12,11 @@ export default function DisplaySettings() {
   const data = useQuery(anyApi.settings.displaySettings);
   const update = useMutation(anyApi.settings.updateDisplaySettings);
   const updateNotifications = useMutation(anyApi.settings.updateNotificationSettings);
+  const updateWorkAssigner = useMutation(anyApi.settings.updateWorkAssignerMode);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [assignerSaving, setAssignerSaving] = useState(false);
+  const [assignerFeedback, setAssignerFeedback] = useState('');
   const [notificationSaving, setNotificationSaving] = useState(false);
   const [notificationFeedback, setNotificationFeedback] = useState('');
   const [notificationForm, setNotificationForm] = useState({
@@ -45,8 +48,10 @@ export default function DisplaySettings() {
   }
 
   const enabled = data.dutyAttendanceConfirmationEnabled !== false;
+  const workAssignerMode = data.workAssignerMode === 'supervisor' ? 'supervisor' : 'admin_mod';
   const enabledSettingCount = [
     enabled,
+    workAssignerMode === 'admin_mod',
     notificationForm.dutiesEnabled,
     notificationForm.workEnabled,
   ].filter(Boolean).length;
@@ -60,6 +65,22 @@ export default function DisplaySettings() {
       setFeedback(feedbackMessage(error));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const setAssignerMode = async (mode) => {
+    if (mode === workAssignerMode) return;
+    setAssignerSaving(true);
+    setAssignerFeedback('');
+    try {
+      await updateWorkAssigner({ mode });
+      setAssignerFeedback(mode === 'admin_mod'
+        ? 'Đã chuyển sang chế độ Admin/Mod giao việc.'
+        : 'Đã chuyển sang chế độ Cấp trên giao việc.');
+    } catch (error) {
+      setAssignerFeedback(feedbackMessage(error));
+    } finally {
+      setAssignerSaving(false);
     }
   };
 
@@ -100,7 +121,7 @@ export default function DisplaySettings() {
         <div>
           <span className="display-settings-kicker">Thiết lập tối cao · Hiển thị</span>
           <h2>Thiết lập hiển thị</h2>
-          <p>Điều chỉnh cách hệ thống hiển thị trạng thái xác nhận tham gia công tác và thông báo gần đến hạn.</p>
+          <p>Điều chỉnh xác nhận tham gia công tác, người giao việc và thông báo gần đến hạn.</p>
         </div>
         <div className={`display-settings-mark ${enabledSettingCount > 0 ? 'is-on' : 'is-off'}`}>
           <strong>{enabledSettingCount}</strong>
@@ -140,6 +161,54 @@ export default function DisplaySettings() {
           </p>
         </div>
         {feedback ? <div className="display-settings-feedback" role="status">{feedback}</div> : null}
+      </div>
+
+      <div className="display-settings-card">
+        <div className="display-settings-card-heading">
+          <span className="display-settings-section-label">CÔNG VIỆC</span>
+          <h3>Người giao việc</h3>
+          <p>
+            Chọn ai được phép phân công công việc. Chỉ bật một chế độ tại một thời điểm để tránh
+            xung đột quy trình.
+          </p>
+        </div>
+        <div className="notification-source-settings">
+          <button
+            type="button"
+            className={`display-toggle ${workAssignerMode === 'admin_mod' ? 'is-on' : 'is-off'}`}
+            onClick={() => void setAssignerMode('admin_mod')}
+            disabled={assignerSaving || workAssignerMode === 'admin_mod'}
+            aria-pressed={workAssignerMode === 'admin_mod'}
+          >
+            <span className="display-toggle-track"><span /></span>
+            <span className="display-toggle-copy">
+              <strong>Admin / Mod</strong>
+              <small>Quản trị giao việc cho phòng ban hoặc cá nhân; mọi thành viên tự hoàn thành.</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`display-toggle ${workAssignerMode === 'supervisor' ? 'is-on' : 'is-off'}`}
+            onClick={() => void setAssignerMode('supervisor')}
+            disabled={assignerSaving || workAssignerMode === 'supervisor'}
+            aria-pressed={workAssignerMode === 'supervisor'}
+          >
+            <span className="display-toggle-track"><span /></span>
+            <span className="display-toggle-copy">
+              <strong>Cấp trên</strong>
+              <small>Cấp 2–3 sao giao việc cho cấp dưới và đốc thúc hoàn thành.</small>
+            </span>
+          </button>
+        </div>
+        <div className="display-settings-note">
+          <span aria-hidden="true">✦</span>
+          <p>
+            {workAssignerMode === 'admin_mod'
+              ? 'Đang dùng quy trình Lê Văn Tám: Admin/Mod phân công; báo cáo KPI theo cá nhân hoàn thành.'
+              : 'Đang dùng quy trình cấp trên giao việc: KPI cấp trên dựa trên việc đã giao và cấp dưới đã xong.'}
+          </p>
+        </div>
+        {assignerFeedback ? <div className="display-settings-feedback" role="status">{assignerFeedback}</div> : null}
       </div>
 
       <div className="display-settings-card notification-settings-card">

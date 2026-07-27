@@ -5,6 +5,7 @@ import {
   currentUserOrThrow,
   getBooleanSystemSetting,
   getNumberArraySystemSetting,
+  getWorkAssignerMode,
   isOperationalManagerRole,
   NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
   NOTIFICATION_MILESTONES_DEFAULT,
@@ -12,6 +13,7 @@ import {
   NOTIFICATION_SOURCE_DEFAULT,
   NOTIFICATION_WORK_ENABLED_SETTING_KEY,
   resolveUserMenuAccess,
+  WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -161,6 +163,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
         }))
     : [];
 
+  const assignerMode = await getWorkAssignerMode(ctx);
   const workSources: NotificationSource[] = [];
   if (canUseWork && level >= 4) {
     for (const document of activeDocuments) {
@@ -181,6 +184,55 @@ async function notificationItems(ctx: any, requestedNow?: number) {
         });
       }
     }
+  }
+
+  if (canUseWork && assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
+    const activeUsers = (await ctx.db.query("users").collect()).filter(
+      (row: any) => row.status === "active",
+    );
+    for (const item of activeWorkItems) {
+      const document = documentsById.get(String(item.documentId)) as any;
+      if (document?.status !== "approved") continue;
+      const completed = (item.completedUserIds || []).some(
+        (id: string) => String(id) === String(user._id),
+      );
+      if (completed) continue;
+      const type = item.assignmentType === "individual" ? "individual" : "department";
+      let isAssignee = false;
+      if (type === "individual") {
+        isAssignee = (item.assigneeUserIds || []).some(
+          (id: string) => String(id) === String(user._id),
+        );
+      } else {
+        const excluded = new Set<string>();
+        for (const sibling of activeWorkItems) {
+          if (String(sibling.documentId) !== String(item.documentId)) continue;
+          if (sibling.assignmentType !== "individual") continue;
+          for (const id of sibling.assigneeUserIds || []) excluded.add(String(id));
+        }
+        if (isOperationalManagerRole(user.role)) continue;
+        if ((document.approverUserIds || []).some((id: string) => String(id) === String(user._id))) {
+          continue;
+        }
+        if (excluded.has(String(user._id))) continue;
+        isAssignee =
+          String(user.departmentId || "") === String(item.departmentId || "") &&
+          activeUsers.some((row: any) => String(row._id) === String(user._id));
+      }
+      if (!isAssignee) continue;
+      workSources.push({
+        kind: "work",
+        sourceType: type === "individual" ? "personal_task" : "department_work",
+        sourceId: String(item._id),
+        title: item.content,
+        description:
+          type === "individual"
+            ? "Công việc cá nhân cần hoàn thành."
+            : `${departmentMap.get(String(item.departmentId)) || "Phòng ban"} · Công việc phòng ban`,
+        dueAt: workDueAt(item.deadline),
+      });
+    }
+  } else if (canUseWork && level >= 4) {
     for (const item of activeWorkItems) {
       const document = documentsById.get(String(item.documentId)) as any;
       const isApprover = document?.approverUserIds.some(

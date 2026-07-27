@@ -35,6 +35,7 @@ function workStatusLabel(status) {
     unassigned: 'Chưa giao việc',
     in_progress: 'Đang thực hiện',
     completed: 'Đã hoàn thành',
+    completed_late: 'Hoàn thành trễ',
     not_completed: 'Chưa hoàn thành',
     overdue: 'Quá hạn',
     pending_task: 'Chưa hoàn thành',
@@ -132,6 +133,7 @@ function DepartmentAssignmentModal({ departments, selectedDepartmentIds, onClose
       (item) => String(item._id) === String(departmentId),
     );
     onDone({
+      type: 'department',
       departmentId,
       departmentName: department?.name || 'Chưa gán phòng ban',
       content: content.trim(),
@@ -144,7 +146,7 @@ function DepartmentAssignmentModal({ departments, selectedDepartmentIds, onClose
         <button type="button" className="work-modal-close" onClick={onClose} aria-label="Đóng">×</button>
         <span className="work-kicker">Phân công · Phòng ban</span>
         <h3>Thêm phòng ban nhận việc</h3>
-        <p className="work-modal-context">Mỗi phòng ban có nội dung và hạn hoàn thành riêng.</p>
+        <p className="work-modal-context">Toàn bộ thành viên phòng ban sẽ thấy việc và hạn chót sau khi công văn được duyệt.</p>
         <label className="work-field-label" htmlFor="assignment-department">Phòng ban nhận việc</label>
         <select id="assignment-department" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} required>
           <option value="">Chọn phòng ban</option>
@@ -176,6 +178,80 @@ function DepartmentAssignmentModal({ departments, selectedDepartmentIds, onClose
   );
 }
 
+function IndividualAssignmentModal({ users, selectedUserIds, onClose, onDone }) {
+  const [assigneeIds, setAssigneeIds] = useState([]);
+  const [content, setContent] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [error, setError] = useState('');
+  const availableUsers = users.filter((user) => !selectedUserIds.includes(String(user._id)));
+  const submit = (event) => {
+    event.preventDefault();
+    if (!assigneeIds.length || !content.trim() || !deadline) {
+      setError('Vui lòng chọn người nhận, nội dung và hạn chót.');
+      return;
+    }
+    const selected = availableUsers.filter((user) => assigneeIds.includes(String(user._id)));
+    onDone({
+      type: 'individual',
+      userIds: selected.map((user) => String(user._id)),
+      userNames: selected.map((user) => user.name),
+      content: content.trim(),
+      deadline,
+    });
+  };
+  return (
+    <div className="work-modal-backdrop" role="presentation">
+      <form className="work-modal department-assignment-modal" onSubmit={submit}>
+        <button type="button" className="work-modal-close" onClick={onClose} aria-label="Đóng">×</button>
+        <span className="work-kicker">Phân công · Cá nhân</span>
+        <h3>Thêm cá nhân nhận việc</h3>
+        <p className="work-modal-context">Người được chọn nhận task riêng; nếu cũng thuộc phòng ban được giao thì chỉ tính task cá nhân.</p>
+        <div className="work-field-label">Người nhận việc <small>{assigneeIds.length} người</small></div>
+        <div className="work-assignee-list">
+          {availableUsers.map((person) => (
+            <label key={person._id} className={assigneeIds.includes(String(person._id)) ? 'is-selected' : ''}>
+              <input
+                type="checkbox"
+                checked={assigneeIds.includes(String(person._id))}
+                onChange={() => setAssigneeIds((current) =>
+                  current.includes(String(person._id))
+                    ? current.filter((id) => id !== String(person._id))
+                    : [...current, String(person._id)],
+                )}
+              />
+              <span className="work-person-avatar" aria-hidden="true">{String(person.name).trim().slice(0, 1).toUpperCase()}</span>
+              <span>
+                <strong>{person.name}</strong>
+                <small>{person.departmentName || 'Chưa gán PB'} · {person.positionName || 'Chưa gán chức vụ'}</small>
+              </span>
+            </label>
+          ))}
+          {!availableUsers.length ? <p className="work-muted">Không còn cá nhân nào để chọn.</p> : null}
+        </div>
+        <label className="work-field-label" htmlFor="individual-content">
+          Nội dung công việc <small>{content.length}/2000</small>
+        </label>
+        <textarea
+          id="individual-content"
+          value={content}
+          maxLength={2000}
+          rows={5}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder="Nhập yêu cầu dành cho cá nhân…"
+          required
+        />
+        <label className="work-field-label" htmlFor="individual-deadline">Hạn chót hoàn thành</label>
+        <input id="individual-deadline" type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
+        {error ? <div className="work-feedback error">{error}</div> : null}
+        <div className="work-modal-actions">
+          <button type="button" className="work-ghost-button" onClick={onClose}>Hủy</button>
+          <button type="submit" className="work-primary-button" disabled={!assigneeIds.length}>Xong</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const options = useQuery(anyApi.work.formOptions, allowCreate ? {} : 'skip');
   const documents = useQuery(anyApi.work.listAdmin);
@@ -183,19 +259,19 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const createDocument = useMutation(anyApi.work.createDocument);
   const [open, setOpen] = useState(allowCreate);
   const [file, setFile] = useState(null);
-  const [departmentAssignments, setDepartmentAssignments] = useState([]);
-  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [assignments, setAssignments] = useState([]);
+  const [assignmentModal, setAssignmentModal] = useState('');
   const [approverIds, setApproverIds] = useState([]);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const [saving, setSaving] = useState(false);
 
   useNotificationFocus(focusTarget, {
-    acceptSourceTypes: ['approval', 'department_work'],
+    acceptSourceTypes: ['approval', 'department_work', 'personal_task'],
   });
 
   const reset = () => {
     setFile(null);
-    setDepartmentAssignments([]);
+    setAssignments([]);
     setApproverIds([]);
   };
 
@@ -203,8 +279,8 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
     event.preventDefault();
     setFeedback({ type: '', text: '' });
     if (!file) return setFeedback({ type: 'error', text: 'Vui lòng tải công văn lên trước.' });
-    if (!departmentAssignments.length || !approverIds.length) {
-      return setFeedback({ type: 'error', text: 'Vui lòng thêm ít nhất một phòng ban nhận việc và chọn người duyệt.' });
+    if (!assignments.length || !approverIds.length) {
+      return setFeedback({ type: 'error', text: 'Vui lòng thêm ít nhất một phân công và chọn người duyệt.' });
     }
     setSaving(true);
     let stage = 'upload';
@@ -225,11 +301,21 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
-        assignments: departmentAssignments.map(({ departmentId: id, content: assignmentContent, deadline: assignmentDeadline }) => ({
-          departmentId: id,
-          content: assignmentContent,
-          deadline: assignmentDeadline,
-        })),
+        assignments: assignments.map((item) => (
+          item.type === 'individual'
+            ? {
+                type: 'individual',
+                userIds: item.userIds,
+                content: item.content,
+                deadline: item.deadline,
+              }
+            : {
+                type: 'department',
+                departmentId: item.departmentId,
+                content: item.content,
+                deadline: item.deadline,
+              }
+        )),
         approverUserIds: approverIds,
       });
       setFeedback({ type: 'success', text: 'Đã tạo công văn và gửi đến người duyệt.' });
@@ -254,13 +340,25 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
     return <div className="work-loading">Đang chuẩn bị sổ công việc…</div>;
   }
 
+  const selectedDepartmentIds = assignments
+    .filter((item) => item.type !== 'individual')
+    .map((item) => String(item.departmentId));
+  const selectedUserIds = assignments
+    .filter((item) => item.type === 'individual')
+    .flatMap((item) => item.userIds.map(String));
+  const isAdminModMode = (options?.assignerMode || 'admin_mod') === 'admin_mod';
+
   return (
     <section className="work-management">
       <header className="work-hero">
         <div>
           <span className="work-kicker">Thiết lập · Công việc</span>
           <h2>Sổ công văn &amp; tiến độ</h2>
-          <p>Gửi đúng người duyệt, giao đúng phòng ban, theo dõi trọn vẹn đến khi hoàn tất.</p>
+          <p>
+            {isAdminModMode
+              ? 'Giao việc cho phòng ban hoặc cá nhân; task chỉ hiện sau khi công văn được duyệt.'
+              : 'Gửi đúng người duyệt, giao đúng phòng ban; cấp trên sẽ chia việc cho cấp dưới.'}
+          </p>
         </div>
         <div className="work-hero-stamp">
           <strong>{documents.length}</strong>
@@ -330,32 +428,41 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
             <header>
               <div>
                 <span>PHÂN CÔNG</span>
-                <h4>Phòng ban nhận việc</h4>
+                <h4>Người nhận việc</h4>
               </div>
-              <button type="button" className="work-outline-button" onClick={() => setAssignmentModalOpen(true)}>
-                ＋ Thêm phòng ban nhận việc
-              </button>
+              <div className="work-assignment-actions">
+                <button type="button" className="work-outline-button" onClick={() => setAssignmentModal('department')}>
+                  ＋ Phòng ban
+                </button>
+                {isAdminModMode ? (
+                  <button type="button" className="work-outline-button" onClick={() => setAssignmentModal('individual')}>
+                    ＋ Cá nhân
+                  </button>
+                ) : null}
+              </div>
             </header>
-            {departmentAssignments.length ? (
+            {assignments.length ? (
               <div className="work-assignment-table">
                 <div className="work-assignment-table-head">
-                  <span>Phòng ban</span>
+                  <span>Đối tượng</span>
                   <span>Nội dung công việc</span>
                   <span>Hạn chót</span>
                   <span />
                 </div>
-                {departmentAssignments.map((assignment) => (
-                  <div className="work-assignment-row" key={assignment.departmentId}>
-                    <strong>{assignment.departmentName}</strong>
+                {assignments.map((assignment, index) => (
+                  <div className="work-assignment-row" key={`${assignment.type}-${assignment.departmentId || assignment.userIds?.join('-')}-${index}`}>
+                    <strong>
+                      {assignment.type === 'individual'
+                        ? `Cá nhân · ${assignment.userNames?.join(', ')}`
+                        : assignment.departmentName}
+                    </strong>
                     <span>{assignment.content}</span>
                     <time>{formatWorkDate(assignment.deadline)}</time>
                     <button
                       type="button"
-                      onClick={() => setDepartmentAssignments((current) =>
-                        current.filter((item) => item.departmentId !== assignment.departmentId)
-                      )}
-                      aria-label={`Xóa ${assignment.departmentName}`}
-                      title="Xóa phòng ban"
+                      onClick={() => setAssignments((current) => current.filter((_, rowIndex) => rowIndex !== index))}
+                      aria-label="Xóa phân công"
+                      title="Xóa phân công"
                     >
                       ×
                     </button>
@@ -365,7 +472,11 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
             ) : (
               <div className="work-assignment-empty">
                 <span>⌁</span>
-                <p>Chưa có phòng ban nhận việc. Mỗi phòng ban sẽ có nội dung và hạn chót riêng.</p>
+                <p>
+                  {isAdminModMode
+                    ? 'Chưa có phân công. Thêm phòng ban và/hoặc cá nhân nhận việc.'
+                    : 'Chưa có phòng ban nhận việc. Mỗi phòng ban sẽ có nội dung và hạn chót riêng.'}
+                </p>
               </div>
             )}
           </section>
@@ -377,14 +488,26 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
         </form>
       ) : null}
 
-      {allowCreate && assignmentModalOpen ? (
+      {allowCreate && assignmentModal === 'department' ? (
         <DepartmentAssignmentModal
           departments={options.departments}
-          selectedDepartmentIds={departmentAssignments.map((assignment) => String(assignment.departmentId))}
-          onClose={() => setAssignmentModalOpen(false)}
+          selectedDepartmentIds={selectedDepartmentIds}
+          onClose={() => setAssignmentModal('')}
           onDone={(assignment) => {
-            setDepartmentAssignments((current) => [...current, assignment]);
-            setAssignmentModalOpen(false);
+            setAssignments((current) => [...current, assignment]);
+            setAssignmentModal('');
+          }}
+        />
+      ) : null}
+
+      {allowCreate && assignmentModal === 'individual' ? (
+        <IndividualAssignmentModal
+          users={options.users || []}
+          selectedUserIds={selectedUserIds}
+          onClose={() => setAssignmentModal('')}
+          onDone={(assignment) => {
+            setAssignments((current) => [...current, assignment]);
+            setAssignmentModal('');
           }}
         />
       ) : null}
@@ -395,7 +518,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
             <div className="work-document-topline">
               <span className={`work-file-badge ${document.fileType.includes('pdf') ? 'pdf' : 'doc'}`}>{document.fileName.split('.').pop().toUpperCase()}</span>
               <WorkStatus status={document.status} />
-              <time>{document.assignmentCount} phòng ban nhận việc</time>
+              <time>{document.assignmentCount} phân công</time>
             </div>
             <h3>{document.fileName}</h3>
             <div className="work-document-meta">
@@ -406,11 +529,25 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
               {document.assignments.map((assignment) => (
                 <section key={assignment._id || assignment.departmentId} data-focus-id={assignment._id || undefined}>
                   <header>
-                    <strong>{assignment.departmentName}</strong>
+                    <strong>
+                      {assignment.type === 'individual' ? 'Cá nhân' : assignment.departmentName}
+                    </strong>
                     <WorkStatus status={assignment.status || 'unassigned'} />
                   </header>
                   <p>{assignment.content}</p>
-                  <small>Hạn {formatWorkDate(assignment.deadline)} · {assignment.taskCount || 0} đầu mục cá nhân</small>
+                  <small>
+                    Hạn {formatWorkDate(assignment.deadline)}
+                    {assignment.taskCount != null ? ` · ${assignment.taskCompletedCount || 0}/${assignment.taskCount} hoàn thành` : ''}
+                  </small>
+                  {assignment.members?.length ? (
+                    <div className="work-member-progress">
+                      {assignment.members.map((member) => (
+                        <span key={member._id} className={`work-member-chip status-${member.status}`}>
+                          {member.name} · {workStatusLabel(member.status)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </section>
               ))}
             </div>
@@ -480,13 +617,15 @@ export function WorkUserView({ focusTarget = null }) {
   const rejectDocument = useMutation(anyApi.work.rejectDocument);
   const createPersonalTask = useMutation(anyApi.work.createPersonalTask);
   const completePersonalTask = useMutation(anyApi.work.completePersonalTask);
+  const completeWorkItem = useMutation(anyApi.work.completeWorkItem);
   const [assigning, setAssigning] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [completingId, setCompletingId] = useState('');
   const [decidingId, setDecidingId] = useState(null);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const isApprover = (data?.level || 0) >= 4;
   const isAssigner = data?.level === 2 || data?.level === 3;
-  const isExecutor = data?.level === 1;
+  const isAdminMod = (data?.assignerMode || 'admin_mod') === 'admin_mod';
 
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: ['approval', 'department_work', 'personal_task'],
@@ -494,10 +633,33 @@ export function WorkUserView({ focusTarget = null }) {
 
   const stats = useMemo(() => {
     if (!data) return { total: 0, done: 0 };
-    if (isApprover) return { total: data.approvals.length, done: data.approvals.filter((item) => item.status === 'approved' || item.status === 'rejected').length };
-    if (isExecutor) return { total: data.personalTasks.length, done: data.personalTasks.filter((item) => item.status === 'completed').length };
-    return { total: data.departmentWorks.length, done: data.departmentWorks.filter((item) => item.status === 'completed').length };
-  }, [data, isApprover, isExecutor]);
+    if (isAdminMod) {
+      const tasks = data.myTasks || [];
+      const approvalsPending = (data.approvals || []).filter((item) => item.status === 'pending').length;
+      return {
+        total: tasks.length + (data.approvals || []).length,
+        done: tasks.filter((item) => item.status === 'completed' || item.status === 'completed_late').length
+          + (data.approvals || []).filter((item) => item.status === 'approved' || item.status === 'rejected').length,
+        pendingApprovals: approvalsPending,
+      };
+    }
+    if (isApprover) {
+      return {
+        total: data.approvals.length,
+        done: data.approvals.filter((item) => item.status === 'approved' || item.status === 'rejected').length,
+      };
+    }
+    if (isAssigner) {
+      return {
+        total: data.departmentWorks.length,
+        done: data.departmentWorks.filter((item) => item.status === 'completed').length,
+      };
+    }
+    return {
+      total: data.personalTasks.length,
+      done: data.personalTasks.filter((item) => item.status === 'completed' || item.status === 'completed_late').length,
+    };
+  }, [data, isAdminMod, isApprover, isAssigner]);
 
   if (data === undefined) return <div className="work-loading">Đang tải công việc của bạn…</div>;
 
@@ -533,19 +695,53 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
+  const handleCompleteWorkItem = async (workItemId) => {
+    setCompletingId(workItemId);
+    setFeedback({ type: '', text: '' });
+    try {
+      await completeWorkItem({ workItemId });
+      setFeedback({ type: 'success', text: 'Đã ghi nhận hoàn thành.' });
+    } catch {
+      setFeedback({ type: 'error', text: 'Không thể đánh dấu hoàn thành lúc này.' });
+    } finally {
+      setCompletingId('');
+    }
+  };
+
+  const handleCompletePersonal = async (taskId) => {
+    setCompletingId(taskId);
+    setFeedback({ type: '', text: '' });
+    try {
+      await completePersonalTask({ taskId });
+      setFeedback({ type: 'success', text: 'Đã ghi nhận hoàn thành.' });
+    } catch {
+      setFeedback({ type: 'error', text: 'Không thể hoàn thành đầu mục này.' });
+    } finally {
+      setCompletingId('');
+    }
+  };
+
+  const title = isAdminMod
+    ? (isApprover ? 'Duyệt công văn & việc của tôi' : 'Công việc cần làm')
+    : (isApprover ? 'Công văn cần duyệt' : isAssigner ? 'Công việc phòng ban' : 'Công việc cần làm');
+
+  const subtitle = isAdminMod
+    ? (isApprover
+      ? 'Duyệt công văn được chỉ định và hoàn thành các task giao đích danh hoặc theo phòng ban.'
+      : 'Các công việc được Admin/Mod giao cho bạn hoặc phòng ban; hoàn thành đúng hạn.')
+    : (isApprover
+      ? 'Duyệt công văn được chỉ định và theo dõi tiến độ hoàn thành của phòng ban nhận việc.'
+      : isAssigner
+        ? 'Chia nhỏ công việc phòng ban thành các đầu mục rõ người, rõ hạn.'
+        : 'Các đầu mục được giao cho bạn, hoàn thành đúng hạn để khép lại công việc phòng ban.');
+
   return (
     <section className="work-user-view">
       <header className="work-hero">
         <div>
           <span className="work-kicker">Không gian · Công việc</span>
-          <h2>{isApprover ? 'Công văn cần duyệt' : isAssigner ? 'Công việc phòng ban' : 'Công việc cần làm'}</h2>
-          <p>
-            {isApprover
-              ? 'Duyệt công văn được chỉ định và theo dõi tiến độ hoàn thành của phòng ban nhận việc.'
-              : isAssigner
-                ? 'Chia nhỏ công việc phòng ban thành các đầu mục rõ người, rõ hạn.'
-                : 'Các đầu mục được giao cho bạn, hoàn thành đúng hạn để khép lại công việc phòng ban.'}
-          </p>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
         </div>
         <div className="work-hero-stamp">
           <strong>{stats.done}<small>/{stats.total}</small></strong>
@@ -557,7 +753,9 @@ export function WorkUserView({ focusTarget = null }) {
 
       {isApprover ? (
         <div className="work-user-list">
-          {!data.approvals.length ? <div className="work-empty"><span>✓</span><h3>Không có công văn cần xử lý</h3><p>Khi Admin chỉ định bạn duyệt, hồ sơ sẽ xuất hiện tại đây.</p></div> : data.approvals.map((document) => {
+          {!data.approvals.length ? (
+            <div className="work-empty"><span>✓</span><h3>Không có công văn cần xử lý</h3><p>Khi Admin chỉ định bạn duyệt, hồ sơ sẽ xuất hiện tại đây.</p></div>
+          ) : data.approvals.map((document) => {
             const ownApproval = document.approvers.find((person) => String(person._id) === String(data.userId));
             const canDecide = document.status === 'pending' && ownApproval && !ownApproval.approved && !ownApproval.rejected;
             return (
@@ -565,7 +763,7 @@ export function WorkUserView({ focusTarget = null }) {
                 <div className="work-user-card-top">
                   <div>
                     <span className="work-file-badge doc">{document.fileName.split('.').pop().toUpperCase()}</span>
-                    <span className="work-card-eyebrow">Công văn · {document.assignmentCount} phòng ban</span>
+                    <span className="work-card-eyebrow">Công văn · {document.assignmentCount} phân công</span>
                   </div>
                   <WorkStatus status={document.status} />
                 </div>
@@ -576,11 +774,11 @@ export function WorkUserView({ focusTarget = null }) {
                   {document.assignments.map((assignment) => (
                     <section key={assignment._id || assignment.departmentId}>
                       <header>
-                        <strong>{assignment.departmentName}</strong>
+                        <strong>{assignment.type === 'individual' ? 'Cá nhân' : assignment.departmentName}</strong>
                         <WorkStatus status={assignment.status || 'unassigned'} />
                       </header>
                       <p>{assignment.content}</p>
-                      <small>Hạn {formatWorkDate(assignment.deadline)} · {assignment.taskCount || 0} đầu mục cá nhân</small>
+                      <small>Hạn {formatWorkDate(assignment.deadline)} · {assignment.taskCount || 0} người</small>
                     </section>
                   ))}
                 </div>
@@ -598,7 +796,75 @@ export function WorkUserView({ focusTarget = null }) {
             );
           })}
         </div>
-      ) : isAssigner ? (
+      ) : null}
+
+      {isAdminMod ? (
+        <div className="work-user-list">
+          {isApprover ? <h3 className="work-section-title">Công việc được giao</h3> : null}
+          {!(data.myTasks || []).length ? (
+            <div className="work-empty">
+              <span>✓</span>
+              <h3>Không có công việc cần làm</h3>
+              <p>Khi Admin/Mod giao việc và công văn được duyệt, task sẽ hiện tại đây.</p>
+            </div>
+          ) : data.myTasks.map((task) => (
+            <article className={`work-user-card personal-card ${task.status}`} key={task._id} data-focus-id={task._id}>
+              <div className="work-user-card-top">
+                <span className="work-card-eyebrow">
+                  {task.type === 'individual' ? 'Cá nhân' : task.departmentName}
+                </span>
+                <WorkStatus status={task.status === 'pending' ? 'pending_task' : task.status} />
+              </div>
+              <h3>{task.content}</h3>
+              <p>{task.documentContent}</p>
+              <div className="work-card-meta">
+                <span>Hạn hoàn thành <strong>{formatWorkDate(task.deadline)}</strong></span>
+                {task.type === 'department' ? (
+                  <span>Tập thể · <strong>{workStatusLabel(task.collectiveStatus)}</strong></span>
+                ) : null}
+              </div>
+              {task.fileUrl ? <a className="work-file-link" href={task.fileUrl} target="_blank" rel="noreferrer">↗ Mở công văn</a> : null}
+              {task.type === 'department' && task.pendingMembers?.length ? (
+                <div className="work-member-progress">
+                  <strong className="work-pending-label">Chưa hoàn thành:</strong>
+                  {task.pendingMembers.map((member) => (
+                    <span key={member._id} className={`work-member-chip status-${member.status}`}>
+                      {member.name}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {task.type === 'department' && task.members?.length ? (
+                <details className="work-member-details">
+                  <summary>Xem tiến độ cả phòng ban ({task.members.length})</summary>
+                  <div className="work-member-progress">
+                    {task.members.map((member) => (
+                      <span key={member._id} className={`work-member-chip status-${member.status}`}>
+                        {member.name} · {workStatusLabel(member.status)}
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
+              {task.status === 'pending' || task.status === 'overdue' ? (
+                <button
+                  type="button"
+                  className="work-primary-button"
+                  disabled={completingId === task._id}
+                  onClick={() => void handleCompleteWorkItem(task._id)}
+                >
+                  {task.status === 'overdue' ? '✓ Hoàn thành (trễ hạn)' : '✓ Đã hoàn thành'}
+                </button>
+              ) : null}
+              {task.status === 'completed_late' ? (
+                <small className="work-overdue-note">Đã hoàn thành trễ hạn — sẽ ghi nhận vào KPI.</small>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {!isAdminMod && isAssigner ? (
         <div className="work-user-list">
           {!data.departmentWorks.length ? <div className="work-empty"><span>⌁</span><h3>Chưa có công việc phòng ban</h3><p>Công việc sẽ xuất hiện sau khi công văn được duyệt đủ.</p></div> : data.departmentWorks.map((work) => (
             <article className="work-user-card" key={work._id} data-focus-id={work._id}>
@@ -612,7 +878,7 @@ export function WorkUserView({ focusTarget = null }) {
                 {work.tasks.map((task) => (
                   <div className="work-task-row" key={task._id}>
                     <span><strong>{task.title}</strong><small>Hạn {formatWorkDate(task.deadline)} · {task.assignees.map((person) => person.name).join(', ')}</small></span>
-                    <WorkStatus status={task.status === 'completed' ? 'completed' : task.status === 'overdue' ? 'not_completed' : 'in_progress'} />
+                    <WorkStatus status={task.status === 'completed' || task.status === 'completed_late' ? task.status : task.status === 'overdue' ? 'not_completed' : 'in_progress'} />
                   </div>
                 ))}
               </div>
@@ -620,7 +886,9 @@ export function WorkUserView({ focusTarget = null }) {
             </article>
           ))}
         </div>
-      ) : (
+      ) : null}
+
+      {!isAdminMod && !isApprover && !isAssigner ? (
         <div className="work-user-list">
           {!data.personalTasks.length ? <div className="work-empty"><span>✓</span><h3>Không có đầu mục cần làm</h3><p>Khi cấp trên giao việc, đầu mục sẽ được hiển thị tại đây.</p></div> : data.personalTasks.map((task) => (
             <article className={`work-user-card personal-card ${task.status}`} key={task._id} data-focus-id={task._id}>
@@ -628,12 +896,23 @@ export function WorkUserView({ focusTarget = null }) {
               <h3>{task.title}</h3>
               <p>{task.documentContent}</p>
               <div className="work-card-meta"><span>Hạn hoàn thành <strong>{formatWorkDate(task.deadline)}</strong></span></div>
-              {task.status === 'pending' ? <button type="button" className="work-primary-button" onClick={async () => { try { await completePersonalTask({ taskId: task._id }); } catch { setFeedback({ type: 'error', text: 'Không thể hoàn thành đầu mục này.' }); } }}>✓ Đã hoàn thành</button> : null}
-              {task.status === 'overdue' ? <small className="work-overdue-note">Đã quá hạn — đầu mục được khóa, không thể xác nhận.</small> : null}
+              {task.status === 'pending' || task.status === 'overdue' ? (
+                <button
+                  type="button"
+                  className="work-primary-button"
+                  disabled={completingId === task._id}
+                  onClick={() => void handleCompletePersonal(task._id)}
+                >
+                  {task.status === 'overdue' ? '✓ Hoàn thành (trễ hạn)' : '✓ Đã hoàn thành'}
+                </button>
+              ) : null}
+              {task.status === 'completed_late' ? (
+                <small className="work-overdue-note">Đã hoàn thành trễ hạn — sẽ ghi nhận vào KPI.</small>
+              ) : null}
             </article>
           ))}
         </div>
-      )}
+      ) : null}
 
       {assigning ? <PersonalTaskAssignModal work={assigning} users={data.assignableUsers} onClose={() => setAssigning(null)} onSubmit={handleAssign} saving={saving} /> : null}
     </section>

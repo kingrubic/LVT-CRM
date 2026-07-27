@@ -59,13 +59,15 @@ function eventsForDay(events, date) {
 function statusLabel(status) {
   return ({
     approved: 'Đã duyệt', pending: 'Chờ duyệt', unassigned: 'Chưa chỉ định',
-    completed: 'Đã hoàn thành', overdue: 'Quá hạn chưa hoàn thành',
+    completed: 'Đã hoàn thành', completed_late: 'Hoàn thành trễ',
+    overdue: 'Quá hạn chưa hoàn thành',
   })[status] || 'Đang thực hiện';
 }
 function statusSummary(status, scope) {
   const labels = {
     approved: 'Công văn đã duyệt', pending: scope === 'all' ? 'Công văn chờ duyệt' : 'Chưa hoàn thành',
-    unassigned: 'Chưa chỉ định cá nhân', completed: 'Đã hoàn thành', overdue: 'Quá hạn chưa hoàn thành',
+    unassigned: 'Chưa chỉ định cá nhân', completed: 'Đã hoàn thành',
+    completed_late: 'Hoàn thành trễ', overdue: 'Quá hạn chưa hoàn thành',
   };
   return labels[status] || statusLabel(status);
 }
@@ -251,8 +253,19 @@ export default function WorkReportsView() {
         </div>
         <div className="report-summary-row work-report-summary">
           <div><strong>{events.length}</strong><span>Mục công việc trong kỳ</span></div>
-          {statuses.map((status) => <div className={`status-${status}`} key={status}><strong>{events.filter((event) => event.status === status).length}</strong><span>{statusSummary(status, data.visibilityScope)}</span></div>)}
-          <span className="report-summary-note">Dữ liệu cập nhật theo phân công hiện hành</span>
+          {data.kpi ? (
+            <>
+              <div><strong>{data.kpi.total}</strong><span>Tổng giao cho cá nhân</span></div>
+              <div className="status-completed"><strong>{data.kpi.onTime}</strong><span>Hoàn thành đúng hạn</span></div>
+              <div className="status-completed_late"><strong>{data.kpi.late}</strong><span>Hoàn thành trễ</span></div>
+              <div className="status-overdue"><strong>{data.kpi.incomplete}</strong><span>Chưa hoàn thành</span></div>
+            </>
+          ) : statuses.map((status) => <div className={`status-${status}`} key={status}><strong>{events.filter((event) => event.status === status).length}</strong><span>{statusSummary(status, data.visibilityScope)}</span></div>)}
+          <span className="report-summary-note">
+            {data.assignerMode === 'admin_mod'
+              ? 'KPI theo cá nhân được giao (Admin/Mod)'
+              : 'KPI theo chế độ cấp trên giao việc'}
+          </span>
         </div>
         <div className="report-calendar-stage">
           {mode === 'week' ? <WeekCalendar range={range} events={events} onSelect={setSelectedEvent} /> : mode === 'month' ? <MonthCalendar anchor={anchor} events={events} onSelect={setSelectedEvent} /> : <PeriodCalendar mode={mode} anchor={anchor} events={events} onSelect={setSelectedEvent} />}

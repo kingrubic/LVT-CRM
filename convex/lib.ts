@@ -23,6 +23,13 @@ export const NOTIFICATION_MILESTONES_SETTING_KEY = "notificationMilestonesHours"
 export const NOTIFICATION_SOURCE_DEFAULT = true;
 export const NOTIFICATION_MILESTONES_DEFAULT = [48, 24, 12, 0] as const;
 
+/** Who creates/assigns work items: admin_mod (default) or supervisor (legacy L2/L3). */
+export const WORK_ASSIGNER_MODE_SETTING_KEY = "workAssignerMode";
+export const WORK_ASSIGNER_MODE_ADMIN_MOD = "admin_mod";
+export const WORK_ASSIGNER_MODE_SUPERVISOR = "supervisor";
+export const WORK_ASSIGNER_MODE_DEFAULT = WORK_ASSIGNER_MODE_ADMIN_MOD;
+export type WorkAssignerMode = typeof WORK_ASSIGNER_MODE_ADMIN_MOD | typeof WORK_ASSIGNER_MODE_SUPERVISOR;
+
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
 export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
 export type SystemRole = "admin" | "moderator" | "user";
@@ -138,6 +145,30 @@ export async function getNumberArraySystemSetting(
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
   return row?.numberValues ? [...row.numberValues] : [...fallback];
+}
+
+export async function getStringSystemSetting(
+  ctx: DbCtx,
+  key: string,
+  fallback: string,
+): Promise<string> {
+  const row = await ctx.db
+    .query("systemSettings")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  const value = row?.stringValue;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+export async function getWorkAssignerMode(ctx: DbCtx): Promise<WorkAssignerMode> {
+  const value = await getStringSystemSetting(
+    ctx,
+    WORK_ASSIGNER_MODE_SETTING_KEY,
+    WORK_ASSIGNER_MODE_DEFAULT,
+  );
+  return value === WORK_ASSIGNER_MODE_SUPERVISOR
+    ? WORK_ASSIGNER_MODE_SUPERVISOR
+    : WORK_ASSIGNER_MODE_ADMIN_MOD;
 }
 
 /** Administrator-only gate for supreme settings and user lifecycle operations. */

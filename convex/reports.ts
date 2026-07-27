@@ -6,9 +6,11 @@ import {
   DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
   DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
   getBooleanSystemSetting,
+  getWorkAssignerMode,
   isOperationalManagerRole,
   isSameDepartmentSubordinate,
   resolveUserMenuAccess,
+  WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,9 +49,63 @@ function workItemStatus(tasks: any[], today = todayInVietnam()) {
       ),
     ),
   );
-  if (completed) return "completed";
+  if (completed) {
+    const anyLate = tasks.some((task) =>
+      task.assigneeUserIds.some((userId: string) =>
+        (task.completedLateUserIds || []).some(
+          (lateId: string) => String(lateId) === String(userId),
+        ),
+      ),
+    );
+    return anyLate ? "completed_late" : "completed";
+  }
   if (tasks.some((task) => task.deadline < today)) return "overdue";
   return "pending";
+}
+
+function assignmentTypeOf(item: any): "department" | "individual" {
+  return item?.assignmentType === "individual" ? "individual" : "department";
+}
+
+function individualAssigneeIdsForDocument(workItems: any[], documentId: string) {
+  const ids = new Set<string>();
+  for (const item of workItems) {
+    if (String(item.documentId) !== String(documentId)) continue;
+    if (assignmentTypeOf(item) !== "individual") continue;
+    for (const userId of item.assigneeUserIds || []) ids.add(String(userId));
+  }
+  return ids;
+}
+
+function departmentRosterMembers(
+  item: any,
+  document: any,
+  activeUsers: any[],
+  excludedIndividualIds: Set<string>,
+) {
+  return activeUsers.filter((user: any) => {
+    if (String(user.departmentId || "") !== String(item.departmentId || "")) return false;
+    if (isOperationalManagerRole(user.role)) return false;
+    if ((document.approverUserIds || []).some((id: string) => String(id) === String(user._id))) {
+      return false;
+    }
+    if (excludedIndividualIds.has(String(user._id))) return false;
+    return true;
+  });
+}
+
+function emptyKpi() {
+  return { total: 0, onTime: 0, late: 0, incomplete: 0 };
+}
+
+function bumpKpi(
+  kpi: { total: number; onTime: number; late: number; incomplete: number },
+  status: string,
+) {
+  kpi.total += 1;
+  if (status === "completed") kpi.onTime += 1;
+  else if (status === "completed_late") kpi.late += 1;
+  else kpi.incomplete += 1;
 }
 
 export const dutyCalendar = query({
@@ -212,6 +268,7 @@ export const workCalendar = query({
       throw new Error("FORBIDDEN: reports menu hidden");
     }
 
+    const assignerMode = await getWorkAssignerMode(ctx);
     const [users, documents, workItems, personalTasks, departments, positions] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("officeDocuments").collect(),
@@ -239,11 +296,11 @@ export const workCalendar = query({
       ? 5 : activePositionLevel(actor, positions);
     const visibleUsers = canViewAll
       ? activeUsers
-      : actorLevel === 2 || actorLevel === 3
-        ? activeUsers.filter(
-            (user) => String(user._id) === String(actor._id) || isSameDepartmentSubordinate(actor, user, positions),
-          )
-        : activeUsers.filter((user) => String(user._id) === String(actor._id));
+      : activeUsers.filter(
+          (user) =>
+            String(user._id) === String(actor._id) ||
+            isSameDepartmentSubordinate(actor, user, positions),
+        );
     const selectedUserId = String(args.userId || actor._id);
     const selectedUser = visibleUsers.find((user) => String(user._id) === selectedUserId);
     if (!selectedUser) throw new Error("REPORT_USER_FORBIDDEN");
@@ -253,6 +310,7 @@ export const workCalendar = query({
     const selectedLevel = isOperationalManagerRole(selectedUser.role)
       ? 5 : activePositionLevel(selectedUser, positions);
     const inRange = (deadline: string) => deadline >= startDate && deadline <= endDate;
+    const today = todayInVietnam();
     const events: Array<{
       _id: string;
       content: string;
@@ -265,6 +323,7 @@ export const workCalendar = query({
       departmentName: string;
       documentName: string;
     }> = [];
+    const kpi = emptyKpi();
 
     if (selectedCanViewAll) {
       for (const document of activeDocuments) {
@@ -282,59 +341,124 @@ export const workCalendar = query({
           documentName: document.fileName || "Công văn",
         });
       }
-    } else if (selectedLevel === 2 || selectedLevel === 3) {
+    }
+
+    if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
       for (const item of activeWorkItems) {
         const document = documentsById.get(String(item.documentId));
-        if (
-          document?.status !== "approved" ||
-          String(item.departmentId) !== String(selectedUser.departmentId || "") ||
-          !inRange(item.deadline)
-        ) continue;
+        if (!document || document.status !== "approved" || !inRange(item.deadline)) continue;
+        const siblings = activeWorkItems.filter(
+          (row) => String(row.documentId) === String(item.documentId),
+        );
+        const excluded = individualAssigneeIdsForDocument(siblings, item.documentId);
+        const type = assignmentTypeOf(item);
+        let isAssignee = false;
+        if (type === "individual") {
+          isAssignee = (item.assigneeUserIds || []).some(
+            (id: string) => String(id) === String(selectedUser._id),
+          );
+        } else {
+          const members = departmentRosterMembers(item, document, activeUsers, excluded);
+          isAssignee = members.some((member: any) => String(member._id) === String(selectedUser._id));
+        }
+        if (!isAssignee) continue;
+        const completed = (item.completedUserIds || []).some(
+          (id: string) => String(id) === String(selectedUser._id),
+        );
+        const late = (item.completedLateUserIds || []).some(
+          (id: string) => String(id) === String(selectedUser._id),
+        );
+        const status = completed
+          ? (late ? "completed_late" : "completed")
+          : item.deadline < today
+            ? "overdue"
+            : "pending";
+        bumpKpi(kpi, status);
         events.push({
           _id: String(item._id),
           content: item.content,
           startDate: item.deadline,
           endDate: item.deadline,
           deadline: item.deadline,
-          status: workItemStatus(tasksByWorkItem.get(String(item._id)) || []),
-          kind: "department_work",
-          kindLabel: "Việc phòng ban",
+          status,
+          kind: type === "individual" ? "personal_task" : "department_work",
+          kindLabel: type === "individual" ? "Công việc cá nhân" : "Việc phòng ban",
           departmentName:
-            departmentsById.get(String(item.departmentId))?.name || "Chưa gán phòng ban",
+            type === "individual"
+              ? "Cá nhân"
+              : departmentsById.get(String(item.departmentId))?.name || "Chưa gán phòng ban",
           documentName: document.fileName || "Công văn",
         });
       }
-    } else if (selectedLevel === 1) {
-      for (const task of activeTasks) {
-        const item = activeWorkItems.find((workItem) => String(workItem._id) === String(task.workItemId));
-        const document = item ? documentsById.get(String(item.documentId)) : undefined;
-        if (
-          !item ||
-          document?.status !== "approved" ||
-          !task.assigneeUserIds.some((userId) => String(userId) === String(selectedUser._id)) ||
-          !inRange(task.deadline)
-        ) continue;
-        const completed = task.completedUserIds.some(
-          (userId) => String(userId) === String(selectedUser._id),
-        );
-        events.push({
-          _id: String(task._id),
-          content: task.title,
-          startDate: task.deadline,
-          endDate: task.deadline,
-          deadline: task.deadline,
-          status: completed ? "completed" : task.deadline < todayInVietnam() ? "overdue" : "pending",
-          kind: "personal_task",
-          kindLabel: "Công việc cá nhân",
-          departmentName:
-            departmentsById.get(String(item.departmentId))?.name || "Chưa gán phòng ban",
-          documentName: document.fileName || "Công văn",
-        });
+    } else if (!selectedCanViewAll) {
+      if (selectedLevel === 2 || selectedLevel === 3) {
+        for (const item of activeWorkItems) {
+          const document = documentsById.get(String(item.documentId));
+          if (
+            document?.status !== "approved" ||
+            assignmentTypeOf(item) !== "department" ||
+            String(item.departmentId) !== String(selectedUser.departmentId || "") ||
+            !inRange(item.deadline)
+          ) continue;
+          const status = workItemStatus(tasksByWorkItem.get(String(item._id)) || []);
+          bumpKpi(kpi, status === "unassigned" ? "pending" : status);
+          events.push({
+            _id: String(item._id),
+            content: item.content,
+            startDate: item.deadline,
+            endDate: item.deadline,
+            deadline: item.deadline,
+            status,
+            kind: "department_work",
+            kindLabel: "Việc phòng ban",
+            departmentName:
+              departmentsById.get(String(item.departmentId))?.name || "Chưa gán phòng ban",
+            documentName: document.fileName || "Công văn",
+          });
+        }
+      } else {
+        for (const task of activeTasks) {
+          const item = activeWorkItems.find((workItem) => String(workItem._id) === String(task.workItemId));
+          const document = item ? documentsById.get(String(item.documentId)) : undefined;
+          if (
+            !item ||
+            document?.status !== "approved" ||
+            !task.assigneeUserIds.some((userId) => String(userId) === String(selectedUser._id)) ||
+            !inRange(task.deadline)
+          ) continue;
+          const completed = task.completedUserIds.some(
+            (userId) => String(userId) === String(selectedUser._id),
+          );
+          const late = (task.completedLateUserIds || []).some(
+            (userId) => String(userId) === String(selectedUser._id),
+          );
+          const status = completed
+            ? (late ? "completed_late" : "completed")
+            : task.deadline < today
+              ? "overdue"
+              : "pending";
+          bumpKpi(kpi, status);
+          events.push({
+            _id: String(task._id),
+            content: task.title,
+            startDate: task.deadline,
+            endDate: task.deadline,
+            deadline: task.deadline,
+            status,
+            kind: "personal_task",
+            kindLabel: "Công việc cá nhân",
+            departmentName:
+              departmentsById.get(String(item.departmentId))?.name || "Chưa gán phòng ban",
+            documentName: document.fileName || "Công văn",
+          });
+        }
       }
     }
 
     events.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.content.localeCompare(b.content, "vi"));
     return {
+      assignerMode,
+      kpi,
       people: visibleUsers
         .map((user) => {
           const department = user.departmentId ? departmentsById.get(String(user.departmentId)) : undefined;
@@ -354,7 +478,11 @@ export const workCalendar = query({
         ),
       selectedUserId: selectedUser._id,
       selectedUserName: selectedUser.name || selectedUser.email || "Chưa đặt tên",
-      visibilityScope: selectedCanViewAll ? "all" : selectedLevel === 2 || selectedLevel === 3 ? "department" : "personal",
+      visibilityScope: selectedCanViewAll
+        ? "all"
+        : actorLevel >= 2
+          ? "self_and_subordinates"
+          : "personal",
       events,
     };
   },
