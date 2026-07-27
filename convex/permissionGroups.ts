@@ -51,7 +51,11 @@ export const list = query({
       ctx.db.query("users").collect(),
     ]);
     return {
-      groups: groups.sort((a, b) => a.name.localeCompare(b.name, "vi")),
+      // Older groups predate the Notifications menu. Normalize on read so every
+      // surface (editor, card badges, and API consumers) shows the same access.
+      groups: groups
+        .map((group) => ({ ...group, menuAccess: normalizeMenuAccess(group.menuAccess) }))
+        .sort((a, b) => a.name.localeCompare(b.name, "vi")),
       menus: SYSTEM_MENU_DEFS.map((m) => ({ id: m.id, label: m.label })),
       users: users.map((u) => ({
         _id: u._id,
