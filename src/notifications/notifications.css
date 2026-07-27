@@ -240,6 +240,19 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes notification-focus-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(22, 136, 121, .4), 0 16px 32px rgba(22, 72, 105, .12); }
+  70% { box-shadow: 0 0 0 10px rgba(22, 136, 121, 0), 0 16px 32px rgba(22, 72, 105, .12); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 136, 121, 0), 0 16px 32px rgba(22, 72, 105, .12); }
+}
+
+.is-notification-focus {
+  border-color: #168879 !important;
+  box-shadow: 0 0 0 3px rgba(22, 136, 121, .28), 0 18px 36px rgba(22, 72, 105, .16) !important;
+  animation: notification-focus-pulse 1.4s ease-out 1;
+  scroll-margin-block: 96px;
+}
+
 @media (max-width: 840px) {
   .notification-category-grid { grid-template-columns: 1fr; }
 }
@@ -257,4 +270,5 @@
 @media (prefers-reduced-motion: reduce) {
   .notification-bell-button.has-unread svg { animation: none; }
   .notification-popover { animation: none; }
+  .is-notification-focus { animation: none; }
 }

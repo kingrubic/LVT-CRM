@@ -12,6 +12,7 @@ import BoardingReportsView from './boarding/BoardingReportsView';
 import { WorkManagement, WorkUserView } from './work/WorkViews';
 import DisplaySettings from './settings/DisplaySettings';
 import NotificationsView from './notifications/NotificationsView';
+import { menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import './profile/profile.css';
@@ -190,6 +191,7 @@ function AppShell({ session }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [reportSection, setReportSection] = useState('duties');
+  const [focusTarget, setFocusTarget] = useState(null);
 
   useEffect(() => {
     const allowed = new Set([
@@ -212,6 +214,19 @@ function AppShell({ session }) {
     setActive(id);
     setMobileOpen(false);
   };
+
+  const openFromNotification = (item) => {
+    const menu = menuForNotification(item);
+    setFocusTarget({
+      menu,
+      sourceType: item.sourceType,
+      sourceId: String(item.sourceId),
+      token: Date.now(),
+    });
+    choose(menu);
+  };
+
+  const activeFocusTarget = focusTarget?.menu === active ? focusTarget : null;
 
   return (
     <div className={`shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
@@ -300,6 +315,7 @@ function AppShell({ session }) {
               <NotificationBell
                 data={notificationFeed}
                 onViewAll={() => choose('notifications')}
+                onOpenItem={openFromNotification}
               />
             ) : null}
             <span className="user-greeting">{user.name || user.email || 'Người dùng'}</span>
@@ -321,7 +337,7 @@ function AppShell({ session }) {
         ) : active === 'display-settings' && isAdmin ? (
           <DisplaySettings />
         ) : active === 'notifications' ? (
-          <NotificationsView data={notificationFeed} />
+          <NotificationsView data={notificationFeed} onOpenItem={openFromNotification} />
         ) : active === 'duties-management' && canManageOperations ? (
           <DutiesAdminView currentUserId={user._id} />
         ) : active === 'boarding' && canManageOperations ? (
@@ -330,10 +346,12 @@ function AppShell({ session }) {
           <WorkManagement />
         ) : active === 'duties' ? (
           canManageOperations
-            ? <DutiesAdminView currentUserId={user._id} allowManage={false} />
-            : <DutiesUserView access={menuAccess?.duties || 'view'} />
+            ? <DutiesAdminView currentUserId={user._id} allowManage={false} focusTarget={activeFocusTarget} />
+            : <DutiesUserView access={menuAccess?.duties || 'view'} focusTarget={activeFocusTarget} />
         ) : active === 'work' ? (
-          canManageOperations ? <WorkManagement allowCreate={false} /> : <WorkUserView />
+          canManageOperations
+            ? <WorkManagement allowCreate={false} focusTarget={activeFocusTarget} />
+            : <WorkUserView focusTarget={activeFocusTarget} />
         ) : active === 'reports' ? (
           reportSection === 'boarding' ? <BoardingReportsView /> : reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
@@ -363,7 +381,7 @@ function useNotificationMinute() {
   return currentMinute;
 }
 
-function NotificationBell({ data, onViewAll }) {
+function NotificationBell({ data, onViewAll, onOpenItem }) {
   const markRead = useMutation(anyApi.notifications.markRead);
   const [open, setOpen] = useState(false);
   const latestItems = (data?.items || []).slice(0, 10);
@@ -377,6 +395,12 @@ function NotificationBell({ data, onViewAll }) {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [open]);
+
+  const openItem = (item) => {
+    if (!item.read) void markRead({ notificationKey: item.key });
+    setOpen(false);
+    onOpenItem?.(item);
+  };
 
   return (
     <div className="notification-bell-wrap">
@@ -407,9 +431,8 @@ function NotificationBell({ data, onViewAll }) {
                   type="button"
                   className={`notification-popover-item ${item.read ? '' : 'unread'}`}
                   key={item.key}
-                  onClick={() => {
-                    if (!item.read) void markRead({ notificationKey: item.key });
-                  }}
+                  title={item.kind === 'duty' ? 'Mở công tác này' : 'Mở công việc này'}
+                  onClick={() => openItem(item)}
                 >
                   <span>{item.kind === 'duty' ? 'Công tác' : 'Công việc'} · {item.milestoneLabel}</span>
                   <strong>{item.title}</strong>
@@ -554,7 +577,7 @@ function emptyDutyForm() {
   };
 }
 
-function DutiesAdminView({ currentUserId, allowManage = true }) {
+function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null }) {
   const options = useQuery(anyApi.duties.formOptions, allowManage ? {} : 'skip');
   const listData = useQuery(anyApi.duties.listAdmin);
   const list = listData?.duties || [];
@@ -567,6 +590,11 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
   const [expanded, setExpanded] = useState(null);
   const [editorOpen, setEditorOpen] = useState(allowManage);
   const { pending, feedback, run } = useFeedback();
+
+  useNotificationFocus(focusTarget, {
+    acceptSourceTypes: ['duty'],
+    onMatch: (target) => setExpanded(String(target.sourceId)),
+  });
 
   const setField = (field, value) => {
     setForm((prev) => {
@@ -784,9 +812,13 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
           </div>
         ) : (
           list.map((item) => {
-            const open = expanded === item._id;
+            const open = String(expanded || '') === String(item._id);
             return (
-              <article className={`duty-modern-card ${open ? 'is-open' : ''}`} key={item._id}>
+              <article
+                className={`duty-modern-card ${open ? 'is-open' : ''}`}
+                key={item._id}
+                data-focus-id={item._id}
+              >
                 <button type="button" className="duty-card-toggle" onClick={() => setExpanded(open ? null : item._id)}>
                   <span className="duty-date-tile" aria-hidden="true">
                     <strong>{item.startDate.slice(8, 10)}</strong>
@@ -960,12 +992,14 @@ function ViewAllDutyParticipants({ participants, showAttendance = true }) {
   );
 }
 
-function DutiesUserView({ access }) {
+function DutiesUserView({ access, focusTarget = null }) {
   const data = useQuery(anyApi.duties.listMine);
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setSubordinateAttendance = useMutation(anyApi.duties.setAttendanceForUser);
   const { pending, feedback, run } = useFeedback();
   const canEdit = access === 'edit' || data?.canEdit;
+
+  useNotificationFocus(focusTarget, { acceptSourceTypes: ['duty'] });
 
   if (data === undefined) return <LoadingView label="Đang tải danh sách công tác…" />;
   const assignedDuties = data.duties.filter((item) => item.isMine);
@@ -1016,7 +1050,11 @@ function DutiesUserView({ access }) {
           </div>
         ) : (
           data.duties.map((item) => (
-            <article className="work-user-card duty-modern-card user-duty-card" key={item._id}>
+            <article
+              className="work-user-card duty-modern-card user-duty-card"
+              key={item._id}
+              data-focus-id={item._id}
+            >
               <div className="duty-card-main">
                 <div className="duty-title-row">
                   <span className="duty-date-tile" aria-hidden="true">

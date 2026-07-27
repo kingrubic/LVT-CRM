@@ -1,0 +1,14 @@
+---
+description: Always commit and push after completing code changes
+alwaysApply: true
+---
+
+# Đồng bộ Git sau thay đổi
+
+Sau khi hoàn thành thay đổi code/docs theo yêu cầu của Bob:
+
+1. **Commit** các file liên quan (không commit secrets / `.env`).
+2. **Push** lên remote tracking branch (`git push -u origin HEAD` nếu chưa có upstream).
+3. Không cần hỏi lại trước khi commit/push cho các thay đổi vừa làm trong session — trừ khi Bob nói rõ là chưa commit, hoặc đang ở nhánh nhạy cảm cần confirm.
+
+Tuân thủ Git Safety Protocol hiện có: không `--force` lên main/master, không amend commit đã push, không skip hooks, không đổi git config.

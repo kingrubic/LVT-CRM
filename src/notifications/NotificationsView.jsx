@@ -15,7 +15,7 @@ function formatDueAt(value) {
   }).format(new Date(value));
 }
 
-function NotificationItem({ item, onRead, onDismiss, canDelete, pending }) {
+function NotificationItem({ item, onOpen, onDismiss, canDelete, pending }) {
   return (
     <article
       className={`notification-card ${item.read ? 'is-read' : 'is-unread'} milestone-${item.milestoneHours}`}
@@ -23,9 +23,8 @@ function NotificationItem({ item, onRead, onDismiss, canDelete, pending }) {
       <button
         type="button"
         className="notification-card-main"
-        onClick={() => {
-          if (!item.read) onRead(item.key);
-        }}
+        title={item.kind === 'duty' ? 'Mở công tác này' : 'Mở công việc này'}
+        onClick={() => onOpen(item)}
         disabled={pending === item.key}
       >
         <span className="notification-icon" aria-hidden="true">
@@ -57,7 +56,7 @@ function NotificationItem({ item, onRead, onDismiss, canDelete, pending }) {
   );
 }
 
-function NotificationSection({ kind, title, subtitle, items, onRead, onDismiss, canDelete, pending }) {
+function NotificationSection({ kind, title, subtitle, items, onOpen, onDismiss, canDelete, pending }) {
   return (
     <section className={`notification-category category-${kind}`}>
       <header>
@@ -74,7 +73,7 @@ function NotificationSection({ kind, title, subtitle, items, onRead, onDismiss, 
             <NotificationItem
               item={item}
               key={item.key}
-              onRead={onRead}
+              onOpen={onOpen}
               onDismiss={onDismiss}
               canDelete={canDelete}
               pending={pending}
@@ -91,7 +90,7 @@ function NotificationSection({ kind, title, subtitle, items, onRead, onDismiss, 
   );
 }
 
-export default function NotificationsView({ data }) {
+export default function NotificationsView({ data, onOpenItem }) {
   const markRead = useMutation(anyApi.notifications.markRead);
   const markAllRead = useMutation(anyApi.notifications.markAllRead);
   const dismiss = useMutation(anyApi.notifications.dismiss);
@@ -105,10 +104,11 @@ export default function NotificationsView({ data }) {
   const workItems = data.items.filter((item) => item.kind === 'work');
   const unreadKeys = data.items.filter((item) => !item.read).map((item) => item.key);
 
-  const readOne = async (notificationKey) => {
-    setPending(notificationKey);
+  const openOne = async (item) => {
+    setPending(item.key);
     try {
-      await markRead({ notificationKey });
+      if (!item.read) await markRead({ notificationKey: item.key });
+      onOpenItem?.(item);
     } finally {
       setPending('');
     }
@@ -139,7 +139,7 @@ export default function NotificationsView({ data }) {
         <div>
           <span className="notifications-kicker">Chức năng chính · Thông báo</span>
           <h2>Nhịp việc sắp tới</h2>
-          <p>Các công tác và công việc gần đến hạn, được nhắc đúng theo mốc thời gian đã thiết lập.</p>
+          <p>Các công tác và công việc gần đến hạn, được nhắc đúng theo mốc thời gian đã thiết lập. Bấm vào thông báo để mở đúng mục cần xử lý.</p>
         </div>
         <div className="notifications-mark">
           <strong>{data.unreadCount}</strong>
@@ -166,7 +166,7 @@ export default function NotificationsView({ data }) {
           title="Công tác gần đến hạn"
           subtitle={data.settings.dutiesEnabled ? 'Lịch công tác được phân công cho bạn.' : 'Thông báo Công tác đang được Admin tắt.'}
           items={dutyItems}
-          onRead={readOne}
+          onOpen={openOne}
           onDismiss={dismissOne}
           canDelete={data.canDelete}
           pending={pending}
@@ -176,7 +176,7 @@ export default function NotificationsView({ data }) {
           title="Công việc gần đến hạn"
           subtitle={data.settings.workEnabled ? 'Công văn, công việc phòng ban và cá nhân cần xử lý.' : 'Thông báo Công việc đang được Admin tắt.'}
           items={workItems}
-          onRead={readOne}
+          onOpen={openOne}
           onDismiss={dismissOne}
           canDelete={data.canDelete}
           pending={pending}

@@ -1,0 +1,54 @@
+import { useEffect, useRef } from 'react';
+
+/**
+ * Scrolls to and briefly highlights the element matching focusTarget.sourceId
+ * via [data-focus-id]. Token changes re-trigger focus for the same id.
+ * Retries briefly while the target view is still loading.
+ */
+export function useNotificationFocus(focusTarget, options = {}) {
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  useEffect(() => {
+    if (!focusTarget?.sourceId || !focusTarget?.token) return undefined;
+
+    const { acceptSourceTypes, onMatch } = optionsRef.current;
+    if (acceptSourceTypes && !acceptSourceTypes.includes(focusTarget.sourceType)) {
+      return undefined;
+    }
+
+    onMatch?.(focusTarget);
+
+    let attempts = 0;
+    let retryTimer;
+    let clearHighlight;
+
+    const tryFocus = () => {
+      const el = document.querySelector(`[data-focus-id="${String(focusTarget.sourceId)}"]`);
+      if (!el) {
+        if (attempts < 25) {
+          attempts += 1;
+          retryTimer = window.setTimeout(tryFocus, 120);
+        }
+        return;
+      }
+      el.classList.add('is-notification-focus');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      clearHighlight = window.setTimeout(() => {
+        el.classList.remove('is-notification-focus');
+      }, 2600);
+    };
+
+    const timer = window.setTimeout(tryFocus, 80);
+
+    return () => {
+      window.clearTimeout(timer);
+      if (retryTimer) window.clearTimeout(retryTimer);
+      if (clearHighlight) window.clearTimeout(clearHighlight);
+    };
+  }, [focusTarget?.token, focusTarget?.sourceId, focusTarget?.sourceType]);
+}
+
+export function menuForNotification(item) {
+  return item?.kind === 'duty' ? 'duties' : 'work';
+}

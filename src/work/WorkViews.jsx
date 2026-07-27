@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
+import { useNotificationFocus } from '../notifications/useNotificationFocus';
 import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
@@ -175,7 +176,7 @@ function DepartmentAssignmentModal({ departments, selectedDepartmentIds, onClose
   );
 }
 
-export function WorkManagement({ allowCreate = true }) {
+export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const options = useQuery(anyApi.work.formOptions, allowCreate ? {} : 'skip');
   const documents = useQuery(anyApi.work.listAdmin);
   const generateUploadUrl = useMutation(anyApi.work.generateUploadUrl);
@@ -187,6 +188,10 @@ export function WorkManagement({ allowCreate = true }) {
   const [approverIds, setApproverIds] = useState([]);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const [saving, setSaving] = useState(false);
+
+  useNotificationFocus(focusTarget, {
+    acceptSourceTypes: ['approval', 'department_work'],
+  });
 
   const reset = () => {
     setFile(null);
@@ -386,7 +391,7 @@ export function WorkManagement({ allowCreate = true }) {
 
       <div className="work-document-grid">
         {documents.length ? documents.map((document) => (
-          <article className="work-document-card" key={document._id}>
+          <article className="work-document-card" key={document._id} data-focus-id={document._id}>
             <div className="work-document-topline">
               <span className={`work-file-badge ${document.fileType.includes('pdf') ? 'pdf' : 'doc'}`}>{document.fileName.split('.').pop().toUpperCase()}</span>
               <WorkStatus status={document.status} />
@@ -399,7 +404,7 @@ export function WorkManagement({ allowCreate = true }) {
             </div>
             <div className="work-document-assignments">
               {document.assignments.map((assignment) => (
-                <section key={assignment._id || assignment.departmentId}>
+                <section key={assignment._id || assignment.departmentId} data-focus-id={assignment._id || undefined}>
                   <header>
                     <strong>{assignment.departmentName}</strong>
                     <WorkStatus status={assignment.status || 'unassigned'} />
@@ -469,7 +474,7 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
   );
 }
 
-export function WorkUserView() {
+export function WorkUserView({ focusTarget = null }) {
   const data = useQuery(anyApi.work.listMine);
   const approveDocument = useMutation(anyApi.work.approveDocument);
   const rejectDocument = useMutation(anyApi.work.rejectDocument);
@@ -482,6 +487,10 @@ export function WorkUserView() {
   const isApprover = (data?.level || 0) >= 4;
   const isAssigner = data?.level === 2 || data?.level === 3;
   const isExecutor = data?.level === 1;
+
+  useNotificationFocus(focusTarget, {
+    acceptSourceTypes: ['approval', 'department_work', 'personal_task'],
+  });
 
   const stats = useMemo(() => {
     if (!data) return { total: 0, done: 0 };
@@ -552,7 +561,7 @@ export function WorkUserView() {
             const ownApproval = document.approvers.find((person) => String(person._id) === String(data.userId));
             const canDecide = document.status === 'pending' && ownApproval && !ownApproval.approved && !ownApproval.rejected;
             return (
-              <article className="work-user-card approval-card" key={document._id}>
+              <article className="work-user-card approval-card" key={document._id} data-focus-id={document._id}>
                 <div className="work-user-card-top">
                   <div>
                     <span className="work-file-badge doc">{document.fileName.split('.').pop().toUpperCase()}</span>
@@ -592,7 +601,7 @@ export function WorkUserView() {
       ) : isAssigner ? (
         <div className="work-user-list">
           {!data.departmentWorks.length ? <div className="work-empty"><span>⌁</span><h3>Chưa có công việc phòng ban</h3><p>Công việc sẽ xuất hiện sau khi công văn được duyệt đủ.</p></div> : data.departmentWorks.map((work) => (
-            <article className="work-user-card" key={work._id}>
+            <article className="work-user-card" key={work._id} data-focus-id={work._id}>
               <div className="work-user-card-top">
                 <div><span className="work-card-eyebrow">{work.departmentName}</span><span className="work-card-date">Hạn {formatWorkDate(work.deadline)}</span></div>
                 <WorkStatus status={work.status} />
@@ -614,7 +623,7 @@ export function WorkUserView() {
       ) : (
         <div className="work-user-list">
           {!data.personalTasks.length ? <div className="work-empty"><span>✓</span><h3>Không có đầu mục cần làm</h3><p>Khi cấp trên giao việc, đầu mục sẽ được hiển thị tại đây.</p></div> : data.personalTasks.map((task) => (
-            <article className={`work-user-card personal-card ${task.status}`} key={task._id}>
+            <article className={`work-user-card personal-card ${task.status}`} key={task._id} data-focus-id={task._id}>
               <div className="work-user-card-top"><span className="work-card-eyebrow">{task.departmentName}</span><WorkStatus status={task.status === 'pending' ? 'pending_task' : task.status} /></div>
               <h3>{task.title}</h3>
               <p>{task.documentContent}</p>

@@ -3,18 +3,19 @@
 CRM nội bộ cho Trường THCS Lê Văn Tám. Stack: **Vite + React 19**, backend **Convex self-hosted** (local Docker) với **Convex Auth (Password provider)** — đăng nhập email + mật khẩu, hồ sơ do admin cấp.
 
 **URL vận hành hiện tại (dev/staging qua tunnel):** https://lvt.vscgroup.io.vn  
-Frontend: Vite dev (`--host 0.0.0.0`). Backend: Convex local `http://127.0.0.1:3210` (proxy qua domain khi hostname = `lvt.vscgroup.io.vn`).
+Frontend: `npm run dev` (Vite). Backend: Convex local `http://127.0.0.1:3210` (proxy qua domain khi hostname = `lvt.vscgroup.io.vn`). Tunnel/LAN: chạy thêm `npx vite --host` nếu cần bind `0.0.0.0`.
 
 ## Phạm vi hiện tại
 
 - Xác thực **email + password only**. Không public signup, không email verification, không tự khôi phục mật khẩu (quên MK → liên hệ Admin).
 - **Ba vai trò hệ thống** trên `users.role`:
-  - `admin` — **Administrator**: toàn quyền, bao gồm **Cài đặt tối cao** và quản lý tài khoản.
-  - `moderator` — **Moderator**: toàn quyền nghiệp vụ và **Quản trị hệ thống**, không thấy/không truy cập **Cài đặt tối cao**.
+  - `admin` — **Administrator**: toàn quyền, bao gồm **Thiết lập tối cao** và quản lý tài khoản.
+  - `moderator` — **Moderator**: toàn quyền nghiệp vụ và **Quản trị hệ thống**, không thấy/không truy cập **Thiết lập tối cao**.
   - `user` — **User**: các chức năng chính theo **nhóm quyền** do Administrator gán.
 - Administrator quản lý thông số tối cao; Administrator và Moderator cùng quản lý bán trú, công việc và các module nghiệp vụ.
 - Mật khẩu băm bởi Convex Auth (Scrypt); plaintext không lưu / không ghi audit. Tài khoản tạo/reset có `mustChangePassword=true`.
-- Module Công tác, Báo cáo và Công việc đã có luồng dữ liệu; các menu khác tiếp tục dùng placeholder theo phạm vi triển khai.
+- **Đã có luồng dữ liệu:** Công tác (lịch + xác nhận tham gia), Công việc (công văn / duyệt / phòng ban / cá nhân), Bán trú, Báo cáo (Công tác · Công việc · Bán trú), Thông báo (mốc hạn + click mở đúng mục), Địa điểm, Thiết lập hiển thị.
+- **Vẫn placeholder:** Lớp chủ nhiệm, Đánh giá nhân sự.
 
 ## Mô hình phân quyền
 
@@ -22,19 +23,20 @@ Frontend: Vite dev (`--host 0.0.0.0`). Backend: Convex local `http://127.0.0.1:3
 
 | Key | Tên UI | Quyền |
 |-----|--------|--------|
-| `admin` | Administrator | Toàn quyền, gồm Cài đặt tối cao và lifecycle tài khoản |
-| `moderator` | Moderator | Toàn quyền chức năng và quản trị nghiệp vụ; không truy cập Cài đặt tối cao |
-| `user` | User | Menu = `permissionGroups.menuAccess` (mặc định ẩn nếu chưa gán nhóm) |
+| `admin` | Administrator | Toàn quyền, gồm Thiết lập tối cao và lifecycle tài khoản |
+| `moderator` | Moderator | Toàn quyền chức năng và quản trị nghiệp vụ; không truy cập Thiết lập tối cao |
+| `user` | User | Menu = `permissionGroups.menuAccess` (mặc định ẩn nếu chưa gán nhóm; **Thông báo** mặc định `view`) |
 
-Chỉ Administrator thấy **Cài đặt tối cao**. Moderator thấy **Chức năng chính** và **Quản trị hệ thống**. User thấy **Chức năng chính** theo nhóm quyền.
+Chỉ Administrator thấy **Thiết lập tối cao**. Moderator thấy **Chức năng chính** và **Quản trị hệ thống**. User thấy **Chức năng chính** theo nhóm quyền.
 
 ### Nhóm quyền (`permissionGroups`)
 
-Mỗi nhóm quy định quyền trên 5 menu **Chức năng chính**:
+Mỗi nhóm quy định quyền trên **6** menu **Chức năng chính**:
 
 | Menu id | Nhãn |
 |---------|------|
 | `reports` | Báo cáo |
+| `notifications` | Thông báo |
 | `duties` | Công tác |
 | `work` | Công việc |
 | `homeroom` | Lớp chủ nhiệm |
@@ -42,7 +44,7 @@ Mỗi nhóm quy định quyền trên 5 menu **Chức năng chính**:
 
 Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (chỉ xem phạm vi thông thường) · **`view_all`** (xem mọi user, không chỉnh sửa) · **`edit`** (thêm/sửa nội dung khi module sẵn sàng).
 
-Gán user: form Quản lý người dùng **hoặc** nút **Thêm user** trong Quản lý nhóm quyền.
+Gán user: form Thiết lập người dùng **hoặc** nút **Thêm user** trong Thiết lập nhóm quyền.
 
 ### Phòng ban (`departments`)
 
@@ -50,7 +52,7 @@ CRUD phòng ban (tên + mã). Gán user khi tạo user hoặc từ màn phòng b
 
 ### Chức vụ (`positions`)
 
-CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho **quy trình duyệt** (workflow sau):
+CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho **quy trình duyệt** công văn / công việc và nền tảng workflow:
 
 | Cấp | Ý nghĩa duyệt |
 |-----|----------------|
@@ -61,13 +63,20 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 - Cùng cấp không duyệt nhau; chỉ **cấp cao hơn** duyệt cấp thấp hơn (`canApproveLevel` trong `convex/lib.ts`).
 - Task nhiều cấp duyệt: cấp cao hơn được **duyệt thay** cấp thấp; mỗi lần duyệt ghi `approvalLogs` (actor, level, task, on-behalf, thời điểm).
-- Gán user: form user hoặc nút **Thêm user** trong Quản lý chức vụ.
+- Gán user: form user hoặc nút **Thêm user** trong Thiết lập chức vụ.
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo, Công tác, Công việc, Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
+1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc · Bán trú), Thông báo, Công tác, Công việc, Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
 2. **Quản trị hệ thống**: Quản lý công tác, Quản lý bán trú, Quản lý công việc (Administrator và Moderator).
-3. **Cài đặt tối cao**: Quản lý người dùng, phòng ban, địa điểm, nhóm quyền, chức vụ (chỉ Administrator).
+3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, địa điểm, nhóm quyền, chức vụ, **Thiết lập hiển thị**.
+
+### Thông báo & Thiết lập hiển thị
+
+- Feed tính theo mốc giờ trước hạn (mặc định `48 · 24 · 12 · 0` / Đến hạn) cho **Công tác** và **Công việc** được gán cho user.
+- Chuông trên header + trang Thông báo; đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` = `edit`.
+- **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`).
+- Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; bật/tắt nguồn thông báo Công tác/Công việc; chỉnh danh sách mốc giờ.
 
 ## Schema chính
 
@@ -75,16 +84,37 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 |------|----------|
 | `users` (+ authTables) | Hồ sơ, `role`, `departmentId`, `permissionGroupId`, `positionId`, status, `mustChangePassword` |
 | `departments` | Phòng ban (`code` unique) |
+| `locations` | Địa điểm công tác |
 | `permissionGroups` | Nhóm quyền + `menuAccess[]` |
 | `positions` | Chức vụ + `level` 1–5 |
+| `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |
+| `boardingPeriods` | Kỳ bán trú |
 | `officeDocuments` | Công văn, tệp đính kèm, người duyệt và trạng thái duyệt |
 | `workItems` | Công việc phòng ban sau khi công văn được duyệt |
 | `personalTasks` | Đầu mục cá nhân, người thực hiện, deadline và trạng thái hoàn thành |
+| `systemSettings` | Cờ hiển thị / cấu hình thông báo |
+| `notificationReads` / `notificationDismissals` | Đã đọc / đã xóa theo `notificationKey` |
 | `roles` | Legacy seed admin permissions (tùy chọn; gate admin thực tế = `role === "admin"`) |
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `departments.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+
+Cấu trúc frontend gợi ý:
+
+```
+src/
+  main.jsx              # shell, auth UI, duties CRUD, profile
+  notifications/        # feed, chuông, click → focus bản ghi
+  work/                 # công văn & công việc
+  boarding/             # bán trú
+  reports/              # báo cáo công tác / công việc
+  settings/             # thiết lập hiển thị
+  duties/ · profile/ · management/
+convex/                 # schema + functions
+infra/convex-local/     # Docker Compose Convex local
+scripts/check-files.mjs
+```
 
 ## Convex Auth beta
 
@@ -166,9 +196,9 @@ npx convex env set SITE_URL http://localhost:5173
 ```bash
 # Push functions (self-hosted). -y bỏ confirm.
 npx convex deploy -y
-# hoặc: npx convex dev
+# hoặc: npm run convex:deploy / npm run convex:dev
 
-npx convex run seed:seed
+npx convex run internal.seed.seed
 
 npm run dev
 # production-like build:
@@ -210,7 +240,7 @@ npx convex run internal.users.provisionFirstAdmin \
 ## Authorization (server)
 
 - Identity: `getAuthUserId` từ JWT Convex Auth.
-- Supreme gate: `status === "active"`, `role === "admin"`, không còn `mustChangePassword` (`adminOrThrow` / `adminPermissionOrThrow`); chỉ dùng cho Cài đặt tối cao và lifecycle tài khoản.
+- Supreme gate: `status === "active"`, `role === "admin"`, không còn `mustChangePassword` (`adminOrThrow` / `adminPermissionOrThrow`); chỉ dùng cho Thiết lập tối cao và lifecycle tài khoản.
 - Operational manager gate: vai trò `admin` hoặc `moderator` (`operationalManagerOrThrow` / `operationalManagerPermissionOrThrow`); dùng cho quản trị bán trú, công việc và nghiệp vụ.
 - Menu user: `resolveUserMenuAccess` / query `users.sessionContext`.
 - Client chỉ là UX; mọi mutation/action admin re-check server-side.
@@ -223,17 +253,27 @@ npx convex run internal.users.provisionFirstAdmin \
 npm run check          # scripts/check-files.mjs
 npm run build
 git diff --check
-npx convex deploy -y   # cần CONVEX_SELF_HOSTED_* 
+npx convex deploy -y   # cần CONVEX_SELF_HOSTED_*
+# alias: npm run convex:deploy
 ```
 
 `npm run typecheck` = `convex codegen --typecheck enable` (cần credentials).
+
+| Script | Việc |
+|--------|------|
+| `npm run dev` | Vite frontend |
+| `npm run build` / `preview` | Build / xem `dist/` |
+| `npm run check` | Kiểm tra file bắt buộc |
+| `npm run typecheck` | Codegen + typecheck Convex |
+| `npm run convex:dev` | `convex dev` |
+| `npm run convex:deploy` | `convex deploy` |
 
 ## Deploy (self-hosted hiện tại)
 
 1. Docker Convex up; `.env.local` có URL + admin key.
 2. `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL` đã set trên deployment.
 3. `npx convex deploy -y`
-4. `npx convex run seed:seed`
+4. `npx convex run internal.seed.seed`
 5. Frontend: `npm run dev` (tunnel/domain) hoặc serve `dist/` sau `npm run build`.
 6. Host `lvt.vscgroup.io.vn`: client dùng `window.location.origin` làm Convex URL (xem `src/main.jsx`).
 
@@ -246,8 +286,8 @@ npx convex deploy -y   # cần CONVEX_SELF_HOSTED_*
 
 1. Deployment Pro + `JWT_PRIVATE_KEY` / `JWKS` / `SITE_URL` (không commit key).
 2. `VITE_CONVEX_URL` → Pro; deploy keys chỉ CI/máy deploy.
-3. Migrate users, authAccounts (hash), departments, permissionGroups, positions, auditLogs, approvalLogs.
-4. Smoke: login, admin CRUD, gán PB/nhóm/chức vụ, reset MK, forced change, menu theo nhóm quyền.
+3. Migrate: users, authAccounts (hash), departments, locations, permissionGroups, positions, duties, dutyAttendances, boardingPeriods, officeDocuments, workItems, personalTasks, systemSettings, notificationReads, notificationDismissals, auditLogs, approvalLogs.
+4. Smoke: login; CRUD catalog; menu theo nhóm quyền; công tác / công việc / bán trú; báo cáo 3 loại; chuông thông báo + click mở đúng mục; thiết lập hiển thị; reset MK / forced change.
 5. Giữ local tới khi backup + migration OK. Không dùng admin key local cho Pro.
 
 ## Production checklist
@@ -257,7 +297,8 @@ npx convex deploy -y   # cần CONVEX_SELF_HOSTED_*
 - [ ] First admin qua internal action; password tạm đã rotate.
 - [ ] Public signup/reset/email verification disabled.
 - [ ] Vai trò chỉ `admin`|`moderator`|`user`; user cũ `manager` đã migrate.
-- [ ] Test: CRUD user/PB/nhóm quyền/chức vụ; gán user; menu ẩn/xem/sửa; profile + đổi MK; self-disable/delete blocked; audit.
+- [ ] Test: CRUD user/PB/địa điểm/nhóm quyền/chức vụ; gán user; menu ẩn/xem/sửa; profile + đổi MK; self-disable/delete blocked; audit.
+- [ ] Test: thông báo (chuông, đọc, click → Công tác/Công việc); thiết lập hiển thị; báo cáo 3 loại.
 - [ ] Hiểu JWT TTL vs session invalidation (beta).
 - [ ] `SITE_URL` / origins khớp domain thật.
 
@@ -273,8 +314,8 @@ npx convex deploy -y   # cần CONVEX_SELF_HOSTED_*
 - Convex Auth beta.
 - Đổi email đăng nhập chưa hỗ trợ qua UI (account id = email).
 - Session invalidate không kick JWT ngay (chờ hết hạn access token).
-- Module nghiệp vụ (báo cáo, công việc, …) vẫn placeholder; `view`/`edit` sẵn sàng khi module có nội dung.
-- Workflow duyệt task đầy đủ chưa UI — chỉ helper + bảng `approvalLogs`.
+- Placeholder còn lại: **Lớp chủ nhiệm**, **Đánh giá nhân sự**.
+- Workflow duyệt task đầy đủ (duyệt thay đa cấp ngoài công văn) chưa UI — helper + bảng `approvalLogs` sẵn sàng.
 - Production “hard” (Convex Pro + CDN static) chưa bắt buộc; stack hiện tại self-hosted + Vite/tunnel.
 
 ## Tham chiếu
