@@ -10,6 +10,7 @@ import BoardingManagement from './boarding/BoardingManagement';
 import BoardingReportsView from './boarding/BoardingReportsView';
 import { WorkManagement, WorkUserView } from './work/WorkViews';
 import './management/managementTheme.css';
+import './duties/duties.css';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl = window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : configuredConvexUrl;
@@ -449,6 +450,7 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(allowManage);
   const { pending, feedback, run } = useFeedback();
 
   const setField = (field, value) => {
@@ -467,6 +469,7 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
   const startEdit = (item) => {
     setEditing(item);
     setExpanded(item._id);
+    setEditorOpen(true);
     setForm({
       startDate: item.startDate,
       endDate: item.endDate,
@@ -508,27 +511,59 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
   if ((allowManage && options === undefined) || list === undefined) return <LoadingView label="Đang tải công tác…" />;
 
   return (
-    <section className="admin-view">
-      <div className="section-intro">
+    <section className="work-management duty-workspace">
+      <header className="work-hero duty-hero">
         <div>
-          <span className="status-pill blue">Công tác</span>
-          <h2>{allowManage ? 'Quản lý công tác' : 'Công tác toàn hệ thống'}</h2>
+          <span className="work-kicker">{allowManage ? 'Thiết lập · Công tác' : 'Không gian · Công tác'}</span>
+          <h2>{allowManage ? 'Sổ công tác & lịch trình' : 'Công tác toàn hệ thống'}</h2>
           <p>
             {allowManage
-              ? 'Thêm, sửa, xóa công tác. Gán địa điểm, phòng ban và cá nhân tham gia. Xem trạng thái tham gia của từng người.'
-              : 'Theo dõi danh sách công tác và trạng thái tham gia. Việc thêm, sửa, xóa được thực hiện tại Quản trị hệ thống → Quản lý công tác.'}
+              ? 'Lập lịch, phân công người tham gia và theo dõi trạng thái trong một không gian tập trung.'
+              : 'Theo dõi lịch trình và trạng thái tham gia; mọi thao tác quản trị được tách riêng, rõ ràng.'}
           </p>
         </div>
-      </div>
-      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
-        {feedback.text}
+        <div className="work-hero-stamp">
+          <strong>{list.length}</strong>
+          <span>CÔNG TÁC</span>
+        </div>
+      </header>
+
+      {feedback.text ? (
+        <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
+          {feedback.text}
+        </div>
+      ) : null}
+
+      <div className="work-page-actions duty-page-actions">
+        <div>
+          <span>{allowManage ? 'QUẢN LÝ CÔNG TÁC' : 'LỊCH TRÌNH'}</span>
+          <h3>Kho công tác</h3>
+        </div>
+        {allowManage ? (
+          <button
+            type="button"
+            className="work-primary-button"
+            onClick={() => {
+              if (editorOpen && editing) {
+                setEditing(null);
+                setForm(emptyDutyForm());
+              }
+              setEditorOpen((open) => !open);
+            }}
+          >
+            <span>{editorOpen ? '×' : '+'}</span> {editorOpen ? 'Đóng biểu mẫu' : 'Thêm công tác'}
+          </button>
+        ) : null}
       </div>
 
-      {allowManage ? <form className="admin-form duty-form" onSubmit={submit}>
-        <div className="form-heading">
-          <strong>{editing ? 'Sửa công tác' : 'Thêm công tác'}</strong>
+      {allowManage && editorOpen ? <form className="work-editor duty-modern-editor" onSubmit={submit}>
+        <div className="work-editor-title">
+          <div>
+            <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
+            <h3>{editing ? 'Sửa công tác' : 'Thêm công tác'}</h3>
+          </div>
           {editing && (
-            <button type="button" className="text-button" onClick={() => { setEditing(null); setForm(emptyDutyForm()); }}>
+            <button type="button" className="work-ghost-button" onClick={() => { setEditing(null); setForm(emptyDutyForm()); }}>
               Hủy chỉnh sửa
             </button>
           )}
@@ -615,21 +650,33 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
           />
         </div>
 
-        <button className="primary-button" disabled={Boolean(pending)}>
-          {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : '+ Thêm công tác'}
-        </button>
+        <div className="work-editor-actions duty-editor-actions">
+          <button type="button" className="work-ghost-button" onClick={() => setForm(emptyDutyForm())}>
+            Xóa biểu mẫu
+          </button>
+          <button className="work-primary-button" disabled={Boolean(pending)}>
+            {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu công tác'}
+          </button>
+        </div>
       </form> : null}
 
-      <div className="card-list duty-list">
-        <h3 className="list-title">Danh sách công tác</h3>
+      <div className="duty-modern-list">
         {list.length === 0 ? (
-          <p className="muted">Chưa có công tác nào.</p>
+          <div className="work-empty">
+            <span>◷</span>
+            <h3>Chưa có công tác nào</h3>
+            <p>{allowManage ? 'Bấm “Thêm công tác” để lập lịch đầu tiên.' : 'Công tác được tạo tại Quản trị hệ thống → Quản lý công tác.'}</p>
+          </div>
         ) : (
           list.map((item) => {
             const open = expanded === item._id;
             return (
-              <article className={`mgmt-card duty-card ${open ? 'is-open' : ''}`} key={item._id}>
+              <article className={`duty-modern-card ${open ? 'is-open' : ''}`} key={item._id}>
                 <button type="button" className="duty-card-toggle" onClick={() => setExpanded(open ? null : item._id)}>
+                  <span className="duty-date-tile" aria-hidden="true">
+                    <strong>{item.startDate.slice(8, 10)}</strong>
+                    <small>THÁNG {Number(item.startDate.slice(5, 7))}</small>
+                  </span>
                   <div className="duty-card-main">
                     <strong>{item.content}</strong>
                     <DutyTimingTags timing={item.timing} />
@@ -648,10 +695,10 @@ function DutiesAdminView({ currentUserId, allowManage = true }) {
                 </button>
                 {allowManage ? (
                   <div className="row-actions duty-actions">
-                    <button type="button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
+                    <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
                     <button
                       type="button"
-                      className="danger-button"
+                      className="work-reject-button"
                       disabled={Boolean(pending)}
                       onClick={() => {
                         if (window.confirm('Xóa công tác này?')) {
@@ -802,15 +849,20 @@ function DutiesUserView({ access }) {
   const canEdit = access === 'edit' || data?.canEdit;
 
   if (data === undefined) return <LoadingView label="Đang tải danh sách công tác…" />;
+  const assignedDuties = data.duties.filter((item) => item.isMine);
+  const confirmedDuties = assignedDuties.filter((item) => item.myStatus !== 'pending');
+  const isGlobalView = data.canViewAll || data.isAdmin;
 
   return (
-    <section className="admin-view">
-      <div className="section-intro">
+    <section className="work-user-view duty-workspace">
+      <header className="work-hero duty-hero">
         <div>
-          <span className="status-pill blue">Công tác</span>
-          <h2>{data.canViewAll ? 'Công tác toàn hệ thống' : 'Công tác của tôi'}</h2>
+          <span className="work-kicker">Không gian · Công tác</span>
+          <h2>{isGlobalView ? 'Công tác toàn hệ thống' : 'Lịch công tác của tôi'}</h2>
           <p>
-            {data.canViewAll
+            {data.isAdmin
+              ? 'Theo dõi toàn bộ lịch trình và trạng thái tham gia trên một dòng thời gian rõ ràng.'
+              : data.canViewAll
               ? 'Bạn đang dùng quyền Xem tối cao: có thể xem công tác và trạng thái tham gia của mọi user, được nhóm theo phòng ban.'
               : 'Danh sách sắp theo thời hạn gần nhất. Lịch cá nhân và lịch của cấp dưới cùng phòng ban (theo cấp Chức vụ) đều hiển thị tại đây.'}
             {!data.canViewAll && canEdit
@@ -818,19 +870,37 @@ function DutiesUserView({ access }) {
               : ' Đây là chế độ chỉ xem — không thể thay đổi dữ liệu.'}
           </p>
         </div>
-      </div>
-      <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
-        {feedback.text}
-      </div>
+        <div className="work-hero-stamp">
+          <strong>
+            {isGlobalView ? data.duties.length : confirmedDuties.length}
+            {!isGlobalView ? <small>/{assignedDuties.length}</small> : null}
+          </strong>
+          <span>{isGlobalView ? 'CÔNG TÁC' : 'ĐÃ XÁC NHẬN'}</span>
+        </div>
+      </header>
 
-      <div className="card-list duty-list">
+      {feedback.text ? (
+        <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
+          {feedback.text}
+        </div>
+      ) : null}
+
+      <div className="work-user-list duty-modern-list">
         {!data.duties?.length ? (
-          <p className="muted">Không có công tác nào được gán cho bạn.</p>
+          <div className="work-empty">
+            <span>✓</span>
+            <h3>Lịch công tác đang trống</h3>
+            <p>Không có công tác nào được gán cho bạn trong thời gian này.</p>
+          </div>
         ) : (
           data.duties.map((item) => (
-            <article className="mgmt-card duty-card user-duty-card" key={item._id}>
+            <article className="work-user-card duty-modern-card user-duty-card" key={item._id}>
               <div className="duty-card-main">
                 <div className="duty-title-row">
+                  <span className="duty-date-tile" aria-hidden="true">
+                    <strong>{item.startDate.slice(8, 10)}</strong>
+                    <small>THÁNG {Number(item.startDate.slice(5, 7))}</small>
+                  </span>
                   <strong>{item.content}</strong>
                   <DutyTimingTags timing={item.timing} />
                 </div>
