@@ -175,12 +175,12 @@ function DepartmentAssignmentModal({ departments, selectedDepartmentIds, onClose
   );
 }
 
-export function WorkManagement() {
-  const options = useQuery(anyApi.work.formOptions);
+export function WorkManagement({ allowCreate = true }) {
+  const options = useQuery(anyApi.work.formOptions, allowCreate ? {} : 'skip');
   const documents = useQuery(anyApi.work.listAdmin);
   const generateUploadUrl = useMutation(anyApi.work.generateUploadUrl);
   const createDocument = useMutation(anyApi.work.createDocument);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(allowCreate);
   const [file, setFile] = useState(null);
   const [departmentAssignments, setDepartmentAssignments] = useState([]);
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
@@ -245,7 +245,7 @@ export function WorkManagement() {
     }
   };
 
-  if (options === undefined || documents === undefined) {
+  if ((allowCreate && options === undefined) || documents === undefined) {
     return <div className="work-loading">Đang chuẩn bị sổ công việc…</div>;
   }
 
@@ -268,12 +268,14 @@ export function WorkManagement() {
           <span>QUẢN LÝ CÔNG VIỆC</span>
           <h3>Kho công văn</h3>
         </div>
-        <button type="button" className="work-primary-button" onClick={() => setOpen((value) => !value)}>
-          <span>{open ? '×' : '+'}</span> {open ? 'Đóng biểu mẫu' : 'Thêm công văn'}
-        </button>
+        {allowCreate ? (
+          <button type="button" className="work-primary-button" onClick={() => setOpen((value) => !value)}>
+            <span>{open ? '×' : '+'}</span> {open ? 'Đóng biểu mẫu' : 'Thêm công văn'}
+          </button>
+        ) : null}
       </div>
 
-      {open ? (
+      {allowCreate && open ? (
         <form className="work-editor" onSubmit={submit}>
           <div className="work-editor-title">
             <div>
@@ -370,7 +372,7 @@ export function WorkManagement() {
         </form>
       ) : null}
 
-      {assignmentModalOpen ? (
+      {allowCreate && assignmentModalOpen ? (
         <DepartmentAssignmentModal
           departments={options.departments}
           selectedDepartmentIds={departmentAssignments.map((assignment) => String(assignment.departmentId))}
@@ -421,7 +423,11 @@ export function WorkManagement() {
             </div>
           </article>
         )) : (
-          <div className="work-empty"><span>✦</span><h3>Chưa có công văn nào</h3><p>Bấm “Thêm công văn” để bắt đầu giao việc.</p></div>
+          <div className="work-empty">
+            <span>✦</span>
+            <h3>Chưa có công văn nào</h3>
+            <p>{allowCreate ? 'Bấm “Thêm công văn” để bắt đầu giao việc.' : 'Công văn được tạo tại Quản trị hệ thống → Quản lý công việc.'}</p>
+          </div>
         )}
       </div>
     </section>

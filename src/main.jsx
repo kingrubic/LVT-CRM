@@ -302,7 +302,7 @@ function AppShell({ session }) {
         ) : active === 'duties' ? (
           canManageOperations ? <DutiesAdminView currentUserId={user._id} /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
         ) : active === 'work' ? (
-          canManageOperations ? <WorkManagement /> : <WorkUserView />
+          canManageOperations ? <WorkManagement allowCreate={false} /> : <WorkUserView />
         ) : active === 'reports' ? (
           reportSection === 'boarding' ? <BoardingReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
