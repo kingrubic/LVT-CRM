@@ -23,6 +23,7 @@ const PRIMARY_MENUS = [
   ['people-review', 'Đánh giá nhân sự'],
 ];
 const SYSTEM_MANAGEMENT_MENUS = [
+  ['duties-management', 'Quản lý công tác'],
   ['boarding', 'Quản lý bán trú'],
   ['work-management', 'Quản lý công việc'],
 ];
@@ -295,12 +296,16 @@ function AppShell({ session }) {
           <PermissionGroupManagement />
         ) : active === 'positions' && isAdmin ? (
           <PositionManagement />
+        ) : active === 'duties-management' && canManageOperations ? (
+          <DutiesAdminView currentUserId={user._id} />
         ) : active === 'boarding' && canManageOperations ? (
           <BoardingManagement />
         ) : active === 'work-management' && canManageOperations ? (
           <WorkManagement />
         ) : active === 'duties' ? (
-          canManageOperations ? <DutiesAdminView currentUserId={user._id} /> : <DutiesUserView access={menuAccess?.duties || 'view'} />
+          canManageOperations
+            ? <DutiesAdminView currentUserId={user._id} allowManage={false} />
+            : <DutiesUserView access={menuAccess?.duties || 'view'} />
         ) : active === 'work' ? (
           canManageOperations ? <WorkManagement allowCreate={false} /> : <WorkUserView />
         ) : active === 'reports' ? (
@@ -434,8 +439,8 @@ function emptyDutyForm() {
   };
 }
 
-function DutiesAdminView({ currentUserId }) {
-  const options = useQuery(anyApi.duties.formOptions);
+function DutiesAdminView({ currentUserId, allowManage = true }) {
+  const options = useQuery(anyApi.duties.formOptions, allowManage ? {} : 'skip');
   const list = useQuery(anyApi.duties.listAdmin);
   const create = useMutation(anyApi.duties.create);
   const update = useMutation(anyApi.duties.update);
@@ -500,22 +505,26 @@ function DutiesAdminView({ currentUserId }) {
     }
   };
 
-  if (options === undefined || list === undefined) return <LoadingView label="Đang tải công tác…" />;
+  if ((allowManage && options === undefined) || list === undefined) return <LoadingView label="Đang tải công tác…" />;
 
   return (
     <section className="admin-view">
       <div className="section-intro">
         <div>
           <span className="status-pill blue">Công tác</span>
-          <h2>Quản lý công tác</h2>
-          <p>Thêm, sửa, xóa công tác. Gán địa điểm, phòng ban và cá nhân tham gia. Xem trạng thái tham gia của từng người.</p>
+          <h2>{allowManage ? 'Quản lý công tác' : 'Công tác toàn hệ thống'}</h2>
+          <p>
+            {allowManage
+              ? 'Thêm, sửa, xóa công tác. Gán địa điểm, phòng ban và cá nhân tham gia. Xem trạng thái tham gia của từng người.'
+              : 'Theo dõi danh sách công tác và trạng thái tham gia. Việc thêm, sửa, xóa được thực hiện tại Quản trị hệ thống → Quản lý công tác.'}
+          </p>
         </div>
       </div>
       <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
         {feedback.text}
       </div>
 
-      <form className="admin-form duty-form" onSubmit={submit}>
+      {allowManage ? <form className="admin-form duty-form" onSubmit={submit}>
         <div className="form-heading">
           <strong>{editing ? 'Sửa công tác' : 'Thêm công tác'}</strong>
           {editing && (
@@ -609,7 +618,7 @@ function DutiesAdminView({ currentUserId }) {
         <button className="primary-button" disabled={Boolean(pending)}>
           {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : '+ Thêm công tác'}
         </button>
-      </form>
+      </form> : null}
 
       <div className="card-list duty-list">
         <h3 className="list-title">Danh sách công tác</h3>
@@ -637,21 +646,23 @@ function DutiesAdminView({ currentUserId }) {
                   </div>
                   <span className="duty-expand-hint">{open ? 'Thu gọn' : 'Chi tiết'}</span>
                 </button>
-                <div className="row-actions duty-actions">
-                  <button type="button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
-                  <button
-                    type="button"
-                    className="danger-button"
-                    disabled={Boolean(pending)}
-                    onClick={() => {
-                      if (window.confirm('Xóa công tác này?')) {
-                        void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
-                      }
-                    }}
-                  >
-                    Xóa
-                  </button>
-                </div>
+                {allowManage ? (
+                  <div className="row-actions duty-actions">
+                    <button type="button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={Boolean(pending)}
+                      onClick={() => {
+                        if (window.confirm('Xóa công tác này?')) {
+                          void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
+                        }
+                      }}
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                ) : null}
                 {open && (
                   <div className="duty-detail">
                     <h4>Người tham gia & trạng thái</h4>

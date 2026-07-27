@@ -66,7 +66,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 ### Cấu trúc menu
 
 1. **Chức năng chính**: Báo cáo, Công tác, Công việc, Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
-2. **Quản trị hệ thống**: Quản lý bán trú, Quản lý công việc (Administrator và Moderator).
+2. **Quản trị hệ thống**: Quản lý công tác, Quản lý bán trú, Quản lý công việc (Administrator và Moderator).
 3. **Cài đặt tối cao**: Quản lý người dùng, phòng ban, địa điểm, nhóm quyền, chức vụ (chỉ Administrator).
 
 ## Schema chính
