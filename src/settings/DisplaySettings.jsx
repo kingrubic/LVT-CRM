@@ -45,6 +45,11 @@ export default function DisplaySettings() {
   }
 
   const enabled = data.dutyAttendanceConfirmationEnabled !== false;
+  const enabledSettingCount = [
+    enabled,
+    notificationForm.dutiesEnabled,
+    notificationForm.workEnabled,
+  ].filter(Boolean).length;
   const toggle = async () => {
     setSaving(true);
     setFeedback('');
@@ -95,11 +100,11 @@ export default function DisplaySettings() {
         <div>
           <span className="display-settings-kicker">Thiết lập tối cao · Hiển thị</span>
           <h2>Thiết lập hiển thị</h2>
-          <p>Điều chỉnh cách hệ thống hiển thị trạng thái xác nhận tham gia công tác cho toàn trường.</p>
+          <p>Điều chỉnh cách hệ thống hiển thị trạng thái xác nhận tham gia công tác và thông báo gần đến hạn.</p>
         </div>
-        <div className={`display-settings-mark ${enabled ? 'is-on' : 'is-off'}`}>
-          <strong>{enabled ? 'ON' : 'OFF'}</strong>
-          <span>CÔNG TÁC</span>
+        <div className={`display-settings-mark ${enabledSettingCount > 0 ? 'is-on' : 'is-off'}`}>
+          <strong>{enabledSettingCount}</strong>
+          <span>ĐANG BẬT</span>
         </div>
       </header>
 
