@@ -246,7 +246,7 @@ export const listMine = query({
 });
 
 export const report = query({
-  args: { userId: v.optional(v.id("users")) },
+  args: { periodId: v.optional(v.id("boardingPeriods")) },
   handler: async (ctx, args) => {
     const actor = await currentUserOrThrow(ctx);
     if (actor.status !== "active") throw new Error("USER_NOT_ACTIVE");
@@ -264,14 +264,28 @@ export const report = query({
     ]);
     const canViewAll =
       isOperationalManagerRole(actor.role) || menuAccess.reports === "view_all";
-    const visibleUsers = canViewAll
-      ? users.filter((user) => user.status === "active")
-      : [actor];
-    const selectedUserId = String(args.userId || actor._id);
-    const selectedUser = visibleUsers.find(
-      (user) => String(user._id) === selectedUserId,
+    const activePeriods = periods
+      .filter((period) => period.active)
+      .sort(
+        (a, b) =>
+          b.schoolYear.localeCompare(a.schoolYear) ||
+          b.semester - a.semester,
+      );
+    const visibleUsers = users.filter(
+      (user) =>
+        user.status === "active" &&
+        (canViewAll || (actor.departmentId && user.departmentId === actor.departmentId)),
     );
-    if (!selectedUser) throw new Error("REPORT_USER_FORBIDDEN");
+    const visiblePeriodRows = activePeriods.filter((period) =>
+      period.participantUserIds.some((userId) =>
+        visibleUsers.some((user) => String(user._id) === String(userId)),
+      ),
+    );
+    const selectedPeriodId = String(args.periodId || visiblePeriodRows[0]?._id || "");
+    const selectedPeriod = visiblePeriodRows.find(
+      (period) => String(period._id) === selectedPeriodId,
+    );
+    if (args.periodId && !selectedPeriod) throw new Error("BOARDING_PERIOD_FORBIDDEN");
 
     const departmentMap = new Map(
       departments.map((department) => [String(department._id), department.name]),
@@ -279,50 +293,59 @@ export const report = query({
     const positionMap = new Map(
       positions.map((position) => [String(position._id), position.name]),
     );
-    const people = visibleUsers
+    const participantIds = new Set(
+      (selectedPeriod?.participantUserIds || []).map((id) => String(id)),
+    );
+    const participants = visibleUsers
+      .filter((user) => participantIds.has(String(user._id)))
       .map((user) => ({
         _id: user._id,
         name: user.name || user.email || "Chưa đặt tên",
         email: user.email || "",
-        isSelf: String(user._id) === String(actor._id),
         departmentName: user.departmentId
-          ? departmentMap.get(String(user.departmentId)) || ""
-          : "",
+          ? departmentMap.get(String(user.departmentId)) || "Chưa gán phòng ban"
+          : "Chưa gán phòng ban",
         positionName: user.positionId
-          ? positionMap.get(String(user.positionId)) || ""
-          : "",
+          ? positionMap.get(String(user.positionId)) || "Chưa gán chức vụ"
+          : "Chưa gán chức vụ",
       }))
       .sort(
         (a, b) =>
-          Number(b.isSelf) - Number(a.isSelf) ||
+          a.departmentName.localeCompare(b.departmentName, "vi") ||
           a.name.localeCompare(b.name, "vi"),
       );
 
+    const groupsByDepartment = new Map<string, typeof participants>();
+    for (const participant of participants) {
+      const list = groupsByDepartment.get(participant.departmentName) || [];
+      list.push(participant);
+      groupsByDepartment.set(participant.departmentName, list);
+    }
+    const groups = [...groupsByDepartment.entries()]
+      .map(([departmentName, departmentParticipants]) => ({
+        departmentName,
+        participants: departmentParticipants,
+        participantCount: departmentParticipants.length,
+      }))
+      .sort((a, b) => a.departmentName.localeCompare(b.departmentName, "vi"));
+
     return {
-      visibilityScope: canViewAll ? "all" : "self",
-      people,
-      selectedUserId: selectedUser._id,
-      selectedUserName:
-        selectedUser.name || selectedUser.email || "Chưa đặt tên",
-      periods: periods
-        .filter(
-          (period) =>
-            period.active &&
-            period.participantUserIds.some(
-              (userId) => String(userId) === String(selectedUser._id),
-            ),
-        )
-        .map((period) => ({
+      visibilityScope: canViewAll ? "all" : "department",
+      periods: visiblePeriodRows.map((period) => ({
           _id: period._id,
           semester: period.semester,
           schoolYear: period.schoolYear,
           participantCount: period.participantUserIds.length,
-        }))
-        .sort(
-          (a, b) =>
-            b.schoolYear.localeCompare(a.schoolYear) ||
-            b.semester - a.semester,
-        ),
+        })),
+      selectedPeriod: selectedPeriod
+        ? {
+            _id: selectedPeriod._id,
+            semester: selectedPeriod.semester,
+            schoolYear: selectedPeriod.schoolYear,
+          }
+        : null,
+      groups,
+      totalParticipants: participants.length,
     };
   },
 });
