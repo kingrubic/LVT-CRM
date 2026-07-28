@@ -203,7 +203,7 @@ function EvalBlock({ title, options, value, onChange, file }) {
           </small>
           {file.texts.length ? (
             <div className="pr-text-list">
-              <strong>{file.texts.length} đánh giá text</strong>
+              <strong>{file.texts.length} BGH đánh giá</strong>
               {file.texts.map((text) => (
                 <article key={text._id}>
                   <header>
@@ -215,7 +215,7 @@ function EvalBlock({ title, options, value, onChange, file }) {
               ))}
             </div>
           ) : (
-            <small className="pr-muted">Chưa có đánh giá text từ ban giám hiệu.</small>
+            <small className="pr-muted">Chưa có BGH đánh giá.</small>
           )}
         </div>
       )}
@@ -434,7 +434,7 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
         });
       }
       if (!jobs.length) {
-        setError('Chọn ít nhất một mục để upload hoặc đánh giá text.');
+        setError('Chọn ít nhất một mục để upload hoặc BGH đánh giá.');
         setSaving(false);
         return;
       }
@@ -444,9 +444,9 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
     } catch (err) {
       console.error('People review evaluation save failed', err);
       const message = String(err?.message || err?.data || err);
-      if (message.includes('EVALUATION_FILE_LOCKED')) setError('File kỳ này đã có đánh giá text — không thể upload lại.');
-      else if (message.includes('EVALUATION_FILE_REQUIRED')) setError('Cần có file upload trước khi ghi đánh giá text.');
-      else if (message.includes('EVALUATION_TEXT_ALREADY_SUBMITTED')) setError('Bạn đã ghi đánh giá text cho kỳ này rồi.');
+      if (message.includes('EVALUATION_FILE_LOCKED')) setError('File kỳ này đã có BGH đánh giá — không thể upload lại.');
+      else if (message.includes('EVALUATION_FILE_REQUIRED')) setError('Cần có file upload trước khi ghi BGH đánh giá.');
+      else if (message.includes('EVALUATION_TEXT_ALREADY_SUBMITTED')) setError('Bạn đã ghi BGH đánh giá cho kỳ này rồi.');
       else if (message.includes('PEOPLE_REVIEW_UPLOAD_FORBIDDEN')) setError('Bạn không có quyền upload file đánh giá cho người này.');
       else if (message.includes('BOARDING_NOT_PARTICIPATING')) setError('Giáo viên không tham gia bán trú kỳ này.');
       else if (message.includes('INVALID_FILE') || message.includes('UPLOAD_FAILED')) setError('Không upload được tệp. Chỉ nhận PDF/PNG/JPG tối đa 20MB.');
@@ -500,7 +500,7 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
           ) : null}
           {person.canWriteText ? (
             <label className="pr-field-label">
-              Đánh giá text
+              BGH đánh giá
               <textarea rows={3} value={quarterText} onChange={(event) => setQuarterText(event.target.value)} disabled={!existingQuarter && !quarterFile} />
             </label>
           ) : null}
@@ -532,7 +532,7 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
           ) : null}
           {person.canWriteText ? (
             <label className="pr-field-label">
-              Đánh giá text
+              BGH đánh giá
               <textarea rows={3} value={civilText} onChange={(event) => setCivilText(event.target.value)} disabled={!existingCivil && !civilFile} />
             </label>
           ) : null}
@@ -569,7 +569,7 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
             ) : null}
             {person.canWriteText ? (
               <label className="pr-field-label">
-                Đánh giá text
+                BGH đánh giá
                 <textarea rows={3} value={boardingText} onChange={(event) => setBoardingText(event.target.value)} disabled={!existingBoarding && !boardingFile} />
               </label>
             ) : null}
