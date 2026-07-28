@@ -739,7 +739,7 @@ export default function PeopleReviewView() {
                     </button>
                     <div className="pr-row-actions">
                       {person.canRecordFault ? (
-                        <button type="button" className="pr-mini-button" onClick={() => setFaultTarget(person)} title="Ghi nhận lỗi">Lỗi</button>
+                        <button type="button" className="pr-mini-button" onClick={() => setFaultTarget(person)} title="Ghi nhận lỗi / vi phạm">Ghi lỗi</button>
                       ) : null}
                       {person.canUpload || person.canWriteText ? (
                         <button type="button" className="pr-mini-button primary" onClick={() => setEvalTarget(person)} title="Thêm đánh giá">Đánh giá</button>
