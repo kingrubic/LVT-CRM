@@ -8,9 +8,11 @@ Native Android app (Kotlin + Jetpack Compose) for school staff.
 - Duties (Công tác) list + mark attendance — wired
 - Work (Công việc) list + complete / admin quality % — wired
 - Profile (change password + forced password gate) — wired
-- Notifications — placeholder (FCM later)
+- Notifications — Convex feed, unread badge, mark read/all, dismiss (permission-based), item focus
+- Native reminders — Android notification channel + WorkManager sync every 15 minutes
 - Admin/Mod: same menus as normal users (no system admin / supreme settings)
-- Push (FCM): after notifications UI + deep links
+- Deep links — `lvtcrm://notification?...` opens and highlights the matching duty/work item
+- FCM — not enabled until a Firebase project/app config is provisioned; WorkManager is the working fallback
 
 ## Requirements
 
@@ -66,7 +68,24 @@ android-app/
     data/auth/      # TokenStore + AuthRepository
     data/convex/    # HTTP client for query/mutation/action
     data/duties/
+    data/notifications/
     data/work/
     ui/             # Compose screens
-    push/           # FCM (later)
+    push/           # notification channel, background sync, deep links
 ```
+
+## Notifications
+
+After sign-in, the app asks for notification permission on Android 13+ and
+schedules a network-constrained background sync. Android only guarantees
+periodic WorkManager runs at roughly 15-minute intervals; opening the app also
+triggers an immediate sync.
+
+Notification taps use the same `kind`, `sourceType`, `sourceId`, and
+`notificationKey` contract as the web app. The app marks the item read, opens
+the Công tác or Công việc tab, scrolls to the matching record, and highlights
+it.
+
+FCM remains an optional transport upgrade for near-instant delivery. Enabling
+it requires a Firebase Android app for both `lvt.crm` and `lvt.crm.debug`, a
+`google-services.json`, and server credentials stored outside git.

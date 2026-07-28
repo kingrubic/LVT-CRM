@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -22,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -35,8 +37,15 @@ import lvt.crm.data.work.WorkTaskItem
 @Composable
 fun WorkScreen(
     viewModel: WorkViewModel,
+    focusId: String?,
 ) {
     val state by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(focusId, state.tasks) {
+        val index = state.tasks.indexOfFirst { it.id == focusId }
+        if (index >= 0) listState.animateScrollToItem(index)
+    }
 
     Column(
         modifier = Modifier
@@ -95,12 +104,14 @@ fun WorkScreen(
                     )
                 }
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.tasks, key = { "${it.kind}-${it.id}" }) { task ->
                         WorkCard(
                             task = task,
+                            focused = task.id == focusId,
                             busy = state.busyTaskId == task.id,
                             onComplete = { viewModel.requestComplete(task) },
                         )
@@ -146,6 +157,7 @@ fun WorkScreen(
 @Composable
 private fun WorkCard(
     task: WorkTaskItem,
+    focused: Boolean,
     busy: Boolean,
     onComplete: () -> Unit,
 ) {
@@ -159,7 +171,13 @@ private fun WorkCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+        colors = CardDefaults.cardColors(
+            containerColor = if (focused) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            },
+        ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(task.title.ifBlank { "Công việc" }, style = MaterialTheme.typography.titleMedium)

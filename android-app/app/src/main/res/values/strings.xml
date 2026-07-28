@@ -9,7 +9,6 @@
     <string name="nav_duties">Công tác</string>
     <string name="nav_work">Công việc</string>
     <string name="nav_profile">Cá nhân</string>
-    <string name="coming_soon">Đang hoàn thiện màn hình native…</string>
     <string name="change_password">Đổi mật khẩu</string>
     <string name="sign_out">Đăng xuất</string>
 </resources>

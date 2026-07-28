@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -20,6 +21,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -32,8 +34,15 @@ import lvt.crm.data.duties.DutyItem
 @Composable
 fun DutiesScreen(
     viewModel: DutiesViewModel,
+    focusId: String?,
 ) {
     val state by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(focusId, state.duties) {
+        val index = state.duties.indexOfFirst { it.id == focusId }
+        if (index >= 0) listState.animateScrollToItem(index)
+    }
 
     Column(
         modifier = Modifier
@@ -92,12 +101,14 @@ fun DutiesScreen(
                     )
                 }
                 LazyColumn(
+                    state = listState,
                     contentPadding = PaddingValues(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.duties, key = { it.id }) { duty ->
                         DutyCard(
                             duty = duty,
+                            focused = duty.id == focusId,
                             confirmationEnabled = state.attendanceConfirmationEnabled,
                             busy = state.busyDutyId == duty.id,
                             onAttend = { viewModel.setAttendance(duty.id, "attended") },
@@ -113,6 +124,7 @@ fun DutiesScreen(
 @Composable
 private fun DutyCard(
     duty: DutyItem,
+    focused: Boolean,
     confirmationEnabled: Boolean,
     busy: Boolean,
     onAttend: () -> Unit,
@@ -120,7 +132,13 @@ private fun DutyCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+        colors = CardDefaults.cardColors(
+            containerColor = if (focused) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            },
+        ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(duty.content.ifBlank { "Công tác" }, style = MaterialTheme.typography.titleMedium)

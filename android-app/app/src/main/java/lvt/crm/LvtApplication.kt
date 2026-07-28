@@ -1,6 +1,7 @@
 package lvt.crm
 
 import android.app.Application
+import lvt.crm.push.NotificationCenter
 
 class LvtApplication : Application() {
     lateinit var container: AppContainer
@@ -8,6 +9,7 @@ class LvtApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        NotificationCenter.createChannel(this)
         container = AppContainer(this)
     }
 }
