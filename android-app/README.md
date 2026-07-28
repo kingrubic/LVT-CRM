@@ -4,6 +4,7 @@ Native Android app (Kotlin + Jetpack Compose) for school staff.
 
 ## V1 scope
 
+- Modern Material 3 UI using the THCS Lê Văn Tám logo and indigo/red identity
 - Login (email/password, same as web / Convex Auth) — wired
 - Duties (Công tác) list + mark attendance — wired
 - Work (Công việc) list + complete / admin quality % — wired

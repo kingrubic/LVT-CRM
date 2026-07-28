@@ -1,7 +1,9 @@
 package lvt.crm.ui.notifications
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,30 +12,41 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.EventAvailable
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import lvt.crm.R
 import lvt.crm.data.notifications.NotificationItem
+import lvt.crm.ui.components.ScreenHeader
+import lvt.crm.ui.components.StatePanel
+import lvt.crm.ui.components.StatusPill
+import lvt.crm.ui.components.StatusTone
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,83 +62,124 @@ fun NotificationsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 18.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.nav_notifications),
-                    style = MaterialTheme.typography.headlineSmall,
-                )
+        ScreenHeader(
+            title = "Thông báo",
+            subtitle = "Những việc cần chú ý sắp tới",
+            icon = Icons.Outlined.Notifications,
+            refreshing = state.refreshing,
+            onRefresh = { viewModel.refresh() },
+            trailing = {
                 if (state.unreadCount > 0) {
                     Badge {
-                        Text(if (state.unreadCount > 99) "99+" else state.unreadCount.toString())
+                        Text(
+                            if (state.unreadCount > 99) {
+                                "99+"
+                            } else {
+                                state.unreadCount.toString()
+                            },
+                        )
                     }
                 }
-            }
-            TextButton(
-                onClick = { viewModel.refresh() },
-                enabled = !state.loading && !state.refreshing,
-            ) {
-                Text("Làm mới")
-            }
-        }
-
-        if (!state.loading && state.settings.milestonesHours.isNotEmpty()) {
-            Text(
-                "Mốc nhắc: ${state.settings.milestonesHours.joinToString(" · ") { hours ->
-                    if (hours == 0) "Đến hạn" else "$hours giờ"
-                }}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
+            },
+        )
 
         when {
-            state.loading -> LoadingState()
-            state.error != null -> ErrorState(
-                message = state.error.orEmpty(),
-                onRetry = { viewModel.refresh(initial = true) },
-            )
+            state.loading -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        "Đang đồng bộ thông báo…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 14.dp),
+                    )
+                }
+            }
+            state.error != null -> {
+                StatePanel(
+                    icon = Icons.Outlined.WarningAmber,
+                    title = "Chưa tải được thông báo",
+                    message = state.error.orEmpty(),
+                    action = {
+                        Button(onClick = { viewModel.refresh(initial = true) }) {
+                            Text("Thử lại")
+                        }
+                    },
+                )
+            }
             state.items.isEmpty() -> {
-                Text(
-                    "Hiện chưa có công tác hoặc công việc nào gần đến hạn.",
-                    modifier = Modifier.padding(top = 24.dp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                StatePanel(
+                    icon = Icons.Outlined.NotificationsNone,
+                    title = "Mọi việc đang ổn",
+                    message = "Chưa có công tác hoặc công việc nào gần đến hạn.",
                 )
             }
             else -> {
-                if (state.actionError != null) {
-                    Text(
-                        state.actionError.orEmpty(),
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(
-                        onClick = viewModel::markAllRead,
-                        enabled = state.unreadCount > 0 &&
-                            state.busyKey != NotificationsViewModel.BUSY_ALL,
+                    StatusPill(
+                        label = "${state.unreadCount} chưa đọc",
+                        tone = if (state.unreadCount > 0) {
+                            StatusTone.Warning
+                        } else {
+                            StatusTone.Positive
+                        },
+                    )
+                    if (state.settings.milestonesHours.isNotEmpty()) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            StatusPill(
+                                label = milestoneSummary(state.settings.milestonesHours),
+                                tone = StatusTone.Neutral,
+                            )
+                        }
+                    }
+                }
+                state.actionError?.let {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
                     ) {
-                        Text("Đánh dấu tất cả đã đọc")
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
+                if (state.unreadCount > 0) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        FilledTonalButton(
+                            onClick = viewModel::markAllRead,
+                            enabled = state.busyKey != NotificationsViewModel.BUSY_ALL,
+                        ) {
+                            Text("Đánh dấu tất cả đã đọc")
+                        }
                     }
                 }
                 LazyColumn(
-                    contentPadding = PaddingValues(bottom = 24.dp),
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.items, key = { it.key }) { item ->
@@ -145,35 +199,6 @@ fun NotificationsScreen(
 }
 
 @Composable
-private fun LoadingState() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun ErrorState(
-    message: String,
-    onRetry: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(message, color = MaterialTheme.colorScheme.error)
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onRetry) {
-            Text("Thử lại")
-        }
-    }
-}
-
-@Composable
 private fun NotificationCard(
     item: NotificationItem,
     canDelete: Boolean,
@@ -185,19 +210,47 @@ private fun NotificationCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !busy, onClick = onOpen),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = if (item.read) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
-            } else {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+            containerColor = when {
+                item.sourceType == "completion_rejected" ->
+                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.52f)
+                item.read -> MaterialTheme.colorScheme.surface
+                else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.54f)
             },
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (item.read) 1.dp else 3.dp,
         ),
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
             verticalAlignment = Alignment.Top,
         ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (item.sourceType == "completion_rejected") {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    notificationIcon(item),
+                    contentDescription = null,
+                    tint = if (item.sourceType == "completion_rejected") {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -214,10 +267,11 @@ private fun NotificationCard(
                         },
                     )
                     if (!item.read) {
-                        Text(
-                            "CHƯA ĐỌC",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.tertiary),
                         )
                     }
                 }
@@ -232,19 +286,21 @@ private fun NotificationCard(
                         item.description,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Text(
                     "Hạn ${formatDueAt(item.dueAt)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
             if (canDelete) {
                 IconButton(
                     onClick = onDismiss,
                     enabled = !busy,
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         Icons.Outlined.DeleteOutline,
@@ -256,12 +312,18 @@ private fun NotificationCard(
     }
 }
 
+private fun notificationIcon(item: NotificationItem): ImageVector =
+    if (item.kind == "duty") Icons.Outlined.EventAvailable else Icons.Outlined.TaskAlt
+
 private fun kindLabel(item: NotificationItem): String = when {
     item.kind == "duty" -> "Công tác"
     item.sourceType == "completion_rejected" -> "Từ chối hoàn thành"
     item.sourceType == "approval" -> "Công văn cần duyệt"
     else -> "Công việc"
 }
+
+private fun milestoneSummary(hours: List<Int>): String =
+    "Mốc ${hours.joinToString(" · ") { if (it == 0) "Đến hạn" else "${it}h" }}"
 
 private fun formatDueAt(value: Long): String {
     if (value <= 0L) return "—"
