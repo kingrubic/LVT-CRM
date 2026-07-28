@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { useConvexAuth, useMutation, useQuery } from 'convex/react';
+import { useConvexAuth } from '@convex-dev/auth/react';
+import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import './peopleReview.css';
 
