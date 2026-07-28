@@ -56,11 +56,15 @@ async function uploadDriveFile(fetchAccessToken, file) {
       Authorization: `Bearer ${token}`,
       'Content-Type': file.type || 'application/octet-stream',
       'X-File-Name': encodeURIComponent(file.name),
+      'X-LVT-Upload-Purpose': 'people-review',
     },
     body: file,
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.driveFileId) throw new Error(`UPLOAD_FAILED:${response.status}`);
+  if (!response.ok || !result?.driveFileId) {
+    const code = result?.error || `UPLOAD_FAILED:${response.status}`;
+    throw new Error(code);
+  }
   return result;
 }
 
@@ -419,6 +423,7 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
       }
       if (boardingKey && (boardingFile || boardingText.trim())) {
         const option = boardingOptions.find((item) => item.periodKey === boardingKey);
+        if (!option) throw new Error('INVALID_EVALUATION_PERIOD');
         jobs.push({
           kind: 'boarding',
           file: boardingFile,
@@ -436,11 +441,17 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
       onSaved();
       onClose();
     } catch (err) {
-      const message = String(err?.data || err?.message || err);
+      console.error('People review evaluation save failed', err);
+      const message = String(err?.message || err?.data || err);
       if (message.includes('EVALUATION_FILE_LOCKED')) setError('File kỳ này đã có đánh giá text — không thể upload lại.');
       else if (message.includes('EVALUATION_FILE_REQUIRED')) setError('Cần có file upload trước khi ghi đánh giá text.');
       else if (message.includes('EVALUATION_TEXT_ALREADY_SUBMITTED')) setError('Bạn đã ghi đánh giá text cho kỳ này rồi.');
-      else setError('Không thể lưu đánh giá. Kiểm tra quyền và dữ liệu.');
+      else if (message.includes('PEOPLE_REVIEW_UPLOAD_FORBIDDEN')) setError('Bạn không có quyền upload file đánh giá cho người này.');
+      else if (message.includes('BOARDING_NOT_PARTICIPATING')) setError('Giáo viên không tham gia bán trú kỳ này.');
+      else if (message.includes('INVALID_FILE') || message.includes('UPLOAD_FAILED')) setError('Không upload được tệp. Chỉ nhận PDF/PNG/JPG tối đa 20MB.');
+      else if (message.includes('AUTH_REQUIRED') || message.includes('UNAUTHORIZED')) setError('Phiên đăng nhập hết hạn. Vui lòng tải lại trang và đăng nhập lại.');
+      else if (message.includes('INVALID_EVALUATION_PERIOD')) setError('Kỳ đánh giá không hợp lệ. Chọn lại quý/năm học/học kỳ.');
+      else setError(`Không thể lưu đánh giá: ${message.replace(/^.*Uncaught Error:\s*/i, '').slice(0, 180)}`);
     } finally {
       setSaving(false);
     }

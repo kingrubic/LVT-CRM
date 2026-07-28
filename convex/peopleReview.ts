@@ -780,13 +780,15 @@ export const upsertEvaluationFile = mutation({
       .unique();
 
     const now = Date.now();
-    if (existing?.active) {
-      const texts = await ctx.db
-        .query("personnelEvaluationTexts")
-        .withIndex("by_file", (q: any) => q.eq("fileId", String(existing._id)).eq("active", true))
-        .collect();
-      if (texts.length) throw new Error("EVALUATION_FILE_LOCKED");
-      const previousDriveFileId = existing.driveFileId;
+    if (existing) {
+      if (existing.active) {
+        const texts = await ctx.db
+          .query("personnelEvaluationTexts")
+          .withIndex("by_file", (q: any) => q.eq("fileId", String(existing._id)).eq("active", true))
+          .collect();
+        if (texts.length) throw new Error("EVALUATION_FILE_LOCKED");
+      }
+      const previousDriveFileId = existing.active ? existing.driveFileId : null;
       await ctx.db.patch(existing._id, {
         driveFileId: meta.driveFileId,
         driveChecksum: args.driveChecksum,
@@ -794,28 +796,38 @@ export const upsertEvaluationFile = mutation({
         fileType: meta.fileType,
         fileSize: meta.fileSize,
         uploadedByUserId: String(access.user._id),
-        versionCount: (existing.versionCount || 1) + 1,
+        versionCount: existing.active ? (existing.versionCount || 1) + 1 : 1,
         lastUploadedAt: now,
         updatedBy: access.user._id,
         updatedAt: now,
         active: true,
+        year: args.year,
+        quarter: args.quarter,
+        schoolYear: args.schoolYear,
+        semester: args.semester,
       });
       await ctx.db.insert("auditLogs", {
         actorUserId: access.user._id,
         targetUserId: target._id,
         targetEmail: target.email,
-        action: "people_review.evaluation_file.replace",
+        action: existing.active
+          ? "people_review.evaluation_file.replace"
+          : "people_review.evaluation_file.reactivate",
         details: JSON.stringify({
           id: existing._id,
           kind: args.kind,
           periodKey,
           previousDriveFileId,
-          versionCount: (existing.versionCount || 1) + 1,
+          versionCount: existing.active ? (existing.versionCount || 1) + 1 : 1,
           fileName: meta.fileName,
         }),
         at: now,
       });
-      return { fileId: existing._id, previousDriveFileId, versionCount: (existing.versionCount || 1) + 1 };
+      return {
+        fileId: existing._id,
+        previousDriveFileId,
+        versionCount: existing.active ? (existing.versionCount || 1) + 1 : 1,
+      };
     }
 
     const fileId = await ctx.db.insert("personnelEvaluationFiles", {

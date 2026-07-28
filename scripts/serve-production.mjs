@@ -16,7 +16,9 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const distRoot = path.join(projectRoot, 'dist');
 const host = process.env.HOST || '127.0.0.1';
 const port = Number(process.env.PORT || 3007);
-const convexUrl = process.env.CONVEX_URL || 'https://lvt-convex.vscgroup.io.vn';
+const convexUrl = process.env.CONVEX_URL
+  || process.env.CONVEX_SELF_HOSTED_URL
+  || 'http://127.0.0.1:3210';
 const driveAccount = process.env.LVT_DRIVE_ACCOUNT || 'bemiagent@gmail.com';
 const maxFileSize = 20 * 1024 * 1024;
 const acceptedExtensions = new Set(['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg']);
@@ -77,13 +79,20 @@ async function authorizedClient(request) {
   return client;
 }
 
-async function authorizeAnyUpload(client) {
-  try {
-    await client.query(anyApi.work.authorizeFileUpload, {});
-    return;
-  } catch {
-    await client.query(anyApi.peopleReview.authorizeFileUpload, {});
+async function authorizeAnyUpload(client, purpose = '') {
+  const attempts = purpose === 'people-review'
+    ? [anyApi.peopleReview.authorizeFileUpload, anyApi.work.authorizeFileUpload]
+    : [anyApi.work.authorizeFileUpload, anyApi.peopleReview.authorizeFileUpload];
+  let lastError;
+  for (const queryRef of attempts) {
+    try {
+      await client.query(queryRef, {});
+      return;
+    } catch (error) {
+      lastError = error;
+    }
   }
+  throw lastError || new Error('UPLOAD_FORBIDDEN');
 }
 
 async function deleteDriveFile(driveFileId) {
@@ -105,14 +114,21 @@ async function deleteDriveFile(driveFileId) {
 async function uploadToDrive(request, response) {
   const fileName = safeFileName(request);
   const declaredSize = Number(request.headers['content-length'] || 0);
-  if (!fileName || declaredSize <= 0 || declaredSize > maxFileSize) {
+  // Content-Length can be absent when proxies use chunked transfer; allow and count bytes instead.
+  if (!fileName || declaredSize > maxFileSize) {
+    console.error('LVT upload rejected before stream', {
+      fileName,
+      declaredSize,
+      hasNameHeader: Boolean(request.headers['x-file-name']),
+    });
     response.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
     response.end('{"error":"INVALID_FILE"}\n');
     return;
   }
 
   const client = await authorizedClient(request);
-  await authorizeAnyUpload(client);
+  const purpose = String(request.headers['x-lvt-upload-purpose'] || '').trim();
+  await authorizeAnyUpload(client, purpose);
 
   const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'lvt-drive-upload-'));
   const temporaryFile = path.join(temporaryDirectory, 'upload.bin');
@@ -132,7 +148,8 @@ async function uploadToDrive(request, response) {
 
   try {
     await pipeline(request, limiter, createWriteStream(temporaryFile, { mode: 0o600 }));
-    if (received !== declaredSize) throw new Error('WORK_FILE_SIZE_MISMATCH');
+    if (received <= 0) throw new Error('INVALID_FILE');
+    if (declaredSize > 0 && received !== declaredSize) throw new Error('WORK_FILE_SIZE_MISMATCH');
 
     const { stdout } = await execFileAsync(
       '/opt/homebrew/bin/gog',
