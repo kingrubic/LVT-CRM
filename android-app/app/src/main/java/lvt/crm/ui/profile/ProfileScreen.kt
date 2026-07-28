@@ -30,28 +30,28 @@ fun ProfileScreen(
         verticalArrangement = Arrangement.Top,
     ) {
         Text(stringResource(R.string.nav_profile), style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         Text(name, style = MaterialTheme.typography.titleMedium)
         Text(
             email,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
         )
-        Spacer(Modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = { /* Wire Convex change-password next */ },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.change_password))
         }
-        Spacer(Modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         OutlinedButton(
             onClick = onSignOut,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.sign_out))
         }
-        Spacer(Modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         Text(
             "Admin/Mod dùng app giống user: không có Quản trị hệ thống / thiết lập tối cao.",
             style = MaterialTheme.typography.bodySmall,

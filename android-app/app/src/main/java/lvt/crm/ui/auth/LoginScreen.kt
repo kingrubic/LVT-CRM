@@ -59,7 +59,7 @@ fun LoginScreen(
                 imeAction = ImeAction.Next,
             ),
         )
-        Spacer(Modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value = state.password,
             onValueChange = viewModel::onPasswordChange,
@@ -84,7 +84,7 @@ fun LoginScreen(
             )
         }
 
-        Spacer(Modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         Button(
             onClick = viewModel::signIn,
             enabled = !state.loading,
