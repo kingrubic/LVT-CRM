@@ -27,3 +27,8 @@ __pycache__/
 # Temporary files
 .tmp/
 tmp/
+
+# Android
+android-app/local.properties
+android-app/.gradle/
+android-app/**/build/

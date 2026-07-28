@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.LvtCrm" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/lvt_teal</item>
+        <item name="android:navigationBarColor">@color/lvt_paper</item>
+        <item name="android:windowBackground">@color/lvt_paper</item>
+    </style>
+</resources>

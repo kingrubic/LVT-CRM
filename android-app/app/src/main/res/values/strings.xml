@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LVT CRM</string>
+    <string name="login_title">Đăng nhập</string>
+    <string name="email">Email</string>
+    <string name="password">Mật khẩu</string>
+    <string name="sign_in">Đăng nhập</string>
+    <string name="nav_notifications">Thông báo</string>
+    <string name="nav_duties">Công tác</string>
+    <string name="nav_work">Công việc</string>
+    <string name="nav_profile">Cá nhân</string>
+    <string name="coming_soon">Đang hoàn thiện màn hình native…</string>
+    <string name="change_password">Đổi mật khẩu</string>
+    <string name="sign_out">Đăng xuất</string>
+</resources>
