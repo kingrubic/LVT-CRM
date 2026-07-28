@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import lvt.crm.data.auth.AuthRepository
+import lvt.crm.data.convex.ConvexException
+import lvt.crm.data.convex.ConvexHttpClient
 
 data class LoginUiState(
     val email: String = "",
@@ -39,10 +41,12 @@ class LoginViewModel(
             _uiState.update {
                 it.copy(
                     loading = false,
-                    error = result.exceptionOrNull()?.message?.let { code ->
-                        when (code) {
-                            "EMAIL_PASSWORD_REQUIRED" -> "Vui lòng nhập email và mật khẩu."
-                            else -> "Không đăng nhập được. Kiểm tra thông tin và thử lại."
+                    error = result.exceptionOrNull()?.let { err ->
+                        when {
+                            err.message == "EMAIL_PASSWORD_REQUIRED" ->
+                                "Vui lòng nhập email và mật khẩu."
+                            err is ConvexException -> err.message
+                            else -> ConvexHttpClient.humanize(err.message ?: "SIGN_IN_FAILED")
                         }
                     },
                 )

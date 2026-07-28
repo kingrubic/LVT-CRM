@@ -12,17 +12,41 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import lvt.crm.R
+import lvt.crm.data.auth.AuthRepository
+import lvt.crm.ui.auth.ChangePasswordScreen
 
 @Composable
 fun ProfileScreen(
     name: String,
     email: String,
+    role: String,
+    departmentName: String?,
+    positionName: String?,
+    authRepository: AuthRepository,
     onSignOut: () -> Unit,
 ) {
+    var changingPassword by remember { mutableStateOf(false) }
+
+    if (changingPassword) {
+        ChangePasswordScreen(
+            title = stringResource(R.string.change_password),
+            subtitle = "Đặt mật khẩu mới cho tài khoản của bạn.",
+            authRepository = authRepository,
+            allowCancel = true,
+            onDone = { changingPassword = false },
+            onCancel = { changingPassword = false },
+        )
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -37,9 +61,29 @@ fun ProfileScreen(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            roleLabel(role),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        )
+        if (!departmentName.isNullOrBlank()) {
+            Text(
+                "Phòng ban: $departmentName",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+            )
+        }
+        if (!positionName.isNullOrBlank()) {
+            Text(
+                "Chức vụ: $positionName",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+            )
+        }
         Spacer(modifier = Modifier.height(24.dp))
         Button(
-            onClick = { /* Wire Convex change-password next */ },
+            onClick = { changingPassword = true },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.change_password))
@@ -58,4 +102,10 @@ fun ProfileScreen(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )
     }
+}
+
+private fun roleLabel(role: String): String = when (role) {
+    "admin" -> "Vai trò: Admin"
+    "moderator" -> "Vai trò: Moderator"
+    else -> "Vai trò: Nhân sự"
 }

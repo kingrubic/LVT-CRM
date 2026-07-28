@@ -4,13 +4,13 @@ Native Android app (Kotlin + Jetpack Compose) for school staff.
 
 ## V1 scope
 
-- Login (email/password, same as web / Convex Auth)
-- Notifications
-- Duties (Công tác)
-- Work (Công việc)
-- Profile (change password)
+- Login (email/password, same as web / Convex Auth) — wired
+- Duties (Công tác) list + mark attendance — wired
+- Work (Công việc) list + complete / admin quality % — wired
+- Profile (change password + forced password gate) — wired
+- Notifications — placeholder (FCM later)
 - Admin/Mod: same menus as normal users (no system admin / supreme settings)
-- Push (FCM): after duties/work UI + deep links are done
+- Push (FCM): after notifications UI + deep links
 
 ## Requirements
 
@@ -43,7 +43,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | | Value |
 |---|---|
 | App name | LVT CRM |
-| applicationId | `lvt.crm` |
+| applicationId | `lvt.crm` (debug: `lvt.crm.debug`) |
 
 Before Play Store release, consider a more unique id (e.g. `vn.lvt.crm`) — changing `applicationId` later is a new app.
 
@@ -51,7 +51,10 @@ Before Play Store release, consider a more unique id (e.g. `vn.lvt.crm`) — cha
 
 Mirrors web:
 
-- Convex: `https://lvt-convex.vscgroup.io.vn` (override in `local.properties` if needed)
+- Convex: `https://lvt-convex.vscgroup.io.vn`
+- Override in `local.properties`: `lvt.convex.url=http://10.0.2.2:3210` (emulator → host)
+
+Auth tokens are stored in EncryptedSharedPreferences and refreshed via `auth:signIn` + refreshToken.
 
 ## Project layout
 
@@ -59,8 +62,11 @@ Mirrors web:
 android-app/
   app/src/main/java/lvt/crm/
     MainActivity.kt
-    LvtApp.kt
-    ui/          # Compose screens
-    data/        # auth + API clients
-    push/        # FCM (later)
+    AppContainer.kt
+    data/auth/      # TokenStore + AuthRepository
+    data/convex/    # HTTP client for query/mutation/action
+    data/duties/
+    data/work/
+    ui/             # Compose screens
+    push/           # FCM (later)
 ```

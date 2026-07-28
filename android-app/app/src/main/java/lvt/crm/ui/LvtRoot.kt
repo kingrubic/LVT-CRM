@@ -14,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -23,19 +22,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import lvt.crm.AppContainer
 import lvt.crm.R
-import lvt.crm.data.auth.AuthRepository
 import lvt.crm.data.auth.AuthState
+import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.auth.LoginScreen
 import lvt.crm.ui.auth.LoginViewModel
 import lvt.crm.ui.duties.DutiesScreen
+import lvt.crm.ui.duties.DutiesViewModel
 import lvt.crm.ui.home.PlaceholderScreen
 import lvt.crm.ui.notifications.NotificationsScreen
 import lvt.crm.ui.profile.ProfileScreen
 import lvt.crm.ui.work.WorkScreen
+import lvt.crm.ui.work.WorkViewModel
 
 private object Routes {
-    const val Login = "login"
     const val Notifications = "notifications"
     const val Duties = "duties"
     const val Work = "work"
@@ -44,22 +45,35 @@ private object Routes {
 
 @Composable
 fun LvtRoot(
-    authRepository: AuthRepository = remember { AuthRepository() },
+    container: AppContainer,
 ) {
-    val authState by authRepository.state.collectAsState()
+    val authState by container.authRepository.state.collectAsState()
     when (val state = authState) {
         AuthState.Loading -> PlaceholderScreen(title = "LVT CRM", body = "Đang tải…")
         AuthState.SignedOut -> {
             val loginVm: LoginViewModel = viewModel(
-                factory = LoginViewModel.factory(authRepository),
+                factory = LoginViewModel.factory(container.authRepository),
             )
             LoginScreen(viewModel = loginVm)
         }
+        is AuthState.MustChangePassword -> {
+            ChangePasswordScreen(
+                title = "Đổi mật khẩu bắt buộc",
+                subtitle = "Bạn cần đặt mật khẩu mới trước khi dùng ứng dụng.",
+                authRepository = container.authRepository,
+                allowCancel = false,
+                onDone = {},
+            )
+        }
         is AuthState.SignedIn -> {
             MainShell(
+                container = container,
                 sessionName = state.session.name,
                 sessionEmail = state.session.email,
-                onSignOut = authRepository::signOut,
+                role = state.session.role,
+                departmentName = state.session.departmentName,
+                positionName = state.session.positionName,
+                onSignOut = container.authRepository::signOut,
             )
         }
     }
@@ -67,8 +81,12 @@ fun LvtRoot(
 
 @Composable
 private fun MainShell(
+    container: AppContainer,
     sessionName: String,
     sessionEmail: String,
+    role: String,
+    departmentName: String?,
+    positionName: String?,
     onSignOut: () -> Unit,
 ) {
     val navController = rememberNavController()
@@ -110,12 +128,26 @@ private fun MainShell(
             modifier = Modifier.padding(padding),
         ) {
             composable(Routes.Notifications) { NotificationsScreen() }
-            composable(Routes.Duties) { DutiesScreen() }
-            composable(Routes.Work) { WorkScreen() }
+            composable(Routes.Duties) {
+                val vm: DutiesViewModel = viewModel(
+                    factory = DutiesViewModel.factory(container.dutiesRepository),
+                )
+                DutiesScreen(viewModel = vm)
+            }
+            composable(Routes.Work) {
+                val vm: WorkViewModel = viewModel(
+                    factory = WorkViewModel.factory(container.workRepository),
+                )
+                WorkScreen(viewModel = vm)
+            }
             composable(Routes.Profile) {
                 ProfileScreen(
                     name = sessionName,
                     email = sessionEmail,
+                    role = role,
+                    departmentName = departmentName,
+                    positionName = positionName,
+                    authRepository = container.authRepository,
                     onSignOut = onSignOut,
                 )
             }

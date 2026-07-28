@@ -14,10 +14,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val container = (application as LvtApplication).container
         setContent {
             LvtCrmTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    LvtRoot()
+                    LvtRoot(container = container)
                 }
             }
         }
