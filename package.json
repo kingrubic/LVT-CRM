@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:production": "VITE_CONVEX_URL=https://lvt-convex.vscgroup.io.vn vite build",
+    "start": "node scripts/serve-production.mjs",
     "preview": "vite preview",
     "check": "node scripts/check-files.mjs",
-    "typecheck": "convex codegen --typecheck enable",
-    "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy"
+    "typecheck": "./scripts/lvt-convex-self-hosted-env.sh ./node_modules/.bin/convex codegen --typecheck enable",
+    "convex:dev": "./scripts/lvt-convex-self-hosted-env.sh ./node_modules/.bin/convex dev",
+    "convex:deploy": "./scripts/lvt-convex-self-hosted-env.sh ./node_modules/.bin/convex deploy"
   },
   "dependencies": {
     "@auth/core": "0.41.3",

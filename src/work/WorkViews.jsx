@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
+import { useConvexAuth } from '@convex-dev/auth/react';
 import { useNotificationFocus } from '../notifications/useNotificationFocus';
 import './work.css';
 
@@ -26,6 +27,55 @@ function fileSizeLabel(bytes) {
   if (!bytes) return '—';
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function PrivateFileLink({
+  documentId,
+  fileName,
+  fileUrl,
+  privateFile,
+  className = '',
+  children,
+}) {
+  const { fetchAccessToken } = useConvexAuth();
+  const [opening, setOpening] = useState(false);
+
+  if (fileUrl) {
+    return <a className={className} href={publicStorageUrl(fileUrl)} target="_blank" rel="noreferrer">{children}</a>;
+  }
+  if (!privateFile || !documentId) return null;
+
+  const openPrivateFile = async () => {
+    if (opening) return;
+    setOpening(true);
+    try {
+      const token = await fetchAccessToken({ forceRefreshToken: false });
+      if (!token) throw new Error('AUTH_REQUIRED');
+      const response = await fetch(`/api/files/${encodeURIComponent(documentId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`FILE_DOWNLOAD_FAILED:${response.status}`);
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const anchor = window.document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.target = '_blank';
+      anchor.rel = 'noreferrer';
+      anchor.download = fileName || '';
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      console.error('Private document download failed', error);
+      window.alert('Không thể mở tệp công văn. Vui lòng đăng nhập lại hoặc liên hệ quản trị viên.');
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return (
+    <button type="button" className={`${className} work-file-link-button`.trim()} onClick={() => void openPrivateFile()} disabled={opening}>
+      {opening ? 'Đang mở tệp…' : children}
+    </button>
+  );
 }
 
 function workStatusLabel(status) {
@@ -392,8 +442,8 @@ function CompletionReviewModal({ item, onClose, onSubmit, saving }) {
 export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const options = useQuery(anyApi.work.formOptions, allowCreate ? {} : 'skip');
   const listData = useQuery(anyApi.work.listAdmin);
-  const generateUploadUrl = useMutation(anyApi.work.generateUploadUrl);
   const createDocument = useMutation(anyApi.work.createDocument);
+  const { fetchAccessToken } = useConvexAuth();
   const reviewWorkCompletion = useMutation(anyApi.work.reviewWorkCompletion);
   const reviewPersonalCompletion = useMutation(anyApi.work.reviewPersonalCompletion);
   const [open, setOpen] = useState(allowCreate);
@@ -430,19 +480,25 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
     setSaving(true);
     let stage = 'upload';
     try {
-      const uploadUrl = await generateUploadUrl({});
-      const response = await fetch(publicStorageUrl(uploadUrl), {
+      const token = await fetchAccessToken({ forceRefreshToken: false });
+      if (!token) throw new Error('AUTH_REQUIRED');
+      const response = await fetch('/api/files/upload', {
         method: 'POST',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+        },
         body: file,
       });
       const result = await response.json().catch(() => null);
-      if (!response.ok || !result?.storageId) {
+      if (!response.ok || !result?.driveFileId) {
         throw new Error(`WORK_UPLOAD_FAILED:${response.status}`);
       }
       stage = 'save';
       await createDocument({
-        fileId: result.storageId,
+        driveFileId: result.driveFileId,
+        driveChecksum: result.driveChecksum,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
@@ -731,7 +787,14 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
             <h3>{document.fileName}</h3>
             <div className="work-document-meta">
               <span>Tệp đính kèm</span>
-              {document.fileUrl ? <a href={publicStorageUrl(document.fileUrl)} target="_blank" rel="noreferrer">{document.fileName} · {fileSizeLabel(document.fileSize)}</a> : <strong>{document.fileName}</strong>}
+              <PrivateFileLink
+                documentId={document._id}
+                fileName={document.fileName}
+                fileUrl={document.fileUrl}
+                privateFile={document.privateFile}
+              >
+                {document.fileName} · {fileSizeLabel(document.fileSize)}
+              </PrivateFileLink>
             </div>
             <div className="work-document-assignments">
               {document.assignments.map((assignment) => (
@@ -1071,7 +1134,15 @@ export function WorkUserView({ focusTarget = null }) {
                 </div>
                 <h3>{document.fileName}</h3>
                 <div className="work-card-meta"><span>Duyệt <strong>{document.approvalCount}/{document.approvalTotal}</strong></span></div>
-                {document.fileUrl ? <a className="work-file-link" href={publicStorageUrl(document.fileUrl)} target="_blank" rel="noreferrer">↗ Mở {document.fileName}</a> : null}
+                <PrivateFileLink
+                  className="work-file-link"
+                  documentId={document._id}
+                  fileName={document.fileName}
+                  fileUrl={document.fileUrl}
+                  privateFile={document.privateFile}
+                >
+                  ↗ Mở {document.fileName}
+                </PrivateFileLink>
                 <div className="work-document-assignments">
                   {document.assignments.map((assignment) => (
                     <section key={assignment._id || assignment.departmentId}>
@@ -1134,7 +1205,15 @@ export function WorkUserView({ focusTarget = null }) {
                   <p>{task.rejectionReason}</p>
                 </div>
               ) : null}
-              {task.fileUrl ? <a className="work-file-link" href={publicStorageUrl(task.fileUrl)} target="_blank" rel="noreferrer">↗ Mở công văn</a> : null}
+              <PrivateFileLink
+                className="work-file-link"
+                documentId={task.documentId}
+                fileName={task.fileName}
+                fileUrl={task.fileUrl}
+                privateFile={task.privateFile}
+              >
+                ↗ Mở công văn
+              </PrivateFileLink>
               {task.type === 'department' && task.pendingMembers?.length ? (
                 <div className="work-member-progress">
                   <strong className="work-pending-label">Chưa xong / chờ duyệt:</strong>

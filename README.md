@@ -2,8 +2,18 @@
 
 CRM nội bộ cho Trường THCS Lê Văn Tám. Stack: **Vite + React 19**, backend **Convex self-hosted** (local Docker) với **Convex Auth (Password provider)** — đăng nhập email + mật khẩu, hồ sơ do admin cấp.
 
-**URL vận hành hiện tại (dev/staging qua tunnel):** https://lvt.vscgroup.io.vn  
-Frontend: `npm run dev` (Vite). Backend: Convex local `http://127.0.0.1:3210` (proxy qua domain khi hostname = `lvt.vscgroup.io.vn`). Tunnel/LAN: chạy thêm `npx vite --host` nếu cần bind `0.0.0.0`.
+**URL production:** https://lvt.vscgroup.io.vn
+Frontend production chạy static server qua LaunchAgent; Convex self-hosted chạy Docker với persistent volume, chỉ bind localhost. Public backend/auth proxy: `https://lvt-convex.vscgroup.io.vn` và `https://lvt-convex-site.vscgroup.io.vn`; hai hostname này đi qua Cloudflare Tunnel.
+
+Vận hành production:
+
+- Build: `npm run build:production`
+- Chạy local production: `npm run start`
+- Backup Convex gồm file storage: `./scripts/lvt-convex-backup.sh`
+- Backup tự động hằng đêm lúc 00:30, lưu ngoài repo dưới `/Users/vsc_agent/clawd/backups/lvt-crm-convex/nightly/`.
+- Admin key chỉ đọc từ macOS Keychain bởi script deploy/backup; không lưu trong `.env.local`, source hoặc bundle.
+- File công văn mới được lưu private trong Google Drive của tài khoản vận hành; Convex chỉ giữ Drive file ID, SHA-256 và metadata. Trình duyệt không nhận link Drive: frontend gửi Convex Auth token đến `/api/files/:documentId`, server kiểm tra quyền CRM rồi mới stream file.
+- Drive OAuth do `gog` quản lý ngoài repo. Folder ID được đọc từ macOS Keychain với service `lvt-crm-drive-folder-id`; không commit OAuth token/credential hoặc bật “Anyone with the link”.
 
 ## Phạm vi hiện tại
 
@@ -139,7 +149,7 @@ npm install
 cp .env.example .env.local
 ```
 
-### Convex local (Docker/Colima)
+### Convex self-hosted (Docker/Colima)
 
 ```bash
 colima start --cpu 4 --memory 8 --disk 60 --vm-type=vz --mount-type=virtiofs
@@ -152,7 +162,7 @@ docker compose -f infra/convex-local/docker-compose.yml up -d
 | Site proxy (auth HTTP) | `http://127.0.0.1:3211` |
 | Dashboard | `http://127.0.0.1:6791` |
 
-`.env.local` (gitignored):
+`.env.local` (gitignored, chỉ dành cho local development):
 
 ```dotenv
 VITE_CONVEX_URL=http://127.0.0.1:3210

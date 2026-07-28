@@ -858,7 +858,8 @@
 }
 
 .work-document-meta strong,
-.work-document-meta a {
+.work-document-meta a,
+.work-document-meta .work-file-link-button {
   overflow: hidden;
   color: #496174;
   font-size: 10px;
@@ -870,6 +871,21 @@
 .work-file-link {
   color: #16786b;
   text-decoration: none;
+}
+
+.work-file-link-button {
+  padding: 0;
+  border: 0;
+  color: #16786b;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.work-file-link-button:disabled {
+  cursor: wait;
+  opacity: .7;
 }
 
 .work-document-assignments {

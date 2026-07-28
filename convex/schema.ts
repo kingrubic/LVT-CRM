@@ -195,9 +195,13 @@ export default defineSchema({
    * Official documents assigned to a department. A document is visible to
    * its selected approvers first, then to the assigned department after all
    * approvals are complete.
-   */
+  */
   officeDocuments: defineTable({
-    fileId: v.id("_storage"),
+    /** Legacy Convex Storage object, retained only until Drive migration finishes. */
+    fileId: v.optional(v.id("_storage")),
+    driveFileId: v.optional(v.string()),
+    driveChecksum: v.optional(v.string()),
+    storageProvider: v.optional(v.string()),
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
@@ -302,4 +306,66 @@ export default defineSchema({
   })
     .index("by_work_item", ["workItemId"])
     .index("by_deadline", ["active", "deadline"]),
+  /**
+   * Personnel fault records (Ghi nhận lỗi) with evidence on Google Drive.
+   */
+  personnelFaults: defineTable({
+    targetUserId: v.string(),
+    recordedByUserId: v.string(),
+    violationDate: v.string(), // YYYY-MM-DD
+    reason: v.string(),
+    driveFileId: v.string(),
+    driveChecksum: v.optional(v.string()),
+    fileName: v.string(),
+    fileType: v.string(),
+    fileSize: v.number(),
+    active: v.boolean(),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_target", ["targetUserId", "active"])
+    .index("by_violation_date", ["active", "violationDate"]),
+  /**
+   * Evaluation evidence files (offline self-assessment PDFs).
+   * kind: quarterly | civil_servant | boarding
+   * One active row per target+kind+period; replace bumps versionCount and swaps driveFileId.
+   */
+  personnelEvaluationFiles: defineTable({
+    targetUserId: v.string(),
+    kind: v.string(),
+    year: v.optional(v.number()),
+    quarter: v.optional(v.number()),
+    schoolYear: v.optional(v.string()),
+    semester: v.optional(v.number()),
+    periodKey: v.string(),
+    driveFileId: v.string(),
+    driveChecksum: v.optional(v.string()),
+    fileName: v.string(),
+    fileType: v.string(),
+    fileSize: v.number(),
+    uploadedByUserId: v.string(),
+    versionCount: v.number(),
+    lastUploadedAt: v.number(),
+    active: v.boolean(),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_target_kind_period", ["targetUserId", "kind", "periodKey"])
+    .index("by_target", ["targetUserId", "active"]),
+  /** BGH text reviews attached to an evaluation file. One text per evaluator per file. */
+  personnelEvaluationTexts: defineTable({
+    fileId: v.string(),
+    targetUserId: v.string(),
+    evaluatorUserId: v.string(),
+    content: v.string(),
+    active: v.boolean(),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_file", ["fileId", "active"])
+    .index("by_target", ["targetUserId", "active"])
+    .index("by_file_evaluator", ["fileId", "evaluatorUserId"]),
 });

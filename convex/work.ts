@@ -9,7 +9,7 @@ import {
   WORK_ASSIGNER_MODE_ADMIN_MOD,
   WORK_ASSIGNER_MODE_SUPERVISOR,
 } from "./lib";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -291,7 +291,10 @@ async function documentView(ctx: any, document: any, catalogData: any) {
     fileName: document.fileName,
     fileType: document.fileType,
     fileSize: document.fileSize,
-    fileUrl: await ctx.storage.getUrl(document.fileId),
+    fileUrl: document.driveFileId || !document.fileId
+      ? null
+      : await ctx.storage.getUrl(document.fileId),
+    privateFile: Boolean(document.driveFileId),
     content: document.content,
     deadline: document.deadline,
     status: document.status,
@@ -370,6 +373,58 @@ export const generateUploadUrl = mutation({
   },
 });
 
+export const authorizeFileUpload = query({
+  args: {},
+  handler: async (ctx) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    return { userId: String(actor.user._id) };
+  },
+});
+
+export const authorizeFileDownload = query({
+  args: { documentId: v.id("officeDocuments") },
+  handler: async (ctx, args) => {
+    const access = await requireWorkAccess(ctx);
+    const document = await ctx.db.get(args.documentId);
+    if (!document?.active || !document.driveFileId) {
+      throw new Error("WORK_FILE_NOT_FOUND");
+    }
+
+    let allowed = access.isAdmin;
+    if (!allowed) {
+      allowed = document.approverUserIds.some(
+        (id: string) => String(id) === String(access.user._id),
+      );
+    }
+
+    if (!allowed && document.status === "approved") {
+      const workItems = (await ctx.db.query("workItems").collect()).filter(
+        (item: any) => item.active && String(item.documentId) === String(document._id),
+      );
+      const excludedIndividuals = individualAssigneeIdsForDocument(workItems, document._id);
+      allowed = workItems.some((item: any) => {
+        if (assignmentTypeOf(item) === "individual") {
+          return (item.assigneeUserIds || []).some(
+            (id: string) => String(id) === String(access.user._id),
+          );
+        }
+        return (
+          String(item.departmentId || "") === String(access.user.departmentId || "")
+          && !excludedIndividuals.has(String(access.user._id))
+        );
+      });
+    }
+
+    if (!allowed) throw new Error("WORK_FILE_FORBIDDEN");
+    return {
+      driveFileId: document.driveFileId,
+      fileName: document.fileName,
+      fileType: document.fileType,
+      fileSize: document.fileSize,
+    };
+  },
+});
+
 export const formOptions = query({
   args: {},
   handler: async (ctx) => {
@@ -424,7 +479,9 @@ export const formOptions = query({
 
 export const createDocument = mutation({
   args: {
-    fileId: v.id("_storage"),
+    fileId: v.optional(v.id("_storage")),
+    driveFileId: v.optional(v.string()),
+    driveChecksum: v.optional(v.string()),
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
@@ -449,6 +506,7 @@ export const createDocument = mutation({
     if (!Number.isFinite(args.fileSize) || args.fileSize <= 0 || args.fileSize > MAX_FILE_SIZE) {
       throw new Error("WORK_FILE_TOO_LARGE");
     }
+    if (!args.driveFileId && !args.fileId) throw new Error("WORK_FILE_REQUIRED");
     if (!args.assignments.length) throw new Error("WORK_ASSIGNMENTS_REQUIRED");
 
     const departments = await ctx.db.query("departments").collect();
@@ -503,6 +561,9 @@ export const createDocument = mutation({
     const firstAssignment = assignments[0];
     const documentId = await ctx.db.insert("officeDocuments", {
       fileId: args.fileId,
+      driveFileId: args.driveFileId,
+      driveChecksum: args.driveChecksum,
+      storageProvider: args.driveFileId ? "google_drive" : "convex",
       fileName,
       fileType: args.fileType.trim() || "application/octet-stream",
       fileSize: args.fileSize,
@@ -558,6 +619,26 @@ export const createDocument = mutation({
       at: now,
     });
     return documentId;
+  },
+});
+
+export const finalizeDriveMigration = internalMutation({
+  args: {
+    documentId: v.id("officeDocuments"),
+    driveFileId: v.string(),
+    driveChecksum: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const document = await ctx.db.get(args.documentId);
+    if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
+    if (document.fileId) await ctx.storage.delete(document.fileId);
+    await ctx.db.patch(args.documentId, {
+      fileId: undefined,
+      driveFileId: args.driveFileId,
+      driveChecksum: args.driveChecksum,
+      storageProvider: "google_drive",
+      updatedAt: Date.now(),
+    });
   },
 });
 
@@ -1234,9 +1315,13 @@ export const listMine = query({
                 || "Chưa gán phòng ban",
           status: userItemStatus(item, String(access.user._id)),
           collectiveStatus: adminModItemStatus(item, members),
+          documentId: document._id,
           documentContent: document.content,
           fileName: document.fileName,
-          fileUrl: await ctx.storage.getUrl(document.fileId),
+          fileUrl: document.driveFileId || !document.fileId
+            ? null
+            : await ctx.storage.getUrl(document.fileId),
+          privateFile: Boolean(document.driveFileId),
           completion: myCompletion,
           qualityPercent: myCompletion?.qualityPercent ?? null,
           rejectionReason: myCompletion?.status === "rejected" ? myCompletion.rejectionReason : "",

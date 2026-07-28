@@ -13,6 +13,7 @@ import { WorkManagement, WorkUserView } from './work/WorkViews';
 import DisplaySettings from './settings/DisplaySettings';
 import NotificationsView from './notifications/NotificationsView';
 import { menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
+import PeopleReviewView from './peopleReview/PeopleReviewView';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import './profile/profile.css';
@@ -20,7 +21,9 @@ import './settings/displaySettings.css';
 import './notifications/notifications.css';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
-const publicConvexUrl = window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : configuredConvexUrl;
+const publicConvexUrl =
+  configuredConvexUrl ||
+  (window.location.hostname === 'lvt.vscgroup.io.vn' ? window.location.origin : null);
 const convex = publicConvexUrl ? new ConvexReactClient(publicConvexUrl) : null;
 
 const PRIMARY_MENUS = [
@@ -122,6 +125,18 @@ function messageFor(error) {
     WORK_ASSIGNMENTS_REQUIRED: 'Vui lòng thêm ít nhất một phân công.',
     WORK_ADMIN_MOD_MODE_REQUIRED: 'Thao tác này chỉ dùng ở chế độ Admin/Mod giao việc.',
     WORK_SUPERVISOR_MODE_REQUIRED: 'Thao tác này chỉ dùng ở chế độ Cấp trên giao việc.',
+    PEOPLE_REVIEW_FAULT_FORBIDDEN: 'Bạn không có quyền ghi nhận lỗi cho người này.',
+    PEOPLE_REVIEW_UPLOAD_FORBIDDEN: 'Bạn không có quyền upload file đánh giá cho người này.',
+    PEOPLE_REVIEW_TEXT_FORBIDDEN: 'Bạn không có quyền ghi đánh giá text cho người này.',
+    PEOPLE_REVIEW_FORBIDDEN: 'Bạn không có quyền xem hồ sơ đánh giá này.',
+    EVALUATION_FILE_LOCKED: 'File kỳ này đã có đánh giá text — không thể upload lại.',
+    EVALUATION_FILE_REQUIRED: 'Cần có file upload trước khi ghi đánh giá text.',
+    EVALUATION_TEXT_ALREADY_SUBMITTED: 'Bạn đã ghi đánh giá text cho kỳ này rồi.',
+    BOARDING_NOT_PARTICIPATING: 'Giáo viên không tham gia bán trú kỳ này.',
+    INVALID_EVALUATION_FILE: 'File đánh giá phải là PDF/PNG/JPG tối đa 20MB.',
+    INVALID_FAULT_REASON: 'Lý do ghi nhận lỗi bắt buộc và tối đa 2.000 ký tự.',
+    INVALID_EVALUATION_TEXT: 'Nội dung đánh giá bắt buộc và tối đa 5.000 ký tự.',
+    INVALID_EVALUATION_PERIOD: 'Kỳ đánh giá không hợp lệ.',
   };
 
   // Prefer longest known code match inside the raw error text (handles Convex wrappers).
@@ -358,6 +373,8 @@ function AppShell({ session }) {
             : <DutiesUserView access={menuAccess?.duties || 'view'} focusTarget={activeFocusTarget} />
         ) : active === 'work' ? (
           <WorkUserView focusTarget={activeFocusTarget} />
+        ) : active === 'people-review' ? (
+          <PeopleReviewView />
         ) : active === 'reports' ? (
           reportSection === 'boarding' ? <BoardingReportsView /> : reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (

@@ -16,6 +16,7 @@ import type * as http from "../http.js";
 import type * as lib from "../lib.js";
 import type * as locations from "../locations.js";
 import type * as notifications from "../notifications.js";
+import type * as peopleReview from "../peopleReview.js";
 import type * as permissionGroups from "../permissionGroups.js";
 import type * as positions from "../positions.js";
 import type * as reports from "../reports.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   lib: typeof lib;
   locations: typeof locations;
   notifications: typeof notifications;
+  peopleReview: typeof peopleReview;
   permissionGroups: typeof permissionGroups;
   positions: typeof positions;
   reports: typeof reports;
