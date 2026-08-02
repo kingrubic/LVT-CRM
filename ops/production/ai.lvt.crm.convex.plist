@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.lvt.crm.convex</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/vsc_agent/projects/LVT-CRM/scripts/lvt-convex-ensure.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/vsc_agent/projects/LVT-CRM</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/vsc_agent</string>
+    <key>DOCKER_HOST</key>
+    <string>unix:///Users/vsc_agent/.colima/default/docker.sock</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/vsc_agent/Library/Logs/lvt-crm-convex-ensure.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/vsc_agent/Library/Logs/lvt-crm-convex-ensure.err.log</string>
+</dict>
+</plist>
