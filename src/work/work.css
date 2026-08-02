@@ -790,8 +790,36 @@
 }
 
 .pending-completion-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 28%);
+  align-items: center;
+  gap: 24px 32px;
+  padding: 24px !important;
   border-color: #f0d58a !important;
   background: #fffdf5 !important;
+}
+
+.work-completion-card-content {
+  min-width: 0;
+}
+
+.work-completion-card-content h3 {
+  margin: 12px 0 14px;
+}
+
+.work-completion-review-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 32px;
+  border-left: 1px solid #e7e9e3;
+}
+
+.work-completion-review-actions .work-primary-button {
+  min-width: 176px;
+  min-height: 32px;
 }
 
 .work-rejection-banner {
@@ -1303,6 +1331,18 @@
   .work-user-card { padding: 16px; }
   .work-user-card-top { align-items: flex-start; }
   .work-user-card-top > div { display: grid; gap: 5px; }
+  .pending-completion-card {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 20px !important;
+  }
+  .work-completion-review-actions {
+    align-items: stretch;
+    padding: 16px 0 0;
+    border-top: 1px solid #e7e9e3;
+    border-left: 0;
+  }
+  .work-completion-review-actions .work-primary-button { width: 100%; }
   .work-task-row { align-items: flex-start; }
   .work-task-row .work-status { flex: 0 0 auto; }
   .work-approval-actions > button {

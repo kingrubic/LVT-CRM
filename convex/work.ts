@@ -9,6 +9,7 @@ import {
   WORK_ASSIGNER_MODE_ADMIN_MOD,
   WORK_ASSIGNER_MODE_SUPERVISOR,
 } from "./lib";
+import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -618,6 +619,14 @@ export const createDocument = mutation({
       }),
       at: now,
     });
+    await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+      userIds: approverUserIds,
+      title: "Công việc mới cần duyệt",
+      body: `Công văn ${fileName} đang chờ quyết định của bạn.`,
+      kind: "work",
+      sourceType: "approval",
+      sourceId: String(documentId),
+    });
     return documentId;
   },
 });
@@ -834,6 +843,31 @@ export const approveDocument = mutation({
       details: JSON.stringify({ documentId: args.documentId, status }),
       at: Date.now(),
     });
+    if (status === "approved") {
+      const users = (await ctx.db.query("users").collect()).filter(
+        (row: any) => row.status === "active",
+      );
+      const recipients = new Set<string>();
+      for (const assignment of document.assignments || []) {
+        if (assignment.type === "individual") {
+          for (const id of assignment.userIds || []) recipients.add(String(id));
+        } else {
+          for (const user of users) {
+            if (String(user.departmentId || "") === String(assignment.departmentId || "")) {
+              recipients.add(String(user._id));
+            }
+          }
+        }
+      }
+      await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+        userIds: [...recipients],
+        title: "Công việc đã được duyệt",
+        body: `Công văn ${document.fileName} đã được duyệt và có hiệu lực.`,
+        kind: "work",
+        sourceType: "department_work",
+        sourceId: String(args.documentId),
+      });
+    }
   },
 });
 
@@ -868,6 +902,14 @@ export const rejectDocument = mutation({
       action: "work.document.reject",
       details: JSON.stringify({ documentId: args.documentId, status: "rejected" }),
       at: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+      userIds: [String(document.createdBy)],
+      title: "Công văn bị từ chối",
+      body: `Công văn ${document.fileName} đã bị từ chối.`,
+      kind: "work",
+      sourceType: "completion_rejected",
+      sourceId: String(args.documentId),
     });
   },
 });
@@ -914,7 +956,7 @@ export const createPersonalTask = mutation({
       }
     }
     const now = Date.now();
-    return await ctx.db.insert("personalTasks", {
+    const taskId = await ctx.db.insert("personalTasks", {
       workItemId: args.workItemId,
       title,
       assigneeUserIds: selectedIds,
@@ -927,6 +969,15 @@ export const createPersonalTask = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+      userIds: selectedIds,
+      title: "Bạn có công việc mới",
+      body: title,
+      kind: "work",
+      sourceType: "personal_task",
+      sourceId: String(taskId),
+    });
+    return taskId;
   },
 });
 

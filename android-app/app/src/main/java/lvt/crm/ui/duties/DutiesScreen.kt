@@ -1,6 +1,7 @@
 package lvt.crm.ui.duties
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,12 +17,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -29,12 +32,17 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -48,13 +56,32 @@ import lvt.crm.ui.components.StatusTone
 fun DutiesScreen(
     viewModel: DutiesViewModel,
     focusId: String?,
+    tabOpenToken: Int,
 ) {
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+    var selectedDuty by remember { mutableStateOf<DutyItem?>(null) }
+
+    BackHandler(enabled = selectedDuty != null) { selectedDuty = null }
+
+    selectedDuty?.let { duty ->
+        DutyDetailScreen(
+            duty = duty,
+            confirmationEnabled = state.attendanceConfirmationEnabled,
+            busy = state.busyDutyId == duty.id,
+            onBack = { selectedDuty = null },
+            onAttend = { viewModel.setAttendance(duty.id, "attended") },
+            onAbsent = { viewModel.setAttendance(duty.id, "absent") },
+        )
+        return
+    }
 
     LaunchedEffect(focusId, state.duties) {
         val index = state.duties.indexOfFirst { it.id == focusId }
         if (index >= 0) listState.animateScrollToItem(index)
+    }
+    LaunchedEffect(tabOpenToken) {
+        if (state.duties.isNotEmpty()) listState.scrollToItem(0)
     }
 
     Column(
@@ -153,6 +180,7 @@ fun DutiesScreen(
                             focused = duty.id == focusId,
                             confirmationEnabled = state.attendanceConfirmationEnabled,
                             busy = state.busyDutyId == duty.id,
+                            onOpen = { selectedDuty = duty },
                             onAttend = { viewModel.setAttendance(duty.id, "attended") },
                             onAbsent = { viewModel.setAttendance(duty.id, "absent") },
                         )
@@ -169,6 +197,7 @@ private fun DutyCard(
     focused: Boolean,
     confirmationEnabled: Boolean,
     busy: Boolean,
+    onOpen: () -> Unit,
     onAttend: () -> Unit,
     onAbsent: () -> Unit,
 ) {
@@ -195,14 +224,18 @@ private fun DutyCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        Column(modifier = Modifier.padding(17.dp)) {
+        Column(
+            modifier = Modifier
+                .clickable(onClick = onOpen)
+                .padding(17.dp),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
                 Text(
-                    duty.content.ifBlank { "Công tác" },
+                    duty.content.truncateCharacters(50).ifBlank { "Công tác" },
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
@@ -229,12 +262,6 @@ private fun DutyCard(
                     text = duty.departmentNames.joinToString(", "),
                 )
             }
-            Spacer(modifier = Modifier.height(10.dp))
-            StatusPill(
-                label = statusLabel(duty.myStatus),
-                tone = statusTone(duty.myStatus),
-            )
-
             if (confirmationEnabled && duty.isMine && duty.canMarkAttendance) {
                 Spacer(modifier = Modifier.height(15.dp))
                 Row(
@@ -256,6 +283,81 @@ private fun DutyCard(
                     ) {
                         Icon(Icons.Outlined.Cancel, contentDescription = null)
                         Text("Vắng", modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DutyDetailScreen(
+    duty: DutyItem,
+    confirmationEnabled: Boolean,
+    busy: Boolean,
+    onBack: () -> Unit,
+    onAttend: () -> Unit,
+    onAbsent: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp),
+    ) {
+        ScreenHeader(
+            title = "Chi tiết công tác",
+            subtitle = "Thông tin tham gia và lịch thực hiện",
+            icon = Icons.Outlined.EventAvailable,
+            trailing = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại danh sách công tác")
+                }
+            },
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(duty.content.ifBlank { "Công tác" }, style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(18.dp))
+                DetailLine(Icons.Outlined.CalendarMonth, "Ngày giờ công tác: ${scheduleLabel(duty)}")
+                DetailLine(
+                    Icons.Outlined.LocationOn,
+                    "Địa điểm: ${duty.locationNames.ifEmpty { listOf("Chưa cập nhật") }.joinToString(", ")}",
+                )
+                DetailLine(
+                    Icons.Outlined.Groups,
+                    "Phòng ban tham gia: ${duty.departmentNames.ifEmpty { listOf("Chưa cập nhật") }.joinToString(", ")}",
+                )
+                duty.departmentParticipants.forEach { department ->
+                    DetailLine(
+                        Icons.Outlined.PeopleOutline,
+                        "${department.departmentName}: ${department.participantNames.ifEmpty { listOf("Chưa cập nhật cá nhân") }.joinToString(", ")}",
+                    )
+                }
+                DetailLine(
+                    Icons.Outlined.PeopleOutline,
+                    "Cá nhân tham gia: ${duty.participantNames.ifEmpty { listOf("Chưa cập nhật") }.joinToString(", ")}",
+                )
+                if (confirmationEnabled && duty.isMine) {
+                    Spacer(modifier = Modifier.height(18.dp))
+                    StatusPill(label = statusLabel(duty.myStatus), tone = statusTone(duty.myStatus))
+                    if (duty.canMarkAttendance) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Button(onClick = onAttend, enabled = !busy, modifier = Modifier.weight(1f)) {
+                                Text("Có mặt")
+                            }
+                            FilledTonalButton(onClick = onAbsent, enabled = !busy, modifier = Modifier.weight(1f)) {
+                                Text("Vắng")
+                            }
+                        }
                     }
                 }
             }
@@ -322,4 +424,9 @@ private fun timingTone(duty: DutyItem): StatusTone = when {
     duty.isOverdue -> StatusTone.Neutral
     duty.isUpcoming -> StatusTone.Primary
     else -> StatusTone.Neutral
+}
+
+private fun String.truncateCharacters(limit: Int): String {
+    val normalized = trim()
+    return if (normalized.length > limit) normalized.take(limit).trimEnd() + "…" else normalized
 }

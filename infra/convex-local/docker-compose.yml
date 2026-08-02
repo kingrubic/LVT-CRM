@@ -3,19 +3,24 @@ services:
     image: ghcr.io/get-convex/convex-backend@sha256:f0de0647e46c0ac830a6dda036ee78e4956cecc00144d951bf39b14cc570ad4d
     stop_grace_period: 10s
     stop_signal: SIGINT
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     ports:
-      - "${PORT:-3210}:3210"
-      - "${SITE_PROXY_PORT:-3211}:3211"
+      - "127.0.0.1:3210:3210"
+      - "127.0.0.1:3211:3211"
     volumes:
       - data:/convex/data
     environment:
-      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:${PORT:-3210}}
-      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:${SITE_PROXY_PORT:-3211}}
-      - DISABLE_BEACON=${DISABLE_BEACON:-true}
-      - DISABLE_METRICS_ENDPOINT=${DISABLE_METRICS_ENDPOINT:-true}
-      - DOCUMENT_RETENTION_DELAY=${DOCUMENT_RETENTION_DELAY:-172800}
-      - DO_NOT_REQUIRE_SSL=${DO_NOT_REQUIRE_SSL:-true}
-      - RUST_LOG=${RUST_LOG:-info}
+      - CONVEX_CLOUD_ORIGIN=https://lvt-convex.vscgroup.io.vn
+      - CONVEX_SITE_ORIGIN=https://lvt-convex-site.vscgroup.io.vn
+      - DISABLE_BEACON=true
+      - DISABLE_METRICS_ENDPOINT=true
+      - DOCUMENT_RETENTION_DELAY=172800
+      - DO_NOT_REQUIRE_SSL=true
+      - REDACT_LOGS_TO_CLIENT=true
+      - RUST_LOG=info
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3210/version"]
       interval: 5s
@@ -27,10 +32,11 @@ services:
     image: ghcr.io/get-convex/convex-dashboard@sha256:b21b95c4abfe543b26d39e0a1e125d65b33bc216f99a0378e9a81642ced2f8c7
     stop_grace_period: 10s
     stop_signal: SIGINT
+    restart: unless-stopped
     ports:
-      - "${DASHBOARD_PORT:-6791}:6791"
+      - "127.0.0.1:6791:6791"
     environment:
-      - NEXT_PUBLIC_DEPLOYMENT_URL=${NEXT_PUBLIC_DEPLOYMENT_URL:-http://127.0.0.1:${PORT:-3210}}
+      - NEXT_PUBLIC_DEPLOYMENT_URL=http://127.0.0.1:3210
     depends_on:
       backend:
         condition: service_healthy

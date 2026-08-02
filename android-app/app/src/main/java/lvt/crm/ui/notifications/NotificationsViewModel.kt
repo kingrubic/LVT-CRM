@@ -13,6 +13,7 @@ import lvt.crm.data.convex.ConvexHttpClient
 import lvt.crm.data.notifications.NotificationItem
 import lvt.crm.data.notifications.NotificationSettings
 import lvt.crm.data.notifications.NotificationsRepository
+import lvt.crm.push.PushEvents
 
 data class NotificationsUiState(
     val loading: Boolean = true,
@@ -38,6 +39,11 @@ class NotificationsViewModel(
 
     init {
         refresh(initial = true)
+        viewModelScope.launch {
+            PushEvents.received.collect {
+                refresh()
+            }
+        }
     }
 
     fun refresh(initial: Boolean = false) {

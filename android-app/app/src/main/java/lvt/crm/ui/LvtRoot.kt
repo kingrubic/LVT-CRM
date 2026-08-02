@@ -142,6 +142,7 @@ private fun MainShell(
     )
     val notificationState by notificationsViewModel.uiState.collectAsState()
     var focusTarget by remember { mutableStateOf<NotificationDestination?>(null) }
+    var tabOpenToken by remember { mutableStateOf(0) }
 
     val tabs = listOf(
         Triple(Routes.Notifications, R.string.nav_notifications, Icons.Outlined.Notifications),
@@ -190,13 +191,28 @@ private fun MainShell(
                     NavigationBarItem(
                         selected = current == route,
                         onClick = {
+                            tabOpenToken += 1
                             focusTarget = null
-                            navController.navigate(route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            if (route == Routes.Notifications) {
+                                if (current != Routes.Notifications) {
+                                    val returnedToNotifications = navController.popBackStack(
+                                        route = Routes.Notifications,
+                                        inclusive = false,
+                                    )
+                                    if (!returnedToNotifications) {
+                                        navController.navigate(Routes.Notifications) {
+                                            launchSingleTop = true
+                                        }
+                                    }
                                 }
-                                launchSingleTop = true
-                                restoreState = true
+                            } else {
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         },
                         icon = {
@@ -242,6 +258,7 @@ private fun MainShell(
                 NotificationsScreen(
                     viewModel = notificationsViewModel,
                     onOpenItem = ::openNotification,
+                    tabOpenToken = tabOpenToken,
                 )
             }
             composable(Routes.Duties) {
@@ -253,6 +270,7 @@ private fun MainShell(
                     focusId = focusTarget
                         ?.takeIf { it.route == Routes.Duties }
                         ?.sourceId,
+                    tabOpenToken = tabOpenToken,
                 )
             }
             composable(Routes.Work) {
@@ -264,6 +282,7 @@ private fun MainShell(
                     focusId = focusTarget
                         ?.takeIf { it.route == Routes.Work }
                         ?.sourceId,
+                    tabOpenToken = tabOpenToken,
                 )
             }
             composable(Routes.Profile) {
@@ -339,6 +358,7 @@ private fun NotificationPermissionAndSync(container: AppContainer) {
 
     LaunchedEffect(container) {
         container.notificationScheduler.schedule()
+        container.fcmTokenRegistrar.sync()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context,

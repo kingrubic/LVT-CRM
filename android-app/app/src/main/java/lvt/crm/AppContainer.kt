@@ -9,6 +9,7 @@ import lvt.crm.data.duties.DutiesRepository
 import lvt.crm.data.notifications.NotificationsRepository
 import lvt.crm.data.work.WorkRepository
 import lvt.crm.push.NotificationScheduler
+import lvt.crm.push.FcmTokenRegistrar
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -21,7 +22,12 @@ class AppContainer(context: Context) {
         onTokensRefreshed = { access, refresh -> tokenStore.save(access, refresh) },
     )
 
-    val authRepository = AuthRepository(tokenStore, convex)
+    val fcmTokenRegistrar = FcmTokenRegistrar(appContext, tokenStore, convex)
+    val authRepository = AuthRepository(
+        tokenStore,
+        convex,
+        beforeSignOut = { fcmTokenRegistrar.unregister() },
+    )
     val dutiesRepository = DutiesRepository(convex)
     val notificationsRepository = NotificationsRepository(convex)
     val workRepository = WorkRepository(convex)

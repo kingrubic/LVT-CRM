@@ -191,6 +191,15 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_key", ["userId", "notificationKey"]),
+  /** FCM registration tokens, one row per Android app installation. */
+  pushTokens: defineTable({
+    userId: v.string(),
+    token: v.string(),
+    appId: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_token", ["token"]),
   /**
    * Official documents assigned to a department. A document is visible to
    * its selected approvers first, then to the assigned department after all

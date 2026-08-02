@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -63,6 +64,8 @@ fun ScreenHeader(
     refreshing: Boolean = false,
     onRefresh: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    refreshContainerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    refreshContentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
 ) {
     Row(
         modifier = Modifier
@@ -99,6 +102,10 @@ fun ScreenHeader(
             FilledTonalIconButton(
                 onClick = onRefresh,
                 enabled = !refreshing,
+                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = refreshContainerColor,
+                    contentColor = refreshContentColor,
+                ),
             ) {
                 if (refreshing) {
                     CircularProgressIndicator(

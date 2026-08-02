@@ -19,6 +19,8 @@ import type * as notifications from "../notifications.js";
 import type * as peopleReview from "../peopleReview.js";
 import type * as permissionGroups from "../permissionGroups.js";
 import type * as positions from "../positions.js";
+import type * as push from "../push.js";
+import type * as pushActions from "../pushActions.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
@@ -43,6 +45,8 @@ declare const fullApi: ApiFromModules<{
   peopleReview: typeof peopleReview;
   permissionGroups: typeof permissionGroups;
   positions: typeof positions;
+  push: typeof push;
+  pushActions: typeof pushActions;
   reports: typeof reports;
   seed: typeof seed;
   settings: typeof settings;

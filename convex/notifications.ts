@@ -22,7 +22,7 @@ const OVERDUE_VISIBILITY_MS = 24 * HOUR_MS;
 
 type NotificationSource = {
   kind: "duty" | "work";
-  sourceType: "duty" | "approval" | "department_work" | "personal_task" | "completion_rejected";
+  sourceType: "duty" | "duty_assigned" | "approval" | "department_work" | "personal_task" | "completion_rejected";
   sourceId: string;
   title: string;
   description: string;
@@ -356,13 +356,59 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     }
   }
 
-  const milestones = createMilestones(
-    [...dutySources, ...workSources],
-    milestonesHours,
+  const now =
     requestedNow && Math.abs(requestedNow - Date.now()) <= 5 * 60 * 1000
       ? requestedNow
-      : Date.now(),
+      : Date.now();
+  // A new duty is an assignment event, not a deadline reminder. Keep it visible
+  // until the duty ends so an assignee who opens the app after creation still sees it.
+  const newDutyAssignments = canUseDuties
+    ? duties
+        .filter(
+          (duty: any) =>
+            duty.active &&
+            isDutyParticipant(user, duty) &&
+            duty.createdAt &&
+            dutyDueAt(duty) >= now,
+        )
+        .map((duty: any) => ({
+          key: `duty:duty_assigned:${String(duty._id)}:new`,
+          kind: "duty" as const,
+          sourceType: "duty_assigned" as const,
+          sourceId: String(duty._id),
+          title: `Công tác mới: ${duty.content}`,
+          description: `${duty.startDate} · ${duty.startTime}–${duty.endTime}`,
+          dueAt: dutyDueAt(duty),
+          milestoneHours: 0,
+          milestoneLabel: "Mới phân công",
+          availableAt: duty.createdAt,
+        }))
+    : [];
+  const scheduledMilestones = createMilestones(
+    [...dutySources, ...workSources],
+    milestonesHours,
+    now,
   );
+  const approvalIdsWithMilestone = new Set(
+    scheduledMilestones
+      .filter((item) => item.sourceType === "approval")
+      .map((item) => item.sourceId),
+  );
+  const pendingApprovalItems = workSources
+    .filter(
+      (source) =>
+        source.sourceType === "approval" &&
+        !approvalIdsWithMilestone.has(source.sourceId),
+    )
+    .map((source) => ({
+      key: `work:approval:${source.sourceId}`,
+      ...source,
+      milestoneHours: 0,
+      milestoneLabel: "Cần duyệt",
+      availableAt: now,
+    }));
+  const milestones = [...newDutyAssignments, ...pendingApprovalItems, ...scheduledMilestones]
+    .sort((a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"));
   const [reads, dismissals] = await Promise.all([
     ctx.db
       .query("notificationReads")

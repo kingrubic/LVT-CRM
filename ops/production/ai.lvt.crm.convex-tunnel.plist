@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.lvt.crm.convex-tunnel</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/cloudflared</string>
+    <string>tunnel</string>
+    <string>--config</string>
+    <string>/Users/vsc_agent/.cloudflared/lvt-crm-convex.yml</string>
+    <string>run</string>
+    <string>lvt-crm-convex</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/vsc_agent/Library/Logs/lvt-crm-convex-tunnel.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/vsc_agent/Library/Logs/lvt-crm-convex-tunnel.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.lvt.crm.convex-backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/vsc_agent/projects/LVT-CRM/scripts/lvt-convex-backup.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/vsc_agent/projects/LVT-CRM</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/vsc_agent</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>0</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/vsc_agent/Library/Logs/lvt-crm-convex-backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/vsc_agent/Library/Logs/lvt-crm-convex-backup.err.log</string>
+</dict>
+</plist>

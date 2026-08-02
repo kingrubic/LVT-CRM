@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.convex.ConvexHttpClient
 import lvt.crm.data.work.WorkRepository
+import lvt.crm.data.work.WorkApprovalItem
+import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkTaskItem
 
 data class WorkUiState(
@@ -19,10 +21,15 @@ data class WorkUiState(
     val error: String? = null,
     val actionError: String? = null,
     val isAdmin: Boolean = false,
+    val accessLevel: Int = 0,
     val tasks: List<WorkTaskItem> = emptyList(),
+    val approvals: List<WorkApprovalItem> = emptyList(),
     val busyTaskId: String? = null,
+    val busyApprovalId: String? = null,
+    val busyReviewId: String? = null,
     val qualityPromptTask: WorkTaskItem? = null,
     val qualityInput: String = "100",
+    val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
 )
 
 class WorkViewModel(
@@ -47,7 +54,10 @@ class WorkViewModel(
                         loading = false,
                         refreshing = false,
                         isAdmin = snap.isAdmin,
+                        accessLevel = snap.accessLevel,
                         tasks = snap.tasks,
+                        approvals = snap.approvals,
+                        completionReviews = snap.completionReviews,
                     )
                 }
             } catch (e: Exception) {
@@ -73,8 +83,71 @@ class WorkViewModel(
         }
     }
 
+    fun decideApproval(approval: WorkApprovalItem, approve: Boolean) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(busyApprovalId = approval.id, actionError = null)
+            }
+            try {
+                repository.decideApproval(approval.id, approve)
+                val snap = repository.listMine()
+                _uiState.update {
+                    it.copy(
+                        busyApprovalId = null,
+                        isAdmin = snap.isAdmin,
+                        accessLevel = snap.accessLevel,
+                        tasks = snap.tasks,
+                        approvals = snap.approvals,
+                        completionReviews = snap.completionReviews,
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        busyApprovalId = null,
+                        actionError = (e as? ConvexException)?.message
+                            ?: ConvexHttpClient.humanize(e.message ?: "APPROVAL_FAILED"),
+                    )
+                }
+            }
+        }
+    }
+
     fun onQualityInput(value: String) {
         _uiState.update { it.copy(qualityInput = value.filter { ch -> ch.isDigit() }.take(3)) }
+    }
+
+    fun reviewCompletion(
+        review: WorkCompletionReviewItem,
+        approve: Boolean,
+        qualityPercent: Int? = null,
+        rejectionReason: String? = null,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(busyReviewId = review.workItemId + review.userId, actionError = null) }
+            try {
+                repository.reviewCompletion(review, approve, qualityPercent, rejectionReason)
+                val snap = repository.listMine()
+                _uiState.update {
+                    it.copy(
+                        busyReviewId = null,
+                        isAdmin = snap.isAdmin,
+                        accessLevel = snap.accessLevel,
+                        tasks = snap.tasks,
+                        approvals = snap.approvals,
+                        completionReviews = snap.completionReviews,
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        busyReviewId = null,
+                        actionError = (e as? ConvexException)?.message
+                            ?: ConvexHttpClient.humanize(e.message ?: "COMPLETION_REVIEW_FAILED"),
+                    )
+                }
+            }
+        }
     }
 
     fun dismissQualityPrompt() {
@@ -102,7 +175,10 @@ class WorkViewModel(
                     it.copy(
                         busyTaskId = null,
                         isAdmin = snap.isAdmin,
+                        accessLevel = snap.accessLevel,
                         tasks = snap.tasks,
+                        approvals = snap.approvals,
+                        completionReviews = snap.completionReviews,
                     )
                 }
             } catch (e: Exception) {

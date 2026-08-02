@@ -757,19 +757,21 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
           <div className="work-user-list">
             {pendingCompletionReviews.map((item) => (
               <article className="work-user-card pending-completion-card" key={`${item.kind}-${item.taskId || item.workItemId}-${item.userId}`}>
-                <div className="work-user-card-top">
+                <div className="work-completion-card-content">
                   <span className="work-card-eyebrow">{item.departmentName}</span>
+                  <h3>{item.content}</h3>
+                  <div className="work-card-meta">
+                    <span>Người nộp <strong>{item.userName}</strong></span>
+                    <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
+                    {item.submittedLate ? <span className="work-late-flag">Nộp trễ</span> : null}
+                  </div>
+                </div>
+                <div className="work-completion-review-actions">
                   <WorkStatus status="pending_completion" />
+                  <button type="button" className="work-primary-button" onClick={() => setReviewing(item)}>
+                    Duyệt / Chưa duyệt
+                  </button>
                 </div>
-                <h3>{item.content}</h3>
-                <div className="work-card-meta">
-                  <span>Người nộp <strong>{item.userName}</strong></span>
-                  <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
-                  {item.submittedLate ? <span className="work-late-flag">Nộp trễ</span> : null}
-                </div>
-                <button type="button" className="work-primary-button" onClick={() => setReviewing(item)}>
-                  Duyệt / Chưa duyệt
-                </button>
               </article>
             ))}
           </div>
@@ -1098,18 +1100,20 @@ export function WorkUserView({ focusTarget = null }) {
           <div className="work-user-list">
             {pendingCompletionReviews.map((item) => (
               <article className="work-user-card pending-completion-card" key={`${item.kind}-${item.taskId || item.workItemId}-${item.userId}`}>
-                <div className="work-user-card-top">
+                <div className="work-completion-card-content">
                   <span className="work-card-eyebrow">{item.departmentName}</span>
+                  <h3>{item.content}</h3>
+                  <div className="work-card-meta">
+                    <span>Người nộp <strong>{item.userName}</strong></span>
+                    <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
+                  </div>
+                </div>
+                <div className="work-completion-review-actions">
                   <WorkStatus status="pending_completion" />
+                  <button type="button" className="work-primary-button" onClick={() => setReviewing(item)}>
+                    Duyệt / Chưa duyệt
+                  </button>
                 </div>
-                <h3>{item.content}</h3>
-                <div className="work-card-meta">
-                  <span>Người nộp <strong>{item.userName}</strong></span>
-                  <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
-                </div>
-                <button type="button" className="work-primary-button" onClick={() => setReviewing(item)}>
-                  Duyệt / Chưa duyệt
-                </button>
               </article>
             ))}
           </div>

@@ -334,9 +334,23 @@ export const listMine = query({
             startTime: duty.startTime,
             endTime: duty.endTime,
             allDay: duty.allDay,
+            createdAt: duty.createdAt,
             content: duty.content,
             locationNames: mapNames(duty.locationIds, locations),
             departmentNames: mapNames(duty.departmentIds, departments),
+            departmentParticipants: duty.departmentIds.map((departmentId) => ({
+              departmentName:
+                departmentNameMap.get(String(departmentId)) || "Chưa gán phòng ban",
+              participantNames: users
+                .filter(
+                  (candidate) =>
+                    candidate.status === "active" &&
+                    String(candidate.departmentId || "") === String(departmentId),
+                )
+                .map((candidate) => String(candidate.name || candidate.email || ""))
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, "vi")),
+            })),
             participantNames: duty.participantUserIds
               .map((id) => userNameMap.get(String(id)))
               .filter((name): name is string => Boolean(name)),
@@ -358,7 +372,7 @@ export const listMine = query({
             participantCount: participants.length,
           };
         })
-        .sort((a, b) => a.timing.deadlineMs - b.timing.deadlineMs),
+        .sort((a, b) => b.createdAt - a.createdAt),
     };
   },
 });

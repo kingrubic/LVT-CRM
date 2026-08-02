@@ -14,6 +14,7 @@ import org.json.JSONObject
 class AuthRepository(
     private val tokenStore: TokenStore,
     private val convex: ConvexHttpClient,
+    private val beforeSignOut: (suspend () -> Unit)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow<AuthState>(AuthState.Loading)
@@ -114,6 +115,7 @@ class AuthRepository(
     fun signOut() {
         scope.launch {
             try {
+                beforeSignOut?.invoke()
                 convex.action("auth:signOut", JSONObject())
             } catch (_: Exception) {
                 // Ignore — clear local session regardless.
