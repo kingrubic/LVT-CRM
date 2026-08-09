@@ -191,44 +191,58 @@ struct MainShell: View {
                         selectedTab = tab
                     }
                 } label: {
-                    VStack(spacing: 3) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: tab.systemImage)
-                                .font(.system(size: 20, weight: selectedTab == tab ? .semibold : .regular))
-                                .symbolEffect(.bounce, value: selectedTab == tab ? tabOpenToken : 0)
-                            if tab == .notifications, notificationsViewModel.unreadCount > 0 {
-                                Text(badgeText)
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(LvtColors.torchRed, in: Capsule())
-                                    .foregroundStyle(.white)
-                                    .offset(x: 8, y: -6)
+                    // Opaque hit plate so taps anywhere in the tab cell register (not only glyph pixels).
+                    Color.clear
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .overlay {
+                            VStack(spacing: 3) {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: tab.systemImage)
+                                        .font(.system(size: 20, weight: selectedTab == tab ? .semibold : .regular))
+                                        .frame(width: 28, height: 28)
+                                        .symbolEffect(.bounce, value: selectedTab == tab ? tabOpenToken : 0)
+                                    if tab == .notifications, notificationsViewModel.unreadCount > 0 {
+                                        Text(badgeText)
+                                            .font(.system(size: 9, weight: .bold))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(LvtColors.torchRed, in: Capsule())
+                                            .foregroundStyle(.white)
+                                            .offset(x: 10, y: -4)
+                                    }
+                                }
+                                .frame(height: 28)
+                                Text(tab.title)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .foregroundStyle(selectedTab == tab ? LvtColors.schoolIndigo : .secondary)
+                        }
+                        .background {
+                            if selectedTab == tab {
+                                Capsule()
+                                    .fill(LvtColors.schoolIndigo.opacity(0.14))
+                                    .padding(.horizontal, 2)
+                                    .padding(.vertical, 2)
+                                    .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
                             }
                         }
-                        Text(tab.title)
-                            .font(.system(size: 10, weight: .medium))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    .foregroundStyle(selectedTab == tab ? LvtColors.schoolIndigo : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background {
-                        if selectedTab == tab {
-                            Capsule()
-                                .fill(LvtColors.schoolIndigo.opacity(0.14))
-                                .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
-                        }
-                    }
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .glassEffect(.regular, in: .capsule)
-        .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        // Keep glass in the background so it doesn't shrink the button hit targets.
+        .background {
+            Capsule()
+                .fill(.clear)
+                .glassEffect(.regular, in: .capsule)
+                .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
+                .allowsHitTesting(false)
+        }
     }
 
     private var badgeText: String {
