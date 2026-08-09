@@ -2,8 +2,9 @@ package lvt.crm.push
 
 import android.content.Context
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
+import kotlin.coroutines.resumeWithException
 import lvt.crm.BuildConfig
 import lvt.crm.data.auth.TokenStore
 import lvt.crm.data.convex.ConvexHttpClient
@@ -23,31 +24,35 @@ class FcmTokenRegistrar(
 
     suspend fun register(token: String) {
         if (tokenStore.accessToken.isNullOrBlank() || token.isBlank()) return
-        runCatching {
-            convex.mutation(
-                "push:registerToken",
-                JSONObject()
-                    .put("token", token)
-                    .put("appId", BuildConfig.APPLICATION_ID),
-            )
-        }
+        convex.mutation(
+            "push:registerToken",
+            JSONObject()
+                .put("token", token)
+                .put("appId", BuildConfig.APPLICATION_ID),
+        )
     }
 
-    suspend fun unregister() {
-        if (tokenStore.accessToken.isNullOrBlank()) return
-        runCatching {
-            convex.mutation(
-                "push:unregisterToken",
-                JSONObject().put("token", currentToken()),
-            )
-        }
+    suspend fun unregister(accessToken: String) {
+        if (accessToken.isBlank()) return
+        convex.mutationWithToken(
+            "push:unregisterToken",
+            JSONObject().put("token", currentToken()),
+            accessToken,
+        )
     }
 
     private suspend fun currentToken(): String =
-        suspendCoroutine { continuation ->
+        suspendCancellableCoroutine { continuation ->
             FirebaseMessaging.getInstance().token
                 .addOnCompleteListener { task ->
-                    continuation.resume(task.result?.takeIf { task.isSuccessful }.orEmpty())
+                    if (!continuation.isActive) return@addOnCompleteListener
+                    when {
+                        task.isSuccessful -> continuation.resume(task.result.orEmpty())
+                        task.isCanceled -> continuation.cancel()
+                        else -> continuation.resumeWithException(
+                            task.exception ?: IllegalStateException("FCM_TOKEN_FAILED"),
+                        )
+                    }
                 }
         }
 }

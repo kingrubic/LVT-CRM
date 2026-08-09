@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
-class TokenStore(context: Context) {
+class TokenStore(context: Context) : CredentialStore {
+    private val credentialLock = Any()
+    private var revision = 0L
     private val prefs = EncryptedSharedPreferences.create(
         context,
         "lvt_crm_auth",
@@ -13,27 +15,75 @@ class TokenStore(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
     )
 
-    var accessToken: String?
-        get() = prefs.getString(KEY_ACCESS, null)
-        set(value) {
-            prefs.edit().putString(KEY_ACCESS, value).apply()
-        }
+    override val accessToken: String?
+        get() = synchronized(credentialLock) { prefs.getString(KEY_ACCESS, null) }
 
-    var refreshToken: String?
-        get() = prefs.getString(KEY_REFRESH, null)
-        set(value) {
-            prefs.edit().putString(KEY_REFRESH, value).apply()
-        }
+    override val refreshToken: String?
+        get() = synchronized(credentialLock) { prefs.getString(KEY_REFRESH, null) }
 
-    fun save(accessToken: String, refreshToken: String) {
-        prefs.edit()
-            .putString(KEY_ACCESS, accessToken)
-            .putString(KEY_REFRESH, refreshToken)
-            .apply()
+    override fun snapshot(): CredentialSnapshot? = synchronized(credentialLock) {
+        val access = prefs.getString(KEY_ACCESS, null)?.takeIf { it.isNotBlank() } ?: return@synchronized null
+        val refresh = prefs.getString(KEY_REFRESH, null)?.takeIf { it.isNotBlank() } ?: return@synchronized null
+        CredentialSnapshot(access, refresh, revision)
     }
 
-    fun clear() {
-        prefs.edit().clear().apply()
+    override fun invalidatePendingWrites(): Long = synchronized(credentialLock) {
+        ++revision
+    }
+
+    override fun saveIfRevision(
+        revision: Long,
+        accessToken: String,
+        refreshToken: String,
+    ): Boolean = synchronized(credentialLock) {
+        if (this.revision != revision) return@synchronized false
+        persist(accessToken, refreshToken)
+        true
+    }
+
+    override fun replaceIfCurrent(
+        expected: CredentialSnapshot,
+        accessToken: String,
+        refreshToken: String,
+    ): Boolean = synchronized(credentialLock) {
+        if (currentSnapshot() != expected) return@synchronized false
+        persist(accessToken, refreshToken)
+        true
+    }
+
+    override fun clearIfRevision(revision: Long): Boolean = synchronized(credentialLock) {
+        if (this.revision != revision) return@synchronized false
+        clearLocked()
+        true
+    }
+
+    override fun clearIfCurrent(expected: CredentialSnapshot): Boolean = synchronized(credentialLock) {
+        if (currentSnapshot() != expected) return@synchronized false
+        clearLocked()
+        true
+    }
+
+    override fun clear() = synchronized(credentialLock) {
+        clearLocked()
+    }
+
+    private fun currentSnapshot(): CredentialSnapshot? {
+        val access = prefs.getString(KEY_ACCESS, null)?.takeIf { it.isNotBlank() } ?: return null
+        val refresh = prefs.getString(KEY_REFRESH, null)?.takeIf { it.isNotBlank() } ?: return null
+        return CredentialSnapshot(access, refresh, revision)
+    }
+
+    private fun persist(accessToken: String, refreshToken: String) {
+        val committed = prefs.edit()
+            .putString(KEY_ACCESS, accessToken)
+            .putString(KEY_REFRESH, refreshToken)
+            .commit()
+        check(committed) { "TOKEN_PERSIST_FAILED" }
+    }
+
+    private fun clearLocked() {
+        ++revision
+        check(prefs.edit().clear().commit()) { "TOKEN_CLEAR_FAILED" }
     }
 
     companion object {

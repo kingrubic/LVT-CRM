@@ -65,6 +65,10 @@ function messageFor(error) {
     USER_UPDATE_FAILED: 'Không thể cập nhật tài khoản. Vui lòng thử lại.',
     PASSWORD_CHANGED_SYNC_PENDING: 'Mật khẩu đã đổi nhưng hệ thống chưa cập nhật xong. Vui lòng liên hệ quản trị viên.',
     PASSWORD_RESET_FAILED: 'Không thể đặt lại mật khẩu. Vui lòng thử lại.',
+    PASSWORD_RESET_EMAIL_FAILED:
+      'Đã tạo mật khẩu tạm nhưng chưa gửi được email. Vui lòng liên hệ quản trị viên.',
+    MAIL_NOT_CONFIGURED: 'Hệ thống chưa cấu hình gửi email. Vui lòng liên hệ quản trị viên.',
+    MAIL_AUTH_FAILED: 'Không xác thực được tài khoản gửi email. Vui lòng liên hệ quản trị viên.',
     PASSWORD_CHANGE_FAILED: 'Không thể đổi mật khẩu. Vui lòng thử lại.',
     EMAIL_CHANGE_UNSUPPORTED: 'Hiện chưa hỗ trợ đổi email đăng nhập. Vui lòng tạo tài khoản mới nếu cần.',
     PUBLIC_SIGNUP_DISABLED: 'Hệ thống không cho phép tự đăng ký.',
@@ -498,7 +502,7 @@ function ReportSubmenu({ active, onChoose }) {
   );
 }
 
-function NavButton({ id, label, icon = '→', active, onClick, nested, badge = 0 }) {
+function NavButton({ id, label, icon = '→', active, onClick, nested = false, badge = 0 }) {
   return (
     <button type="button" className={`shell-nav-button ${active === id ? 'active' : ''} ${nested ? 'nested' : ''}`} onClick={() => onClick(id)}>
       <span className="nav-icon">{icon}</span>
@@ -556,7 +560,7 @@ function MultiCheckList({ options, values, onChange, getLabel, emptyText = 'Khô
   );
 }
 
-function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel, emptyText }) {
+function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel = (item) => item.name, emptyText }) {
   const [open, setOpen] = useState(false);
   const selectedCount = values?.length || 0;
   return (
@@ -1370,7 +1374,7 @@ function UserManagement() {
         </div>
         <label>
           Họ tên
-          <input required maxLength="120" value={form.name} onChange={(e) => setField('name', e.target.value)} />
+          <input required maxLength={120} value={form.name} onChange={(e) => setField('name', e.target.value)} />
         </label>
         <label>
           Email (đăng nhập)
@@ -1445,7 +1449,7 @@ function UserManagement() {
         {!editing && (
           <label>
             Mật khẩu tạm thời
-            <input required minLength="8" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
+            <input required minLength={8} type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
             <small>Ít nhất 8 ký tự. Không gửi qua email hoặc chat công khai.</small>
           </label>
         )}
@@ -1470,7 +1474,7 @@ function UserManagement() {
           </div>
           <label>
             Mật khẩu tạm thời mới
-            <input required minLength="8" type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
+            <input required minLength={8} type="password" autoComplete="new-password" value={form.temporaryPassword} onChange={(e) => setField('temporaryPassword', e.target.value)} />
           </label>
           <button className="primary-button" disabled={Boolean(pending)}>
             {pending ? 'Đang đặt lại…' : 'Đặt lại mật khẩu'}
@@ -1635,11 +1639,11 @@ function DepartmentManagement() {
         </div>
         <label>
           Tên phòng ban
-          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <input required maxLength={120} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </label>
         <label>
           Mã
-          <input required maxLength="32" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+          <input required maxLength={32} value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
         </label>
         <button className="primary-button" disabled={Boolean(pending)}>
           {editing ? 'Lưu' : '+ Thêm phòng ban'}
@@ -1760,12 +1764,12 @@ function LocationManagement() {
         </div>
         <label>
           Tên địa điểm
-          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <input required maxLength={120} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </label>
         <label>
           Mô tả
           <textarea
-            maxLength="1000"
+            maxLength={1000}
             rows={3}
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -1906,11 +1910,11 @@ function PermissionGroupManagement() {
         </div>
         <label>
           Tên nhóm quyền
-          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <input required maxLength={120} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </label>
         <label>
           Mô tả (tùy chọn)
-          <input maxLength="500" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+          <input maxLength={500} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
         </label>
         <div className="perm-matrix" role="group" aria-label="Quyền menu">
           <div className="perm-matrix-head">
@@ -2066,11 +2070,11 @@ function PositionManagement() {
         </div>
         <label>
           Tên chức vụ
-          <input required maxLength="120" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+          <input required maxLength={120} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </label>
         <label>
           Mã
-          <input required maxLength="32" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+          <input required maxLength={32} value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
         </label>
         <label>
           Cấp bậc (1–5 sao)
@@ -2263,11 +2267,11 @@ function ProfileView({ session }) {
 
           <label className="profile-field">
             <span>Mật khẩu mới</span>
-            <input required minLength="8" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <label className="profile-field">
             <span>Xác nhận mật khẩu</span>
-            <input required minLength="8" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
+            <input required minLength={8} type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
           </label>
 
           <div className="profile-password-hint">
@@ -2323,11 +2327,11 @@ function MustChangePasswordView() {
       <form className="password-form" onSubmit={submit}>
         <label>
           Mật khẩu mới
-          <input required minLength="8" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         <label>
           Xác nhận mật khẩu
-          <input required minLength="8" type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
+          <input required minLength={8} type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
         </label>
         <p className="form-message" role="status" aria-live="polite">
           {feedback}
@@ -2384,13 +2388,18 @@ function AccessDeniedView({ message }) {
 
 function SignedOutView() {
   const { signIn } = useAuthActions();
+  const requestPasswordReset = useAction(anyApi.users.requestPasswordReset);
+  const [mode, setMode] = useState('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const submit = async (event) => {
+  const [info, setInfo] = useState('');
+
+  const submitSignIn = async (event) => {
     event.preventDefault();
     setError('');
+    setInfo('');
     setPending(true);
     try {
       await signIn('password', { email: email.trim().toLowerCase(), password, flow: 'signIn' });
@@ -2400,29 +2409,81 @@ function SignedOutView() {
       setPending(false);
     }
   };
+
+  const submitForgot = async (event) => {
+    event.preventDefault();
+    setError('');
+    setInfo('');
+    setPending(true);
+    try {
+      await requestPasswordReset({ email: email.trim().toLowerCase() });
+      setInfo(
+        'Nếu email tồn tại trong hệ thống, mật khẩu tạm đã được gửi. Hãy kiểm tra hộp thư rồi đăng nhập và đổi mật khẩu mới.',
+      );
+    } catch (err) {
+      setError(messageFor(err));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const switchMode = (next) => {
+    setMode(next);
+    setError('');
+    setInfo('');
+    setPassword('');
+  };
+
   return (
     <main className="auth-page">
       <div className="auth-card">
         <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
         <p className="eyebrow">Lê Văn Tám CRM</p>
-        <h1>Đăng nhập không gian nội bộ</h1>
-        <p>Đăng nhập bằng email và mật khẩu do nhà trường cấp. Không có đăng ký công khai. Quên mật khẩu: liên hệ Quản trị viên.</p>
-        <form className="password-form sign-in-form" onSubmit={submit}>
-          <label>
-            Email
-            <input required type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </label>
-          <label>
-            Mật khẩu
-            <input required type="password" autoComplete="current-password" minLength="8" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </label>
-          <p className="form-message" role="status" aria-live="polite">
-            {error}
-          </p>
-          <button className="primary-button" disabled={pending}>
-            {pending ? 'Đang đăng nhập…' : 'Đăng nhập'}
-          </button>
-        </form>
+        {mode === 'signIn' ? (
+          <>
+            <h1>Đăng nhập không gian nội bộ</h1>
+            <p>Đăng nhập bằng email và mật khẩu do nhà trường cấp. Không có đăng ký công khai.</p>
+            <form className="password-form sign-in-form" onSubmit={submitSignIn}>
+              <label>
+                Email
+                <input required type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </label>
+              <label>
+                Mật khẩu
+                <input required type="password" autoComplete="current-password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+              </label>
+              <p className={`form-message${info ? ' form-message-success' : ''}`} role="status" aria-live="polite">
+                {error || info}
+              </p>
+              <button className="primary-button" disabled={pending}>
+                {pending ? 'Đang đăng nhập…' : 'Đăng nhập'}
+              </button>
+              <button type="button" className="text-button auth-forgot-link" disabled={pending} onClick={() => switchMode('forgot')}>
+                Quên mật khẩu?
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <h1>Quên mật khẩu</h1>
+            <p>Nhập email tài khoản. Nếu email có trong hệ thống, chúng tôi sẽ gửi mật khẩu tạm tới hộp thư của bạn.</p>
+            <form className="password-form sign-in-form" onSubmit={submitForgot}>
+              <label>
+                Email
+                <input required type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </label>
+              <p className={`form-message${info ? ' form-message-success' : ''}`} role="status" aria-live="polite">
+                {error || info}
+              </p>
+              <button className="primary-button" disabled={pending}>
+                {pending ? 'Đang gửi…' : 'Gửi mật khẩu tạm'}
+              </button>
+              <button type="button" className="text-button auth-forgot-link" disabled={pending} onClick={() => switchMode('signIn')}>
+                Quay lại đăng nhập
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </main>
   );

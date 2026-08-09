@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,6 +60,7 @@ fun LoginScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var passwordVisible by remember { mutableStateOf(false) }
+    val isForgot = state.mode == LoginMode.ForgotPassword
 
     Box(
         modifier = Modifier
@@ -110,12 +112,16 @@ fun LoginScreen(
             ) {
                 Column(modifier = Modifier.padding(22.dp)) {
                     Text(
-                        stringResource(R.string.login_title),
+                        if (isForgot) "Quên mật khẩu" else stringResource(R.string.login_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Dùng tài khoản được nhà trường cấp.",
+                        if (isForgot) {
+                            "Nhập email tài khoản. Nếu email có trong hệ thống, mật khẩu tạm sẽ được gửi tới hộp thư."
+                        } else {
+                            "Dùng tài khoản được nhà trường cấp."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp, bottom = 20.dp),
@@ -134,48 +140,56 @@ fun LoginScreen(
                         shape = MaterialTheme.shapes.medium,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Email,
-                            imeAction = ImeAction.Next,
+                            imeAction = if (isForgot) ImeAction.Done else ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (isForgot) viewModel.requestPasswordReset()
+                            },
                         ),
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    OutlinedTextField(
-                        value = state.password,
-                        onValueChange = viewModel::onPasswordChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(stringResource(R.string.password)) },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Lock, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    if (passwordVisible) {
-                                        Icons.Outlined.VisibilityOff
-                                    } else {
-                                        Icons.Outlined.Visibility
-                                    },
-                                    contentDescription = if (passwordVisible) {
-                                        "Ẩn mật khẩu"
-                                    } else {
-                                        "Hiện mật khẩu"
-                                    },
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        enabled = !state.loading,
-                        shape = MaterialTheme.shapes.medium,
-                        visualTransformation = if (passwordVisible) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done,
-                        ),
-                        keyboardActions = KeyboardActions(onDone = { viewModel.signIn() }),
-                    )
+
+                    if (!isForgot) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        OutlinedTextField(
+                            value = state.password,
+                            onValueChange = viewModel::onPasswordChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.password)) },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.Lock, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        if (passwordVisible) {
+                                            Icons.Outlined.VisibilityOff
+                                        } else {
+                                            Icons.Outlined.Visibility
+                                        },
+                                        contentDescription = if (passwordVisible) {
+                                            "Ẩn mật khẩu"
+                                        } else {
+                                            "Hiện mật khẩu"
+                                        },
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            enabled = !state.loading,
+                            shape = MaterialTheme.shapes.medium,
+                            visualTransformation = if (passwordVisible) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { viewModel.signIn() }),
+                        )
+                    }
 
                     state.error?.let { message ->
                         Surface(
@@ -194,9 +208,28 @@ fun LoginScreen(
                         }
                     }
 
+                    state.info?.let { message ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 14.dp),
+                        ) {
+                            Text(
+                                message,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(12.dp),
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(20.dp))
                     Button(
-                        onClick = viewModel::signIn,
+                        onClick = {
+                            if (isForgot) viewModel.requestPasswordReset() else viewModel.signIn()
+                        },
                         enabled = !state.loading,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -209,6 +242,8 @@ fun LoginScreen(
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(22.dp),
                             )
+                        } else if (isForgot) {
+                            Text("Gửi mật khẩu tạm")
                         } else {
                             Text(stringResource(R.string.sign_in))
                             Icon(
@@ -217,6 +252,18 @@ fun LoginScreen(
                                 modifier = Modifier.padding(start = 8.dp),
                             )
                         }
+                    }
+
+                    TextButton(
+                        onClick = {
+                            if (isForgot) viewModel.showSignIn() else viewModel.showForgotPassword()
+                        },
+                        enabled = !state.loading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    ) {
+                        Text(if (isForgot) "Quay lại đăng nhập" else "Quên mật khẩu?")
                     }
                 }
             }

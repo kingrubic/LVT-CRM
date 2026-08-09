@@ -15,6 +15,7 @@ import type * as duties from "../duties.js";
 import type * as http from "../http.js";
 import type * as lib from "../lib.js";
 import type * as locations from "../locations.js";
+import type * as mail from "../mail.js";
 import type * as notifications from "../notifications.js";
 import type * as peopleReview from "../peopleReview.js";
 import type * as permissionGroups from "../permissionGroups.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   lib: typeof lib;
   locations: typeof locations;
+  mail: typeof mail;
   notifications: typeof notifications;
   peopleReview: typeof peopleReview;
   permissionGroups: typeof permissionGroups;

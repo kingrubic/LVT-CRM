@@ -58,9 +58,21 @@ function cleanUserInput(args: {
 }
 
 const MIN_PASSWORD_LENGTH = 8;
+const FORGOT_PASSWORD_COOLDOWN_MS = 5 * 60 * 1000;
 
 function assertPasswordLength(password: string, code = "PASSWORD_TOO_SHORT") {
   if (!password || password.length < MIN_PASSWORD_LENGTH) throw new Error(code);
+}
+
+function randomTemporaryPassword(length = 12): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < length; i += 1) {
+    out += alphabet[bytes[i]! % alphabet.length]!;
+  }
+  return out;
 }
 
 async function auditBestEffort(
@@ -582,6 +594,86 @@ export const resetPassword = action({
       targetUserId: target._id,
       targetEmail: target.email,
     });
+  },
+});
+
+/**
+ * Public forgot-password for web / Android / future iOS.
+ * Always returns { ok: true } when the email looks valid (no account enumeration),
+ * except when mail delivery fails after credentials were rotated.
+ */
+export const requestPasswordReset = action({
+  args: { email: v.string() },
+  handler: async (ctx, args): Promise<{ ok: true }> => {
+    const email = normalizeEmail(args.email);
+    if (!email || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254) {
+      throw new Error("INVALID_EMAIL");
+    }
+
+    const user = await ctx.runQuery(internal.users.byEmail, { email });
+    if (!user || user.status !== "active" || !user.email) {
+      return { ok: true };
+    }
+
+    const lastReset = user.lastPasswordResetAt ?? 0;
+    if (Date.now() - lastReset < FORGOT_PASSWORD_COOLDOWN_MS) {
+      return { ok: true };
+    }
+
+    const temporaryPassword = randomTemporaryPassword(12);
+    await ctx.runMutation(internal.users.patchById, {
+      id: user._id,
+      actorUserId: "system:requestPasswordReset",
+      mustChangePassword: true,
+      lastPasswordResetAt: Date.now(),
+    });
+
+    try {
+      await modifyAccountCredentials(ctx, {
+        provider: "password",
+        account: { id: email, secret: temporaryPassword },
+      });
+      await invalidateSessions(ctx, { userId: user._id });
+    } catch {
+      await auditBestEffort(ctx, {
+        actorUserId: "system:requestPasswordReset",
+        action: "user.password_forgot_reset_failed",
+        targetUserId: user._id,
+        targetEmail: email,
+        details: JSON.stringify({ stage: "credentials" }),
+      });
+      throw new Error("PASSWORD_RESET_FAILED");
+    }
+
+    try {
+      await ctx.runAction(internal.mail.sendPasswordResetEmail, {
+        to: email,
+        temporaryPassword,
+        recipientName: user.name,
+      });
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : String(error);
+      const code =
+        ["MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PASSWORD_RESET_EMAIL_FAILED"].find((item) =>
+          raw.includes(item),
+        ) ?? "PASSWORD_RESET_EMAIL_FAILED";
+      await auditBestEffort(ctx, {
+        actorUserId: "system:requestPasswordReset",
+        action: "user.password_forgot_reset_failed",
+        targetUserId: user._id,
+        targetEmail: email,
+        details: JSON.stringify({ stage: "email", code }),
+      });
+      throw new Error(code);
+    }
+
+    await auditBestEffort(ctx, {
+      actorUserId: "system:requestPasswordReset",
+      action: "user.password_forgot_reset",
+      targetUserId: user._id,
+      targetEmail: email,
+    });
+    return { ok: true };
   },
 });
 

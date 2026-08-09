@@ -12,21 +12,23 @@ import lvt.crm.push.NotificationScheduler
 import lvt.crm.push.FcmTokenRegistrar
 
 class AppContainer(context: Context) {
-    private val appContext = context.applicationContext
+    val appContext = context.applicationContext
     val tokenStore = TokenStore(appContext)
 
     val convex = ConvexHttpClient(
         baseUrl = ConvexConfig.url,
         tokenProvider = { tokenStore.accessToken },
-        refreshTokenProvider = { tokenStore.refreshToken },
-        onTokensRefreshed = { access, refresh -> tokenStore.save(access, refresh) },
+        refreshCredentialsProvider = { tokenStore.snapshot() },
+        onTokensRefreshed = { expected, access, refresh ->
+            tokenStore.replaceIfCurrent(expected, access, refresh)
+        },
     )
 
     val fcmTokenRegistrar = FcmTokenRegistrar(appContext, tokenStore, convex)
     val authRepository = AuthRepository(
         tokenStore,
         convex,
-        beforeSignOut = { fcmTokenRegistrar.unregister() },
+        beforeSignOut = { accessToken -> fcmTokenRegistrar.unregister(accessToken) },
     )
     val dutiesRepository = DutiesRepository(convex)
     val notificationsRepository = NotificationsRepository(convex)

@@ -15,10 +15,11 @@ Vận hành production:
 - Admin key chỉ đọc từ macOS Keychain bởi script deploy/backup; không lưu trong `.env.local`, source hoặc bundle.
 - File công văn mới được lưu private trong Google Drive của tài khoản vận hành; Convex chỉ giữ Drive file ID, SHA-256 và metadata. Trình duyệt không nhận link Drive: frontend gửi Convex Auth token đến `/api/files/:documentId`, server kiểm tra quyền CRM rồi mới stream file.
 - Drive OAuth do `gog` quản lý ngoài repo. Folder ID được đọc từ macOS Keychain với service `lvt-crm-drive-folder-id`; không commit OAuth token/credential hoặc bật “Anyone with the link”.
+- Quên mật khẩu (web / Android / API iOS): `users.requestPasswordReset` gửi mật khẩu tạm qua Gmail API từ `thcslevantambinhthanh@gmail.com`. Cấu hình Convex env `GMAIL_*` (xem `.env.example`); lấy refresh token một lần bằng `node scripts/gmail-oauth-setup.mjs`. Không commit `client_secret*.json`.
 
 ## Phạm vi hiện tại
 
-- Xác thực **email + password only**. Không public signup, không email verification, không tự khôi phục mật khẩu (quên MK → liên hệ Admin).
+- Xác thực **email + password only**. Không public signup, không email verification. Quên mật khẩu tự phục vụ: gửi mật khẩu tạm + bắt buộc đổi MK (`mustChangePassword`).
 - **Ba vai trò hệ thống** trên `users.role`:
   - `admin` — **Administrator**: toàn quyền, bao gồm **Thiết lập tối cao** và quản lý tài khoản.
   - `moderator` — **Moderator**: toàn quyền nghiệp vụ và **Quản trị hệ thống**, không thấy/không truy cập **Thiết lập tối cao**.

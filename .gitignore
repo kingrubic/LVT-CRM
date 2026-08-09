@@ -12,6 +12,7 @@
 *_secret
 session_secret
 auth_config.json
+client_secret*.json
 
 # Vite / Node
 node_modules/
@@ -23,6 +24,7 @@ npm-debug.log*
 __pycache__/
 *.py[cod]
 *.log
+.runtime/
 
 # Temporary files
 .tmp/
