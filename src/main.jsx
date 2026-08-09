@@ -2392,6 +2392,7 @@ function SignedOutView() {
   const [mode, setMode] = useState('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -2450,7 +2451,22 @@ function SignedOutView() {
               </label>
               <label>
                 Mật khẩu
-                <input required type="password" autoComplete="current-password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+                <input
+                  required
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </label>
+              <label className="auth-show-password">
+                <input
+                  type="checkbox"
+                  checked={showPassword}
+                  onChange={(e) => setShowPassword(e.target.checked)}
+                />
+                Hiện mật khẩu
               </label>
               <p className={`form-message${info ? ' form-message-success' : ''}`} role="status" aria-live="polite">
                 {error || info}
