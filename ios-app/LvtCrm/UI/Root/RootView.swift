@@ -79,7 +79,7 @@ struct MainShell: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             AmbientBackground()
 
             VStack(spacing: 0) {
@@ -89,9 +89,10 @@ struct MainShell: View {
                     // Keep last rows readable while content still scrolls under the floating bar.
                     .contentMargins(.bottom, 96, for: .scrollContent)
             }
-
-            // Overlay (not safeAreaInset) so list content passes behind the glass — required for
-            // the frosted Liquid Glass look like GitHub.
+        }
+        // Use overlay (not a flexible ZStack child) so the capsule keeps intrinsic height
+        // instead of expanding to fill the screen.
+        .overlay(alignment: .bottom) {
             floatingTabBar
                 .padding(.horizontal, 20)
                 .padding(.bottom, 10)
@@ -191,58 +192,50 @@ struct MainShell: View {
                         selectedTab = tab
                     }
                 } label: {
-                    // Opaque hit plate so taps anywhere in the tab cell register (not only glyph pixels).
-                    Color.clear
-                        .frame(maxWidth: .infinity, minHeight: 56)
-                        .overlay {
-                            VStack(spacing: 3) {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: tab.systemImage)
-                                        .font(.system(size: 20, weight: selectedTab == tab ? .semibold : .regular))
-                                        .frame(width: 28, height: 28)
-                                        .symbolEffect(.bounce, value: selectedTab == tab ? tabOpenToken : 0)
-                                    if tab == .notifications, notificationsViewModel.unreadCount > 0 {
-                                        Text(badgeText)
-                                            .font(.system(size: 9, weight: .bold))
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 1)
-                                            .background(LvtColors.torchRed, in: Capsule())
-                                            .foregroundStyle(.white)
-                                            .offset(x: 10, y: -4)
-                                    }
-                                }
-                                .frame(height: 28)
-                                Text(tab.title)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                            }
-                            .foregroundStyle(selectedTab == tab ? LvtColors.schoolIndigo : .secondary)
-                        }
-                        .background {
-                            if selectedTab == tab {
-                                Capsule()
-                                    .fill(LvtColors.schoolIndigo.opacity(0.14))
-                                    .padding(.horizontal, 2)
-                                    .padding(.vertical, 2)
-                                    .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
+                    VStack(spacing: 3) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: tab.systemImage)
+                                .font(.system(size: 20, weight: selectedTab == tab ? .semibold : .regular))
+                                .frame(width: 28, height: 28)
+                                .symbolEffect(.bounce, value: selectedTab == tab ? tabOpenToken : 0)
+                            if tab == .notifications, notificationsViewModel.unreadCount > 0 {
+                                Text(badgeText)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(LvtColors.torchRed, in: Capsule())
+                                    .foregroundStyle(.white)
+                                    .offset(x: 10, y: -4)
                             }
                         }
-                        .contentShape(Rectangle())
+                        .frame(height: 28)
+                        Text(tab.title)
+                            .font(.system(size: 10, weight: .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .foregroundStyle(selectedTab == tab ? LvtColors.schoolIndigo : .secondary)
+                    // Fixed height — Color.clear + minHeight in a ZStack was expanding full-screen.
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .contentShape(Rectangle())
+                    .background {
+                        if selectedTab == tab {
+                            Capsule()
+                                .fill(LvtColors.schoolIndigo.opacity(0.14))
+                                .padding(4)
+                                .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        // Keep glass in the background so it doesn't shrink the button hit targets.
-        .background {
-            Capsule()
-                .fill(.clear)
-                .glassEffect(.regular, in: .capsule)
-                .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
-                .allowsHitTesting(false)
-        }
+        .glassEffect(.regular, in: .capsule)
+        .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var badgeText: String {
