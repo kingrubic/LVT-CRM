@@ -55,6 +55,7 @@ struct MainShell: View {
     @State private var selectedTab: AppTab = .notifications
     @State private var focusTarget: NotificationDestination?
     @State private var tabOpenToken = 0
+    @Namespace private var tabNamespace
 
     init(
         container: AppContainer,
@@ -78,43 +79,22 @@ struct MainShell: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             AmbientBackground()
+
             VStack(spacing: 0) {
                 appBar
-                Group {
-                    switch selectedTab {
-                    case .notifications:
-                        NotificationsScreen(
-                            viewModel: notificationsViewModel,
-                            onOpenItem: openNotification,
-                            tabOpenToken: tabOpenToken
-                        )
-                    case .duties:
-                        DutiesScreen(
-                            viewModel: dutiesViewModel,
-                            focusId: focusTarget?.route == .duties ? focusTarget?.sourceId : nil,
-                            tabOpenToken: tabOpenToken
-                        )
-                    case .work:
-                        WorkScreen(
-                            viewModel: workViewModel,
-                            focusId: focusTarget?.route == .work ? focusTarget?.sourceId : nil,
-                            tabOpenToken: tabOpenToken
-                        )
-                    case .profile:
-                        ProfileScreen(
-                            session: session,
-                            authRepository: container.authRepository,
-                            onSignOut: onSignOut
-                        )
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                tabContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Keep last rows readable while content still scrolls under the floating bar.
+                    .contentMargins(.bottom, 96, for: .scrollContent)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            glassTabBar
+
+            // Overlay (not safeAreaInset) so list content passes behind the glass — required for
+            // the frosted Liquid Glass look like GitHub.
+            floatingTabBar
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
         }
         .task {
             await NotificationCenterService.requestAuthorizationIfNeeded()
@@ -126,7 +106,9 @@ struct MainShell: View {
         .onChange(of: pendingDestination) { _, destination in
             guard let destination else { return }
             focusTarget = destination
-            selectedTab = destination.route
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                selectedTab = destination.route
+            }
             if let key = destination.notificationKey {
                 Task {
                     do {
@@ -141,9 +123,43 @@ struct MainShell: View {
         }
     }
 
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .notifications:
+            NotificationsScreen(
+                viewModel: notificationsViewModel,
+                onOpenItem: openNotification,
+                tabOpenToken: tabOpenToken
+            )
+        case .duties:
+            DutiesScreen(
+                viewModel: dutiesViewModel,
+                focusId: focusTarget?.route == .duties ? focusTarget?.sourceId : nil,
+                tabOpenToken: tabOpenToken
+            )
+        case .work:
+            WorkScreen(
+                viewModel: workViewModel,
+                focusId: focusTarget?.route == .work ? focusTarget?.sourceId : nil,
+                tabOpenToken: tabOpenToken
+            )
+        case .profile:
+            ProfileScreen(
+                session: session,
+                authRepository: container.authRepository,
+                onSignOut: onSignOut
+            )
+        }
+    }
+
     private var appBar: some View {
         HStack(spacing: 12) {
-            SchoolLogo(size: 42)
+            Image("LogoLvt")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+                .clipShape(Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text("THCS Lê Văn Tám")
                     .font(.headline)
@@ -154,60 +170,65 @@ struct MainShell: View {
             }
             Spacer()
             Text(String(session.name.prefix(1)).uppercased())
-                .font(.headline.weight(.bold))
+                .font(.subheadline.weight(.bold))
                 .foregroundStyle(LvtColors.schoolIndigoDark)
-                .frame(width: 40, height: 40)
-                .glassEffect(.regular.tint(LvtColors.primaryContainer), in: .circle)
+                .frame(width: 36, height: 36)
+                .background(.thinMaterial, in: Circle())
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 0))
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
     }
 
-    private var glassTabBar: some View {
-        GlassEffectContainer {
-            HStack(spacing: 8) {
-                ForEach(AppTab.allCases) { tab in
-                    Button {
-                        tabOpenToken += 1
-                        focusTarget = nil
+    /// Single floating capsule — one glass sample, GitHub-style. Per-tab glass was the lag source.
+    private var floatingTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(AppTab.allCases) { tab in
+                Button {
+                    tabOpenToken += 1
+                    focusTarget = nil
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
                         selectedTab = tab
-                    } label: {
-                        VStack(spacing: 4) {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: tab.systemImage)
-                                    .font(.system(size: 18, weight: .semibold))
-                                if tab == .notifications, notificationsViewModel.unreadCount > 0 {
-                                    Text(badgeText)
-                                        .font(.caption2.weight(.bold))
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 1)
-                                        .background(LvtColors.torchRed, in: Capsule())
-                                        .foregroundStyle(.white)
-                                        .offset(x: 10, y: -8)
-                                }
-                            }
-                            Text(tab.title)
-                                .font(.caption2.weight(.semibold))
-                        }
-                        .foregroundStyle(selectedTab == tab ? LvtColors.schoolIndigo : .secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .glassEffect(
-                            selectedTab == tab
-                                ? .regular.interactive().tint(LvtColors.schoolIndigo.opacity(0.2))
-                                : .regular,
-                            in: .rect(cornerRadius: 18)
-                        )
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    VStack(spacing: 3) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: tab.systemImage)
+                                .font(.system(size: 20, weight: selectedTab == tab ? .semibold : .regular))
+                                .symbolEffect(.bounce, value: selectedTab == tab ? tabOpenToken : 0)
+                            if tab == .notifications, notificationsViewModel.unreadCount > 0 {
+                                Text(badgeText)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(LvtColors.torchRed, in: Capsule())
+                                    .foregroundStyle(.white)
+                                    .offset(x: 8, y: -6)
+                            }
+                        }
+                        Text(tab.title)
+                            .font(.system(size: 10, weight: .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .foregroundStyle(selectedTab == tab ? LvtColors.schoolIndigo : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background {
+                        if selectedTab == tab {
+                            Capsule()
+                                .fill(LvtColors.schoolIndigo.opacity(0.14))
+                                .matchedGeometryEffect(id: "selectedTab", in: tabNamespace)
+                        }
+                    }
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
         }
         .padding(.horizontal, 10)
-        .padding(.bottom, 6)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
+        .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
     }
 
     private var badgeText: String {
