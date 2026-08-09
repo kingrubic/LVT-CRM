@@ -78,8 +78,31 @@ button { font: inherit; cursor: pointer; }
 .password-form .form-message { min-height: 20px; margin: 0; color: #9e3030; font-size: 12px; }
 .password-form .form-message-success { color: #166c4c; }
 .sign-in-form { margin: 0; width: 100%; box-shadow: none; border: 0; padding: 0; }
-.auth-show-password { display: flex; align-items: center; gap: 8px; width: auto; color: #526078; font-size: 13px; font-weight: 600; cursor: pointer; }
-.auth-show-password input[type='checkbox'] { width: auto; min-height: 0; margin: 0; accent-color: #2448a2; cursor: pointer; }
+.password-form label.auth-show-password {
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  justify-self: start;
+  color: #526078;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.password-form label.auth-show-password input[type='checkbox'] {
+  width: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  accent-color: #2448a2;
+  cursor: pointer;
+  flex: 0 0 16px;
+}
 .auth-forgot-link { justify-self: center; margin-top: 4px; background: transparent; border: 0; color: #3156aa; font-size: 13px; font-weight: 700; cursor: pointer; }
 .auth-forgot-link:hover { text-decoration: underline; background: transparent; }
 .auth-forgot-link:disabled { opacity: .58; cursor: wait; }
