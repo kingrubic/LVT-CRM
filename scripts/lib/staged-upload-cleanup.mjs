@@ -7,6 +7,27 @@ export async function settleClaimedUpload({ claim, deleteDriveFile }) {
   if (claim.action === 'delete') await deleteDriveFile(claim.driveFileId);
 }
 
+export async function throwUploadRegistrationError({
+  registrationError,
+  settleStage,
+  deleteDriveFile,
+  onCleanupFailure,
+}) {
+  let stageCleanupError;
+  try {
+    await settleStage();
+  } catch (error) {
+    stageCleanupError = error;
+    try {
+      await deleteDriveFile();
+    } catch (driveCleanupError) {
+      onCleanupFailure?.({ stageCleanupError, driveCleanupError });
+    }
+  }
+
+  throw new FileHttpError(502, 'UPLOAD_REGISTRATION_FAILED', registrationError);
+}
+
 export function assertStagedUploadOwner(stage, actorUserId) {
   if (!stage) throw new FileHttpError(404, 'FILE_NOT_FOUND');
   if (!actorUserId || String(actorUserId) !== String(stage.userId)) {

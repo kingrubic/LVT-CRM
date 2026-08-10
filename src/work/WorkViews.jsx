@@ -7,6 +7,19 @@ import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
 
+function workUploadErrorMessage(code) {
+  if (code === 'UPLOAD_REGISTRATION_FAILED') {
+    return 'Tệp đã đến Google Drive nhưng hệ thống chưa thể đăng ký công văn. Vui lòng liên hệ quản trị viên và cung cấp thời điểm xảy ra lỗi.';
+  }
+  if (code === 'DRIVE_UPLOAD_FAILED') {
+    return 'Google Drive chưa nhận được tệp công văn. Vui lòng thử lại sau.';
+  }
+  if (code === 'FILE_ACCESS_DENIED') {
+    return 'Bạn không có quyền tải tệp công văn lên.';
+  }
+  return 'Không thể tải tệp công văn lên. Vui lòng thử lại.';
+}
+
 function publicStorageUrl(shortLivedUrl) {
   if (!shortLivedUrl) return '';
   const uploadUrl = new URL(shortLivedUrl, window.location.origin);
@@ -37,7 +50,8 @@ async function settleWorkUploadedFile(fetchAccessToken, cleanupToken, committed)
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok && response.status !== 404) {
-    throw new Error(`WORK_UPLOAD_SETTLEMENT_FAILED:${response.status}`);
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.error || `WORK_UPLOAD_SETTLEMENT_FAILED:${response.status}`);
   }
 }
 
@@ -526,7 +540,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
       });
       uploaded = await response.json().catch(() => null);
       if (!response.ok || !uploaded?.driveFileId || !uploaded?.cleanupToken) {
-        throw new Error(`WORK_UPLOAD_FAILED:${response.status}`);
+        throw new Error(uploaded?.error || `WORK_UPLOAD_FAILED:${response.status}`);
       }
       stage = 'save';
       await createDocument({
@@ -578,7 +592,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
       } else {
         setFeedback({
           type: 'error',
-          text: 'Không thể tải tệp công văn lên. Vui lòng thử lại.',
+          text: workUploadErrorMessage(error?.message),
         });
       }
       console.error('Work document submission failed', {

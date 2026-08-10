@@ -40,4 +40,7 @@ test('work document submit retains committed uploads and retries settlement with
   const management = section(source, 'export function WorkManagement(', 'export function WorkUserView(');
 
   assertSafeSettlementFlow(management, 'await createDocument({');
+  assert.match(management, /uploaded\?\.error \|\| `WORK_UPLOAD_FAILED:/);
+  assert.match(management, /workUploadErrorMessage\(error\?\.message\)/);
+  assert.match(source, /UPLOAD_REGISTRATION_FAILED[\s\S]*Tệp đã đến Google Drive/);
 });

@@ -15,7 +15,11 @@ import { DriveUploadStages } from './lib/drive-upload-stages.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from './lib/file-content-policy.mjs';
 import { FileHttpError, classifyFileError } from './lib/file-http-errors.mjs';
 import { matchDriveMutationRoute } from './lib/file-route-policy.mjs';
-import { assertStagedUploadOwner, settleClaimedUpload } from './lib/staged-upload-cleanup.mjs';
+import {
+  assertStagedUploadOwner,
+  settleClaimedUpload,
+  throwUploadRegistrationError,
+} from './lib/staged-upload-cleanup.mjs';
 import { authorizeUpload, uploadApiForPurpose } from './lib/upload-authorization.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -175,7 +179,12 @@ async function handleStagedUpload(request, response, cleanupToken, finalizeOnly)
   const actor = await authorizeUpload(client, stage.purpose);
   assertStagedUploadOwner(stage, actor?.userId);
   if (finalizeOnly) {
-    await client.mutation(uploadApi(stage, 'finalizeStagedUpload'), { cleanupToken });
+    try {
+      await client.mutation(uploadApi(stage, 'finalizeStagedUpload'), { cleanupToken });
+    } catch (error) {
+      if (classifyFileError(error).code !== 'FILE_SERVER_ERROR') throw error;
+      throw new FileHttpError(502, 'UPLOAD_FINALIZATION_FAILED', error);
+    }
   } else {
     await settleClaimedStage(client, cleanupToken, stage);
   }
@@ -282,12 +291,18 @@ async function uploadToDrive(request, response) {
       });
       await uploadStages.add(cleanupToken, stage);
     } catch (error) {
-      try {
-        await settleClaimedStage(client, cleanupToken, stage);
-      } catch {
-        await deleteDriveFile(uploaded.id);
-      }
-      throw error;
+      await throwUploadRegistrationError({
+        registrationError: error,
+        settleStage: () => settleClaimedStage(client, cleanupToken, stage),
+        deleteDriveFile: () => deleteDriveFile(uploaded.id),
+        onCleanupFailure: ({ stageCleanupError, driveCleanupError }) => {
+          console.error('LVT failed upload cleanup also failed', {
+            cleanupToken,
+            stageCode: stageCleanupError instanceof Error ? stageCleanupError.message : 'UNKNOWN',
+            driveCode: driveCleanupError instanceof Error ? driveCleanupError.message : 'UNKNOWN',
+          });
+        },
+      });
     }
 
     response.writeHead(201, {
@@ -466,13 +481,16 @@ const server = createServer(async (request, response) => {
       })
       .pipe(response);
   } catch (error) {
+    const classified = classifyFileError(error);
     console.error('LVT private file request failed', {
       method: request.method,
       path: request.url,
-      code: error instanceof Error ? error.message : 'UNKNOWN',
+      code: classified.code,
+      cause: error?.cause instanceof Error
+        ? error.cause.message
+        : (error instanceof Error ? error.message : 'UNKNOWN'),
     });
     if (!response.headersSent) {
-      const classified = classifyFileError(error);
       response.writeHead(classified.status, { 'Content-Type': 'application/json; charset=utf-8' });
       response.end(`${JSON.stringify({ error: classified.code })}\n`);
     } else {

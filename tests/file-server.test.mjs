@@ -7,7 +7,11 @@ import { DriveUploadStages } from '../scripts/lib/drive-upload-stages.mjs';
 import { FileHttpError, classifyFileError } from '../scripts/lib/file-http-errors.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from '../scripts/lib/file-content-policy.mjs';
 import { matchDriveMutationRoute } from '../scripts/lib/file-route-policy.mjs';
-import { assertStagedUploadOwner, settleClaimedUpload } from '../scripts/lib/staged-upload-cleanup.mjs';
+import {
+  assertStagedUploadOwner,
+  settleClaimedUpload,
+  throwUploadRegistrationError,
+} from '../scripts/lib/staged-upload-cleanup.mjs';
 import { authorizeUpload, uploadApiForPurpose } from '../scripts/lib/upload-authorization.mjs';
 
 const uploadApis = {
@@ -151,4 +155,32 @@ test('staged cleanup is object-scoped and propagates Drive failures', async () =
     },
   });
   assert.equal(deleteCalls, 1);
+});
+
+test('failed upload cleanup cannot replace the original registration error', async () => {
+  const registrationError = new Error('Could not find public function work:registerDriveUpload');
+  let cleanupFailure;
+  let directDeleteCalls = 0;
+
+  await assert.rejects(
+    throwUploadRegistrationError({
+      registrationError,
+      settleStage: async () => {},
+      deleteDriveFile: async () => { directDeleteCalls += 1; },
+    }),
+    (error) => error.code === 'UPLOAD_REGISTRATION_FAILED' && error.cause === registrationError,
+  );
+  assert.equal(directDeleteCalls, 0);
+
+  await assert.rejects(
+    throwUploadRegistrationError({
+      registrationError,
+      settleStage: async () => { throw new Error('UPLOAD_NOT_FOUND'); },
+      deleteDriveFile: async () => { throw new FileHttpError(502, 'DRIVE_DELETE_FAILED'); },
+      onCleanupFailure: (failure) => { cleanupFailure = failure; },
+    }),
+    (error) => error.code === 'UPLOAD_REGISTRATION_FAILED' && error.cause === registrationError,
+  );
+  assert.equal(cleanupFailure.stageCleanupError.message, 'UPLOAD_NOT_FOUND');
+  assert.equal(cleanupFailure.driveCleanupError.code, 'DRIVE_DELETE_FAILED');
 });
