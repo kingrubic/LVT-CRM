@@ -1,0 +1,354 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		200000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000001 /* AppDelegate.swift */; };
+		200000000000000000000002 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000002 /* SceneDelegate.swift */; };
+		200000000000000000000003 /* RootTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000003 /* RootTabBarController.swift */; };
+		200000000000000000000006 /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000006 /* AuthModels.swift */; };
+		200000000000000000000007 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000007 /* CredentialStore.swift */; };
+		200000000000000000000008 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000008 /* TokenStore.swift */; };
+		200000000000000000000009 /* ConvexConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000009 /* ConvexConfig.swift */; };
+		20000000000000000000000A /* ConvexHttpClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000A /* ConvexHttpClient.swift */; };
+		20000000000000000000000B /* AuthRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000B /* AuthRepository.swift */; };
+		20000000000000000000000C /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000C /* AppContainer.swift */; };
+		20000000000000000000000D /* LoginViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000D /* LoginViewController.swift */; };
+		20000000000000000000000E /* ChangePasswordViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000E /* ChangePasswordViewController.swift */; };
+		20000000000000000000000F /* AuthFlowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000F /* AuthFlowCoordinator.swift */; };
+		200000000000000000000010 /* SessionsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000010 /* SessionsRepository.swift */; };
+		200000000000000000000011 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000011 /* ProfileViewController.swift */; };
+		200000000000000000000012 /* DevicesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000012 /* DevicesViewController.swift */; };
+		200000000000000000000013 /* NotificationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000013 /* NotificationModels.swift */; };
+		200000000000000000000014 /* NotificationsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000014 /* NotificationsRepository.swift */; };
+		200000000000000000000015 /* NotificationsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000015 /* NotificationsViewModel.swift */; };
+		200000000000000000000016 /* NotificationsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000016 /* NotificationsViewController.swift */; };
+		200000000000000000000017 /* DutiesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000017 /* DutiesRepository.swift */; };
+		200000000000000000000018 /* DutiesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000018 /* DutiesViewModel.swift */; };
+		200000000000000000000019 /* DutiesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000019 /* DutiesViewController.swift */; };
+		20000000000000000000001A /* WorkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000001A /* WorkRepository.swift */; };
+		20000000000000000000001B /* WorkViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000001B /* WorkViewModel.swift */; };
+		20000000000000000000001C /* WorkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000001C /* WorkViewController.swift */; };
+		20000000000000000000001D /* APNsTokenRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000001D /* APNsTokenRegistrar.swift */; };
+		20000000000000000000001E /* NotificationCenterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000001E /* NotificationCenterService.swift */; };
+		20000000000000000000001F /* NotificationSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000001F /* NotificationSyncService.swift */; };
+		200000000000000000000020 /* PushEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000020 /* PushEvents.swift */; };
+		200000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000021 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		300000000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		300000000000000000000002 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		300000000000000000000003 /* RootTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabBarController.swift; sourceTree = "<group>"; };
+		300000000000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		300000000000000000000005 /* LvtCrmUIKit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LvtCrmUIKit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		300000000000000000000006 /* AuthModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthModels.swift; sourceTree = "<group>"; };
+		300000000000000000000007 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
+		300000000000000000000008 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
+		300000000000000000000009 /* ConvexConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvexConfig.swift; sourceTree = "<group>"; };
+		30000000000000000000000A /* ConvexHttpClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvexHttpClient.swift; sourceTree = "<group>"; };
+		30000000000000000000000B /* AuthRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthRepository.swift; sourceTree = "<group>"; };
+		30000000000000000000000C /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
+		30000000000000000000000D /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
+		30000000000000000000000E /* ChangePasswordViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordViewController.swift; sourceTree = "<group>"; };
+		30000000000000000000000F /* AuthFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowCoordinator.swift; sourceTree = "<group>"; };
+		300000000000000000000010 /* SessionsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsRepository.swift; sourceTree = "<group>"; };
+		300000000000000000000011 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
+		300000000000000000000012 /* DevicesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicesViewController.swift; sourceTree = "<group>"; };
+		300000000000000000000013 /* NotificationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationModels.swift; sourceTree = "<group>"; };
+		300000000000000000000014 /* NotificationsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsRepository.swift; sourceTree = "<group>"; };
+		300000000000000000000015 /* NotificationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsViewModel.swift; sourceTree = "<group>"; };
+		300000000000000000000016 /* NotificationsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsViewController.swift; sourceTree = "<group>"; };
+		300000000000000000000017 /* DutiesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutiesRepository.swift; sourceTree = "<group>"; };
+		300000000000000000000018 /* DutiesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutiesViewModel.swift; sourceTree = "<group>"; };
+		300000000000000000000019 /* DutiesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutiesViewController.swift; sourceTree = "<group>"; };
+		30000000000000000000001A /* WorkRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkRepository.swift; sourceTree = "<group>"; };
+		30000000000000000000001B /* WorkViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkViewModel.swift; sourceTree = "<group>"; };
+		30000000000000000000001C /* WorkViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkViewController.swift; sourceTree = "<group>"; };
+		30000000000000000000001D /* APNsTokenRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APNsTokenRegistrar.swift; sourceTree = "<group>"; };
+		30000000000000000000001E /* NotificationCenterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCenterService.swift; sourceTree = "<group>"; };
+		30000000000000000000001F /* NotificationSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSyncService.swift; sourceTree = "<group>"; };
+		300000000000000000000020 /* PushEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushEvents.swift; sourceTree = "<group>"; };
+		300000000000000000000021 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		400000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		500000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				500000000000000000000002 /* LvtCrmUIKit */,
+				500000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		500000000000000000000002 /* LvtCrmUIKit */ = {
+			isa = PBXGroup;
+			children = (
+				300000000000000000000001 /* AppDelegate.swift */,
+				300000000000000000000002 /* SceneDelegate.swift */,
+				30000000000000000000000C /* AppContainer.swift */,
+				30000000000000000000000F /* AuthFlowCoordinator.swift */,
+				300000000000000000000003 /* RootTabBarController.swift */,
+				30000000000000000000000D /* LoginViewController.swift */,
+				30000000000000000000000E /* ChangePasswordViewController.swift */,
+				300000000000000000000011 /* ProfileViewController.swift */,
+				300000000000000000000012 /* DevicesViewController.swift */,
+				300000000000000000000016 /* NotificationsViewController.swift */,
+				300000000000000000000015 /* NotificationsViewModel.swift */,
+				300000000000000000000014 /* NotificationsRepository.swift */,
+				300000000000000000000013 /* NotificationModels.swift */,
+				30000000000000000000001D /* APNsTokenRegistrar.swift */,
+				30000000000000000000001E /* NotificationCenterService.swift */,
+				30000000000000000000001F /* NotificationSyncService.swift */,
+				300000000000000000000020 /* PushEvents.swift */,
+				300000000000000000000019 /* DutiesViewController.swift */,
+				300000000000000000000018 /* DutiesViewModel.swift */,
+				300000000000000000000017 /* DutiesRepository.swift */,
+				30000000000000000000001C /* WorkViewController.swift */,
+				30000000000000000000001B /* WorkViewModel.swift */,
+				30000000000000000000001A /* WorkRepository.swift */,
+				300000000000000000000006 /* AuthModels.swift */,
+				30000000000000000000000B /* AuthRepository.swift */,
+				300000000000000000000010 /* SessionsRepository.swift */,
+				300000000000000000000007 /* CredentialStore.swift */,
+				300000000000000000000008 /* TokenStore.swift */,
+				300000000000000000000009 /* ConvexConfig.swift */,
+				30000000000000000000000A /* ConvexHttpClient.swift */,
+				300000000000000000000021 /* Assets.xcassets */,
+				300000000000000000000004 /* Info.plist */,
+			);
+			path = LvtCrmUIKit;
+			sourceTree = "<group>";
+		};
+		500000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				300000000000000000000005 /* LvtCrmUIKit.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		100000000000000000000001 /* LvtCrmUIKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 600000000000000000000002 /* Build configuration list for PBXNativeTarget "LvtCrmUIKit" */;
+			buildPhases = (
+				400000000000000000000002 /* Sources */,
+				400000000000000000000001 /* Frameworks */,
+				400000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LvtCrmUIKit;
+			productName = LvtCrmUIKit;
+			productReference = 300000000000000000000005 /* LvtCrmUIKit.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		100000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+			};
+			buildConfigurationList = 600000000000000000000001 /* Build configuration list for PBXProject "LvtCrmUIKit" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = vi;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				vi,
+				Base,
+			);
+			mainGroup = 500000000000000000000001;
+			productRefGroup = 500000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				100000000000000000000001 /* LvtCrmUIKit */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		400000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000021 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		400000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000001 /* AppDelegate.swift in Sources */,
+				200000000000000000000002 /* SceneDelegate.swift in Sources */,
+				200000000000000000000003 /* RootTabBarController.swift in Sources */,
+				200000000000000000000006 /* AuthModels.swift in Sources */,
+				200000000000000000000007 /* CredentialStore.swift in Sources */,
+				200000000000000000000008 /* TokenStore.swift in Sources */,
+				200000000000000000000009 /* ConvexConfig.swift in Sources */,
+				20000000000000000000000A /* ConvexHttpClient.swift in Sources */,
+				20000000000000000000000B /* AuthRepository.swift in Sources */,
+				20000000000000000000000C /* AppContainer.swift in Sources */,
+				20000000000000000000000D /* LoginViewController.swift in Sources */,
+				20000000000000000000000E /* ChangePasswordViewController.swift in Sources */,
+				20000000000000000000000F /* AuthFlowCoordinator.swift in Sources */,
+				200000000000000000000010 /* SessionsRepository.swift in Sources */,
+				200000000000000000000011 /* ProfileViewController.swift in Sources */,
+				200000000000000000000012 /* DevicesViewController.swift in Sources */,
+				200000000000000000000013 /* NotificationModels.swift in Sources */,
+				200000000000000000000014 /* NotificationsRepository.swift in Sources */,
+				200000000000000000000015 /* NotificationsViewModel.swift in Sources */,
+				200000000000000000000016 /* NotificationsViewController.swift in Sources */,
+				200000000000000000000017 /* DutiesRepository.swift in Sources */,
+				200000000000000000000018 /* DutiesViewModel.swift in Sources */,
+				200000000000000000000019 /* DutiesViewController.swift in Sources */,
+				20000000000000000000001A /* WorkRepository.swift in Sources */,
+				20000000000000000000001B /* WorkViewModel.swift in Sources */,
+				20000000000000000000001C /* WorkViewController.swift in Sources */,
+				20000000000000000000001D /* APNsTokenRegistrar.swift in Sources */,
+				20000000000000000000001E /* NotificationCenterService.swift in Sources */,
+				20000000000000000000001F /* NotificationSyncService.swift in Sources */,
+				200000000000000000000020 /* PushEvents.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		700000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		700000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		700000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		700000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		600000000000000000000001 /* Build configuration list for PBXProject "LvtCrmUIKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				700000000000000000000001 /* Debug */,
+				700000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		600000000000000000000002 /* Build configuration list for PBXNativeTarget "LvtCrmUIKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				700000000000000000000003 /* Debug */,
+				700000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 100000000000000000000002 /* Project object */;
+}
