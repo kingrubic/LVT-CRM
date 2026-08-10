@@ -62,24 +62,39 @@ async function uploadDriveFile(fetchAccessToken, file) {
     body: file,
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.driveFileId) {
+  if (!response.ok || !result?.driveFileId || !result?.cleanupToken) {
     const code = result?.error || `UPLOAD_FAILED:${response.status}`;
     throw new Error(code);
   }
   return result;
 }
 
-async function deleteDriveFile(fetchAccessToken, driveFileId) {
-  if (!driveFileId) return;
+async function settleUploadedFile(fetchAccessToken, cleanupToken, committed) {
+  if (!cleanupToken) return;
+  const token = await fetchAccessToken({ forceRefreshToken: false });
+  if (!token) throw new Error('AUTH_REQUIRED');
+  const response = await fetch(`/api/files/uploads/${encodeURIComponent(cleanupToken)}`, {
+    method: committed ? 'POST' : 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`UPLOAD_SETTLEMENT_FAILED:${response.status}`);
+  }
+}
+
+async function runCleanupJob(fetchAccessToken, cleanupJobId) {
   try {
     const token = await fetchAccessToken({ forceRefreshToken: false });
     if (!token) return;
-    await fetch(`/api/files/drive/${encodeURIComponent(driveFileId)}`, {
+    const response = await fetch(`/api/files/cleanup-jobs/${encodeURIComponent(cleanupJobId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-  } catch {
-    // best-effort
+    if (!response.ok && response.status !== 404) {
+      console.error('Superseded Drive file cleanup failed', response.status);
+    }
+  } catch (error) {
+    console.error('Superseded Drive file cleanup failed', error);
   }
 }
 
@@ -271,28 +286,63 @@ function FaultModal({ person, onClose, onSaved }) {
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pendingSettlement, setPendingSettlement] = useState(null);
 
   const submit = async (event) => {
     event.preventDefault();
+    if (pendingSettlement) {
+      setSaving(true);
+      setError('');
+      try {
+        await settleUploadedFile(fetchAccessToken, pendingSettlement.cleanupToken, true);
+        setPendingSettlement(null);
+        onSaved();
+        onClose();
+      } catch (settlementError) {
+        console.error('Fault upload settlement retry failed', settlementError);
+        setError('Lỗi đã được ghi nhận và tệp vẫn được giữ an toàn, nhưng chưa thể hoàn tất upload. Vui lòng thử lại.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!file) return setError('Vui lòng đính kèm ảnh/PDF bằng chứng.');
     setSaving(true);
     setError('');
+    let uploaded = null;
+    let crmCommitted = false;
     try {
-      const uploaded = await uploadDriveFile(fetchAccessToken, file);
+      uploaded = await uploadDriveFile(fetchAccessToken, file);
       await recordFault({
         targetUserId: person._id,
         violationDate,
         reason,
         driveFileId: uploaded.driveFileId,
         driveChecksum: uploaded.driveChecksum,
+        cleanupToken: uploaded.cleanupToken,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
       });
+      crmCommitted = true;
+      await settleUploadedFile(fetchAccessToken, uploaded.cleanupToken, true);
       onSaved();
       onClose();
-    } catch {
-      setError('Không thể ghi nhận lỗi. Kiểm tra quyền và tệp đính kèm.');
+    } catch (submitError) {
+      if (crmCommitted) {
+        setPendingSettlement(uploaded);
+        console.error('Fault upload settlement failed after CRM commit', submitError);
+        setError('Lỗi đã được ghi nhận và tệp vẫn được giữ an toàn, nhưng chưa thể hoàn tất upload. Vui lòng thử lại.');
+      } else if (uploaded) {
+        try {
+          await settleUploadedFile(fetchAccessToken, uploaded.cleanupToken, false);
+        } catch (cleanupError) {
+          console.error('Fault upload cleanup failed', cleanupError);
+        }
+        setError('Không thể ghi nhận lỗi. Kiểm tra quyền và tệp đính kèm.');
+      } else {
+        setError('Không thể ghi nhận lỗi. Kiểm tra quyền và tệp đính kèm.');
+      }
     } finally {
       setSaving(false);
     }
@@ -329,7 +379,9 @@ function FaultModal({ person, onClose, onSaved }) {
         {error ? <div className="pr-feedback error">{error}</div> : null}
         <div className="pr-modal-actions">
           <button type="button" className="pr-ghost-button" onClick={onClose}>Hủy</button>
-          <button type="submit" className="pr-primary-button" disabled={saving}>{saving ? 'Đang lưu…' : 'Ghi nhận'}</button>
+          <button type="submit" className="pr-primary-button" disabled={saving}>
+            {saving ? 'Đang lưu…' : pendingSettlement ? 'Thử hoàn tất lại' : 'Ghi nhận'}
+          </button>
         </div>
       </form>
     </div>
@@ -338,8 +390,7 @@ function FaultModal({ person, onClose, onSaved }) {
 
 function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose, onSaved }) {
   const { fetchAccessToken } = useConvexAuth();
-  const upsertFile = useMutation(anyApi.peopleReview.upsertEvaluationFile);
-  const submitText = useMutation(anyApi.peopleReview.submitEvaluationText);
+  const saveBatch = useMutation(anyApi.peopleReview.saveEvaluationBatch);
   const nowQ = currentQuarter();
   const [quarter, setQuarter] = useState(nowQ.quarter);
   const [year, setYear] = useState(nowQ.year);
@@ -353,6 +404,8 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
   const [boardingText, setBoardingText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [requestId] = useState(() => crypto.randomUUID());
+  const [pendingSettlement, setPendingSettlement] = useState(null);
 
   const findExisting = (kind, periodKey) =>
     existingEvaluations.find((item) => item.kind === kind && item.periodKey === periodKey) || null;
@@ -374,35 +427,32 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
     setter(next);
   };
 
-  const saveSection = async ({ kind, file, text, periodArgs, existing }) => {
-    let fileId = existing?._id || null;
-    if (file) {
-      if (existing?.textLocked) throw new Error('EVALUATION_FILE_LOCKED');
-      const uploaded = await uploadDriveFile(fetchAccessToken, file);
-      const result = await upsertFile({
-        targetUserId: person._id,
-        kind,
-        ...periodArgs,
-        driveFileId: uploaded.driveFileId,
-        driveChecksum: uploaded.driveChecksum,
-        fileName: file.name,
-        fileType: file.type || 'application/octet-stream',
-        fileSize: file.size,
-      });
-      fileId = result.fileId;
-      if (result.previousDriveFileId) await deleteDriveFile(fetchAccessToken, result.previousDriveFileId);
-    }
-    if (text.trim()) {
-      if (!fileId) throw new Error('EVALUATION_FILE_REQUIRED');
-      await submitText({ fileId, content: text.trim() });
-    }
-  };
-
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError('');
+    if (pendingSettlement) {
+      try {
+        await Promise.all(pendingSettlement.uploadedFiles.map((uploaded) =>
+          settleUploadedFile(fetchAccessToken, uploaded.cleanupToken, true)));
+        await Promise.all(pendingSettlement.cleanupJobIds.map((cleanupJobId) =>
+          runCleanupJob(fetchAccessToken, cleanupJobId)));
+        setPendingSettlement(null);
+        onSaved();
+        onClose();
+      } catch (settlementError) {
+        console.error('People review evaluation settlement retry failed', settlementError);
+        setError('Đánh giá đã được lưu và tệp vẫn được giữ an toàn, nhưng chưa thể hoàn tất upload. Vui lòng thử lại.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    const uploadedFiles = [];
+    let crmCommitted = false;
+    let cleanupJobIds = [];
     try {
+      /** @type {Array<any>} */
       const jobs = [];
       if (quarterFile || quarterText.trim()) {
         jobs.push({
@@ -438,10 +488,48 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
         setSaving(false);
         return;
       }
-      for (const job of jobs) await saveSection(job);
+      for (const job of jobs) {
+        if (!job.file) continue;
+        if (job.existing?.textLocked) throw new Error('EVALUATION_FILE_LOCKED');
+        job.uploaded = await uploadDriveFile(fetchAccessToken, job.file);
+        uploadedFiles.push(job.uploaded);
+      }
+      const result = await saveBatch({
+        targetUserId: person._id,
+        requestId,
+        sections: jobs.map((job) => ({
+          kind: job.kind,
+          ...job.periodArgs,
+          ...(job.text.trim() ? { content: job.text.trim() } : {}),
+          ...(job.uploaded ? {
+            upload: {
+              driveFileId: job.uploaded.driveFileId,
+              driveChecksum: job.uploaded.driveChecksum,
+              cleanupToken: job.uploaded.cleanupToken,
+              fileName: job.file.name,
+              fileType: job.file.type || 'application/octet-stream',
+              fileSize: job.file.size,
+            },
+          } : {}),
+        })),
+      });
+      crmCommitted = true;
+      cleanupJobIds = result.cleanupJobIds || [];
+      await Promise.all(uploadedFiles.map((uploaded) =>
+        settleUploadedFile(fetchAccessToken, uploaded.cleanupToken, true)));
+      await Promise.all(cleanupJobIds.map((cleanupJobId) =>
+        runCleanupJob(fetchAccessToken, cleanupJobId)));
       onSaved();
       onClose();
     } catch (err) {
+      if (crmCommitted) {
+        setPendingSettlement({ uploadedFiles, cleanupJobIds });
+        console.error('People review evaluation settlement failed after CRM commit', err);
+        setError('Đánh giá đã được lưu và tệp vẫn được giữ an toàn, nhưng chưa thể hoàn tất upload. Vui lòng thử lại.');
+        return;
+      }
+      await Promise.allSettled(uploadedFiles.map((uploaded) =>
+        settleUploadedFile(fetchAccessToken, uploaded.cleanupToken, false)));
       console.error('People review evaluation save failed', err);
       const message = String(err?.message || err?.data || err);
       if (message.includes('EVALUATION_FILE_LOCKED')) setError('File kỳ này đã có BGH đánh giá — không thể upload lại.');
@@ -579,7 +667,9 @@ function EvaluationModal({ person, boardingOptions, existingEvaluations, onClose
         {error ? <div className="pr-feedback error">{error}</div> : null}
         <div className="pr-modal-actions">
           <button type="button" className="pr-ghost-button" onClick={onClose}>Hủy</button>
-          <button type="submit" className="pr-primary-button" disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu'}</button>
+          <button type="submit" className="pr-primary-button" disabled={saving}>
+            {saving ? 'Đang lưu…' : pendingSettlement ? 'Thử hoàn tất lại' : 'Lưu'}
+          </button>
         </div>
       </form>
     </div>

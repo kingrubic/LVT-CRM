@@ -57,6 +57,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
@@ -82,7 +83,12 @@ fun WorkScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     if (state.isAdmin) {
-        AdminWorkScreen(state = state, onRefresh = viewModel::refresh, onReview = viewModel::reviewCompletion)
+        AdminWorkScreen(
+            state = state,
+            focusId = focusId,
+            onRefresh = viewModel::refresh,
+            onReview = viewModel::reviewCompletion,
+        )
         return
     }
     val listState = rememberLazyListState()
@@ -94,17 +100,22 @@ fun WorkScreen(
     val pendingApprovalCount = orderedApprovals.count { it.myDecision.isBlank() }
     val pendingCompletionCount = state.tasks.count { needsCompletion(it.status) }
     val visibleApprovals = if (canApproveDocuments) {
-        visibleWorkApprovals(orderedApprovals, pendingFilterOnly)
+        visibleWorkApprovals(orderedApprovals, pendingFilterOnly && focusId == null)
     } else {
         emptyList()
     }
     val visibleTasks = when {
-        canApproveDocuments && pendingFilterOnly -> emptyList()
-        !canApproveDocuments && pendingFilterOnly -> state.tasks.filter { needsCompletion(it.status) }
+        canApproveDocuments && pendingFilterOnly && focusId == null -> emptyList()
+        !canApproveDocuments && pendingFilterOnly && focusId == null -> state.tasks.filter { needsCompletion(it.status) }
         else -> state.tasks
     }
 
     LaunchedEffect(focusId, visibleApprovals, visibleTasks) {
+        val approvalIndex = visibleApprovals.indexOfFirst { it.id == focusId }
+        if (approvalIndex >= 0) {
+            listState.animateScrollToItem(approvalIndex + 1)
+            return@LaunchedEffect
+        }
         val taskIndex = visibleTasks.indexOfFirst { it.id == focusId }
         if (taskIndex >= 0) {
             val approvalOffset = if (visibleApprovals.isEmpty()) 0 else visibleApprovals.size + 1
@@ -223,7 +234,8 @@ fun WorkScreen(
                         items(visibleApprovals, key = { "approval-${it.id}" }) { approval ->
                             ApprovalCard(
                                 approval = approval,
-                                busy = state.busyApprovalId == approval.id,
+                                focused = approval.id == focusId,
+                                busy = state.busyApprovalId != null || state.busyTaskId != null,
                                 onDecision = { approve ->
                                     pendingApprovalAction = ApprovalAction(approval, approve)
                                 },
@@ -252,7 +264,7 @@ fun WorkScreen(
                         WorkCard(
                             task = task,
                             focused = task.id == focusId,
-                            busy = state.busyTaskId == task.id,
+                            busy = state.busyTaskId != null || state.busyApprovalId != null,
                             onComplete = {
                                 if (task.isAdmin) {
                                     viewModel.requestComplete(task)
@@ -376,11 +388,13 @@ internal enum class AdminDocumentFilter { All, Pending, Approved, PendingComplet
 @Composable
 private fun AdminWorkScreen(
     state: WorkUiState,
+    focusId: String?,
     onRefresh: () -> Unit,
     onReview: (WorkCompletionReviewItem, Boolean, Int?, String?) -> Unit,
 ) {
     var filter by rememberSaveable { mutableStateOf(AdminDocumentFilter.All) }
-    var selectedDocument by remember { mutableStateOf<WorkApprovalItem?>(null) }
+    var selectedDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedDocument = currentAdminDocument(state.approvals, selectedDocumentId)
     var selectedReview by remember { mutableStateOf<WorkCompletionReviewItem?>(null) }
     var qualityPercent by rememberSaveable { mutableStateOf("100") }
     var rejectionReason by rememberSaveable { mutableStateOf("") }
@@ -389,6 +403,19 @@ private fun AdminWorkScreen(
     val allCount = state.approvals.size
     val pendingCount = state.approvals.count { it.status == "pending" }
     val approvedCount = state.approvals.count { it.status == "approved" }
+
+    BackHandler(enabled = selectedDocumentId != null && selectedReview == null) {
+        selectedDocumentId = null
+    }
+    LaunchedEffect(focusId, state.approvals) {
+        val focusedDocument = focusedAdminDocument(state.approvals, focusId)
+        if (focusedDocument != null) selectedDocumentId = focusedDocument.id
+    }
+    LaunchedEffect(selectedDocumentId, selectedDocument) {
+        if (selectedDocumentId != null && selectedDocument == null && !state.loading) {
+            selectedDocumentId = null
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -468,7 +495,7 @@ private fun AdminWorkScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(documents, key = { it.id }) { document ->
-                            AdminDocumentCard(document = document, onOpen = { selectedDocument = document })
+                            AdminDocumentCard(document = document, onOpen = { selectedDocumentId = document.id })
                         }
                     }
                 }
@@ -476,7 +503,7 @@ private fun AdminWorkScreen(
             else -> {
                 val document = selectedDocument ?: return@Column
                 TextButton(
-                    onClick = { selectedDocument = null },
+                    onClick = { selectedDocumentId = null },
                     modifier = Modifier.padding(bottom = 6.dp),
                 ) {
                     Text("← Danh sách công văn")
@@ -510,7 +537,7 @@ private fun AdminWorkScreen(
                                 AdminAssignmentCard(
                                     assignment = assignment,
                                     pendingReviews = pendingReviews,
-                                    busyReviewId = state.busyReviewId,
+                                    busy = state.busyReviewId != null,
                                     onReview = { review ->
                                         qualityPercent = "100"
                                         rejectionReason = ""
@@ -716,6 +743,18 @@ internal fun visibleAdminDocuments(
     }
 }
 
+internal fun currentAdminDocument(
+    documents: List<WorkApprovalItem>,
+    selectedDocumentId: String?,
+): WorkApprovalItem? = documents.firstOrNull { it.id == selectedDocumentId }
+
+internal fun focusedAdminDocument(
+    documents: List<WorkApprovalItem>,
+    focusId: String?,
+): WorkApprovalItem? = documents.firstOrNull { document ->
+    document.id == focusId || document.assignments.any { it.id == focusId }
+}
+
 @Composable
 private fun DocumentSummaryCard(document: WorkApprovalItem) {
     val members = document.assignments.flatMap { it.members }
@@ -812,7 +851,7 @@ private fun DocumentSummaryCard(document: WorkApprovalItem) {
 private fun AdminAssignmentCard(
     assignment: WorkDocumentAssignment,
     pendingReviews: Map<String, WorkCompletionReviewItem>,
-    busyReviewId: String?,
+    busy: Boolean,
     onReview: (WorkCompletionReviewItem) -> Unit,
 ) {
     val completedCount = assignment.members.count { it.status in completedWorkStatuses }
@@ -919,7 +958,7 @@ private fun AdminAssignmentCard(
                     .first()
                 Button(
                     onClick = { onReview(nextReview) },
-                    enabled = busyReviewId != nextReview.workItemId + nextReview.userId,
+                    enabled = !busy,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 14.dp),
@@ -1018,6 +1057,7 @@ private data class ApprovalAction(
 @Composable
 private fun ApprovalCard(
     approval: WorkApprovalItem,
+    focused: Boolean,
     busy: Boolean,
     onDecision: (Boolean) -> Unit,
 ) {
@@ -1067,7 +1107,7 @@ private fun ApprovalCard(
                 modifier = Modifier.weight(1f),
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = cardContainerColor),
-                border = BorderStroke(1.dp, cardBorderColor),
+                border = BorderStroke(if (focused) 2.dp else 1.dp, if (focused) MaterialTheme.colorScheme.primary else cardBorderColor),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             ) {
                 Column(modifier = Modifier.padding(17.dp)) {

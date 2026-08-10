@@ -7,12 +7,20 @@ if (( $# == 0 )); then
 fi
 
 export CONVEX_SELF_HOSTED_URL="http://127.0.0.1:3210"
-export CONVEX_SELF_HOSTED_ADMIN_KEY="$(
+if ! admin_key="$(
   security find-generic-password \
     -s lvt-convex-local-admin-key \
     -a lvt-crm \
     -w
-)"
+)"; then
+  echo "failed to read lvt-convex-local-admin-key from Keychain" >&2
+  exit 78
+fi
+if [[ -z "$admin_key" ]]; then
+  echo "lvt-convex-local-admin-key is empty" >&2
+  exit 78
+fi
+export CONVEX_SELF_HOSTED_ADMIN_KEY="$admin_key"
 export CONVEX_DEPLOYMENT=""
 
 exec "$@"

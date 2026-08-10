@@ -34,3 +34,9 @@ tmp/
 android-app/local.properties
 android-app/.gradle/
 android-app/**/build/
+
+# Local tooling / archives
+.clawpatch/
+ios-app.zip
+acceptance-platform/logs/
+acceptance-platform/*.bak*

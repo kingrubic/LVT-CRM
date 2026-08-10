@@ -63,14 +63,42 @@ data class WorkSnapshot(
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
 )
 
+internal data class ApprovalDecision(
+    val userId: String,
+    val approved: Boolean,
+    val rejected: Boolean,
+)
+
+internal fun decisionForUser(currentUserId: String, approvers: List<ApprovalDecision>): String {
+    val approver = approvers.firstOrNull { it.userId == currentUserId } ?: return ""
+    return when {
+        approver.approved -> "approved"
+        approver.rejected -> "rejected"
+        else -> ""
+    }
+}
+
+interface WorkOperations {
+    suspend fun listMine(): WorkSnapshot
+    suspend fun complete(item: WorkTaskItem, qualityPercent: Int? = null)
+    suspend fun decideApproval(documentId: String, approve: Boolean)
+    suspend fun reviewCompletion(
+        review: WorkCompletionReviewItem,
+        approve: Boolean,
+        qualityPercent: Int? = null,
+        rejectionReason: String? = null,
+    )
+}
+
 class WorkRepository(
     private val convex: ConvexHttpClient,
-) {
-    suspend fun listMine(): WorkSnapshot {
+) : WorkOperations {
+    override suspend fun listMine(): WorkSnapshot {
         val result = convex.query("work:listMine")
         val isAdmin = result.optBoolean("isAdmin", false)
         val accessLevel = result.optInt("level", 0)
         val assignerMode = result.optString("assignerMode", "")
+        val currentUserId = result.optString("userId")
         val tasks = mutableListOf<WorkTaskItem>()
         val approvals = mutableListOf<WorkApprovalItem>()
 
@@ -79,16 +107,16 @@ class WorkRepository(
             for (i in 0 until approvalArray.length()) {
                 val document = approvalArray.getJSONObject(i)
                 val approvers = document.optJSONArray("approvers") ?: org.json.JSONArray()
-                var myDecision = ""
+                val decisions = mutableListOf<ApprovalDecision>()
                 for (approverIndex in 0 until approvers.length()) {
                     val approver = approvers.optJSONObject(approverIndex) ?: continue
-                    myDecision = when {
-                        approver.optBoolean("approved", false) -> "approved"
-                        approver.optBoolean("rejected", false) -> "rejected"
-                        else -> ""
-                    }
-                    if (myDecision.isNotBlank()) break
+                    decisions += ApprovalDecision(
+                        userId = approver.optString("_id"),
+                        approved = approver.optBoolean("approved", false),
+                        rejected = approver.optBoolean("rejected", false),
+                    )
                 }
+                val myDecision = decisionForUser(currentUserId, decisions)
                 approvals += WorkApprovalItem(
                     id = document.optString("_id"),
                     fileName = document.optString("fileName"),
@@ -173,7 +201,7 @@ class WorkRepository(
         )
     }
 
-    suspend fun complete(item: WorkTaskItem, qualityPercent: Int? = null) {
+    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?) {
         val args = JSONObject()
         if (qualityPercent != null) {
             args.put("qualityPercent", qualityPercent)
@@ -190,16 +218,16 @@ class WorkRepository(
         }
     }
 
-    suspend fun decideApproval(documentId: String, approve: Boolean) {
+    override suspend fun decideApproval(documentId: String, approve: Boolean) {
         val path = if (approve) "work:approveDocument" else "work:rejectDocument"
         convex.mutation(path, JSONObject().put("documentId", documentId))
     }
 
-    suspend fun reviewCompletion(
+    override suspend fun reviewCompletion(
         review: WorkCompletionReviewItem,
         approve: Boolean,
-        qualityPercent: Int? = null,
-        rejectionReason: String? = null,
+        qualityPercent: Int?,
+        rejectionReason: String?,
     ) {
         val args = JSONObject()
             .put("workItemId", review.workItemId)

@@ -39,7 +39,7 @@ class NotificationScheduler(context: Context) {
             .build()
         workManager.enqueueUniqueWork(
             IMMEDIATE_WORK,
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             immediate,
         )
     }
@@ -47,8 +47,10 @@ class NotificationScheduler(context: Context) {
     fun cancel() {
         workManager.cancelUniqueWork(PERIODIC_WORK)
         workManager.cancelUniqueWork(IMMEDIATE_WORK)
-        NotificationManagerCompat.from(appContext).cancelAll()
-        NotificationSyncWorker.clearDeliveryHistory(appContext)
+        NotificationSessionBoundary.cleanup {
+            NotificationManagerCompat.from(appContext).cancelAll()
+            NotificationSyncWorker.clearDeliveryHistory(appContext)
+        }
     }
 
     companion object {

@@ -10,6 +10,14 @@ import {
 } from "./lib";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import {
+  claimDriveUploadCleanup,
+  commitDriveUploadStage,
+  completeDriveUploadCleanup,
+  finalizeDriveUploadStage,
+  registerDriveUploadStage,
+  releaseDriveUploadCleanup,
+} from "./driveUploadStages";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SCHOOL_YEAR_RE = /^\d{4}-\d{4}$/;
@@ -60,7 +68,12 @@ function assertFileMeta(args: {
   }
   return {
     fileName,
-    fileType: args.fileType || "application/octet-stream",
+    fileType: ({
+      jpeg: "image/jpeg",
+      jpg: "image/jpeg",
+      pdf: "application/pdf",
+      png: "image/png",
+    } as Record<string, string>)[ext] || "application/octet-stream",
     fileSize: Math.round(args.fileSize),
     driveFileId: args.driveFileId.trim(),
   };
@@ -450,6 +463,75 @@ export const authorizeFileUpload = query({
   },
 });
 
+async function uploadActor(ctx: any) {
+  const access = await requirePeopleReviewAccess(ctx);
+  const canUpload = access.isOps || [2, 3, 4, 5].includes(access.level);
+  if (!canUpload) throw new Error("PEOPLE_REVIEW_UPLOAD_FORBIDDEN");
+  return access;
+}
+
+export const registerDriveUpload = mutation({
+  args: { cleanupToken: v.string(), driveFileId: v.string() },
+  handler: async (ctx, args) => {
+    const access = await uploadActor(ctx);
+    await registerDriveUploadStage(ctx, args, String(access.user._id), "people-review");
+  },
+});
+
+export const claimStagedUploadCleanup = mutation({
+  args: { cleanupToken: v.string(), claimId: v.string() },
+  handler: async (ctx, args) => {
+    const access = await uploadActor(ctx);
+    return await claimDriveUploadCleanup(ctx, args, String(access.user._id), "people-review");
+  },
+});
+
+export const finalizeStagedUpload = mutation({
+  args: { cleanupToken: v.string() },
+  handler: async (ctx, args) => {
+    const access = await uploadActor(ctx);
+    await finalizeDriveUploadStage(ctx, args.cleanupToken, String(access.user._id), "people-review");
+  },
+});
+
+export const completeStagedUploadCleanup = mutation({
+  args: { cleanupToken: v.string(), claimId: v.string() },
+  handler: async (ctx, args) => {
+    const access = await uploadActor(ctx);
+    await completeDriveUploadCleanup(ctx, args, String(access.user._id), "people-review");
+  },
+});
+
+export const releaseStagedUploadCleanup = mutation({
+  args: { cleanupToken: v.string(), claimId: v.string() },
+  handler: async (ctx, args) => {
+    const access = await uploadActor(ctx);
+    await releaseDriveUploadCleanup(ctx, args, String(access.user._id), "people-review");
+  },
+});
+
+export const isDriveFileReferenced = query({
+  args: { driveFileId: v.string() },
+  handler: async (ctx, args) => {
+    await requirePeopleReviewAccess(ctx);
+    const [faults, evaluations] = await Promise.all([
+      ctx.db
+        .query("personnelFaults")
+        .withIndex("by_drive_file", (q: any) => q.eq("driveFileId", args.driveFileId))
+        .collect(),
+      ctx.db
+        .query("personnelEvaluationFiles")
+        .withIndex("by_drive_file", (q: any) => q.eq("driveFileId", args.driveFileId))
+        .collect(),
+    ]);
+    return {
+      referenced:
+        faults.some((row: any) => row.active && row.driveFileId === args.driveFileId)
+        || evaluations.some((row: any) => row.active && row.driveFileId === args.driveFileId),
+    };
+  },
+});
+
 export const authorizeFileDownload = query({
   args: {
     fileId: v.string(),
@@ -700,6 +782,7 @@ export const recordFault = mutation({
     reason: v.string(),
     driveFileId: v.string(),
     driveChecksum: v.optional(v.string()),
+    cleanupToken: v.string(),
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
@@ -712,6 +795,12 @@ export const recordFault = mutation({
     const meta = assertFileMeta(args);
     const violationDate = assertDate(args.violationDate);
     const reason = assertReason(args.reason);
+    await commitDriveUploadStage(
+      ctx,
+      { cleanupToken: args.cleanupToken, driveFileId: meta.driveFileId },
+      String(access.user._id),
+      "people-review",
+    );
     const now = Date.now();
     const id = await ctx.db.insert("personnelFaults", {
       targetUserId: String(target._id),
@@ -751,6 +840,7 @@ export const upsertEvaluationFile = mutation({
     semester: v.optional(v.number()),
     driveFileId: v.string(),
     driveChecksum: v.optional(v.string()),
+    cleanupToken: v.string(),
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
@@ -772,6 +862,12 @@ export const upsertEvaluationFile = mutation({
 
     const periodKey = periodKeyFor(args);
     const meta = assertFileMeta(args);
+    await commitDriveUploadStage(
+      ctx,
+      { cleanupToken: args.cleanupToken, driveFileId: meta.driveFileId },
+      String(access.user._id),
+      "people-review",
+    );
     const existing = await ctx.db
       .query("personnelEvaluationFiles")
       .withIndex("by_target_kind_period", (q: any) =>
@@ -907,5 +1003,216 @@ export const submitEvaluationText = mutation({
       at: now,
     });
     return id;
+  },
+});
+
+export const saveEvaluationBatch = mutation({
+  args: {
+    targetUserId: v.id("users"),
+    requestId: v.string(),
+    sections: v.array(v.object({
+      kind: v.string(),
+      year: v.optional(v.number()),
+      quarter: v.optional(v.number()),
+      schoolYear: v.optional(v.string()),
+      semester: v.optional(v.number()),
+      content: v.optional(v.string()),
+      upload: v.optional(v.object({
+        driveFileId: v.string(),
+        driveChecksum: v.optional(v.string()),
+        cleanupToken: v.string(),
+        fileName: v.string(),
+        fileType: v.string(),
+        fileSize: v.number(),
+      })),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const access = await requirePeopleReviewAccess(ctx);
+    const requestId = args.requestId.trim();
+    if (!requestId || requestId.length > 100) throw new Error("INVALID_EVALUATION_REQUEST_ID");
+    const priorRequest = await ctx.db
+      .query("peopleReviewSaveRequests")
+      .withIndex("by_user_request", (q: any) =>
+        q.eq("userId", String(access.user._id)).eq("requestId", requestId),
+      )
+      .unique();
+    if (priorRequest) return { cleanupJobIds: priorRequest.cleanupJobIds };
+    const target = await ctx.db.get(args.targetUserId);
+    if (!target || target.status !== "active") throw new Error("USER_NOT_FOUND");
+    if (!args.sections.length || args.sections.length > 3) throw new Error("INVALID_EVALUATION_BATCH");
+    const boardingOptions = await boardingParticipationKeys(ctx, String(target._id));
+    const prepared: any[] = [];
+    const keys = new Set<string>();
+
+    for (const section of args.sections) {
+      if (!EVAL_KINDS.has(section.kind)) throw new Error("INVALID_EVALUATION_KIND");
+      const periodKey = periodKeyFor(section);
+      const key = `${section.kind}:${periodKey}`;
+      if (keys.has(key)) throw new Error("DUPLICATE_EVALUATION_SECTION");
+      keys.add(key);
+      if (section.kind === "boarding" && !boardingOptions.some((option: any) => option.periodKey === periodKey)) {
+        throw new Error("BOARDING_NOT_PARTICIPATING");
+      }
+      if (!section.upload && !section.content?.trim()) throw new Error("EMPTY_EVALUATION_SECTION");
+      if (section.upload && !canUploadEvaluationFile(access, target)) {
+        throw new Error("PEOPLE_REVIEW_UPLOAD_FORBIDDEN");
+      }
+      if (section.content?.trim() && !canWriteEvaluationText(access, target)) {
+        throw new Error("PEOPLE_REVIEW_TEXT_FORBIDDEN");
+      }
+      const existing = await ctx.db
+        .query("personnelEvaluationFiles")
+        .withIndex("by_target_kind_period", (q: any) =>
+          q.eq("targetUserId", String(target._id)).eq("kind", section.kind).eq("periodKey", periodKey),
+        )
+        .unique();
+      const texts = existing
+        ? await ctx.db
+            .query("personnelEvaluationTexts")
+            .withIndex("by_file", (q: any) => q.eq("fileId", String(existing._id)).eq("active", true))
+            .collect()
+        : [];
+      if (section.upload && existing?.active && texts.length) throw new Error("EVALUATION_FILE_LOCKED");
+      if (section.content?.trim() && !section.upload && !existing?.active) {
+        throw new Error("EVALUATION_FILE_REQUIRED");
+      }
+      if (section.content?.trim() && texts.some(
+        (text: any) => text.active && String(text.evaluatorUserId) === String(access.user._id),
+      )) {
+        throw new Error("EVALUATION_TEXT_ALREADY_SUBMITTED");
+      }
+      prepared.push({
+        section,
+        periodKey,
+        existing,
+        content: section.content?.trim() ? assertText(section.content) : null,
+        meta: section.upload ? assertFileMeta(section.upload) : null,
+      });
+    }
+
+    const now = Date.now();
+    const cleanupJobIds: Id<"driveCleanupJobs">[] = [];
+    for (const item of prepared) {
+      if (!item.meta || !item.section.upload) continue;
+      await commitDriveUploadStage(
+        ctx,
+        {
+          cleanupToken: item.section.upload.cleanupToken,
+          driveFileId: item.meta.driveFileId,
+        },
+        String(access.user._id),
+        "people-review",
+      );
+    }
+    for (const item of prepared) {
+      const { section, periodKey, existing, meta, content } = item;
+      let fileId = existing?._id || null;
+      if (meta && section.upload) {
+        if (existing) {
+          if (existing.active && existing.driveFileId !== meta.driveFileId) {
+            cleanupJobIds.push(await ctx.db.insert("driveCleanupJobs", {
+              driveFileId: existing.driveFileId,
+              purpose: "people-review",
+              resourceId: String(existing._id),
+              createdBy: String(access.user._id),
+              active: true,
+              createdAt: now,
+              updatedAt: now,
+            }));
+          }
+          await ctx.db.patch(existing._id, {
+            driveFileId: meta.driveFileId,
+            driveChecksum: section.upload.driveChecksum,
+            fileName: meta.fileName,
+            fileType: meta.fileType,
+            fileSize: meta.fileSize,
+            uploadedByUserId: String(access.user._id),
+            versionCount: existing.active ? (existing.versionCount || 1) + 1 : 1,
+            lastUploadedAt: now,
+            active: true,
+            year: section.year,
+            quarter: section.quarter,
+            schoolYear: section.schoolYear,
+            semester: section.semester,
+            updatedBy: access.user._id,
+            updatedAt: now,
+          });
+        } else {
+          fileId = await ctx.db.insert("personnelEvaluationFiles", {
+            targetUserId: String(target._id),
+            kind: section.kind,
+            year: section.year,
+            quarter: section.quarter,
+            schoolYear: section.schoolYear,
+            semester: section.semester,
+            periodKey,
+            driveFileId: meta.driveFileId,
+            driveChecksum: section.upload.driveChecksum,
+            fileName: meta.fileName,
+            fileType: meta.fileType,
+            fileSize: meta.fileSize,
+            uploadedByUserId: String(access.user._id),
+            versionCount: 1,
+            lastUploadedAt: now,
+            active: true,
+            createdBy: access.user._id,
+            updatedBy: access.user._id,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+      if (content && fileId) {
+        await ctx.db.insert("personnelEvaluationTexts", {
+          fileId: String(fileId),
+          targetUserId: String(target._id),
+          evaluatorUserId: String(access.user._id),
+          content,
+          active: true,
+          createdBy: access.user._id,
+          updatedBy: access.user._id,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      await ctx.db.insert("auditLogs", {
+        actorUserId: access.user._id,
+        targetUserId: target._id,
+        targetEmail: target.email,
+        action: "people_review.evaluation_batch.save",
+        details: JSON.stringify({ fileId, kind: section.kind, periodKey, hasUpload: Boolean(meta), hasText: Boolean(content) }),
+        at: now,
+      });
+    }
+    await ctx.db.insert("peopleReviewSaveRequests", {
+      userId: String(access.user._id),
+      requestId,
+      cleanupJobIds: cleanupJobIds.map(String),
+      createdAt: now,
+    });
+    return { cleanupJobIds };
+  },
+});
+
+export const authorizeDriveCleanupJob = query({
+  args: { cleanupJobId: v.id("driveCleanupJobs") },
+  handler: async (ctx, args) => {
+    const access = await requirePeopleReviewAccess(ctx);
+    const job = await ctx.db.get(args.cleanupJobId);
+    if (!job?.active) throw new Error("DRIVE_CLEANUP_NOT_FOUND");
+    if (String(job.createdBy) !== String(access.user._id)) throw new Error("DRIVE_CLEANUP_FORBIDDEN");
+    return { driveFileId: job.driveFileId };
+  },
+});
+
+export const completeDriveCleanupJob = mutation({
+  args: { cleanupJobId: v.id("driveCleanupJobs") },
+  handler: async (ctx, args) => {
+    const access = await requirePeopleReviewAccess(ctx);
+    const job = await ctx.db.get(args.cleanupJobId);
+    if (!job?.active) return;
+    if (String(job.createdBy) !== String(access.user._id)) throw new Error("DRIVE_CLEANUP_FORBIDDEN");
+    await ctx.db.patch(args.cleanupJobId, { active: false, updatedAt: Date.now() });
   },
 });

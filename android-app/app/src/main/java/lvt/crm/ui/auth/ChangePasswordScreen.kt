@@ -61,6 +61,7 @@ fun ChangePasswordScreen(
     onDone: () -> Unit,
     onCancel: (() -> Unit)? = null,
 ) {
+    // Keep password material out of saved instance state; only the enclosing route is restorable.
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -197,6 +198,10 @@ fun ChangePasswordScreen(
                                     loading = false
                                     result.fold(
                                         onSuccess = {
+                                            password = ""
+                                            confirmation = ""
+                                            passwordVisible = false
+                                            confirmationVisible = false
                                             success = "Đã đổi mật khẩu."
                                             onDone()
                                         },
@@ -235,6 +240,7 @@ fun ChangePasswordScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         FilledTonalButton(
                             onClick = onCancel,
+                            enabled = !loading,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(50.dp),

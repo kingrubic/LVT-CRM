@@ -60,16 +60,22 @@ fun DutiesScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
-    var selectedDuty by remember { mutableStateOf<DutyItem?>(null) }
+    var selectedDutyId by remember { mutableStateOf<String?>(null) }
+    val selectedDuty = currentDuty(state.duties, selectedDutyId)
 
-    BackHandler(enabled = selectedDuty != null) { selectedDuty = null }
+    BackHandler(enabled = selectedDutyId != null) { selectedDutyId = null }
+
+    LaunchedEffect(selectedDutyId, selectedDuty) {
+        if (selectedDutyId != null && selectedDuty == null && !state.loading) selectedDutyId = null
+    }
 
     selectedDuty?.let { duty ->
         DutyDetailScreen(
             duty = duty,
             confirmationEnabled = state.attendanceConfirmationEnabled,
-            busy = state.busyDutyId == duty.id,
-            onBack = { selectedDuty = null },
+            busy = state.busyDutyId != null,
+            actionError = state.actionError,
+            onBack = { selectedDutyId = null },
             onAttend = { viewModel.setAttendance(duty.id, "attended") },
             onAbsent = { viewModel.setAttendance(duty.id, "absent") },
         )
@@ -179,8 +185,8 @@ fun DutiesScreen(
                             duty = duty,
                             focused = duty.id == focusId,
                             confirmationEnabled = state.attendanceConfirmationEnabled,
-                            busy = state.busyDutyId == duty.id,
-                            onOpen = { selectedDuty = duty },
+                            busy = state.busyDutyId != null,
+                            onOpen = { selectedDutyId = duty.id },
                             onAttend = { viewModel.setAttendance(duty.id, "attended") },
                             onAbsent = { viewModel.setAttendance(duty.id, "absent") },
                         )
@@ -190,6 +196,9 @@ fun DutiesScreen(
         }
     }
 }
+
+internal fun currentDuty(duties: List<DutyItem>, selectedDutyId: String?): DutyItem? =
+    duties.firstOrNull { it.id == selectedDutyId }
 
 @Composable
 private fun DutyCard(
@@ -295,6 +304,7 @@ private fun DutyDetailScreen(
     duty: DutyItem,
     confirmationEnabled: Boolean,
     busy: Boolean,
+    actionError: String?,
     onBack: () -> Unit,
     onAttend: () -> Unit,
     onAbsent: () -> Unit,
@@ -314,6 +324,19 @@ private fun DutyDetailScreen(
                 }
             },
         )
+        actionError?.let {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            ) {
+                Text(
+                    it,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+        }
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,

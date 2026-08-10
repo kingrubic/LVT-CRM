@@ -33,10 +33,15 @@ data class DutiesSnapshot(
     val duties: List<DutyItem>,
 )
 
+interface DutiesOperations {
+    suspend fun listMine(): DutiesSnapshot
+    suspend fun setAttendance(dutyId: String, status: String)
+}
+
 class DutiesRepository(
     private val convex: ConvexHttpClient,
-) {
-    suspend fun listMine(): DutiesSnapshot {
+) : DutiesOperations {
+    override suspend fun listMine(): DutiesSnapshot {
         val result = convex.query("duties:listMine")
         val array = result.optJSONArray("duties")
         val duties = buildList {
@@ -75,7 +80,7 @@ class DutiesRepository(
         )
     }
 
-    suspend fun setAttendance(dutyId: String, status: String) {
+    override suspend fun setAttendance(dutyId: String, status: String) {
         convex.mutation(
             "duties:setAttendance",
             JSONObject()

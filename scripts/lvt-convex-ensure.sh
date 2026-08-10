@@ -16,6 +16,11 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 export HOME="/Users/vsc_agent"
 export DOCKER_HOST="unix://${DOCKER_SOCK}"
 
+if [[ ! "$CHECK_INTERVAL_SEC" =~ ^[0-9]+$ ]] || (( CHECK_INTERVAL_SEC < 1 || CHECK_INTERVAL_SEC > 3600 )); then
+  print -u2 -- "LVT_CONVEX_ENSURE_INTERVAL must be an integer from 1 to 3600 seconds"
+  exit 64
+fi
+
 log() {
   print -r -- "$(date '+%Y-%m-%dT%H:%M:%S%z') $*"
 }

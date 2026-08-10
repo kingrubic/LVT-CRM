@@ -32,8 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,9 +59,10 @@ fun ProfileScreen(
     authRepository: AuthRepository,
     onSignOut: () -> Unit,
 ) {
-    var changingPassword by remember { mutableStateOf(false) }
+    var changingPassword by rememberSaveable { mutableStateOf(false) }
 
     if (changingPassword) {
+        BackHandler { changingPassword = false }
         ChangePasswordScreen(
             title = stringResource(R.string.change_password),
             subtitle = "Đặt mật khẩu mới để bảo vệ tài khoản của bạn.",

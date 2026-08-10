@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -58,6 +59,7 @@ import lvt.crm.R
 import lvt.crm.data.auth.AuthState
 import lvt.crm.data.notifications.NotificationItem
 import lvt.crm.push.NotificationDestination
+import lvt.crm.push.NotificationMarkReadWorker
 import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.auth.LoginScreen
 import lvt.crm.ui.auth.LoginViewModel
@@ -114,8 +116,8 @@ fun LvtRoot(
                 notificationDestination = notificationDestination,
                 onNotificationDestinationHandled = onNotificationDestinationHandled,
                 onSignOut = {
-                    container.notificationScheduler.cancel()
                     container.authRepository.signOut()
+                    container.notificationScheduler.cancel()
                 },
             )
         }
@@ -167,12 +169,18 @@ private fun MainShell(
     LaunchedEffect(notificationDestination) {
         val destination = notificationDestination ?: return@LaunchedEffect
         focusTarget = destination
-        destination.notificationKey?.let { key ->
-            runCatching { container.notificationsRepository.markRead(key) }
-            notificationsViewModel.refresh()
-        }
         navController.navigate(destination.route) {
             launchSingleTop = true
+        }
+        destination.notificationKey?.let { key ->
+            runCatching { container.notificationsRepository.markRead(key) }
+                .onFailure {
+                    runCatching { NotificationMarkReadWorker.enqueue(container.appContext, key) }
+                        .onFailure { enqueueError ->
+                            Log.e("LvtNotifications", "Mark-read retry scheduling failed", enqueueError)
+                        }
+                }
+            notificationsViewModel.refresh()
         }
         onNotificationDestinationHandled()
     }
@@ -353,12 +361,15 @@ private fun NotificationPermissionAndSync(container: AppContainer) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
-        container.notificationScheduler.syncNow()
+        runCatching { container.notificationScheduler.syncNow() }
+            .onFailure { Log.e("LvtNotifications", "Immediate sync scheduling failed", it) }
     }
 
     LaunchedEffect(container) {
-        container.notificationScheduler.schedule()
-        container.fcmTokenRegistrar.sync()
+        runCatching { container.notificationScheduler.schedule() }
+            .onFailure { Log.e("LvtNotifications", "Notification scheduling failed", it) }
+        runCatching { container.fcmTokenRegistrar.sync() }
+            .onFailure { Log.e("LvtNotifications", "FCM token sync failed", it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
                 context,

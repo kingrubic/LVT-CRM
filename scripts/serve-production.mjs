@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -11,6 +11,12 @@ import { execFile, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ConvexHttpClient } from 'convex/browser';
 import { anyApi } from 'convex/server';
+import { DriveUploadStages } from './lib/drive-upload-stages.mjs';
+import { canonicalUploadMime, downloadContentPolicy } from './lib/file-content-policy.mjs';
+import { FileHttpError, classifyFileError } from './lib/file-http-errors.mjs';
+import { matchDriveMutationRoute } from './lib/file-route-policy.mjs';
+import { assertStagedUploadOwner, settleClaimedUpload } from './lib/staged-upload-cleanup.mjs';
+import { authorizeUpload, uploadApiForPurpose } from './lib/upload-authorization.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = path.join(projectRoot, 'dist');
@@ -23,6 +29,10 @@ const driveAccount = process.env.LVT_DRIVE_ACCOUNT || 'bemiagent@gmail.com';
 const maxFileSize = 20 * 1024 * 1024;
 const acceptedExtensions = new Set(['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg']);
 const execFileAsync = promisify(execFile);
+const uploadStages = new DriveUploadStages(
+  process.env.LVT_DRIVE_UPLOAD_STATE_PATH
+    || path.join(projectRoot, '.runtime', 'drive-upload-stages.json'),
+);
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -62,6 +72,15 @@ function safeFileName(request) {
   }
 }
 
+function applyPrivateDownloadHeaders(response, fileName, size) {
+  const policy = downloadContentPolicy(fileName);
+  response.setHeader('Cache-Control', 'private, no-store');
+  response.setHeader('Content-Disposition', `${policy.disposition}; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  response.setHeader('Content-Length', size);
+  response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  response.setHeader('Content-Type', policy.mimeType);
+}
+
 function driveFolderId() {
   if (process.env.LVT_DRIVE_FOLDER_ID) return process.env.LVT_DRIVE_FOLDER_ID;
   return execFileSync(
@@ -79,24 +98,14 @@ async function authorizedClient(request) {
   return client;
 }
 
-async function authorizeAnyUpload(client, purpose = '') {
-  const attempts = purpose === 'people-review'
-    ? [anyApi.peopleReview.authorizeFileUpload, anyApi.work.authorizeFileUpload]
-    : [anyApi.work.authorizeFileUpload, anyApi.peopleReview.authorizeFileUpload];
-  let lastError;
-  for (const queryRef of attempts) {
-    try {
-      await client.query(queryRef, {});
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError || new Error('UPLOAD_FORBIDDEN');
+function uploadApi(stage, name) {
+  return uploadApiForPurpose(stage.purpose)[name];
 }
 
 async function deleteDriveFile(driveFileId) {
-  if (!driveFileId || !/^[a-zA-Z0-9_-]+$/.test(driveFileId)) return;
+  if (!driveFileId || !/^[a-zA-Z0-9_-]+$/.test(driveFileId)) {
+    throw new FileHttpError(400, 'INVALID_FILE');
+  }
   try {
     await execFileAsync(
       '/opt/homebrew/bin/gog',
@@ -104,18 +113,91 @@ async function deleteDriveFile(driveFileId) {
       { maxBuffer: 1024 * 1024 },
     );
   } catch (error) {
-    console.error('LVT drive delete failed', {
-      driveFileId,
-      code: error instanceof Error ? error.message : 'UNKNOWN',
-    });
+    const detail = `${error?.stderr || ''} ${error?.message || ''}`;
+    if (/not found|does not exist|404/i.test(detail)) return;
+    throw new FileHttpError(502, 'DRIVE_DELETE_FAILED', error);
   }
+}
+
+async function settleClaimedStage(client, cleanupToken, stage) {
+  const claimId = randomUUID();
+  const claim = await client.mutation(uploadApi(stage, 'claimStagedUploadCleanup'), {
+    cleanupToken,
+    claimId,
+  });
+  try {
+    await settleClaimedUpload({ claim, deleteDriveFile });
+    if (claim.action === 'delete') {
+      await client.mutation(uploadApi(stage, 'completeStagedUploadCleanup'), {
+        cleanupToken,
+        claimId,
+      });
+    }
+  } catch (error) {
+    if (claim.action === 'delete') {
+      try {
+        await client.mutation(uploadApi(stage, 'releaseStagedUploadCleanup'), {
+          cleanupToken,
+          claimId,
+        });
+      } catch (releaseError) {
+        console.error('LVT upload cleanup claim release failed', {
+          cleanupToken,
+          code: releaseError instanceof Error ? releaseError.message : 'UNKNOWN',
+        });
+      }
+    }
+    throw error;
+  }
+}
+
+async function collectStaleUploads(client, actorUserId) {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  for (const [cleanupToken, stage] of await uploadStages.entries()) {
+    if (stage.userId !== String(actorUserId) || stage.createdAt > cutoff) continue;
+    try {
+      await settleClaimedStage(client, cleanupToken, stage);
+      await uploadStages.remove(cleanupToken);
+    } catch (error) {
+      console.error('LVT stale upload cleanup failed', {
+        cleanupToken,
+        code: error instanceof Error ? error.message : 'UNKNOWN',
+      });
+    }
+  }
+}
+
+async function handleStagedUpload(request, response, cleanupToken, finalizeOnly) {
+  if (!/^[0-9a-f-]{36}$/i.test(cleanupToken)) throw new FileHttpError(400, 'INVALID_UPLOAD');
+  const stage = await uploadStages.get(cleanupToken);
+  if (!stage) throw new FileHttpError(404, 'FILE_NOT_FOUND');
+  const client = await authorizedClient(request);
+  const actor = await authorizeUpload(client, stage.purpose);
+  assertStagedUploadOwner(stage, actor?.userId);
+  if (finalizeOnly) {
+    await client.mutation(uploadApi(stage, 'finalizeStagedUpload'), { cleanupToken });
+  } else {
+    await settleClaimedStage(client, cleanupToken, stage);
+  }
+  await uploadStages.remove(cleanupToken);
+  response.writeHead(204);
+  response.end();
+}
+
+async function handleCleanupJob(request, response, cleanupJobId) {
+  const client = await authorizedClient(request);
+  const job = await client.query(anyApi.peopleReview.authorizeDriveCleanupJob, { cleanupJobId });
+  await deleteDriveFile(job.driveFileId);
+  await client.mutation(anyApi.peopleReview.completeDriveCleanupJob, { cleanupJobId });
+  response.writeHead(204);
+  response.end();
 }
 
 async function uploadToDrive(request, response) {
   const fileName = safeFileName(request);
   const declaredSize = Number(request.headers['content-length'] || 0);
   // Content-Length can be absent when proxies use chunked transfer; allow and count bytes instead.
-  if (!fileName || declaredSize > maxFileSize) {
+  if (!fileName) {
     console.error('LVT upload rejected before stream', {
       fileName,
       declaredSize,
@@ -125,10 +207,18 @@ async function uploadToDrive(request, response) {
     response.end('{"error":"INVALID_FILE"}\n');
     return;
   }
+  if (declaredSize > maxFileSize) {
+    response.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+    response.end('{"error":"FILE_TOO_LARGE"}\n');
+    return;
+  }
 
   const client = await authorizedClient(request);
-  const purpose = String(request.headers['x-lvt-upload-purpose'] || '').trim();
-  await authorizeAnyUpload(client, purpose);
+  const purpose = String(request.headers['x-lvt-upload-purpose'] || '').trim() === 'people-review'
+    ? 'people-review'
+    : 'work';
+  const actor = await authorizeUpload(client, purpose);
+  await collectStaleUploads(client, actor?.userId);
 
   const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'lvt-drive-upload-'));
   const temporaryFile = path.join(temporaryDirectory, 'upload.bin');
@@ -151,9 +241,11 @@ async function uploadToDrive(request, response) {
     if (received <= 0) throw new Error('INVALID_FILE');
     if (declaredSize > 0 && received !== declaredSize) throw new Error('WORK_FILE_SIZE_MISMATCH');
 
-    const { stdout } = await execFileAsync(
-      '/opt/homebrew/bin/gog',
-      [
+    let stdout;
+    try {
+      ({ stdout } = await execFileAsync(
+        '/opt/homebrew/bin/gog',
+        [
         'drive',
         'upload',
         temporaryFile,
@@ -164,15 +256,39 @@ async function uploadToDrive(request, response) {
         '--name',
         fileName,
         '--mime-type',
-        String(request.headers['content-type'] || 'application/octet-stream'),
+        canonicalUploadMime(fileName),
         '--json',
         '--no-input',
-      ],
-      { maxBuffer: 1024 * 1024 },
-    );
+        ],
+        { maxBuffer: 1024 * 1024 },
+      ));
+    } catch (error) {
+      throw new FileHttpError(502, 'DRIVE_UPLOAD_FAILED', error);
+    }
     const result = JSON.parse(stdout);
     const uploaded = result.file || result.upload || result;
     if (!uploaded?.id) throw new Error('DRIVE_UPLOAD_INVALID_RESPONSE');
+    const cleanupToken = randomUUID();
+    const stage = {
+      driveFileId: uploaded.id,
+      purpose,
+      userId: String(actor?.userId || ''),
+      createdAt: Date.now(),
+    };
+    try {
+      await client.mutation(uploadApi(stage, 'registerDriveUpload'), {
+        cleanupToken,
+        driveFileId: uploaded.id,
+      });
+      await uploadStages.add(cleanupToken, stage);
+    } catch (error) {
+      try {
+        await settleClaimedStage(client, cleanupToken, stage);
+      } catch {
+        await deleteDriveFile(uploaded.id);
+      }
+      throw error;
+    }
 
     response.writeHead(201, {
       'Cache-Control': 'no-store',
@@ -180,6 +296,7 @@ async function uploadToDrive(request, response) {
     });
     response.end(`${JSON.stringify({
       driveFileId: uploaded.id,
+      cleanupToken,
       driveChecksum: hash.digest('hex'),
       fileSize: received,
     })}\n`);
@@ -210,10 +327,7 @@ async function downloadPeopleReviewFile(request, response, kind, fileId) {
       { maxBuffer: 1024 * 1024 },
     );
     const metadata = await stat(temporaryFile);
-    response.setHeader('Cache-Control', 'private, no-store');
-    response.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`);
-    response.setHeader('Content-Length', metadata.size);
-    response.setHeader('Content-Type', file.fileType || 'application/octet-stream');
+    applyPrivateDownloadHeaders(response, file.fileName, metadata.size);
     response.writeHead(200);
     await pipeline(createReadStream(temporaryFile), response);
   } finally {
@@ -243,10 +357,7 @@ async function downloadFromDrive(request, response, documentId) {
       { maxBuffer: 1024 * 1024 },
     );
     const metadata = await stat(temporaryFile);
-    response.setHeader('Cache-Control', 'private, no-store');
-    response.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`);
-    response.setHeader('Content-Length', metadata.size);
-    response.setHeader('Content-Type', file.fileType || 'application/octet-stream');
+    applyPrivateDownloadHeaders(response, file.fileName, metadata.size);
     response.writeHead(200);
     await pipeline(createReadStream(temporaryFile), response);
   } finally {
@@ -278,15 +389,13 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    const driveDelete = request.method === 'DELETE'
-      ? new URL(request.url || '/', 'http://localhost').pathname.match(/^\/api\/files\/drive\/([^/]+)$/)
-      : null;
-    if (driveDelete) {
-      const client = await authorizedClient(request);
-      await authorizeAnyUpload(client);
-      await deleteDriveFile(driveDelete[1]);
-      response.writeHead(204);
-      response.end();
+    const driveMutation = matchDriveMutationRoute(request.method, request.url);
+    if (driveMutation?.kind === 'staged-upload') {
+      await handleStagedUpload(request, response, driveMutation.id, driveMutation.finalize);
+      return;
+    }
+    if (driveMutation?.kind === 'cleanup-job') {
+      await handleCleanupJob(request, response, driveMutation.id);
       return;
     }
 
@@ -318,6 +427,11 @@ const server = createServer(async (request, response) => {
     } catch {
       response.writeHead(400);
       response.end();
+      return;
+    }
+    if (pathname.startsWith('/api/')) {
+      response.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end('{"error":"FILE_NOT_FOUND"}\n');
       return;
     }
 
@@ -358,9 +472,9 @@ const server = createServer(async (request, response) => {
       code: error instanceof Error ? error.message : 'UNKNOWN',
     });
     if (!response.headersSent) {
-      const status = error instanceof Error && error.message === 'UNAUTHORIZED' ? 401 : 403;
-      response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-      response.end('{"error":"FILE_ACCESS_DENIED"}\n');
+      const classified = classifyFileError(error);
+      response.writeHead(classified.status, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(`${JSON.stringify({ error: classified.code })}\n`);
     } else {
       response.end();
     }

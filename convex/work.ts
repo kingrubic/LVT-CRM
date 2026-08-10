@@ -10,8 +10,16 @@ import {
   WORK_ASSIGNER_MODE_SUPERVISOR,
 } from "./lib";
 import { internal } from "./_generated/api";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import {
+  claimDriveUploadCleanup,
+  commitDriveUploadStage,
+  completeDriveUploadCleanup,
+  finalizeDriveUploadStage,
+  registerDriveUploadStage,
+  releaseDriveUploadCleanup,
+} from "./driveUploadStages";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -78,6 +86,19 @@ function syncApprovedArrays(completions: CompletionRow[]) {
 
 function extensionOf(fileName: string) {
   return fileName.trim().toLowerCase().split(".").pop() || "";
+}
+
+function fileTypeForName(fileName: string) {
+  const types: Record<string, string> = {
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    pdf: "application/pdf",
+    png: "image/png",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  };
+  return types[extensionOf(fileName)] || "application/octet-stream";
 }
 
 function assertDate(value: string) {
@@ -382,6 +403,62 @@ export const authorizeFileUpload = query({
   },
 });
 
+export const registerDriveUpload = mutation({
+  args: { cleanupToken: v.string(), driveFileId: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    await registerDriveUploadStage(ctx, args, String(actor.user._id), "work");
+  },
+});
+
+export const claimStagedUploadCleanup = mutation({
+  args: { cleanupToken: v.string(), claimId: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    return await claimDriveUploadCleanup(ctx, args, String(actor.user._id), "work");
+  },
+});
+
+export const finalizeStagedUpload = mutation({
+  args: { cleanupToken: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    await finalizeDriveUploadStage(ctx, args.cleanupToken, String(actor.user._id), "work");
+  },
+});
+
+export const completeStagedUploadCleanup = mutation({
+  args: { cleanupToken: v.string(), claimId: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    await completeDriveUploadCleanup(ctx, args, String(actor.user._id), "work");
+  },
+});
+
+export const releaseStagedUploadCleanup = mutation({
+  args: { cleanupToken: v.string(), claimId: v.string() },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    await releaseDriveUploadCleanup(ctx, args, String(actor.user._id), "work");
+  },
+});
+
+export const isDriveFileReferenced = query({
+  args: { driveFileId: v.string() },
+  handler: async (ctx, args) => {
+    await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const documents = await ctx.db
+      .query("officeDocuments")
+      .withIndex("by_drive_file", (q: any) => q.eq("driveFileId", args.driveFileId))
+      .collect();
+    return {
+      referenced: documents.some(
+        (document: any) => document.active && document.driveFileId === args.driveFileId,
+      ),
+    };
+  },
+});
+
 export const authorizeFileDownload = query({
   args: { documentId: v.id("officeDocuments") },
   handler: async (ctx, args) => {
@@ -483,6 +560,7 @@ export const createDocument = mutation({
     fileId: v.optional(v.id("_storage")),
     driveFileId: v.optional(v.string()),
     driveChecksum: v.optional(v.string()),
+    cleanupToken: v.optional(v.string()),
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
@@ -508,6 +586,7 @@ export const createDocument = mutation({
       throw new Error("WORK_FILE_TOO_LARGE");
     }
     if (!args.driveFileId && !args.fileId) throw new Error("WORK_FILE_REQUIRED");
+    if (args.driveFileId && !args.cleanupToken) throw new Error("UPLOAD_NOT_FOUND");
     if (!args.assignments.length) throw new Error("WORK_ASSIGNMENTS_REQUIRED");
 
     const departments = await ctx.db.query("departments").collect();
@@ -559,6 +638,14 @@ export const createDocument = mutation({
     }
 
     const now = Date.now();
+    if (args.driveFileId && args.cleanupToken) {
+      await commitDriveUploadStage(
+        ctx,
+        { cleanupToken: args.cleanupToken, driveFileId: args.driveFileId },
+        String(actor.user._id),
+        "work",
+      );
+    }
     const firstAssignment = assignments[0];
     const documentId = await ctx.db.insert("officeDocuments", {
       fileId: args.fileId,
@@ -566,7 +653,7 @@ export const createDocument = mutation({
       driveChecksum: args.driveChecksum,
       storageProvider: args.driveFileId ? "google_drive" : "convex",
       fileName,
-      fileType: args.fileType.trim() || "application/octet-stream",
+      fileType: fileTypeForName(fileName),
       fileSize: args.fileSize,
       departmentId: firstAssignment.departmentId || "",
       content: firstAssignment.content,
@@ -640,6 +727,9 @@ export const finalizeDriveMigration = internalMutation({
   handler: async (ctx, args) => {
     const document = await ctx.db.get(args.documentId);
     if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
+    if (document.driveFileId) {
+      return { applied: false, driveFileId: document.driveFileId };
+    }
     if (document.fileId) await ctx.storage.delete(document.fileId);
     await ctx.db.patch(args.documentId, {
       fileId: undefined,
@@ -648,6 +738,19 @@ export const finalizeDriveMigration = internalMutation({
       storageProvider: "google_drive",
       updatedAt: Date.now(),
     });
+    return { applied: true, driveFileId: args.driveFileId };
+  },
+});
+
+export const driveMigrationStatus = internalQuery({
+  args: { documentId: v.id("officeDocuments") },
+  handler: async (ctx, args) => {
+    const document = await ctx.db.get(args.documentId);
+    if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
+    return {
+      migrated: Boolean(document.driveFileId),
+      driveFileId: document.driveFileId || null,
+    };
   },
 });
 

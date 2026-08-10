@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:production": "VITE_CONVEX_URL=https://lvt-convex.vscgroup.io.vn vite build",
+    "build": "npm run typecheck && vite build",
+    "build:production": "npm run typecheck && VITE_CONVEX_URL=https://lvt-convex.vscgroup.io.vn vite build",
     "start": "node scripts/serve-production.mjs",
     "preview": "vite preview",
     "check": "node scripts/check-files.mjs",
-    "typecheck": "./scripts/lvt-convex-self-hosted-env.sh ./node_modules/.bin/convex codegen --typecheck enable",
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "./node_modules/.bin/tsc --project tsconfig.app.json && ./node_modules/.bin/tsc --project convex/tsconfig.json --noEmit",
+    "typecheck:convex-codegen": "./scripts/lvt-convex-self-hosted-env.sh ./node_modules/.bin/convex codegen --typecheck enable",
     "convex:dev": "./scripts/lvt-convex-self-hosted-env.sh ./node_modules/.bin/convex dev",
     "convex:deploy": "./scripts/lvt-convex-self-hosted-env.sh ./node_modules/.bin/convex deploy"
   },
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@types/react": "^19.2.18",
     "@vitejs/plugin-react": "^6.0.4",
     "typescript": "^5.9.3",
     "vite": "^8.1.5"

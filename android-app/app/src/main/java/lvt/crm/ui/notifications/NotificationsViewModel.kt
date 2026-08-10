@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import java.util.concurrent.atomic.AtomicBoolean
 import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.convex.ConvexHttpClient
 import lvt.crm.data.notifications.NotificationItem
@@ -34,6 +36,8 @@ data class NotificationsUiState(
 class NotificationsViewModel(
     private val repository: NotificationsRepository,
 ) : ViewModel() {
+    private val operationMutex = Mutex()
+    private val refreshPending = AtomicBoolean(false)
     private val _uiState = MutableStateFlow(NotificationsUiState())
     val uiState: StateFlow<NotificationsUiState> = _uiState.asStateFlow()
 
@@ -47,30 +51,48 @@ class NotificationsViewModel(
     }
 
     fun refresh(initial: Boolean = false) {
+        if (!operationMutex.tryLock()) {
+            refreshPending.set(true)
+            return
+        }
+        _uiState.update {
+            it.copy(
+                loading = initial,
+                refreshing = !initial,
+                error = null,
+                actionError = null,
+            )
+        }
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    loading = initial,
-                    refreshing = !initial,
-                    error = null,
-                    actionError = null,
-                )
+            try {
+                loadSnapshot()
+            } finally {
+                releaseOperation()
             }
-            loadSnapshot()
         }
     }
 
     fun open(item: NotificationItem, onOpened: (NotificationItem) -> Unit) {
+        onOpened(item)
+        if (item.read || !operationMutex.tryLock()) return
+        _uiState.update { it.copy(busyKey = item.key, actionError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(busyKey = item.key, actionError = null) }
             try {
-                if (!item.read) repository.markRead(item.key)
-                onOpened(item)
+                repository.markRead(item.key)
+                _uiState.update { state ->
+                    state.copy(
+                        items = state.items.map { current ->
+                            if (current.key == item.key) current.copy(read = true) else current
+                        },
+                        unreadCount = (state.unreadCount - 1).coerceAtLeast(0),
+                    )
+                }
                 loadSnapshot(keepBusy = true)
             } catch (error: Exception) {
                 showActionError(error)
             } finally {
-                _uiState.update { it.copy(busyKey = null) }
+                if (_uiState.value.busyKey == item.key) _uiState.update { it.copy(busyKey = null) }
+                releaseOperation()
             }
         }
     }
@@ -78,29 +100,45 @@ class NotificationsViewModel(
     fun markAllRead() {
         val keys = _uiState.value.items.filter { !it.read }.map { it.key }
         if (keys.isEmpty()) return
+        if (!operationMutex.tryLock()) return
+        _uiState.update { it.copy(busyKey = BUSY_ALL, actionError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(busyKey = BUSY_ALL, actionError = null) }
             try {
                 repository.markAllRead(keys)
+                _uiState.update { state ->
+                    state.copy(items = state.items.map { it.copy(read = true) }, unreadCount = 0)
+                }
                 loadSnapshot(keepBusy = true)
             } catch (error: Exception) {
                 showActionError(error)
             } finally {
-                _uiState.update { it.copy(busyKey = null) }
+                if (_uiState.value.busyKey == BUSY_ALL) _uiState.update { it.copy(busyKey = null) }
+                releaseOperation()
             }
         }
     }
 
     fun dismiss(item: NotificationItem) {
+        val operationKey = "dismiss:${item.key}"
+        if (!operationMutex.tryLock()) return
+        _uiState.update { it.copy(busyKey = operationKey, actionError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(busyKey = "dismiss:${item.key}", actionError = null) }
             try {
                 repository.dismiss(item.key)
+                _uiState.update { state ->
+                    state.copy(
+                        items = state.items.filterNot { it.key == item.key },
+                        unreadCount = if (item.read) state.unreadCount else {
+                            (state.unreadCount - 1).coerceAtLeast(0)
+                        },
+                    )
+                }
                 loadSnapshot(keepBusy = true)
             } catch (error: Exception) {
                 showActionError(error)
             } finally {
-                _uiState.update { it.copy(busyKey = null) }
+                if (_uiState.value.busyKey == operationKey) _uiState.update { it.copy(busyKey = null) }
+                releaseOperation()
             }
         }
     }
@@ -122,12 +160,20 @@ class NotificationsViewModel(
             }
         } catch (error: Exception) {
             _uiState.update {
-                it.copy(
-                    loading = false,
-                    refreshing = false,
-                    error = humanize(error),
-                    busyKey = if (keepBusy) it.busyKey else null,
-                )
+                if (keepBusy) {
+                    it.copy(
+                        loading = false,
+                        refreshing = false,
+                        actionError = "Thao tác đã được lưu, nhưng chưa tải lại được thông báo. Hãy làm mới.",
+                    )
+                } else {
+                    it.copy(
+                        loading = false,
+                        refreshing = false,
+                        error = humanize(error),
+                        busyKey = null,
+                    )
+                }
             }
         }
     }
@@ -139,6 +185,11 @@ class NotificationsViewModel(
     private fun humanize(error: Exception): String =
         (error as? ConvexException)?.message
             ?: ConvexHttpClient.humanize(error.message ?: "NOTIFICATION_FAILED")
+
+    private fun releaseOperation() {
+        operationMutex.unlock()
+        if (refreshPending.getAndSet(false)) refresh()
+    }
 
     companion object {
         const val BUSY_ALL = "all"

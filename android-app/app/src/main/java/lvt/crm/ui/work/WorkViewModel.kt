@@ -8,9 +8,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicBoolean
 import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.convex.ConvexHttpClient
 import lvt.crm.data.work.WorkRepository
+import lvt.crm.data.work.WorkOperations
 import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkTaskItem
@@ -33,8 +37,10 @@ data class WorkUiState(
 )
 
 class WorkViewModel(
-    private val repository: WorkRepository,
+    private val repository: WorkOperations,
 ) : ViewModel() {
+    private val operationMutex = Mutex()
+    private val refreshPending = AtomicBoolean(false)
     private val _uiState = MutableStateFlow(WorkUiState())
     val uiState: StateFlow<WorkUiState> = _uiState.asStateFlow()
 
@@ -43,10 +49,14 @@ class WorkViewModel(
     }
 
     fun refresh(initial: Boolean = false) {
+        if (!operationMutex.tryLock()) {
+            refreshPending.set(true)
+            return
+        }
+        _uiState.update {
+            it.copy(loading = initial, refreshing = !initial, error = null, actionError = null)
+        }
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(loading = initial, refreshing = !initial, error = null, actionError = null)
-            }
             try {
                 val snap = repository.listMine()
                 _uiState.update {
@@ -69,6 +79,8 @@ class WorkViewModel(
                             ?: ConvexHttpClient.humanize(e.message ?: "LOAD_FAILED"),
                     )
                 }
+            } finally {
+                releaseOperation()
             }
         }
     }
@@ -84,32 +96,37 @@ class WorkViewModel(
     }
 
     fun decideApproval(approval: WorkApprovalItem, approve: Boolean) {
+        _uiState.update { it.copy(busyApprovalId = approval.id, actionError = null) }
         viewModelScope.launch {
-            _uiState.update {
-                it.copy(busyApprovalId = approval.id, actionError = null)
-            }
-            try {
-                repository.decideApproval(approval.id, approve)
-                val snap = repository.listMine()
-                _uiState.update {
-                    it.copy(
-                        busyApprovalId = null,
-                        isAdmin = snap.isAdmin,
-                        accessLevel = snap.accessLevel,
-                        tasks = snap.tasks,
-                        approvals = snap.approvals,
-                        completionReviews = snap.completionReviews,
-                    )
+            operationMutex.withLock {
+                try {
+                    repository.decideApproval(approval.id, approve)
+                    _uiState.update { state ->
+                        state.copy(
+                            approvals = state.approvals.map { item ->
+                                if (item.id == approval.id) {
+                                    item.copy(myDecision = if (approve) "approved" else "rejected")
+                                } else {
+                                    item
+                                }
+                            },
+                        )
+                    }
+                    reloadAfterCommittedMutation()
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            actionError = (e as? ConvexException)?.message
+                                ?: ConvexHttpClient.humanize(e.message ?: "APPROVAL_FAILED"),
+                        )
+                    }
+                } finally {
+                    if (_uiState.value.busyApprovalId == approval.id) {
+                        _uiState.update { it.copy(busyApprovalId = null) }
+                    }
                 }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        busyApprovalId = null,
-                        actionError = (e as? ConvexException)?.message
-                            ?: ConvexHttpClient.humanize(e.message ?: "APPROVAL_FAILED"),
-                    )
-                }
             }
+            runPendingRefresh()
         }
     }
 
@@ -123,30 +140,34 @@ class WorkViewModel(
         qualityPercent: Int? = null,
         rejectionReason: String? = null,
     ) {
+        val operationId = review.workItemId + review.userId
+        _uiState.update { it.copy(busyReviewId = operationId, actionError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(busyReviewId = review.workItemId + review.userId, actionError = null) }
-            try {
-                repository.reviewCompletion(review, approve, qualityPercent, rejectionReason)
-                val snap = repository.listMine()
-                _uiState.update {
-                    it.copy(
-                        busyReviewId = null,
-                        isAdmin = snap.isAdmin,
-                        accessLevel = snap.accessLevel,
-                        tasks = snap.tasks,
-                        approvals = snap.approvals,
-                        completionReviews = snap.completionReviews,
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        busyReviewId = null,
-                        actionError = (e as? ConvexException)?.message
-                            ?: ConvexHttpClient.humanize(e.message ?: "COMPLETION_REVIEW_FAILED"),
-                    )
+            operationMutex.withLock {
+                try {
+                    repository.reviewCompletion(review, approve, qualityPercent, rejectionReason)
+                    _uiState.update { state ->
+                        state.copy(
+                            completionReviews = state.completionReviews.filterNot {
+                                it.workItemId == review.workItemId && it.userId == review.userId
+                            },
+                        )
+                    }
+                    reloadAfterCommittedMutation()
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            actionError = (e as? ConvexException)?.message
+                                ?: ConvexHttpClient.humanize(e.message ?: "COMPLETION_REVIEW_FAILED"),
+                        )
+                    }
+                } finally {
+                    if (_uiState.value.busyReviewId == operationId) {
+                        _uiState.update { it.copy(busyReviewId = null) }
+                    }
                 }
             }
+            runPendingRefresh()
         }
     }
 
@@ -161,36 +182,74 @@ class WorkViewModel(
             _uiState.update { it.copy(actionError = "Nhập % chất lượng từ 0 đến 100.") }
             return
         }
-        _uiState.update { it.copy(qualityPromptTask = null) }
         complete(task, qualityPercent = pct)
+        _uiState.update { it.copy(qualityPromptTask = null) }
     }
 
     private fun complete(task: WorkTaskItem, qualityPercent: Int?) {
+        _uiState.update { it.copy(busyTaskId = task.id, actionError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(busyTaskId = task.id, actionError = null) }
-            try {
-                repository.complete(task, qualityPercent)
-                val snap = repository.listMine()
-                _uiState.update {
-                    it.copy(
-                        busyTaskId = null,
-                        isAdmin = snap.isAdmin,
-                        accessLevel = snap.accessLevel,
-                        tasks = snap.tasks,
-                        approvals = snap.approvals,
-                        completionReviews = snap.completionReviews,
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        busyTaskId = null,
-                        actionError = (e as? ConvexException)?.message
-                            ?: ConvexHttpClient.humanize(e.message ?: "COMPLETE_FAILED"),
-                    )
+            operationMutex.withLock {
+                try {
+                    repository.complete(task, qualityPercent)
+                    _uiState.update { state ->
+                        state.copy(
+                            tasks = state.tasks.map { item ->
+                                if (item.id == task.id && item.kind == task.kind) {
+                                    item.copy(
+                                        status = if (task.isAdmin) "completed" else "pending_completion",
+                                        qualityPercent = qualityPercent ?: item.qualityPercent,
+                                    )
+                                } else {
+                                    item
+                                }
+                            },
+                        )
+                    }
+                    reloadAfterCommittedMutation()
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            actionError = (e as? ConvexException)?.message
+                                ?: ConvexHttpClient.humanize(e.message ?: "COMPLETE_FAILED"),
+                        )
+                    }
+                } finally {
+                    if (_uiState.value.busyTaskId == task.id) {
+                        _uiState.update { it.copy(busyTaskId = null) }
+                    }
                 }
             }
+            runPendingRefresh()
         }
+    }
+
+    private suspend fun reloadAfterCommittedMutation() {
+        try {
+            val snap = repository.listMine()
+            _uiState.update {
+                it.copy(
+                    isAdmin = snap.isAdmin,
+                    accessLevel = snap.accessLevel,
+                    tasks = snap.tasks,
+                    approvals = snap.approvals,
+                    completionReviews = snap.completionReviews,
+                )
+            }
+        } catch (_: Exception) {
+            _uiState.update {
+                it.copy(actionError = "Thao tác đã được lưu, nhưng chưa tải lại được danh sách. Hãy làm mới.")
+            }
+        }
+    }
+
+    private fun releaseOperation() {
+        operationMutex.unlock()
+        runPendingRefresh()
+    }
+
+    private fun runPendingRefresh() {
+        if (refreshPending.getAndSet(false)) refresh()
     }
 
     companion object {

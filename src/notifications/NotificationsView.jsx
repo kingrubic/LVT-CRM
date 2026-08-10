@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from 'convex/react';
 import { anyApi } from 'convex/server';
+import { openNotification } from './openNotification.js';
 
 function formatDueAt(value) {
   if (!value) return '—';
@@ -107,8 +108,8 @@ export default function NotificationsView({ data, onOpenItem }) {
   const openOne = async (item) => {
     setPending(item.key);
     try {
-      if (!item.read) await markRead({ notificationKey: item.key });
-      onOpenItem?.(item);
+      const error = await openNotification(item, markRead, onOpenItem);
+      if (error) console.error('Notification read state was not saved', error);
     } finally {
       setPending('');
     }

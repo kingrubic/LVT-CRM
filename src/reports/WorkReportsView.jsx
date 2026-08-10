@@ -199,8 +199,8 @@ export default function WorkReportsView() {
   const statuses = data?.visibilityScope === 'all'
     ? ['approved', 'pending']
     : data?.visibilityScope === 'department'
-      ? ['unassigned', 'pending', 'completed', 'overdue']
-      : ['pending', 'completed', 'overdue'];
+      ? ['unassigned', 'pending', 'completed', 'completed_late', 'overdue']
+      : ['pending', 'completed', 'completed_late', 'overdue'];
   const peopleGroups = useMemo(() => {
     const groups = new Map();
     for (const person of data?.people || []) {

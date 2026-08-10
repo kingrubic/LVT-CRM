@@ -1,0 +1,141 @@
+package lvt.crm.ui.work
+
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import lvt.crm.data.work.WorkApprovalItem
+import lvt.crm.data.work.WorkCompletionReviewItem
+import lvt.crm.data.work.WorkOperations
+import lvt.crm.data.work.WorkSnapshot
+import lvt.crm.data.work.WorkTaskItem
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class WorkViewModelConcurrencyTest {
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `approval waits for busy refresh and runs exactly once`() = runTest(dispatcher) {
+        val repository = BlockingWorkOperations()
+        val viewModel = WorkViewModel(repository)
+        runCurrent()
+        assertTrue(repository.refreshStarted.isCompleted)
+        val approval = approval("approval-1")
+
+        viewModel.decideApproval(approval, approve = true)
+
+        assertEquals("approval-1", viewModel.uiState.value.busyApprovalId)
+        assertEquals(0, repository.approvalCalls)
+
+        repository.releaseRefresh.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.approvalCalls)
+        assertEquals(null, viewModel.uiState.value.busyApprovalId)
+    }
+
+    @Test
+    fun `quality completion is accepted while refresh is busy`() = runTest(dispatcher) {
+        val repository = BlockingWorkOperations()
+        val viewModel = WorkViewModel(repository)
+        runCurrent()
+        val task = task("task-1")
+
+        viewModel.requestComplete(task)
+        viewModel.onQualityInput("85")
+        viewModel.confirmQualityComplete()
+
+        assertEquals(null, viewModel.uiState.value.qualityPromptTask)
+        assertEquals("task-1", viewModel.uiState.value.busyTaskId)
+        assertEquals(0, repository.completionCalls)
+
+        repository.releaseRefresh.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.completionCalls)
+        assertEquals(85, repository.lastQualityPercent)
+    }
+
+    private fun approval(id: String) = WorkApprovalItem(
+        id = id,
+        fileName = "file.pdf",
+        content = "content",
+        deadline = "2026-08-10",
+        status = "pending",
+        approvalCount = 0,
+        approvalTotal = 1,
+        myDecision = "",
+    )
+
+    private fun task(id: String) = WorkTaskItem(
+        id = id,
+        kind = WorkTaskItem.Kind.WorkItem,
+        title = "Task",
+        deadline = "2026-08-10",
+        status = "in_progress",
+        documentContent = "Document",
+        departmentName = "Office",
+        qualityPercent = null,
+        rejectionReason = "",
+        isAdmin = true,
+    )
+}
+
+private class BlockingWorkOperations : WorkOperations {
+    val refreshStarted = CompletableDeferred<Unit>()
+    val releaseRefresh = CompletableDeferred<Unit>()
+    var listCalls = 0
+    var approvalCalls = 0
+    var completionCalls = 0
+    var lastQualityPercent: Int? = null
+
+    override suspend fun listMine(): WorkSnapshot {
+        if (listCalls++ == 0) {
+            refreshStarted.complete(Unit)
+            releaseRefresh.await()
+        }
+        return WorkSnapshot(
+            assignerMode = "",
+            isAdmin = true,
+            accessLevel = 3,
+            tasks = emptyList(),
+            approvals = emptyList(),
+        )
+    }
+
+    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?) {
+        completionCalls++
+        lastQualityPercent = qualityPercent
+    }
+
+    override suspend fun decideApproval(documentId: String, approve: Boolean) {
+        approvalCalls++
+    }
+
+    override suspend fun reviewCompletion(
+        review: WorkCompletionReviewItem,
+        approve: Boolean,
+        qualityPercent: Int?,
+        rejectionReason: String?,
+    ) = Unit
+}

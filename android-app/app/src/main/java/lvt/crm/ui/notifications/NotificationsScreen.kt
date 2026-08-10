@@ -191,7 +191,7 @@ fun NotificationsScreen(
                     ) {
                         Button(
                             onClick = viewModel::markAllRead,
-                            enabled = state.busyKey != NotificationsViewModel.BUSY_ALL,
+                            enabled = state.busyKey == null,
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.secondary,
@@ -227,8 +227,7 @@ fun NotificationsScreen(
                             NotificationCard(
                                 item = item,
                                 canDelete = state.canDelete,
-                                busy = state.busyKey == item.key ||
-                                    state.busyKey == "dismiss:${item.key}",
+                                busy = state.busyKey != null,
                                 onOpen = { viewModel.open(item, onOpenItem) },
                                 onDismiss = { viewModel.dismiss(item) },
                             )

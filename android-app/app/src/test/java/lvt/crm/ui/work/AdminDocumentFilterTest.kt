@@ -8,6 +8,15 @@ import org.junit.Test
 
 class AdminDocumentFilterTest {
     @Test
+    fun selectionAndNotificationFocusResolveAgainstLatestDocuments() {
+        val stale = document("document-1", "work-1")
+        val updated = stale.copy(content = "updated")
+
+        assertEquals("updated", currentAdminDocument(listOf(updated), stale.id)?.content)
+        assertEquals(updated.id, focusedAdminDocument(listOf(updated), "work-1")?.id)
+    }
+
+    @Test
     fun pendingCompletionFilterKeepsOnlyDocumentsWithReviewableTasks() {
         val reviewable = document("reviewable", "work-1")
         val complete = document("complete", "work-2")

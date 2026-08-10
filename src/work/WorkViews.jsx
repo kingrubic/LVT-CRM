@@ -29,6 +29,18 @@ function fileSizeLabel(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+async function settleWorkUploadedFile(fetchAccessToken, cleanupToken, committed) {
+  const token = await fetchAccessToken({ forceRefreshToken: false });
+  if (!token) throw new Error('AUTH_REQUIRED');
+  const response = await fetch(`/api/files/uploads/${encodeURIComponent(cleanupToken)}`, {
+    method: committed ? 'POST' : 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`WORK_UPLOAD_SETTLEMENT_FAILED:${response.status}`);
+  }
+}
+
 function PrivateFileLink({
   documentId,
   fileName,
@@ -453,6 +465,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const [approverIds, setApproverIds] = useState([]);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const [saving, setSaving] = useState(false);
+  const [pendingSettlement, setPendingSettlement] = useState(null);
   const [reviewing, setReviewing] = useState(null);
   const [reviewSaving, setReviewSaving] = useState(false);
 
@@ -473,12 +486,32 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const submit = async (event) => {
     event.preventDefault();
     setFeedback({ type: '', text: '' });
+    if (pendingSettlement) {
+      setSaving(true);
+      try {
+        await settleWorkUploadedFile(fetchAccessToken, pendingSettlement.cleanupToken, true);
+        setPendingSettlement(null);
+        setFeedback({ type: 'success', text: 'Đã tạo công văn và gửi đến người duyệt.' });
+        reset();
+      } catch (settlementError) {
+        console.error('Work upload settlement retry failed', settlementError);
+        setFeedback({
+          type: 'error',
+          text: 'Công văn đã được tạo và tệp vẫn được giữ an toàn, nhưng chưa thể hoàn tất upload. Vui lòng thử lại.',
+        });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!file) return setFeedback({ type: 'error', text: 'Vui lòng tải công văn lên trước.' });
     if (!assignments.length || !approverIds.length) {
       return setFeedback({ type: 'error', text: 'Vui lòng thêm ít nhất một phân công và chọn người duyệt.' });
     }
     setSaving(true);
     let stage = 'upload';
+    let uploaded = null;
+    let crmCommitted = false;
     try {
       const token = await fetchAccessToken({ forceRefreshToken: false });
       if (!token) throw new Error('AUTH_REQUIRED');
@@ -491,14 +524,15 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
         },
         body: file,
       });
-      const result = await response.json().catch(() => null);
-      if (!response.ok || !result?.driveFileId) {
+      uploaded = await response.json().catch(() => null);
+      if (!response.ok || !uploaded?.driveFileId || !uploaded?.cleanupToken) {
         throw new Error(`WORK_UPLOAD_FAILED:${response.status}`);
       }
       stage = 'save';
       await createDocument({
-        driveFileId: result.driveFileId,
-        driveChecksum: result.driveChecksum,
+        driveFileId: uploaded.driveFileId,
+        driveChecksum: uploaded.driveChecksum,
+        cleanupToken: uploaded.cleanupToken,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
@@ -519,15 +553,34 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
         )),
         approverUserIds: approverIds,
       });
+      crmCommitted = true;
+      stage = 'settlement';
+      await settleWorkUploadedFile(fetchAccessToken, uploaded.cleanupToken, true);
       setFeedback({ type: 'success', text: 'Đã tạo công văn và gửi đến người duyệt.' });
       reset();
     } catch (error) {
-      setFeedback({
-        type: 'error',
-        text: stage === 'upload'
-          ? 'Không thể tải tệp công văn lên. Vui lòng thử lại.'
-          : 'Tệp đã tải lên nhưng không thể lưu công văn. Vui lòng kiểm tra thông tin phân công và người duyệt.',
-      });
+      if (crmCommitted) {
+        setPendingSettlement(uploaded);
+        setFeedback({
+          type: 'error',
+          text: 'Công văn đã được tạo và tệp vẫn được giữ an toàn, nhưng chưa thể hoàn tất upload. Vui lòng thử lại.',
+        });
+      } else if (uploaded?.cleanupToken) {
+        try {
+          await settleWorkUploadedFile(fetchAccessToken, uploaded.cleanupToken, false);
+        } catch (cleanupError) {
+          console.error('Work orphan upload cleanup failed', cleanupError);
+        }
+        setFeedback({
+          type: 'error',
+          text: 'Tệp đã tải lên nhưng không thể lưu công văn. Vui lòng kiểm tra thông tin phân công và người duyệt.',
+        });
+      } else {
+        setFeedback({
+          type: 'error',
+          text: 'Không thể tải tệp công văn lên. Vui lòng thử lại.',
+        });
+      }
       console.error('Work document submission failed', {
         stage,
         message: String(error?.message || error),
@@ -717,7 +770,9 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
           {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
           <div className="work-editor-actions">
             <button type="button" className="work-ghost-button" onClick={reset}>Xóa biểu mẫu</button>
-            <button type="submit" className="work-primary-button" disabled={saving}>{saving ? 'Đang tải lên…' : 'Lưu & gửi duyệt'}</button>
+            <button type="submit" className="work-primary-button" disabled={saving}>
+              {saving ? 'Đang tải lên…' : pendingSettlement ? 'Thử hoàn tất lại' : 'Lưu & gửi duyệt'}
+            </button>
           </div>
         </form>
       ) : null}
@@ -983,7 +1038,9 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
-  const handleCompleteWorkItem = async ({ qualityPercent } = {}) => {
+  /** @param {{ qualityPercent?: number }} [result] */
+  const handleCompleteWorkItem = async (result = {}) => {
+    const { qualityPercent } = result;
     if (!completing) return;
     setCompletingSaving(true);
     setFeedback({ type: '', text: '' });
@@ -1004,7 +1061,9 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
-  const handleCompletePersonal = async ({ qualityPercent } = {}) => {
+  /** @param {{ qualityPercent?: number }} [result] */
+  const handleCompletePersonal = async (result = {}) => {
+    const { qualityPercent } = result;
     if (!completing) return;
     setCompletingSaving(true);
     setFeedback({ type: '', text: '' });

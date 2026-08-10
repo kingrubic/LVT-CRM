@@ -240,7 +240,8 @@ export default defineSchema({
     ...timestamps,
   })
     .index("by_active_deadline", ["active", "deadline"])
-    .index("by_department", ["departmentId"]),
+    .index("by_department", ["departmentId"])
+    .index("by_drive_file", ["driveFileId"]),
   /**
    * Work generated from an official document.
    * assignmentType=department (default): collective task for live department roster.
@@ -334,7 +335,8 @@ export default defineSchema({
     ...timestamps,
   })
     .index("by_target", ["targetUserId", "active"])
-    .index("by_violation_date", ["active", "violationDate"]),
+    .index("by_violation_date", ["active", "violationDate"])
+    .index("by_drive_file", ["driveFileId"]),
   /**
    * Evaluation evidence files (offline self-assessment PDFs).
    * kind: quarterly | civil_servant | boarding
@@ -362,7 +364,8 @@ export default defineSchema({
     ...timestamps,
   })
     .index("by_target_kind_period", ["targetUserId", "kind", "periodKey"])
-    .index("by_target", ["targetUserId", "active"]),
+    .index("by_target", ["targetUserId", "active"])
+    .index("by_drive_file", ["driveFileId"]),
   /** BGH text reviews attached to an evaluation file. One text per evaluator per file. */
   personnelEvaluationTexts: defineTable({
     fileId: v.string(),
@@ -377,4 +380,34 @@ export default defineSchema({
     .index("by_file", ["fileId", "active"])
     .index("by_target", ["targetUserId", "active"])
     .index("by_file_evaluator", ["fileId", "evaluatorUserId"]),
+  /** Trusted cleanup queue for Drive objects superseded by an atomic metadata update. */
+  driveCleanupJobs: defineTable({
+    driveFileId: v.string(),
+    purpose: v.string(),
+    resourceId: v.string(),
+    createdBy: v.string(),
+    active: v.boolean(),
+    ...timestamps,
+  })
+    .index("by_creator", ["createdBy", "active"]),
+  /** Atomic ownership/cleanup state for Drive uploads before CRM records take ownership. */
+  driveUploadStages: defineTable({
+    cleanupToken: v.string(),
+    driveFileId: v.string(),
+    purpose: v.string(),
+    userId: v.string(),
+    status: v.string(),
+    claimId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_cleanup_token", ["cleanupToken"]),
+  /** Idempotency receipts for atomic multi-section personnel-review saves. */
+  peopleReviewSaveRequests: defineTable({
+    userId: v.string(),
+    requestId: v.string(),
+    cleanupJobIds: v.array(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user_request", ["userId", "requestId"]),
 });

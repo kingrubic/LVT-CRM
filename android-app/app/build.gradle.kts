@@ -17,11 +17,6 @@ android {
         versionName = "0.5.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField(
-            "String",
-            "CONVEX_URL",
-            "\"${project.findProperty("lvt.convex.url") ?: "https://lvt-convex.vscgroup.io.vn"}\"",
-        )
     }
 
     buildTypes {
@@ -29,6 +24,11 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             isMinifyEnabled = false
+            buildConfigField(
+                "String",
+                "CONVEX_URL",
+                "\"${project.findProperty("lvt.convex.debug.url") ?: "http://10.0.2.2:3210"}\"",
+            )
         }
         release {
             isMinifyEnabled = true
@@ -36,6 +36,11 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
+            )
+            buildConfigField(
+                "String",
+                "CONVEX_URL",
+                "\"${project.findProperty("lvt.convex.release.url") ?: "https://lvt-convex.vscgroup.io.vn"}\"",
             )
         }
     }
@@ -86,6 +91,9 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging:24.1.2")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.json:json:20240303")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
