@@ -22,6 +22,7 @@ class AuthRepository(
     private val tokenStore: CredentialStore,
     private val convex: AuthApi,
     private val beforeSignOut: (suspend (String) -> Unit)? = null,
+    private val afterAuthenticated: (suspend () -> Result<*>)? = null,
 ) : SignInGateway {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow<AuthState>(AuthState.Loading)
@@ -48,6 +49,7 @@ class AuthRepository(
                 clearCurrentCredentialsAndSignOut(credentials, generation)
             } else {
                 publish(session, generation, credentials)
+                runCatching { afterAuthenticated?.invoke() }
             }
         } catch (e: Exception) {
             // Keep tokens if network blip; only clear on hard auth failure.
@@ -118,6 +120,7 @@ class AuthRepository(
             if (!publish(session, generation)) {
                 return Result.failure(ConvexException("SIGN_IN_SUPERSEDED"))
             }
+            runCatching { afterAuthenticated?.invoke() }
             Result.success(session)
         } catch (e: ConvexException) {
             if (previousCredentials != null && previousState.isAuthenticated()) {

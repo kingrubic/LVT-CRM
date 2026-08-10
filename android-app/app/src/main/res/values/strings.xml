@@ -10,5 +10,6 @@
     <string name="nav_work">Công việc</string>
     <string name="nav_profile">Cá nhân</string>
     <string name="change_password">Đổi mật khẩu</string>
+    <string name="devices">Thiết bị</string>
     <string name="sign_out">Đăng xuất</string>
 </resources>

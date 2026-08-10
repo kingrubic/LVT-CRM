@@ -112,3 +112,51 @@ export const sendPasswordResetEmail = internalAction({
     return { ok: true as const };
   },
 });
+
+export const sendAccountLockedEmail = internalAction({
+  args: {
+    to: v.string(),
+    recipientName: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const config = requireGmailConfig();
+    const accessToken = await gmailAccessToken(config);
+    const greeting = args.recipientName?.trim()
+      ? `Xin chào ${args.recipientName.trim()},`
+      : "Xin chào,";
+    const text = [
+      greeting,
+      "",
+      "Tài khoản Lê Văn Tám CRM của bạn đã bị tạm khóa do đăng nhập sai quá số lần cho phép.",
+      "",
+      "Vui lòng liên hệ quản trị viên của nhà trường để được mở khóa tài khoản.",
+      "Không thử đăng nhập lại cho đến khi quản trị viên xác nhận đã mở khóa.",
+      "",
+      "Trân trọng,",
+      "THCS Lê Văn Tám",
+    ].join("\n");
+
+    const response = await fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          raw: buildRawMessage({
+            from: config.from,
+            to: args.to,
+            subject: "Tài khoản bị khóa — Lê Văn Tám CRM",
+            text,
+          }),
+        }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error("ACCOUNT_LOCKED_EMAIL_FAILED");
+    }
+    return { ok: true as const };
+  },
+});

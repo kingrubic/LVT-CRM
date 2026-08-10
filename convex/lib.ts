@@ -30,6 +30,12 @@ export const WORK_ASSIGNER_MODE_SUPERVISOR = "supervisor";
 export const WORK_ASSIGNER_MODE_DEFAULT = WORK_ASSIGNER_MODE_ADMIN_MOD;
 export type WorkAssignerMode = typeof WORK_ASSIGNER_MODE_ADMIN_MOD | typeof WORK_ASSIGNER_MODE_SUPERVISOR;
 
+/** Failed-login lockout (SYS-008). Stored as single-element numberValues arrays. */
+export const LOGIN_MAX_FAILED_ATTEMPTS_SETTING_KEY = "login.maxFailedAttempts";
+export const LOGIN_ATTEMPT_WINDOW_MINUTES_SETTING_KEY = "login.attemptWindowMinutes";
+export const LOGIN_MAX_FAILED_ATTEMPTS_DEFAULT = 5;
+export const LOGIN_ATTEMPT_WINDOW_MINUTES_DEFAULT = 15;
+
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
 export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
 export type SystemRole = "admin" | "moderator" | "user";
@@ -158,6 +164,19 @@ export async function getStringSystemSetting(
     .unique();
   const value = row?.stringValue;
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+export async function getNumberSystemSetting(
+  ctx: DbCtx,
+  key: string,
+  fallback: number,
+): Promise<number> {
+  const row = await ctx.db
+    .query("systemSettings")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  const value = row?.numberValues?.[0];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 export async function getWorkAssignerMode(ctx: DbCtx): Promise<WorkAssignerMode> {

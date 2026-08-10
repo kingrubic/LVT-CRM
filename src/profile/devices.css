@@ -1,0 +1,183 @@
+.devices-panel {
+  margin-top: 16px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--profile-line, #dce5eb);
+  border-radius: 17px;
+  background: #fffdf7;
+  box-shadow: 0 13px 34px rgba(27, 61, 91, .07);
+}
+
+.devices-admin {
+  margin-top: 12px;
+  background: #fff;
+}
+
+.devices-head h3 {
+  margin: 4px 0 6px;
+  font-size: 18px;
+}
+
+.devices-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.devices-section {
+  margin-top: 16px;
+}
+
+.devices-section h4 {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 10px;
+  letter-spacing: .12em;
+}
+
+.devices-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.devices-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid #e8eef3;
+}
+
+.devices-row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.devices-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #eef3ff;
+  font-size: 18px;
+}
+
+.devices-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.devices-meta strong {
+  font-size: 13px;
+  color: #16243e;
+}
+
+.devices-meta span,
+.devices-meta small {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.devices-logout-others {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #f1d4d4;
+  border-radius: 12px;
+  background: #fff7f6;
+  color: #c13d44;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.devices-logout-others strong {
+  display: block;
+  font-size: 13px;
+}
+
+.devices-logout-others small {
+  display: block;
+  margin-top: 2px;
+  color: #9a6064;
+  font-size: 11px;
+}
+
+.devices-logout-others:disabled,
+.devices-revoke:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.devices-revoke {
+  white-space: nowrap;
+}
+
+.devices-empty,
+.devices-loading {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.devices-admin-revoke-all {
+  margin-top: 14px;
+}
+
+.lockout-settings {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid #dde4ec;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.lockout-settings h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.lockout-settings > p {
+  margin: 0 0 12px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.lockout-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 180px)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.lockout-settings label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lockout-settings input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #dde4ec;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.admin-sessions-drawer {
+  margin-top: 10px;
+  grid-column: 1 / -1;
+}

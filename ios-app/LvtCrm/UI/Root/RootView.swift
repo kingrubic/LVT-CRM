@@ -149,6 +149,7 @@ struct MainShell: View {
             ProfileScreen(
                 session: session,
                 authRepository: container.authRepository,
+                sessionsRepository: container.sessionsRepository,
                 onSignOut: onSignOut
             )
         }

@@ -301,6 +301,7 @@ private fun MainShell(
                     departmentName = departmentName,
                     positionName = positionName,
                     authRepository = container.authRepository,
+                    sessionsRepository = container.sessionsRepository,
                     onSignOut = onSignOut,
                 )
             }

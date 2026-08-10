@@ -146,6 +146,11 @@ button { font: inherit; cursor: pointer; }
 .meta-stack span { color: #8490a5; font-size: 11px; }
 .user-table-head-5, .user-row-5 { grid-template-columns: 1.5fr .9fr 1.4fr .8fr 1.6fr; }
 .wide-table .user-table-head-5, .wide-table .user-row-5 { min-width: 920px; }
+.users-management .user-row-5 { align-items: start; }
+.users-management .admin-sessions-drawer {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
 .card-list { display: grid; gap: 12px; }
 .mgmt-card { padding: 16px 18px; border: 1px solid #e1e7f1; border-radius: 10px; background: #fff; }
 .mgmt-card-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }

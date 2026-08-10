@@ -5,6 +5,7 @@ final class AppContainer: ObservableObject {
     let tokenStore: TokenStore
     let convex: ConvexHttpClient
     let authRepository: AuthRepository
+    let sessionsRepository: SessionsRepository
     let dutiesRepository: DutiesRepository
     let workRepository: WorkRepository
     let notificationsRepository: NotificationsRepository
@@ -30,6 +31,9 @@ final class AppContainer: ObservableObject {
         self.dutiesRepository = DutiesRepository(convex: convex)
         self.workRepository = WorkRepository(convex: convex)
 
+        let sessionsRepository = SessionsRepository(convex: convex)
+        self.sessionsRepository = sessionsRepository
+
         let apnsRegistrar = APNsTokenRegistrar(tokenStore: tokenStore, convex: convex)
         self.apnsRegistrar = apnsRegistrar
 
@@ -38,6 +42,9 @@ final class AppContainer: ObservableObject {
             convex: convex,
             beforeSignOut: { accessToken in
                 await apnsRegistrar.unregister(accessToken: accessToken)
+            },
+            afterAuthenticated: {
+                await sessionsRepository.registerCurrentDevice()
             }
         )
 

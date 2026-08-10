@@ -206,11 +206,12 @@ actor ConvexHttpClient {
     static func extractCode(_ message: String) -> String {
         let known = [
             "InvalidAccountId", "InvalidSecret", "Invalid credentials", "USER_NOT_ACTIVE",
-            "PASSWORD_TOO_SHORT", "PASSWORD_CHANGE_FAILED", "PASSWORD_CHANGED_SYNC_PENDING",
+            "ACCOUNT_LOCKED", "PASSWORD_TOO_SHORT", "PASSWORD_CHANGE_FAILED", "PASSWORD_CHANGED_SYNC_PENDING",
             "PASSWORD_CHANGE_REQUIRED", "PASSWORD_RESET_FAILED", "PASSWORD_RESET_EMAIL_FAILED",
             "MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PUBLIC_SIGNUP_DISABLED", "INVALID_EMAIL",
             "INVALID_AUTH_FLOW", "FORBIDDEN", "UNAUTHENTICATED", "ATTENDANCE_OUTSIDE_WINDOW",
             "ATTENDANCE_CONFIRMATION_DISABLED", "NOT_A_PARTICIPANT", "QUALITY_PERCENT_REQUIRED",
+            "CANNOT_REVOKE_CURRENT_SESSION", "SESSION_NOT_FOUND",
         ]
         return known.first { message.localizedCaseInsensitiveContains($0) } ?? message
     }
@@ -221,10 +222,16 @@ actor ConvexHttpClient {
         case code.localizedCaseInsensitiveContains("Invalid"),
              code.localizedCaseInsensitiveContains("credentials"):
             return "Email hoặc mật khẩu không đúng."
+        case code == "ACCOUNT_LOCKED":
+            return "Tài khoản đã bị khóa do đăng nhập sai quá số lần. Liên hệ quản trị viên để mở khóa."
         case code == "USER_NOT_ACTIVE":
             return "Tài khoản chưa được kích hoạt hoặc đã bị khóa."
         case code == "PASSWORD_TOO_SHORT":
             return "Mật khẩu phải có ít nhất 8 ký tự."
+        case code == "CANNOT_REVOKE_CURRENT_SESSION":
+            return "Không thể thu hồi phiên đang dùng."
+        case code == "SESSION_NOT_FOUND":
+            return "Phiên đăng nhập không còn tồn tại."
         case code == "PASSWORD_CHANGE_FAILED":
             return "Không đổi được mật khẩu. Thử lại sau."
         case code == "PASSWORD_CHANGED_SYNC_PENDING":

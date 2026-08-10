@@ -36,6 +36,8 @@
 		28F26CDDF19351DBBF422C42 /* WorkScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5210E75B31BC29A5FA698B16 /* WorkScreen.swift */; };
 		31A7ED74B7092E2F8C8D67FB /* WorkViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D2FF87017C89AF993C5B006 /* WorkViewModel.swift */; };
 		95F893ABF8DE2704294E63B9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5417BC6652ACDD9848361A86 /* Assets.xcassets */; };
+		B11SESSREP00000000000001 /* SessionsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11SESSREP00000000000001 /* SessionsRepository.swift */; };
+		B11DEVSCREEN000000000001 /* DevicesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11DEVSCREEN000000000001 /* DevicesScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */

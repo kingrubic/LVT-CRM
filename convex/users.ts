@@ -255,6 +255,24 @@ export const assertRoleAndDepartment = internalQuery({
   },
 });
 
+export const clearLoginLock = internalMutation({
+  args: { id: v.id("users"), actorUserId: v.string() },
+  handler: async (ctx, args) => {
+    const target = await ctx.db.get(args.id);
+    if (!target) return;
+    if (!target.loginLockedAt && !target.failedLoginCount && !target.failedLoginWindowStart) {
+      return;
+    }
+    await ctx.db.patch(args.id, {
+      loginLockedAt: undefined,
+      failedLoginCount: undefined,
+      failedLoginWindowStart: undefined,
+      updatedBy: args.actorUserId,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const patchById = internalMutation({
   args: {
     id: v.id("users"),
@@ -488,6 +506,8 @@ export const setDisabled = action({
       });
       try {
         await invalidateSessions(ctx, { userId: args.id });
+        await ctx.runMutation(internal.push.removeAllForUser, { userId: String(args.id) });
+        await ctx.runMutation(internal.sessions.removeAllMetadataForUser, { userId: args.id });
       } catch {
         await auditBestEffort(ctx, {
           actorUserId: actorId,
@@ -503,6 +523,8 @@ export const setDisabled = action({
         actorUserId: actorId,
         status: "active",
       });
+      // Enabling also clears failed-login lock so admin "Mở khóa" recovers both cases.
+      await ctx.runMutation(internal.users.clearLoginLock, { id: args.id, actorUserId: actorId });
     }
 
     await auditBestEffort(ctx, {
@@ -578,6 +600,9 @@ export const resetPassword = action({
         account: { id: normalizeEmail(target.email), secret: args.temporaryPassword },
       });
       await invalidateSessions(ctx, { userId: args.id });
+      await ctx.runMutation(internal.push.removeAllForUser, { userId: String(args.id) });
+      await ctx.runMutation(internal.sessions.removeAllMetadataForUser, { userId: args.id });
+      await ctx.runMutation(internal.users.clearLoginLock, { id: args.id, actorUserId: actorId });
     } catch {
       await auditBestEffort(ctx, {
         actorUserId: actorId,
@@ -611,7 +636,8 @@ export const requestPasswordReset = action({
     }
 
     const user = await ctx.runQuery(internal.users.byEmail, { email });
-    if (!user || user.status !== "active" || !user.email) {
+    // Locked accounts must contact admin; do not rotate credentials via forgot-password.
+    if (!user || user.status !== "active" || !user.email || user.loginLockedAt) {
       return { ok: true };
     }
 
@@ -634,6 +660,8 @@ export const requestPasswordReset = action({
         account: { id: email, secret: temporaryPassword },
       });
       await invalidateSessions(ctx, { userId: user._id });
+      await ctx.runMutation(internal.push.removeAllForUser, { userId: String(user._id) });
+      await ctx.runMutation(internal.sessions.removeAllMetadataForUser, { userId: user._id });
     } catch {
       await auditBestEffort(ctx, {
         actorUserId: "system:requestPasswordReset",
@@ -696,6 +724,21 @@ export const changeOwnPassword = action({
         userId,
         except: sessionId ? [sessionId] : undefined,
       });
+      if (sessionId) {
+        const all: Id<"authSessions">[] = await ctx.runQuery(internal.sessions.authSessionIdsForUser, {
+          userId,
+        });
+        const revoked = all.filter((id) => id !== sessionId);
+        if (revoked.length) {
+          await ctx.runMutation(internal.sessions.cleanupAfterRevoke, {
+            userId,
+            sessionIds: revoked,
+          });
+        }
+      } else {
+        await ctx.runMutation(internal.push.removeAllForUser, { userId: String(userId) });
+        await ctx.runMutation(internal.sessions.removeAllMetadataForUser, { userId });
+      }
     } catch {
       await auditBestEffort(ctx, {
         actorUserId: userId,

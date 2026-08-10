@@ -41,8 +41,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.outlined.Devices
 import lvt.crm.R
 import lvt.crm.data.auth.AuthRepository
+import lvt.crm.data.auth.SessionsRepository
 import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.components.InfoRow
 import lvt.crm.ui.components.ScreenHeader
@@ -57,9 +59,11 @@ fun ProfileScreen(
     departmentName: String?,
     positionName: String?,
     authRepository: AuthRepository,
+    sessionsRepository: SessionsRepository,
     onSignOut: () -> Unit,
 ) {
     var changingPassword by rememberSaveable { mutableStateOf(false) }
+    var showingDevices by rememberSaveable { mutableStateOf(false) }
 
     if (changingPassword) {
         BackHandler { changingPassword = false }
@@ -70,6 +74,15 @@ fun ProfileScreen(
             allowCancel = true,
             onDone = { changingPassword = false },
             onCancel = { changingPassword = false },
+        )
+        return
+    }
+
+    if (showingDevices) {
+        BackHandler { showingDevices = false }
+        DevicesScreen(
+            sessionsRepository = sessionsRepository,
+            onBack = { showingDevices = false },
         )
         return
     }
@@ -170,6 +183,20 @@ fun ProfileScreen(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = { showingDevices = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Icon(Icons.Outlined.Devices, contentDescription = null)
+            Text(
+                stringResource(R.string.devices),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
         Button(
             onClick = { changingPassword = true },
             modifier = Modifier

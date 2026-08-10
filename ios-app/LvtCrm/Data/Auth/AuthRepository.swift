@@ -10,14 +10,18 @@ final class AuthRepository: ObservableObject {
     private var authGeneration: Int64 = 0
     private let lock = NSLock()
 
+    private let afterAuthenticated: (() async -> Void)?
+
     init(
         tokenStore: CredentialStore,
         convex: ConvexHttpClient,
-        beforeSignOut: ((String) async -> Void)? = nil
+        beforeSignOut: ((String) async -> Void)? = nil,
+        afterAuthenticated: (() async -> Void)? = nil
     ) {
         self.tokenStore = tokenStore
         self.convex = convex
         self.beforeSignOut = beforeSignOut
+        self.afterAuthenticated = afterAuthenticated
         Task { await restoreSession() }
     }
 
@@ -30,6 +34,7 @@ final class AuthRepository: ObservableObject {
         do {
             if let session = try await fetchSession() {
                 _ = publish(session, generation: generation, expectedCredentials: credentials)
+                await afterAuthenticated?()
             } else {
                 _ = clearCurrentCredentialsAndSignOut(credentials, generation: generation)
             }
@@ -99,6 +104,7 @@ final class AuthRepository: ObservableObject {
             guard publish(session, generation: generation) else {
                 return .failure(ConvexException(code: "SIGN_IN_SUPERSEDED"))
             }
+            await afterAuthenticated?()
             return .success(session)
         } catch {
             if let previousCredentials, previousState.isAuthenticated {

@@ -3,9 +3,11 @@ import SwiftUI
 struct ProfileScreen: View {
     let session: UserSession
     let authRepository: AuthRepository
+    let sessionsRepository: SessionsRepository
     var onSignOut: () -> Void
 
     @State private var showChangePassword = false
+    @State private var showDevices = false
 
     var body: some View {
         ScrollView {
@@ -43,6 +45,11 @@ struct ProfileScreen: View {
                 }
 
                 VStack(spacing: 10) {
+                    Button("Thiết bị") { showDevices = true }
+                        .buttonStyle(.glassProminent)
+                        .tint(LvtColors.schoolIndigo)
+                        .frame(maxWidth: .infinity)
+
                     Button("Đổi mật khẩu") { showChangePassword = true }
                         .buttonStyle(.glassProminent)
                         .tint(LvtColors.schoolIndigo)
@@ -65,6 +72,9 @@ struct ProfileScreen: View {
                 onCancel: { showChangePassword = false }
             )
             .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showDevices) {
+            DevicesScreen(sessionsRepository: sessionsRepository)
         }
     }
 

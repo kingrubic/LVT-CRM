@@ -2,6 +2,7 @@ package lvt.crm
 
 import android.content.Context
 import lvt.crm.data.auth.AuthRepository
+import lvt.crm.data.auth.SessionsRepository
 import lvt.crm.data.auth.TokenStore
 import lvt.crm.data.convex.ConvexConfig
 import lvt.crm.data.convex.ConvexHttpClient
@@ -24,11 +25,13 @@ class AppContainer(context: Context) {
         },
     )
 
+    val sessionsRepository = SessionsRepository(convex)
     val fcmTokenRegistrar = FcmTokenRegistrar(appContext, tokenStore, convex)
     val authRepository = AuthRepository(
         tokenStore,
         convex,
         beforeSignOut = { accessToken -> fcmTokenRegistrar.unregister(accessToken) },
+        afterAuthenticated = { sessionsRepository.registerCurrentDevice() },
     )
     val dutiesRepository = DutiesRepository(convex)
     val notificationsRepository = NotificationsRepository(convex)

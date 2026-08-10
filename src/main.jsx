@@ -14,9 +14,12 @@ import DisplaySettings from './settings/DisplaySettings';
 import NotificationsView from './notifications/NotificationsView';
 import { menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
+import DevicesPanel from './profile/DevicesPanel';
+import { describeWebDevice } from './profile/deviceSession';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import './profile/profile.css';
+import './profile/devices.css';
 import './settings/displaySettings.css';
 import './notifications/notifications.css';
 
@@ -55,6 +58,12 @@ function messageFor(error) {
   const raw = String(error?.data ?? error?.message ?? error ?? 'UNKNOWN_ERROR');
   const messages = {
     USER_NOT_ACTIVE: 'Tài khoản không còn hoạt động. Vui lòng liên hệ quản trị viên.',
+    ACCOUNT_LOCKED:
+      'Tài khoản đã bị khóa do đăng nhập sai quá số lần cho phép. Vui lòng liên hệ quản trị viên để được mở khóa.',
+    INVALID_LOGIN_MAX_FAILED_ATTEMPTS: 'Số lần đăng nhập sai phải từ 1 đến 50.',
+    INVALID_LOGIN_ATTEMPT_WINDOW: 'Khung thời gian phải từ 1 đến 1440 phút.',
+    CANNOT_REVOKE_CURRENT_SESSION: 'Không thể thu hồi phiên đang dùng trên thiết bị này.',
+    SESSION_NOT_FOUND: 'Phiên đăng nhập không còn tồn tại.',
     EMAIL_TAKEN: 'Email này đã được sử dụng. Vui lòng chọn email khác.',
     TEMP_PASSWORD_TOO_SHORT: 'Mật khẩu tạm thời phải có ít nhất 8 ký tự.',
     PASSWORD_TOO_SHORT: 'Mật khẩu mới phải có ít nhất 8 ký tự.',
@@ -177,9 +186,26 @@ function StarRating({ level, max = 5 }) {
 
 function AuthenticatedApp() {
   const session = useQuery(anyApi.users.sessionContext);
+  const registerDevice = useMutation(anyApi.sessions.registerCurrent);
+  const touchSession = useMutation(anyApi.sessions.touchCurrent);
+
+  useEffect(() => {
+    if (!session?.user || session.user.status !== 'active') return;
+    const device = describeWebDevice();
+    void registerDevice(device).catch(() => {});
+    const timer = window.setInterval(() => {
+      void touchSession({}).catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [session?.user?._id, session?.user?.status, registerDevice, touchSession]);
 
   if (session === undefined) return <LoadingView label="Đang kiểm tra quyền truy cập…" />;
   if (!session?.user) return <AccessDeniedView message="Phiên đăng nhập không gắn với hồ sơ người dùng hợp lệ." />;
+  if (session.user.loginLockedAt) {
+    return (
+      <AccessDeniedView message="Tài khoản đã bị khóa do đăng nhập sai quá số lần. Vui lòng liên hệ quản trị viên để được mở khóa." />
+    );
+  }
   if (session.user.status !== 'active') {
     return <AccessDeniedView message="Tài khoản này đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên." />;
   }
@@ -1255,6 +1281,9 @@ function emptyUserForm() {
 
 function UserManagement() {
   const data = useQuery(anyApi.users.bootstrap);
+  const lockoutSettings = useQuery(anyApi.loginSecurity.lockoutSettings);
+  const updateLockoutSettings = useMutation(anyApi.loginSecurity.updateLockoutSettings);
+  const unlockLogin = useMutation(anyApi.loginSecurity.unlockLogin);
   const create = useAction(anyApi.users.create);
   const update = useAction(anyApi.users.update);
   const setDisabled = useAction(anyApi.users.setDisabled);
@@ -1263,7 +1292,17 @@ function UserManagement() {
   const [form, setForm] = useState(emptyUserForm);
   const [editing, setEditing] = useState(null);
   const [resetting, setResetting] = useState(null);
+  const [sessionsUserId, setSessionsUserId] = useState(null);
+  const [lockoutForm, setLockoutForm] = useState({ maxFailedAttempts: '5', windowMinutes: '15' });
   const { pending, feedback, run } = useFeedback();
+
+  useEffect(() => {
+    if (!lockoutSettings) return;
+    setLockoutForm({
+      maxFailedAttempts: String(lockoutSettings.maxFailedAttempts),
+      windowMinutes: String(lockoutSettings.windowMinutes),
+    });
+  }, [lockoutSettings?.maxFailedAttempts, lockoutSettings?.windowMinutes]);
 
   const departments = (data?.departments || []).filter((d) => d.active);
   const groups = (data?.permissionGroups || []).filter((g) => g.active);
@@ -1352,6 +1391,54 @@ function UserManagement() {
             Administrator có toàn quyền; Moderator quản trị toàn bộ nghiệp vụ nhưng không truy cập Cài đặt tối cao; User phụ thuộc nhóm quyền.
           </p>
         </div>
+      </div>
+      <div className="lockout-settings">
+        <h3>Giới hạn đăng nhập thất bại</h3>
+        <p>
+          Khi vượt số lần sai trong khung thời gian, tài khoản bị khóa và chỉ Administrator mở khóa thủ công.
+          Người dùng sẽ thấy thông báo trên màn hình đăng nhập và nhận email hướng dẫn liên hệ admin.
+        </p>
+        <form
+          className="lockout-settings-grid"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void run(
+              'lockout',
+              () =>
+                updateLockoutSettings({
+                  maxFailedAttempts: Number(lockoutForm.maxFailedAttempts),
+                  windowMinutes: Number(lockoutForm.windowMinutes),
+                }),
+              'Đã cập nhật giới hạn đăng nhập thất bại.',
+            );
+          }}
+        >
+          <label>
+            Số lần sai tối đa
+            <input
+              required
+              type="number"
+              min={1}
+              max={50}
+              value={lockoutForm.maxFailedAttempts}
+              onChange={(e) => setLockoutForm((prev) => ({ ...prev, maxFailedAttempts: e.target.value }))}
+            />
+          </label>
+          <label>
+            Trong vòng (phút)
+            <input
+              required
+              type="number"
+              min={1}
+              max={1440}
+              value={lockoutForm.windowMinutes}
+              onChange={(e) => setLockoutForm((prev) => ({ ...prev, windowMinutes: e.target.value }))}
+            />
+          </label>
+          <button type="submit" className="primary-button" disabled={Boolean(pending)}>
+            Lưu cấu hình
+          </button>
+        </form>
       </div>
       <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
         {feedback.text}
@@ -1503,8 +1590,20 @@ function UserManagement() {
               <span>{positions.find((p) => p._id === item.positionId)?.name || 'Chưa gán chức vụ'}</span>
               <span>{groups.find((g) => g._id === item.permissionGroupId)?.name || 'Chưa gán nhóm quyền'}</span>
             </div>
-            <span className={item.status === 'active' ? 'live-tag' : 'pending-tag'}>
-              {item.status === 'active' ? (item.mustChangePassword ? 'Cần đổi MK' : 'Hoạt động') : item.status === 'disabled' ? 'Đã khóa' : item.status}
+            <span
+              className={
+                item.loginLockedAt || item.status !== 'active' ? 'pending-tag' : 'live-tag'
+              }
+            >
+              {item.loginLockedAt
+                ? 'Khóa ĐN'
+                : item.status === 'active'
+                  ? item.mustChangePassword
+                    ? 'Cần đổi MK'
+                    : 'Hoạt động'
+                  : item.status === 'disabled'
+                    ? 'Đã khóa'
+                    : item.status}
             </span>
             <div className="row-actions">
               <button type="button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>
@@ -1513,6 +1612,28 @@ function UserManagement() {
               <button type="button" onClick={() => setResetting(item)} disabled={Boolean(pending) || !item.email}>
                 Đặt lại MK
               </button>
+              <button
+                type="button"
+                onClick={() => setSessionsUserId((prev) => (prev === item._id ? null : item._id))}
+                disabled={Boolean(pending)}
+              >
+                {sessionsUserId === item._id ? 'Ẩn phiên' : 'Phiên'}
+              </button>
+              {item.loginLockedAt ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    run(
+                      `unlock-login-${item._id}`,
+                      () => unlockLogin({ userId: item._id }),
+                      'Đã mở khóa đăng nhập.',
+                    )
+                  }
+                  disabled={Boolean(pending)}
+                >
+                  Mở khóa ĐN
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() =>
@@ -1530,6 +1651,11 @@ function UserManagement() {
                 Xóa
               </button>
             </div>
+            {sessionsUserId === item._id ? (
+              <div className="admin-sessions-drawer">
+                <DevicesPanel mode="admin" userId={item._id} />
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -2290,6 +2416,8 @@ function ProfileView({ session }) {
           </button>
         </form>
       </div>
+
+      <DevicesPanel mode="self" />
     </section>
   );
 }

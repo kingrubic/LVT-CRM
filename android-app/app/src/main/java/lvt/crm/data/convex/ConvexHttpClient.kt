@@ -177,6 +177,7 @@ class ConvexHttpClient(
                 "InvalidSecret",
                 "Invalid credentials",
                 "USER_NOT_ACTIVE",
+                "ACCOUNT_LOCKED",
                 "PASSWORD_TOO_SHORT",
                 "PASSWORD_CHANGE_FAILED",
                 "PASSWORD_CHANGED_SYNC_PENDING",
@@ -190,6 +191,8 @@ class ConvexHttpClient(
                 "INVALID_AUTH_FLOW",
                 "FORBIDDEN",
                 "UNAUTHENTICATED",
+                "CANNOT_REVOKE_CURRENT_SESSION",
+                "SESSION_NOT_FOUND",
             )
             return known.firstOrNull { message.contains(it, ignoreCase = true) } ?: message
         }
@@ -200,8 +203,12 @@ class ConvexHttpClient(
                 code.contains("Invalid", ignoreCase = true) ||
                     code.contains("credentials", ignoreCase = true) ->
                     "Email hoặc mật khẩu không đúng."
+                code == "ACCOUNT_LOCKED" ->
+                    "Tài khoản đã bị khóa do đăng nhập sai quá số lần. Liên hệ quản trị viên để mở khóa."
                 code == "USER_NOT_ACTIVE" -> "Tài khoản chưa được kích hoạt hoặc đã bị khóa."
                 code == "PASSWORD_TOO_SHORT" -> "Mật khẩu phải có ít nhất 8 ký tự."
+                code == "CANNOT_REVOKE_CURRENT_SESSION" -> "Không thể thu hồi phiên đang dùng."
+                code == "SESSION_NOT_FOUND" -> "Phiên đăng nhập không còn tồn tại."
                 code == "PASSWORD_CHANGE_FAILED" -> "Không đổi được mật khẩu. Thử lại sau."
                 code == "PASSWORD_CHANGED_SYNC_PENDING" ->
                     "Mật khẩu đã đổi nhưng hồ sơ chưa đồng bộ. Đăng nhập lại."

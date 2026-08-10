@@ -43,6 +43,10 @@
   gap: 16px;
 }
 
+.profile-workspace > .devices-panel {
+  margin-top: 16px;
+}
+
 .profile-paper {
   position: relative;
   overflow: hidden;

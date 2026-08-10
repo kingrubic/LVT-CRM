@@ -32,6 +32,10 @@ export default defineSchema({
     status: v.string(), // pending | active | disabled
     mustChangePassword: v.boolean(),
     lastPasswordResetAt: v.optional(v.number()),
+    /** Set when failed-login lockout triggers; cleared only by admin unlock. */
+    loginLockedAt: v.optional(v.number()),
+    failedLoginCount: v.optional(v.number()),
+    failedLoginWindowStart: v.optional(v.number()),
     createdBy: v.optional(v.string()),
     updatedBy: v.optional(v.string()),
     ...timestamps,
@@ -42,6 +46,25 @@ export default defineSchema({
     .index("by_department", ["departmentId"])
     .index("by_permission_group", ["permissionGroupId"])
     .index("by_position", ["positionId"]),
+  /**
+   * Client-reported metadata for authSessions (Telegram-style device list).
+   * authSessions rows remain owned by Convex Auth; this table only enriches them.
+   */
+  deviceSessions: defineTable({
+    sessionId: v.id("authSessions"),
+    userId: v.id("users"),
+    deviceName: v.string(),
+    platformLabel: v.string(),
+    clientKind: v.string(), // web | android | ios | unknown
+    appVersion: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    pushToken: v.optional(v.string()),
+    lastActiveAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_user", ["userId"])
+    .index("by_user_push", ["userId", "pushToken"]),
   departments: defineTable({
     name: v.string(),
     code: v.string(),
