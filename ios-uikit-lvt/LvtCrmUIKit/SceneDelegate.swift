@@ -13,6 +13,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         let window = UIWindow(windowScene: windowScene)
+        switch UserDefaults.standard.string(forKey: "lvt_uikit_appearance") {
+        case "light": window.overrideUserInterfaceStyle = .light
+        case "dark": window.overrideUserInterfaceStyle = .dark
+        default: window.overrideUserInterfaceStyle = .unspecified
+        }
         guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
         let authFlowCoordinator = AuthFlowCoordinator(window: window, container: appDelegate.container)
         authFlowCoordinator.start()

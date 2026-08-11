@@ -182,7 +182,7 @@ final class DevicesViewController: UITableViewController {
         cell.contentConfiguration = content
         cell.accessoryType = .disclosureIndicator
         cell.selectionStyle = .default
-        cell.accessibilityLabel = "Không thể tải phiên đăng nhập. (message). Thử lại"
+        cell.accessibilityLabel = "Không thể tải phiên đăng nhập. \(message). Thử lại"
         cell.accessibilityTraits = .button
         cell.accessibilityHint = "Tải lại danh sách phiên đăng nhập"
     }
@@ -206,12 +206,12 @@ final class DevicesViewController: UITableViewController {
         let activity = session.isCurrent ? "Thiết bị này" : formatActive(session.lastActiveAt)
         var content = cell.defaultContentConfiguration()
         content.text = session.deviceName
-        content.secondaryText = "(session.platformLabel) · (activity)"
+        content.secondaryText = "\(session.platformLabel) · \(activity)"
         content.image = UIImage(systemName: iconName(for: session.clientKind))
         content.imageProperties.tintColor = session.isCurrent ? .systemGreen : .systemIndigo
         content.imageProperties.maximumSize = CGSize(width: 32, height: 32)
         cell.contentConfiguration = content
-        cell.accessibilityLabel = "(session.deviceName), (session.platformLabel), (activity)"
+        cell.accessibilityLabel = "\(session.deviceName), \(session.platformLabel), \(activity)"
 
         guard allowsRevoke, !session.isCurrent else {
             cell.accessibilityTraits = session.isCurrent ? [.staticText, .selected] : .staticText
@@ -226,7 +226,7 @@ final class DevicesViewController: UITableViewController {
         button.configuration = configuration
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.isEnabled = !isPending
-        button.accessibilityLabel = "Thu hồi phiên trên (session.deviceName)"
+        button.accessibilityLabel = "Thu hồi phiên trên \(session.deviceName)"
         button.accessibilityHint = "Yêu cầu xác nhận trước khi đăng xuất thiết bị"
         button.sizeToFit()
         cell.accessoryView = button
@@ -286,7 +286,7 @@ final class DevicesViewController: UITableViewController {
         guard !session.isCurrent, !isPending else { return }
         let alert = UIAlertController(
             title: "Thu hồi phiên?",
-            message: "(session.deviceName) sẽ bị đăng xuất và ngừng nhận thông báo.",
+            message: "\(session.deviceName) sẽ bị đăng xuất và ngừng nhận thông báo.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Hủy", style: .cancel))

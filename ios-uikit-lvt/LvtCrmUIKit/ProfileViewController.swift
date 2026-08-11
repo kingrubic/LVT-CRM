@@ -2,10 +2,35 @@ import UIKit
 
 @MainActor
 final class ProfileViewController: UITableViewController {
+    private enum Appearance: String, CaseIterable {
+        case system
+        case light
+        case dark
+
+        var title: String {
+            switch self {
+            case .system: return "Theo hệ thống"
+            case .light: return "Sáng"
+            case .dark: return "Tối"
+            }
+        }
+
+        var interfaceStyle: UIUserInterfaceStyle {
+            switch self {
+            case .system: return .unspecified
+            case .light: return .light
+            case .dark: return .dark
+            }
+        }
+    }
+
+    private static let appearanceDefaultsKey = "lvt_uikit_appearance"
+
     private enum Section: Int, CaseIterable {
         case identity
         case work
         case account
+        case appearance
         case signOut
     }
 
@@ -44,6 +69,7 @@ final class ProfileViewController: UITableViewController {
         case .identity: return 2
         case .work: return 3
         case .account: return 2
+        case .appearance: return 1
         case .signOut: return 1
         case nil: return 0
         }
@@ -54,6 +80,7 @@ final class ProfileViewController: UITableViewController {
         case .identity: return "Tài khoản"
         case .work: return "Thông tin công việc"
         case .account: return "Bảo mật"
+        case .appearance: return "Giao diện"
         case .signOut, nil: return nil
         }
     }
@@ -106,6 +133,16 @@ final class ProfileViewController: UITableViewController {
             cell.accessibilityHint = isDevices
                 ? "Mở danh sách các phiên đăng nhập"
                 : "Mở màn hình đổi mật khẩu"
+        case .appearance:
+            content.text = "Chế độ hiển thị"
+            content.secondaryText = currentAppearance.title
+            content.image = UIImage(systemName: "circle.lefthalf.filled")
+            content.imageProperties.tintColor = .systemIndigo
+            cell.accessoryType = .disclosureIndicator
+            cell.selectionStyle = .default
+            cell.accessibilityTraits = .button
+            cell.accessibilityLabel = "Chế độ hiển thị, \(currentAppearance.title)"
+            cell.accessibilityHint = "Chọn giao diện sáng, tối hoặc theo hệ thống"
         case .signOut:
             content.text = "Đăng xuất"
             content.image = UIImage(systemName: "rectangle.portrait.and.arrow.right")
@@ -131,11 +168,43 @@ final class ProfileViewController: UITableViewController {
             )
         case .account:
             showChangePassword()
+        case .appearance:
+            showAppearancePicker()
         case .signOut:
             confirmSignOut()
         default:
             break
         }
+    }
+
+    private var currentAppearance: Appearance {
+        Appearance(rawValue: UserDefaults.standard.string(forKey: Self.appearanceDefaultsKey) ?? "") ?? .system
+    }
+
+    private func showAppearancePicker() {
+        let alert = UIAlertController(
+            title: "Chế độ hiển thị",
+            message: "Chọn giao diện cho LVT CRM.",
+            preferredStyle: .actionSheet
+        )
+        for appearance in Appearance.allCases {
+            let action = UIAlertAction(title: appearance.title, style: .default) { [weak self] _ in
+                self?.apply(appearance: appearance)
+            }
+            alert.addAction(action)
+        }
+        alert.addAction(UIAlertAction(title: "Hủy", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = tableView
+            popover.sourceRect = tableView.rectForRow(at: IndexPath(row: 0, section: Section.appearance.rawValue))
+        }
+        present(alert, animated: true)
+    }
+
+    private func apply(appearance: Appearance) {
+        UserDefaults.standard.set(appearance.rawValue, forKey: Self.appearanceDefaultsKey)
+        view.window?.windowScene?.windows.forEach { $0.overrideUserInterfaceStyle = appearance.interfaceStyle }
+        tableView.reloadSections(IndexSet(integer: Section.appearance.rawValue), with: .none)
     }
 
     private func showChangePassword() {
