@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { useConvexAuth } from '@convex-dev/auth/react';
@@ -186,7 +187,7 @@ function PrivateFileLink({
         </button>
         {busyAction ? <span className="work-file-busy" role="status">Đang tải…</span> : null}
       </span>
-      {previewUrl ? (
+      {previewUrl ? createPortal((
         <div className="work-file-preview-backdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) closePreview();
         }}>
@@ -218,7 +219,7 @@ function PrivateFileLink({
             </div>
           </section>
         </div>
-      ) : null}
+      ), window.document.body) : null}
     </>
   );
 }
