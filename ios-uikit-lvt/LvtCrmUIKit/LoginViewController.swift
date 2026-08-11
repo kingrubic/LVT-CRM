@@ -251,8 +251,16 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
     }
 
     private func show(error: Error) {
+        let technicalMessage = (error as? ConvexException)?.message ?? error.localizedDescription
+        let message: String
+        if technicalMessage.range(of: #"^\[Request ID:[^\]]+\]\s*Server Error\s*$"#, options: [.regularExpression, .caseInsensitive]) != nil
+            || technicalMessage.trimmingCharacters(in: .whitespacesAndNewlines).localizedCaseInsensitiveCompare("Server Error") == .orderedSame {
+            message = "Không thể đăng nhập. Hãy kiểm tra email, mật khẩu rồi thử lại."
+        } else {
+            message = ConvexHttpClient.humanize(technicalMessage)
+        }
         showMessage(
-            (error as? ConvexException)?.message ?? ConvexHttpClient.humanize(error.localizedDescription),
+            message,
             color: .systemRed
         )
     }

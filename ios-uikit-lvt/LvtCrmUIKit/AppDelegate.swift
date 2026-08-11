@@ -25,9 +25,6 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 self?.container.notificationSync.handleBackgroundTask(refresh)
             }
         }
-        if let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
-            pendingDestination = NotificationDestination.from(userInfo: userInfo)
-        }
         return true
     }
 

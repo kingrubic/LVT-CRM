@@ -467,6 +467,14 @@ private final class DashboardCard: UIControl {
         }
     }
 
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled,
+              !isHidden,
+              alpha > 0.01,
+              self.point(inside: point, with: event) else { return nil }
+        return self
+    }
+
     func setUsesAccessibilityLayout(_ enabled: Bool) {
         metricsStack.axis = enabled ? .vertical : .horizontal
         metricsStack.distribution = enabled ? .fill : .fillEqually

@@ -1,5 +1,6 @@
 import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
 import { convexAuth, retrieveAccount } from "@convex-dev/auth/server";
+import { ConvexError } from "convex/values";
 import { Scrypt } from "lucia";
 import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
@@ -49,6 +50,11 @@ const PasswordSignInOnly = ConvexCredentials({
         provider: "password",
         account: { id: email, secret },
       });
+      if (retrieved === null) {
+        const result = await ctx.runMutation(internal.loginSecurity.recordFailure, { email });
+        if (result.locked || result.newlyLocked) throw new ConvexError("ACCOUNT_LOCKED");
+        throw new ConvexError("INVALID_CREDENTIALS");
+      }
       await ctx.runMutation(internal.loginSecurity.clearFailures, { email });
       return { userId: retrieved.user._id };
     } catch (error) {
@@ -59,8 +65,8 @@ const PasswordSignInOnly = ConvexCredentials({
         raw.includes("TooManyFailedAttempts")
       ) {
         const result = await ctx.runMutation(internal.loginSecurity.recordFailure, { email });
-        if (result.locked || result.newlyLocked) throw new Error("ACCOUNT_LOCKED");
-        throw new Error("Invalid credentials");
+        if (result.locked || result.newlyLocked) throw new ConvexError("ACCOUNT_LOCKED");
+        throw new ConvexError("INVALID_CREDENTIALS");
       }
       throw error;
     }

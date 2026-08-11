@@ -81,6 +81,7 @@ function messageFor(error) {
     PASSWORD_CHANGE_FAILED: 'Không thể đổi mật khẩu. Vui lòng thử lại.',
     EMAIL_CHANGE_UNSUPPORTED: 'Hiện chưa hỗ trợ đổi email đăng nhập. Vui lòng tạo tài khoản mới nếu cần.',
     PUBLIC_SIGNUP_DISABLED: 'Hệ thống không cho phép tự đăng ký.',
+    INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
     'Invalid credentials': 'Email hoặc mật khẩu không đúng.',
     INVALID_EMAIL: 'Email không hợp lệ.',
     INVALID_ROLE: 'Vai trò chỉ được chọn Administrator, Moderator hoặc User.',
@@ -171,6 +172,14 @@ function messageFor(error) {
   if (/invalid credentials|invalidsecret/i.test(raw)) return messages['Invalid credentials'];
   if (/FORBIDDEN/i.test(raw)) return 'Bạn không có quyền thực hiện thao tác này.';
   return 'Không thể hoàn tất thao tác. Vui lòng thử lại hoặc liên hệ quản trị viên.';
+}
+
+function signInMessageFor(error) {
+  const raw = String(error?.data ?? error?.message ?? error ?? '');
+  if (/^\[Request ID:[^\]]+\]\s*Server Error\s*$/i.test(raw.trim()) || /^Server Error\s*$/i.test(raw.trim())) {
+    return 'Không thể đăng nhập. Hãy kiểm tra email, mật khẩu rồi thử lại.';
+  }
+  return messageFor(error);
 }
 
 function StarRating({ level, max = 5 }) {
@@ -2533,7 +2542,7 @@ function SignedOutView() {
     try {
       await signIn('password', { email: email.trim().toLowerCase(), password, flow: 'signIn' });
     } catch (err) {
-      setError(messageFor(err));
+      setError(signInMessageFor(err));
     } finally {
       setPending(false);
     }

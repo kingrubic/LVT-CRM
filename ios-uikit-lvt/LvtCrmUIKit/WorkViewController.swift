@@ -692,7 +692,7 @@ private final class WorkReviewViewController: UIViewController, UITextViewDelega
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Gửi", style: .done, target: self, action: #selector(submit))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Gửi", style: .prominent, target: self, action: #selector(submit))
         decision.selectedSegmentIndex = 0
         decision.selectedSegmentTintColor = .systemIndigo
         decision.addTarget(self, action: #selector(decisionChanged), for: .valueChanged)

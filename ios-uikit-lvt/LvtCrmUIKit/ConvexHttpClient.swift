@@ -94,7 +94,8 @@ actor ConvexHttpClient {
         if (json["status"] as? String) == "success" {
             return unwrapValue(json["value"])
         }
-        let errorMessage = (json["errorMessage"] as? String)?.nilIfBlank
+        let errorMessage = (json["errorData"] as? String)?.nilIfBlank
+            ?? (json["errorMessage"] as? String)?.nilIfBlank
             ?? (json["error"] as? String)?.nilIfBlank
             ?? "CONVEX_ERROR"
         let unauthorized = statusCode == 401
@@ -161,7 +162,7 @@ actor ConvexHttpClient {
 
     static func extractCode(_ message: String) -> String {
         let known = [
-            "InvalidAccountId", "InvalidSecret", "Invalid credentials", "USER_NOT_ACTIVE",
+            "INVALID_CREDENTIALS", "InvalidAccountId", "InvalidSecret", "Invalid credentials", "USER_NOT_ACTIVE",
             "ACCOUNT_LOCKED", "PASSWORD_TOO_SHORT", "PASSWORD_CHANGE_FAILED", "PASSWORD_CHANGED_SYNC_PENDING",
             "PASSWORD_CHANGE_REQUIRED", "PASSWORD_RESET_FAILED", "PASSWORD_RESET_EMAIL_FAILED",
             "MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PUBLIC_SIGNUP_DISABLED", "INVALID_EMAIL",
