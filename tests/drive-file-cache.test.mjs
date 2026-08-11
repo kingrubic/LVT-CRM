@@ -23,6 +23,8 @@ test('Drive cache persists one atomic non-empty entry and reuses it', async () =
   assert.equal(second.cacheStatus, 'HIT');
   assert.equal(await readFile(second.path, 'utf8'), 'document');
   assert.equal((await readdir(directory)).filter((name) => name.endsWith('.tmp')).length, 0);
+  await cache.invalidateDriveFile('drive-1');
+  assert.equal(await cache.get('drive-1:v1'), null);
 });
 
 test('Drive cache single-flight coalesces concurrent misses', async () => {

@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as boarding from "../boarding.js";
 import type * as departments from "../departments.js";
+import type * as driveUploadStages from "../driveUploadStages.js";
 import type * as duties from "../duties.js";
 import type * as http from "../http.js";
 import type * as lib from "../lib.js";
@@ -29,6 +30,7 @@ import type * as sessions from "../sessions.js";
 import type * as settings from "../settings.js";
 import type * as users from "../users.js";
 import type * as work from "../work.js";
+import type * as workDocumentPolicy from "../workDocumentPolicy.js";
 
 import type {
   ApiFromModules,
@@ -40,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   boarding: typeof boarding;
   departments: typeof departments;
+  driveUploadStages: typeof driveUploadStages;
   duties: typeof duties;
   http: typeof http;
   lib: typeof lib;
@@ -58,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   users: typeof users;
   work: typeof work;
+  workDocumentPolicy: typeof workDocumentPolicy;
 }>;
 
 /**

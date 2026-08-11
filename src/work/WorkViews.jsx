@@ -56,6 +56,20 @@ async function settleWorkUploadedFile(fetchAccessToken, cleanupToken, committed)
   }
 }
 
+async function settleWorkCleanupJob(fetchAccessToken, cleanupJobId) {
+  if (!cleanupJobId) return;
+  const token = await fetchAccessToken({ forceRefreshToken: false });
+  if (!token) throw new Error('AUTH_REQUIRED');
+  const response = await fetch(`/api/files/cleanup-jobs/work/${encodeURIComponent(cleanupJobId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok && response.status !== 404) {
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.error || `WORK_CLEANUP_FAILED:${response.status}`);
+  }
+}
+
 function EyeIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -119,15 +133,43 @@ function PrivateFileLink({
 
   const fetchFileBlob = async () => {
     const headers = new Headers();
-    if (privateFile) {
-      const token = await fetchAccessToken({ forceRefreshToken: false });
-      if (!token) throw new Error('AUTH_REQUIRED');
-      headers.set('Authorization', 'Bearer ' + token);
+    if (!privateFile) {
+      const response = await fetch(publicStorageUrl(fileUrl), { headers });
+      if (!response.ok) throw new Error(`FILE_DOWNLOAD_FAILED:${response.status}`);
+      return response.blob();
     }
-    const source = privateFile
-      ? `/api/files/${encodeURIComponent(documentId)}`
-      : publicStorageUrl(fileUrl);
-    const response = await fetch(source, { headers });
+
+    const token = await fetchAccessToken({ forceRefreshToken: false });
+    if (!token) throw new Error('AUTH_REQUIRED');
+    headers.set('Authorization', 'Bearer ' + token);
+    const basePath = `/api/files/${encodeURIComponent(documentId)}`;
+    const metadataResponse = await fetch(`${basePath}/metadata`, { headers, cache: 'no-store' });
+    if (!metadataResponse.ok) {
+      if ('caches' in window) {
+        const cache = await window.caches.open('lvt-work-files-v1');
+        for (const request of await cache.keys()) {
+          if (new URL(request.url).pathname === basePath) await cache.delete(request);
+        }
+      }
+      throw new Error(`FILE_METADATA_FAILED:${metadataResponse.status}`);
+    }
+    const metadata = await metadataResponse.json();
+    const versionedURL = `${basePath}?v=${encodeURIComponent(metadata.fileVersion)}`;
+    if ('caches' in window) {
+      const cache = await window.caches.open('lvt-work-files-v1');
+      const cached = await cache.match(versionedURL);
+      if (cached) return cached.blob();
+      const response = await fetch(basePath, { headers });
+      if (!response.ok) throw new Error(`FILE_DOWNLOAD_FAILED:${response.status}`);
+      await cache.put(versionedURL, response.clone());
+      for (const request of await cache.keys()) {
+        if (new URL(request.url).pathname === basePath && request.url !== new URL(versionedURL, window.location.origin).href) {
+          await cache.delete(request);
+        }
+      }
+      return response.blob();
+    }
+    const response = await fetch(basePath, { headers });
     if (!response.ok) throw new Error(`FILE_DOWNLOAD_FAILED:${response.status}`);
     return response.blob();
   };
@@ -589,10 +631,13 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const options = useQuery(anyApi.work.formOptions, allowCreate ? {} : 'skip');
   const listData = useQuery(anyApi.work.listAdmin);
   const createDocument = useMutation(anyApi.work.createDocument);
+  const updateDocument = useMutation(anyApi.work.updateDocument);
+  const deleteDocument = useMutation(anyApi.work.deleteDocument);
   const { fetchAccessToken } = useConvexAuth();
   const reviewWorkCompletion = useMutation(anyApi.work.reviewWorkCompletion);
   const reviewPersonalCompletion = useMutation(anyApi.work.reviewPersonalCompletion);
   const [open, setOpen] = useState(allowCreate);
+  const [editingDocument, setEditingDocument] = useState(null);
   const [file, setFile] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [assignmentModal, setAssignmentModal] = useState('');
@@ -612,9 +657,32 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const isAdminModMode = (listData?.assignerMode || options?.assignerMode || 'admin_mod') === 'admin_mod';
 
   const reset = () => {
+    setEditingDocument(null);
     setFile(null);
     setAssignments([]);
     setApproverIds([]);
+  };
+
+  const startEdit = (document) => {
+    setEditingDocument(document);
+    setFile(null);
+    setApproverIds(document.approvers.map((person) => person._id));
+    setAssignments(document.assignments.map((assignment) => ({
+      type: assignment.type || 'department',
+      departmentId: assignment.departmentId,
+      departmentName: assignment.departmentName,
+      userIds: assignment.userIds || [],
+      userNames: (assignment.userIds || []).map((id) => (
+        options.users.find((person) => String(person._id) === String(id))?.name || 'Người dùng'
+      )),
+      content: assignment.content,
+      deadline: assignment.deadline,
+    })));
+    setFeedback({ type: '', text: '' });
+    setOpen(true);
+    window.requestAnimationFrame(() => {
+      window.document.getElementById('work-document-editor')?.scrollIntoView({ behavior: 'smooth' });
+    });
   };
 
   const submit = async (event) => {
@@ -624,6 +692,9 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
       setSaving(true);
       try {
         await settleWorkUploadedFile(fetchAccessToken, pendingSettlement.cleanupToken, true);
+        await settleWorkCleanupJob(fetchAccessToken, pendingSettlement.cleanupJobId).catch((cleanupError) => {
+          console.error('Work old file cleanup deferred', cleanupError);
+        });
         setPendingSettlement(null);
         setFeedback({ type: 'success', text: 'Đã tạo công văn và gửi đến người duyệt.' });
         reset();
@@ -638,63 +709,71 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
       }
       return;
     }
-    if (!file) return setFeedback({ type: 'error', text: 'Vui lòng tải công văn lên trước.' });
+    if (!file && !editingDocument) {
+      return setFeedback({ type: 'error', text: 'Vui lòng tải công văn lên trước.' });
+    }
     if (!assignments.length || !approverIds.length) {
       return setFeedback({ type: 'error', text: 'Vui lòng thêm ít nhất một phân công và chọn người duyệt.' });
     }
     setSaving(true);
-    let stage = 'upload';
+    let stage = file ? 'upload' : 'save';
     let uploaded = null;
+    let saved = null;
     let crmCommitted = false;
     try {
-      const token = await fetchAccessToken({ forceRefreshToken: false });
-      if (!token) throw new Error('AUTH_REQUIRED');
-      const response = await fetch('/api/files/upload', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': file.type || 'application/octet-stream',
-          'X-File-Name': encodeURIComponent(file.name),
-        },
-        body: file,
-      });
-      uploaded = await response.json().catch(() => null);
-      if (!response.ok || !uploaded?.driveFileId || !uploaded?.cleanupToken) {
-        throw new Error(uploaded?.error || `WORK_UPLOAD_FAILED:${response.status}`);
+      if (file) {
+        const token = await fetchAccessToken({ forceRefreshToken: false });
+        if (!token) throw new Error('AUTH_REQUIRED');
+        const response = await fetch('/api/files/upload', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': file.type || 'application/octet-stream',
+            'X-File-Name': encodeURIComponent(file.name),
+          },
+          body: file,
+        });
+        uploaded = await response.json().catch(() => null);
+        if (!response.ok || !uploaded?.driveFileId || !uploaded?.cleanupToken) {
+          throw new Error(uploaded?.error || `WORK_UPLOAD_FAILED:${response.status}`);
+        }
       }
       stage = 'save';
-      await createDocument({
+      const workflow = {
+        assignments: assignments.map((item) => (
+          item.type === 'individual'
+            ? { type: 'individual', userIds: item.userIds, content: item.content, deadline: item.deadline }
+            : { type: 'department', departmentId: item.departmentId, content: item.content, deadline: item.deadline }
+        )),
+        approverUserIds: approverIds,
+      };
+      const fileArgs = uploaded ? {
         driveFileId: uploaded.driveFileId,
         driveChecksum: uploaded.driveChecksum,
         cleanupToken: uploaded.cleanupToken,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
-        assignments: assignments.map((item) => (
-          item.type === 'individual'
-            ? {
-                type: 'individual',
-                userIds: item.userIds,
-                content: item.content,
-                deadline: item.deadline,
-              }
-            : {
-                type: 'department',
-                departmentId: item.departmentId,
-                content: item.content,
-                deadline: item.deadline,
-              }
-        )),
-        approverUserIds: approverIds,
-      });
+      } : {};
+      saved = editingDocument
+        ? await updateDocument({ documentId: editingDocument._id, ...workflow, ...fileArgs })
+        : await createDocument({ ...workflow, ...fileArgs });
       crmCommitted = true;
-      stage = 'settlement';
-      await settleWorkUploadedFile(fetchAccessToken, uploaded.cleanupToken, true);
-      setFeedback({ type: 'success', text: 'Đã tạo công văn và gửi đến người duyệt.' });
+      if (uploaded) {
+        stage = 'settlement';
+        await settleWorkUploadedFile(fetchAccessToken, uploaded.cleanupToken, true);
+      }
+      await settleWorkCleanupJob(fetchAccessToken, saved?.cleanupJobId).catch((cleanupError) => {
+        console.error('Work old file cleanup deferred', cleanupError);
+      });
+      setFeedback({
+        type: 'success',
+        text: editingDocument ? 'Đã cập nhật và gửi duyệt lại công văn.' : 'Đã tạo công văn và gửi đến người duyệt.',
+      });
       reset();
     } catch (error) {
       if (crmCommitted) {
-        setPendingSettlement(uploaded);
+        setPendingSettlement({ ...uploaded, cleanupJobId: saved?.cleanupJobId });
         setFeedback({
           type: 'error',
           text: 'Công văn đã được tạo và tệp vẫn được giữ an toàn, nhưng chưa thể hoàn tất upload. Vui lòng thử lại.',
@@ -734,6 +813,29 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
   const selectedUserIds = assignments
     .filter((item) => item.type === 'individual')
     .flatMap((item) => item.userIds.map(String));
+
+  const removeDocument = async (document) => {
+    if (!window.confirm(`Xóa công văn ${document.fileName}? Tệp đã duyệt sẽ không thể xóa.`)) return;
+    setSaving(true);
+    setFeedback({ type: '', text: '' });
+    try {
+      const result = await deleteDocument({ documentId: document._id });
+      await settleWorkCleanupJob(fetchAccessToken, result?.cleanupJobId).catch((cleanupError) => {
+        console.error('Work deleted file cleanup deferred', cleanupError);
+      });
+      if (editingDocument?._id === document._id) reset();
+      setFeedback({ type: 'success', text: 'Đã xóa công văn chưa duyệt.' });
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        text: String(error?.message || '').includes('WORK_DOCUMENT_IMMUTABLE')
+          ? 'Công văn đã được duyệt nên không thể sửa hoặc xóa.'
+          : 'Không thể xóa công văn lúc này.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const submitReview = async ({ decision, qualityPercent, rejectionReason }) => {
     if (!reviewing) return;
@@ -800,17 +902,20 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
       </div>
 
       {allowCreate && open ? (
-        <form className="work-editor" onSubmit={submit}>
+        <form id="work-document-editor" className="work-editor" onSubmit={submit}>
           <div className="work-editor-title">
             <div>
-              <span>HỒ SƠ MỚI</span>
-              <h3>Thêm công văn</h3>
+              <span>{editingDocument ? 'CẬP NHẬT HỒ SƠ' : 'HỒ SƠ MỚI'}</span>
+              <h3>{editingDocument ? `Sửa ${editingDocument.fileName}` : 'Thêm công văn'}</h3>
             </div>
             <span className="work-editor-index">01 / 03</span>
           </div>
           <div className="work-editor-grid">
             <div className="work-editor-column">
               <label className="work-field-label">Tải công văn</label>
+              {editingDocument && !file ? (
+                <p className="work-muted">Đang giữ tệp hiện tại: {editingDocument.fileName}. Chọn tệp mới nếu muốn thay.</p>
+              ) : null}
               <WorkFileDropzone
                 file={file}
                 onFile={(nextFile, error) => {
@@ -903,9 +1008,9 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
           </section>
           {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
           <div className="work-editor-actions">
-            <button type="button" className="work-ghost-button" onClick={reset}>Xóa biểu mẫu</button>
+            <button type="button" className="work-ghost-button" onClick={reset}>{editingDocument ? 'Hủy sửa' : 'Xóa biểu mẫu'}</button>
             <button type="submit" className="work-primary-button" disabled={saving}>
-              {saving ? 'Đang tải lên…' : pendingSettlement ? 'Thử hoàn tất lại' : 'Lưu & gửi duyệt'}
+              {saving ? 'Đang lưu…' : pendingSettlement ? 'Thử hoàn tất lại' : editingDocument ? 'Lưu & gửi duyệt lại' : 'Lưu & gửi duyệt'}
             </button>
           </div>
         </form>
@@ -1026,6 +1131,18 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
                 })}
               </div>
             </div>
+            {document.canEdit || document.canDelete ? (
+              <div className="work-document-admin-actions">
+                {document.canEdit ? (
+                  <button type="button" className="work-outline-button" onClick={() => startEdit(document)} disabled={saving}>Sửa</button>
+                ) : null}
+                {document.canDelete ? (
+                  <button type="button" className="work-reject-button" onClick={() => void removeDocument(document)} disabled={saving}>Xóa</button>
+                ) : null}
+              </div>
+            ) : (
+              <p className="work-document-locked">Đã duyệt · Không thể sửa hoặc xóa</p>
+            )}
           </article>
         )) : (
           <div className="work-empty">

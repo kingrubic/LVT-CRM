@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdtemp, rm, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -87,6 +87,14 @@ function safeFileName(request) {
   }
 }
 
+function driveFileVersion(file) {
+  return String(file.driveChecksum || `${file.driveFileId}:${file.fileSize || ''}`);
+}
+
+function driveCacheIdentity(file) {
+  return `${file.driveFileId}:${driveFileVersion(file)}`;
+}
+
 function applyPrivateDownloadHeaders(response, fileName, size, etag, cacheStatus) {
   const policy = downloadContentPolicy(fileName);
   response.setHeader('Cache-Control', 'private, max-age=86400, must-revalidate');
@@ -129,9 +137,13 @@ async function deleteDriveFile(driveFileId) {
       ['drive', 'delete', driveFileId, '--account', driveAccount, '--no-input'],
       { maxBuffer: 1024 * 1024 },
     );
+    await driveFileCache.invalidateDriveFile(driveFileId);
   } catch (error) {
     const detail = `${error?.stderr || ''} ${error?.message || ''}`;
-    if (/not found|does not exist|404/i.test(detail)) return;
+    if (/not found|does not exist|404/i.test(detail)) {
+      await driveFileCache.invalidateDriveFile(driveFileId);
+      return;
+    }
     throw new FileHttpError(502, 'DRIVE_DELETE_FAILED', error);
   }
 }
@@ -206,11 +218,12 @@ async function handleStagedUpload(request, response, cleanupToken, finalizeOnly)
   response.end();
 }
 
-async function handleCleanupJob(request, response, cleanupJobId) {
+async function handleCleanupJob(request, response, cleanupJobId, purpose) {
   const client = await authorizedClient(request);
-  const job = await client.query(anyApi.peopleReview.authorizeDriveCleanupJob, { cleanupJobId });
+  const api = purpose === 'work' ? anyApi.work : anyApi.peopleReview;
+  const job = await client.query(api.authorizeDriveCleanupJob, { cleanupJobId });
   await deleteDriveFile(job.driveFileId);
-  await client.mutation(anyApi.peopleReview.completeDriveCleanupJob, { cleanupJobId });
+  await client.mutation(api.completeDriveCleanupJob, { cleanupJobId });
   response.writeHead(204);
   response.end();
 }
@@ -303,6 +316,18 @@ async function uploadToDrive(request, response) {
         driveFileId: uploaded.id,
       });
       await uploadStages.add(cleanupToken, stage);
+      const driveChecksum = hash.digest('hex');
+      stage.driveChecksum = driveChecksum;
+      try {
+        await driveFileCache.getOrCreate(
+          driveCacheIdentity({ driveFileId: uploaded.id, driveChecksum, fileSize: received }),
+          (destination) => copyFile(temporaryFile, destination),
+        );
+      } catch (cacheError) {
+        console.error('LVT Drive upload prewarm failed', {
+          code: cacheError instanceof Error ? cacheError.message : 'UNKNOWN',
+        });
+      }
     } catch (error) {
       await throwUploadRegistrationError({
         registrationError: error,
@@ -325,7 +350,7 @@ async function uploadToDrive(request, response) {
     response.end(`${JSON.stringify({
       driveFileId: uploaded.id,
       cleanupToken,
-      driveChecksum: hash.digest('hex'),
+      driveChecksum: stage.driveChecksum,
       fileSize: received,
     })}\n`);
   } finally {
@@ -363,7 +388,7 @@ async function downloadDriveFile(destination, file, requestLabel) {
 }
 
 async function serveAuthorizedDriveFile(request, response, file, requestLabel) {
-  const sourceIdentity = `${file.driveFileId}:${file.fileSize || ''}`;
+  const sourceIdentity = driveCacheIdentity(file);
   const entry = await driveFileCache.getOrCreate(
     sourceIdentity,
     (destination) => downloadDriveFile(destination, file, requestLabel),
@@ -384,6 +409,20 @@ async function downloadPeopleReviewFile(request, response, kind, fileId) {
   const client = await authorizedClient(request);
   const file = await client.query(anyApi.peopleReview.authorizeFileDownload, { kind, fileId });
   await serveAuthorizedDriveFile(request, response, file, `people-review:${kind}:${fileId}`);
+}
+
+async function workFileMetadata(request, response, documentId) {
+  const client = await authorizedClient(request);
+  const file = await client.query(anyApi.work.authorizeFileDownload, { documentId });
+  response.writeHead(200, {
+    'Cache-Control': 'private, no-store',
+    'Content-Type': 'application/json; charset=utf-8',
+  });
+  response.end(`${JSON.stringify({
+    fileName: file.fileName,
+    fileSize: file.fileSize,
+    fileVersion: driveFileVersion(file),
+  })}\n`);
 }
 
 async function downloadFromDrive(request, response, documentId) {
@@ -422,7 +461,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (driveMutation?.kind === 'cleanup-job') {
-      await handleCleanupJob(request, response, driveMutation.id);
+      await handleCleanupJob(request, response, driveMutation.id, driveMutation.purpose);
       return;
     }
 
@@ -434,9 +473,15 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    const privateDownload = request.method === 'GET'
-      ? new URL(request.url || '/', 'http://localhost').pathname.match(/^\/api\/files\/([^/]+)$/)
-      : null;
+    const privatePath = request.method === 'GET'
+      ? new URL(request.url || '/', 'http://localhost').pathname
+      : '';
+    const privateMetadata = privatePath.match(/^\/api\/files\/([^/]+)\/metadata$/);
+    if (privateMetadata) {
+      await workFileMetadata(request, response, privateMetadata[1]);
+      return;
+    }
+    const privateDownload = privatePath.match(/^\/api\/files\/([^/]+)$/);
     if (privateDownload) {
       await downloadFromDrive(request, response, privateDownload[1]);
       return;

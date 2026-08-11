@@ -86,7 +86,7 @@ async function runCleanupJob(fetchAccessToken, cleanupJobId) {
   try {
     const token = await fetchAccessToken({ forceRefreshToken: false });
     if (!token) return;
-    const response = await fetch(`/api/files/cleanup-jobs/${encodeURIComponent(cleanupJobId)}`, {
+    const response = await fetch(`/api/files/cleanup-jobs/people-review/${encodeURIComponent(cleanupJobId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });

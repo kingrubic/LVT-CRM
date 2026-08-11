@@ -69,9 +69,25 @@ export class DriveFileCache {
     const existing = this.inFlight.get(key);
     if (existing) return { ...(await existing), cacheStatus: 'COALESCED' };
 
-    const pending = this.#create(key, producer).finally(() => this.inFlight.delete(key));
+    const pending = this.#create(key, String(sourceIdentity), producer).finally(() => this.inFlight.delete(key));
     this.inFlight.set(key, pending);
     return { ...(await pending), cacheStatus: 'MISS' };
+  }
+
+  async invalidateDriveFile(driveFileId) {
+    const prefix = `${String(driveFileId)}:`;
+    const names = await readdir(this.directory).catch(() => []);
+    for (const name of names.filter((item) => item.endsWith('.json'))) {
+      const key = name.slice(0, -5);
+      try {
+        const metadata = JSON.parse(await readFile(path.join(this.directory, name), 'utf8'));
+        if (!metadata.sourceIdentity || String(metadata.sourceIdentity).startsWith(prefix)) {
+          await this.#remove(key);
+        }
+      } catch {
+        // Normal cache reads/pruning remove malformed entries.
+      }
+    }
   }
 
   async prune() {
@@ -104,7 +120,7 @@ export class DriveFileCache {
     return { entries: entries.length, bytes: Math.max(0, total) };
   }
 
-  async #create(key, producer) {
+  async #create(key, sourceIdentity, producer) {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const finalPaths = this.paths(key);
     const temporary = path.join(this.directory, `.${key}.${randomUUID()}.tmp`);
@@ -115,6 +131,7 @@ export class DriveFileCache {
       const now = this.now();
       const metadata = {
         key,
+        sourceIdentity,
         size: info.size,
         createdAt: now,
         lastAccessedAt: now,
@@ -153,6 +170,7 @@ export class DriveFileCache {
     entry.lastAccessedAt = this.now();
     await this.#writeMetadata(this.paths(entry.key).metadata, {
       key: entry.key,
+      sourceIdentity: entry.sourceIdentity,
       size: entry.size,
       createdAt: entry.createdAt,
       lastAccessedAt: entry.lastAccessedAt,

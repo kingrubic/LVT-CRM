@@ -617,6 +617,24 @@
   animation: work-rise .3s ease both;
 }
 
+.work-document-admin-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--work-line);
+}
+
+.work-document-locked {
+  margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--work-line);
+  color: #718293;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
 .work-document-card::before,
 .work-user-card::before {
   position: absolute;

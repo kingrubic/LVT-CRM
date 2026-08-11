@@ -20,6 +20,7 @@ import {
   registerDriveUploadStage,
   releaseDriveUploadCleanup,
 } from "./driveUploadStages";
+import { canMutateWorkDocument } from "./workDocumentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -105,7 +106,9 @@ function assertDate(value: string) {
   const date = value.trim();
   if (!DATE_RE.test(date)) throw new Error("INVALID_WORK_DEADLINE");
   const parsed = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) throw new Error("INVALID_WORK_DEADLINE");
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw new Error("INVALID_WORK_DEADLINE");
+  }
   return date;
 }
 
@@ -113,6 +116,182 @@ function assertContent(value: string) {
   const content = value.trim();
   if (!content || content.length > 2000) throw new Error("INVALID_WORK_CONTENT");
   return content;
+}
+
+type DocumentAssignmentInput = {
+  type?: "department" | "individual";
+  departmentId?: string;
+  userIds?: string[];
+  content: string;
+  deadline: string;
+};
+
+type ValidatedDocumentAssignment = {
+  type: "department" | "individual";
+  departmentId: string;
+  userIds: string[];
+  content: string;
+  deadline: string;
+};
+
+function validateDocumentFile(fileNameInput: string, fileSize: number) {
+  const fileName = fileNameInput.trim();
+  const extension = extensionOf(fileName);
+  if (!fileName || fileName.length > 255 || !ACCEPTED_EXTENSIONS.has(extension)) {
+    throw new Error("INVALID_WORK_FILE");
+  }
+  if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > MAX_FILE_SIZE) {
+    throw new Error("WORK_FILE_TOO_LARGE");
+  }
+  return { fileName, fileType: fileTypeForName(fileName) };
+}
+
+async function validateDocumentWorkflow(
+  ctx: any,
+  assignmentInputs: DocumentAssignmentInput[],
+  approverInputs: string[],
+) {
+  if (!assignmentInputs.length) throw new Error("WORK_ASSIGNMENTS_REQUIRED");
+
+  const [departments, users, positions] = await Promise.all([
+    ctx.db.query("departments").collect(),
+    ctx.db.query("users").collect(),
+    ctx.db.query("positions").collect(),
+  ]);
+  const activeUsers = users.filter((user: any) => user.status === "active");
+  const assignments: ValidatedDocumentAssignment[] = assignmentInputs.map((assignment) => {
+    const type = assignment.type === "individual" ? "individual" : "department";
+    const content = assertContent(assignment.content);
+    const deadline = assertDate(assignment.deadline);
+    if (type === "department") {
+      const departmentId = String(assignment.departmentId || "").trim();
+      const department = departments.find((item: any) => String(item._id) === departmentId);
+      if (!departmentId || !department?.active) throw new Error("INVALID_DEPARTMENT");
+      return { type, departmentId, userIds: [], content, deadline };
+    }
+
+    const userIds = [
+      ...new Set((assignment.userIds || []).map((id) => String(id).trim()).filter(Boolean)),
+    ];
+    if (!userIds.length) throw new Error("WORK_ASSIGNEES_REQUIRED");
+    for (const userId of userIds) {
+      if (!activeUsers.some((user: any) => String(user._id) === userId)) {
+        throw new Error("INVALID_WORK_ASSIGNEE");
+      }
+    }
+    const firstUser = activeUsers.find((user: any) => String(user._id) === userIds[0]);
+    return {
+      type,
+      departmentId: String(firstUser?.departmentId || ""),
+      userIds,
+      content,
+      deadline,
+    };
+  });
+
+  const departmentIds = assignments
+    .filter((assignment) => assignment.type === "department")
+    .map((assignment) => assignment.departmentId);
+  if (new Set(departmentIds).size !== departmentIds.length) {
+    throw new Error("WORK_DEPARTMENT_DUPLICATE");
+  }
+
+  const approverUserIds = [
+    ...new Set(approverInputs.map((id) => String(id).trim()).filter(Boolean)),
+  ];
+  if (!approverUserIds.length) throw new Error("WORK_APPROVERS_REQUIRED");
+  for (const userId of approverUserIds) {
+    const approver = activeUsers.find((user: any) => String(user._id) === userId);
+    if (!approver || activePositionLevel(approver, positions) < 4) {
+      throw new Error("INVALID_WORK_APPROVER");
+    }
+  }
+
+  return { assignments, approverUserIds };
+}
+
+function storedAssignments(assignments: ValidatedDocumentAssignment[]) {
+  return assignments.map((assignment) => ({
+    type: assignment.type,
+    departmentId: assignment.departmentId || undefined,
+    userIds: assignment.type === "individual" ? assignment.userIds : undefined,
+    content: assignment.content,
+    deadline: assignment.deadline,
+  }));
+}
+
+async function insertDocumentWorkItems(
+  ctx: any,
+  documentId: Id<"officeDocuments">,
+  assignments: ValidatedDocumentAssignment[],
+  actorUserId: Id<"users">,
+  now: number,
+) {
+  for (const assignment of assignments) {
+    await ctx.db.insert("workItems", {
+      documentId,
+      departmentId: assignment.departmentId || "",
+      assignmentType: assignment.type,
+      assigneeUserIds: assignment.type === "individual" ? assignment.userIds : [],
+      completedUserIds: [],
+      completedLateUserIds: [],
+      content: assignment.content,
+      deadline: assignment.deadline,
+      active: true,
+      createdBy: actorUserId,
+      updatedBy: actorUserId,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
+async function relatedDocumentWork(ctx: any, documentId: Id<"officeDocuments">) {
+  const workItems = (await ctx.db.query("workItems").collect()).filter(
+    (item: any) => String(item.documentId) === String(documentId),
+  );
+  const workItemIds = new Set(workItems.map((item: any) => String(item._id)));
+  const personalTasks = (await ctx.db.query("personalTasks").collect()).filter(
+    (task: any) => workItemIds.has(String(task.workItemId)),
+  );
+  return { workItems, personalTasks };
+}
+
+async function deactivateRelatedDocumentWork(
+  ctx: any,
+  related: { workItems: any[]; personalTasks: any[] },
+  actorUserId: Id<"users">,
+  now: number,
+) {
+  for (const task of related.personalTasks) {
+    await ctx.db.patch(task._id, { active: false, updatedBy: actorUserId, updatedAt: now });
+  }
+  for (const item of related.workItems) {
+    await ctx.db.patch(item._id, { active: false, updatedBy: actorUserId, updatedAt: now });
+  }
+  return {
+    workItemCount: related.workItems.length,
+    personalTaskCount: related.personalTasks.length,
+  };
+}
+
+async function createWorkDriveCleanupJob(
+  ctx: any,
+  driveFileId: string | undefined,
+  documentId: Id<"officeDocuments">,
+  actorUserId: Id<"users">,
+  now: number,
+) {
+  if (!driveFileId) return null;
+  return await ctx.db.insert("driveCleanupJobs", {
+    driveFileId,
+    purpose: "work",
+    resourceId: String(documentId),
+    createdBy: actorUserId,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+  });
 }
 
 function assignmentTypeOf(item: any): "department" | "individual" {
@@ -330,6 +509,8 @@ async function documentView(ctx: any, document: any, catalogData: any) {
     approvalCount: document.approvedByUserIds.length,
     approvalTotal: document.approverUserIds.length,
     createdAt: document.createdAt,
+    canEdit: canMutateWorkDocument(document),
+    canDelete: canMutateWorkDocument(document),
   };
 }
 
@@ -459,6 +640,67 @@ export const isDriveFileReferenced = query({
   },
 });
 
+export const authorizeDriveCleanupJob = query({
+  args: { cleanupJobId: v.id("driveCleanupJobs") },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const job = await ctx.db.get(args.cleanupJobId);
+    if (
+      !job?.active
+      || job.purpose !== "work"
+      || String(job.createdBy) !== String(actor.user._id)
+    ) {
+      throw new Error("WORK_CLEANUP_JOB_NOT_FOUND");
+    }
+    const references = await ctx.db
+      .query("officeDocuments")
+      .withIndex("by_drive_file", (q: any) => q.eq("driveFileId", job.driveFileId))
+      .collect();
+    if (references.some((document: any) => document.active)) {
+      throw new Error("WORK_FILE_STILL_REFERENCED");
+    }
+    return { driveFileId: job.driveFileId };
+  },
+});
+
+export const completeDriveCleanupJob = mutation({
+  args: { cleanupJobId: v.id("driveCleanupJobs") },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const job = await ctx.db.get(args.cleanupJobId);
+    if (
+      !job?.active
+      || job.purpose !== "work"
+      || String(job.createdBy) !== String(actor.user._id)
+    ) {
+      throw new Error("WORK_CLEANUP_JOB_NOT_FOUND");
+    }
+    const references = await ctx.db
+      .query("officeDocuments")
+      .withIndex("by_drive_file", (q: any) => q.eq("driveFileId", job.driveFileId))
+      .collect();
+    if (references.some((document: any) => document.active)) {
+      throw new Error("WORK_FILE_STILL_REFERENCED");
+    }
+    const now = Date.now();
+    await ctx.db.patch(args.cleanupJobId, {
+      active: false,
+      updatedAt: now,
+    });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: actor.user._id,
+      targetEmail: actor.user.email,
+      action: "work.drive_cleanup.complete",
+      details: JSON.stringify({
+        cleanupJobId: args.cleanupJobId,
+        documentId: job.resourceId,
+        driveFileId: job.driveFileId,
+      }),
+      at: now,
+    });
+  },
+});
+
 export const authorizeFileDownload = query({
   args: { documentId: v.id("officeDocuments") },
   handler: async (ctx, args) => {
@@ -496,6 +738,7 @@ export const authorizeFileDownload = query({
     if (!allowed) throw new Error("WORK_FILE_FORBIDDEN");
     return {
       driveFileId: document.driveFileId,
+      driveChecksum: document.driveChecksum || null,
       fileName: document.fileName,
       fileType: document.fileType,
       fileSize: document.fileSize,
@@ -577,65 +820,14 @@ export const createDocument = mutation({
   },
   handler: async (ctx, args) => {
     const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
-    const fileName = args.fileName.trim();
-    const extension = extensionOf(fileName);
-    if (!fileName || fileName.length > 255 || !ACCEPTED_EXTENSIONS.has(extension)) {
-      throw new Error("INVALID_WORK_FILE");
-    }
-    if (!Number.isFinite(args.fileSize) || args.fileSize <= 0 || args.fileSize > MAX_FILE_SIZE) {
-      throw new Error("WORK_FILE_TOO_LARGE");
-    }
+    const { fileName, fileType } = validateDocumentFile(args.fileName, args.fileSize);
     if (!args.driveFileId && !args.fileId) throw new Error("WORK_FILE_REQUIRED");
     if (args.driveFileId && !args.cleanupToken) throw new Error("UPLOAD_NOT_FOUND");
-    if (!args.assignments.length) throw new Error("WORK_ASSIGNMENTS_REQUIRED");
-
-    const departments = await ctx.db.query("departments").collect();
-    const users = await ctx.db.query("users").collect();
-    const positions = await ctx.db.query("positions").collect();
-    const activeUsers = users.filter((user: any) => user.status === "active");
-
-    const assignments = args.assignments.map((assignment) => {
-      const type = assignment.type === "individual" ? "individual" : "department";
-      const content = assertContent(assignment.content);
-      const deadline = assertDate(assignment.deadline);
-      if (type === "department") {
-        const departmentId = String(assignment.departmentId || "").trim();
-        if (!departmentId) throw new Error("INVALID_DEPARTMENT");
-        const department = departments.find((item: any) => String(item._id) === departmentId);
-        if (!department?.active) throw new Error("INVALID_DEPARTMENT");
-        return { type, departmentId, userIds: [] as string[], content, deadline };
-      }
-      const userIds = [...new Set((assignment.userIds || []).map((id) => String(id).trim()).filter(Boolean))];
-      if (!userIds.length) throw new Error("WORK_ASSIGNEES_REQUIRED");
-      for (const userId of userIds) {
-        const target = activeUsers.find((user: any) => String(user._id) === userId);
-        if (!target) throw new Error("INVALID_WORK_ASSIGNEE");
-      }
-      const firstUser = activeUsers.find((user: any) => String(user._id) === userIds[0]);
-      return {
-        type,
-        departmentId: String(firstUser?.departmentId || ""),
-        userIds,
-        content,
-        deadline,
-      };
-    });
-
-    const departmentIds = assignments
-      .filter((assignment) => assignment.type === "department")
-      .map((assignment) => assignment.departmentId);
-    if (new Set(departmentIds).size !== departmentIds.length) {
-      throw new Error("WORK_DEPARTMENT_DUPLICATE");
-    }
-
-    const approverUserIds = [...new Set(args.approverUserIds.map((id) => id.trim()).filter(Boolean))];
-    if (!approverUserIds.length) throw new Error("WORK_APPROVERS_REQUIRED");
-    for (const userId of approverUserIds) {
-      const approver = activeUsers.find((user: any) => String(user._id) === String(userId));
-      if (!approver || activePositionLevel(approver, positions) < 4) {
-        throw new Error("INVALID_WORK_APPROVER");
-      }
-    }
+    const { assignments, approverUserIds } = await validateDocumentWorkflow(
+      ctx,
+      args.assignments,
+      args.approverUserIds,
+    );
 
     const now = Date.now();
     if (args.driveFileId && args.cleanupToken) {
@@ -653,18 +845,12 @@ export const createDocument = mutation({
       driveChecksum: args.driveChecksum,
       storageProvider: args.driveFileId ? "google_drive" : "convex",
       fileName,
-      fileType: fileTypeForName(fileName),
+      fileType,
       fileSize: args.fileSize,
       departmentId: firstAssignment.departmentId || "",
       content: firstAssignment.content,
       deadline: firstAssignment.deadline,
-      assignments: assignments.map((assignment) => ({
-        type: assignment.type,
-        departmentId: assignment.departmentId || undefined,
-        userIds: assignment.type === "individual" ? assignment.userIds : undefined,
-        content: assignment.content,
-        deadline: assignment.deadline,
-      })),
+      assignments: storedAssignments(assignments),
       approverUserIds,
       approvedByUserIds: [],
       rejectedByUserIds: [],
@@ -676,23 +862,7 @@ export const createDocument = mutation({
       updatedAt: now,
     });
 
-    for (const assignment of assignments) {
-      await ctx.db.insert("workItems", {
-        documentId,
-        departmentId: assignment.departmentId || "",
-        assignmentType: assignment.type,
-        assigneeUserIds: assignment.type === "individual" ? assignment.userIds : [],
-        completedUserIds: [],
-        completedLateUserIds: [],
-        content: assignment.content,
-        deadline: assignment.deadline,
-        active: true,
-        createdBy: actor.user._id,
-        updatedBy: actor.user._id,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    await insertDocumentWorkItems(ctx, documentId, assignments, actor.user._id, now);
 
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
@@ -715,6 +885,181 @@ export const createDocument = mutation({
       sourceId: String(documentId),
     });
     return documentId;
+  },
+});
+
+export const updateDocument = mutation({
+  args: {
+    documentId: v.id("officeDocuments"),
+    driveFileId: v.optional(v.string()),
+    driveChecksum: v.optional(v.string()),
+    cleanupToken: v.optional(v.string()),
+    fileName: v.optional(v.string()),
+    fileType: v.optional(v.string()),
+    fileSize: v.optional(v.number()),
+    assignments: v.array(
+      v.object({
+        type: v.optional(v.union(v.literal("department"), v.literal("individual"))),
+        departmentId: v.optional(v.string()),
+        userIds: v.optional(v.array(v.string())),
+        content: v.string(),
+        deadline: v.string(),
+      }),
+    ),
+    approverUserIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const document = await ctx.db.get(args.documentId);
+    if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
+    if (!canMutateWorkDocument(document)) throw new Error("WORK_DOCUMENT_IMMUTABLE");
+
+    const replacementRequested =
+      args.driveFileId !== undefined
+      || args.driveChecksum !== undefined
+      || args.cleanupToken !== undefined
+      || args.fileName !== undefined
+      || args.fileType !== undefined
+      || args.fileSize !== undefined;
+    let replacement: {
+      driveFileId: string;
+      driveChecksum?: string;
+      cleanupToken: string;
+      fileName: string;
+      fileType: string;
+      fileSize: number;
+    } | null = null;
+    if (replacementRequested) {
+      if (!args.driveFileId || !args.cleanupToken || args.fileName === undefined || args.fileSize === undefined) {
+        throw new Error("WORK_REPLACEMENT_FILE_REQUIRED");
+      }
+      const file = validateDocumentFile(args.fileName, args.fileSize);
+      replacement = {
+        driveFileId: args.driveFileId,
+        driveChecksum: args.driveChecksum,
+        cleanupToken: args.cleanupToken,
+        fileName: file.fileName,
+        fileType: file.fileType,
+        fileSize: args.fileSize,
+      };
+    }
+
+    const { assignments, approverUserIds } = await validateDocumentWorkflow(
+      ctx,
+      args.assignments,
+      args.approverUserIds,
+    );
+    if (replacement) {
+      await commitDriveUploadStage(
+        ctx,
+        { cleanupToken: replacement.cleanupToken, driveFileId: replacement.driveFileId },
+        String(actor.user._id),
+        "work",
+      );
+    }
+
+    const related = await relatedDocumentWork(ctx, args.documentId);
+    const now = Date.now();
+    const firstAssignment = assignments[0];
+    await ctx.db.patch(args.documentId, {
+      ...(replacement
+        ? {
+            fileId: undefined,
+            driveFileId: replacement.driveFileId,
+            driveChecksum: replacement.driveChecksum,
+            storageProvider: "google_drive",
+            fileName: replacement.fileName,
+            fileType: replacement.fileType,
+            fileSize: replacement.fileSize,
+          }
+        : {}),
+      departmentId: firstAssignment.departmentId || "",
+      content: firstAssignment.content,
+      deadline: firstAssignment.deadline,
+      assignments: storedAssignments(assignments),
+      approverUserIds,
+      approvedByUserIds: [],
+      rejectedByUserIds: [],
+      status: "pending",
+      updatedBy: actor.user._id,
+      updatedAt: now,
+    });
+    await insertDocumentWorkItems(ctx, args.documentId, assignments, actor.user._id, now);
+    const deactivated = await deactivateRelatedDocumentWork(ctx, related, actor.user._id, now);
+
+    const supersededDriveFileId = replacement && document.driveFileId !== replacement.driveFileId
+      ? document.driveFileId
+      : undefined;
+    const cleanupJobId = await createWorkDriveCleanupJob(
+      ctx,
+      supersededDriveFileId,
+      args.documentId,
+      actor.user._id,
+      now,
+    );
+    await ctx.db.insert("auditLogs", {
+      actorUserId: actor.user._id,
+      targetEmail: actor.user.email,
+      action: "work.document.update",
+      details: JSON.stringify({
+        documentId: args.documentId,
+        replacementFile: Boolean(replacement),
+        cleanupJobId,
+        assignmentCount: assignments.length,
+        approverCount: approverUserIds.length,
+        deactivatedWorkItemCount: deactivated.workItemCount,
+        deactivatedPersonalTaskCount: deactivated.personalTaskCount,
+      }),
+      at: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+      userIds: approverUserIds,
+      title: "Công việc cần duyệt lại",
+      body: `Công văn ${replacement?.fileName || document.fileName} đã được cập nhật.`,
+      kind: "work",
+      sourceType: "approval",
+      sourceId: String(args.documentId),
+    });
+    return { documentId: args.documentId, cleanupJobId };
+  },
+});
+
+export const deleteDocument = mutation({
+  args: { documentId: v.id("officeDocuments") },
+  handler: async (ctx, args) => {
+    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const document = await ctx.db.get(args.documentId);
+    if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
+    if (!canMutateWorkDocument(document)) throw new Error("WORK_DOCUMENT_IMMUTABLE");
+
+    const related = await relatedDocumentWork(ctx, args.documentId);
+    const now = Date.now();
+    await ctx.db.patch(args.documentId, {
+      active: false,
+      updatedBy: actor.user._id,
+      updatedAt: now,
+    });
+    const deactivated = await deactivateRelatedDocumentWork(ctx, related, actor.user._id, now);
+    const cleanupJobId = await createWorkDriveCleanupJob(
+      ctx,
+      document.driveFileId,
+      args.documentId,
+      actor.user._id,
+      now,
+    );
+    await ctx.db.insert("auditLogs", {
+      actorUserId: actor.user._id,
+      targetEmail: actor.user.email,
+      action: "work.document.delete",
+      details: JSON.stringify({
+        documentId: args.documentId,
+        cleanupJobId,
+        deactivatedWorkItemCount: deactivated.workItemCount,
+        deactivatedPersonalTaskCount: deactivated.personalTaskCount,
+      }),
+      at: now,
+    });
+    return { documentId: args.documentId, cleanupJobId };
   },
 });
 

@@ -236,22 +236,34 @@ final class WorkRepository: Sendable {
     func downloadDocument(_ document: WorkApprovalItem) async throws -> URL {
         let sourceURL: URL
         var request: URLRequest
+        let sourceIdentity: String
         if !document.fileURL.isEmpty, let url = URL(string: document.fileURL) {
             sourceURL = url
             request = URLRequest(url: url)
+            sourceIdentity = "public:\(document.id):\(document.fileURL)"
         } else if document.privateFile,
                   let encodedId = document.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                   let url = URL(string: "\(ConvexConfig.webURL)/api/files/\(encodedId)"),
+                  let metadataURL = URL(string: "\(ConvexConfig.webURL)/api/files/\(encodedId)/metadata"),
                   let token = tokenProvider(), !token.isEmpty {
+            var metadataRequest = URLRequest(url: metadataURL)
+            metadataRequest.cachePolicy = .reloadIgnoringLocalCacheData
+            metadataRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (metadataData, metadataResponse) = try await URLSession.shared.data(for: metadataRequest)
+            guard let metadataHTTP = metadataResponse as? HTTPURLResponse,
+                  (200..<300).contains(metadataHTTP.statusCode),
+                  let metadata = try JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
+                  let fileVersion = metadata["fileVersion"] as? String,
+                  !fileVersion.isEmpty else {
+                throw ConvexException(code: "WORK_FILE_FORBIDDEN", message: "Bạn không còn quyền mở tệp công văn này.")
+            }
             sourceURL = url
             request = URLRequest(url: url)
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            sourceIdentity = "private:\(document.id):\(fileVersion)"
         } else {
             throw ConvexException(code: "WORK_FILE_UNAVAILABLE", message: "Tệp công văn chưa sẵn sàng để mở.")
         }
-        let sourceIdentity = document.privateFile
-            ? "private:\(document.id):\(document.fileName)"
-            : "public:\(document.id):\(document.fileURL)"
         if let cached = await documentCache.cachedURL(sourceIdentity: sourceIdentity) {
             return cached
         }
