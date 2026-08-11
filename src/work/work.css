@@ -916,6 +916,178 @@
   opacity: .7;
 }
 
+.work-file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  color: #496174;
+}
+
+.work-document-meta .work-file-actions {
+  font-size: 10px;
+}
+
+.work-file-name {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-file-icon-button,
+.work-file-preview-action,
+.work-file-preview-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(22, 120, 107, .25);
+  color: #16786b;
+  background: #fff;
+  cursor: pointer;
+}
+
+.work-file-icon-button {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.work-file-icon-button:hover,
+.work-file-icon-button:focus-visible,
+.work-file-preview-action:hover,
+.work-file-preview-action:focus-visible,
+.work-file-preview-close:hover,
+.work-file-preview-close:focus-visible {
+  border-color: #16786b;
+  background: #eaf7f4;
+  outline: 3px solid rgba(22, 120, 107, .14);
+  outline-offset: 2px;
+}
+
+.work-file-icon-button:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.work-file-icon-button svg,
+.work-file-preview-action svg,
+.work-file-preview-close svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.work-file-busy {
+  flex: 0 0 auto;
+  color: #718695;
+  font-size: 9px;
+}
+
+.work-file-preview-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 16, 28, .76);
+  backdrop-filter: blur(7px);
+}
+
+.work-file-preview-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1100px, 100%);
+  height: min(88vh, 820px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 18px;
+  background: #101d2b;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .42);
+}
+
+.work-file-preview-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 12px 14px 12px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+  color: #f4f8fb;
+}
+
+.work-file-preview-dialog > header strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-file-preview-dialog > header > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.work-file-preview-action {
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 13px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.work-file-preview-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+.work-file-preview-content {
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+  background: #07111c;
+}
+
+.work-file-preview-content iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  border: 0;
+  background: #fff;
+}
+
+.work-file-preview-content img {
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .work-file-preview-backdrop { padding: 0; }
+  .work-file-preview-dialog {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+  .work-file-preview-dialog > header { padding-left: 14px; }
+  .work-file-preview-action span { display: none; }
+  .work-file-preview-action { width: 40px; padding: 0; }
+  .work-file-preview-content iframe { min-height: 0; }
+}
+
 .work-document-assignments {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));

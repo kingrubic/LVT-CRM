@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { useConvexAuth } from '@convex-dev/auth/react';
@@ -55,6 +55,31 @@ async function settleWorkUploadedFile(fetchAccessToken, cleanupToken, committed)
   }
 }
 
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2.4 12s3.5-6 9.6-6 9.6 6 9.6 6-3.5 6-9.6 6-9.6-6-9.6-6Z" />
+      <circle cx="12" cy="12" r="2.7" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M5 20h14" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m6 6 12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
 function PrivateFileLink({
   documentId,
   fileName,
@@ -64,43 +89,137 @@ function PrivateFileLink({
   children,
 }) {
   const { fetchAccessToken } = useConvexAuth();
-  const [opening, setOpening] = useState(false);
+  const [busyAction, setBusyAction] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
+  const closeButtonRef = useRef(null);
+  const extension = fileName?.toLowerCase().split('.').pop() || '';
+  const canPreview = ['pdf', 'png', 'jpg', 'jpeg'].includes(extension);
 
-  if (fileUrl) {
-    return <a className={className} href={publicStorageUrl(fileUrl)} target="_blank" rel="noreferrer">{children}</a>;
-  }
-  if (!privateFile || !documentId) return null;
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
-  const openPrivateFile = async () => {
-    if (opening) return;
-    setOpening(true);
-    try {
+  useEffect(() => {
+    if (!previewUrl) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setPreviewUrl('');
+    };
+    const previousOverflow = window.document.body.style.overflow;
+    window.document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    return () => {
+      window.document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [previewUrl]);
+
+  if ((!fileUrl && !privateFile) || !documentId) return null;
+
+  const fetchFileBlob = async () => {
+    const headers = new Headers();
+    if (privateFile) {
       const token = await fetchAccessToken({ forceRefreshToken: false });
       if (!token) throw new Error('AUTH_REQUIRED');
-      const response = await fetch(`/api/files/${encodeURIComponent(documentId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error(`FILE_DOWNLOAD_FAILED:${response.status}`);
-      const objectUrl = URL.createObjectURL(await response.blob());
-      const anchor = window.document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.target = '_blank';
-      anchor.rel = 'noreferrer';
-      anchor.download = fileName || '';
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      headers.set('Authorization', 'Bearer ' + token);
+    }
+    const source = privateFile
+      ? `/api/files/${encodeURIComponent(documentId)}`
+      : publicStorageUrl(fileUrl);
+    const response = await fetch(source, { headers });
+    if (!response.ok) throw new Error(`FILE_DOWNLOAD_FAILED:${response.status}`);
+    return response.blob();
+  };
+
+  const runFileAction = async (action) => {
+    if (busyAction) return;
+    setBusyAction(action);
+    try {
+      const objectUrl = URL.createObjectURL(await fetchFileBlob());
+      if (action === 'preview') {
+        setPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return objectUrl;
+        });
+      } else {
+        const anchor = window.document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = fileName || 'cong-van';
+        anchor.click();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      }
     } catch (error) {
-      console.error('Private document download failed', error);
+      console.error('Document file action failed', error);
       window.alert('Không thể mở tệp công văn. Vui lòng đăng nhập lại hoặc liên hệ quản trị viên.');
     } finally {
-      setOpening(false);
+      setBusyAction('');
     }
   };
 
+  const closePreview = () => setPreviewUrl('');
+
   return (
-    <button type="button" className={`${className} work-file-link-button`.trim()} onClick={() => void openPrivateFile()} disabled={opening}>
-      {opening ? 'Đang mở tệp…' : children}
-    </button>
+    <>
+      <span className={`${className} work-file-actions`.trim()}>
+        <span className="work-file-name">{children}</span>
+        {canPreview ? (
+          <button
+            type="button"
+            className="work-file-icon-button"
+            onClick={() => void runFileAction('preview')}
+            disabled={Boolean(busyAction)}
+            aria-label={`Xem trước ${fileName}`}
+            title="Xem trước"
+          >
+            <EyeIcon />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="work-file-icon-button"
+          onClick={() => void runFileAction('download')}
+          disabled={Boolean(busyAction)}
+          aria-label={`Tải xuống ${fileName}`}
+          title="Tải xuống"
+        >
+          <DownloadIcon />
+        </button>
+        {busyAction ? <span className="work-file-busy" role="status">Đang tải…</span> : null}
+      </span>
+      {previewUrl ? (
+        <div className="work-file-preview-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closePreview();
+        }}>
+          <section className="work-file-preview-dialog" role="dialog" aria-modal="true" aria-label={`Xem trước ${fileName}`}>
+            <header>
+              <strong>{fileName}</strong>
+              <div>
+                <button type="button" className="work-file-preview-action" onClick={() => void runFileAction('download')}>
+                  <DownloadIcon />
+                  <span>Tải xuống</span>
+                </button>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  className="work-file-preview-close"
+                  onClick={closePreview}
+                  aria-label="Đóng xem trước"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            </header>
+            <div className="work-file-preview-content">
+              {extension === 'pdf' ? (
+                <iframe src={previewUrl} title={`Nội dung ${fileName}`} />
+              ) : (
+                <img src={previewUrl} alt={`Xem trước ${fileName}`} />
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -1218,7 +1337,7 @@ export function WorkUserView({ focusTarget = null }) {
                   fileUrl={document.fileUrl}
                   privateFile={document.privateFile}
                 >
-                  ↗ Mở {document.fileName}
+                  {document.fileName}
                 </PrivateFileLink>
                 <div className="work-document-assignments">
                   {document.assignments.map((assignment) => (
@@ -1289,7 +1408,7 @@ export function WorkUserView({ focusTarget = null }) {
                 fileUrl={task.fileUrl}
                 privateFile={task.privateFile}
               >
-                ↗ Mở công văn
+                {task.fileName || 'Công văn đính kèm'}
               </PrivateFileLink>
               {task.type === 'department' && task.pendingMembers?.length ? (
                 <div className="work-member-progress">
