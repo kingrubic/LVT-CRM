@@ -36,6 +36,7 @@ test('file errors preserve truthful authentication, validation, and infrastructu
   assert.equal(classifyFileError(new Error('drive unavailable')).status, 500);
   assert.equal(classifyFileError(new FileHttpError(502, 'DRIVE_DELETE_FAILED')).status, 502);
   assert.equal(classifyFileError(new Error('context deadline exceeded')).status, 503);
+  assert.equal(classifyFileError(new Error('DRIVE_DOWNLOAD_QUEUE_FULL')).status, 503);
 });
 
 test('Drive downloads retry bounded transient timeouts but not authorization failures', async () => {
@@ -47,7 +48,7 @@ test('Drive downloads retry bounded transient timeouts but not authorization fai
     calls += 1;
     if (calls < 3) throw new Error('Client.Timeout exceeded while awaiting headers');
     return 'downloaded';
-  }, { delays: [0, 0], sleep: async () => {} });
+  }, { delays: [0, 0], random: () => 0, sleep: async () => {} });
   assert.equal(result, 'downloaded');
   assert.equal(calls, 3);
 

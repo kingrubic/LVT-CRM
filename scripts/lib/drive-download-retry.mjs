@@ -30,7 +30,8 @@ export async function retryDriveDownload(
   download,
   {
     attempts = 3,
-    delays = [300, 900],
+    delays = [1000, 2000],
+    random = Math.random,
     sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
     onRetry = () => {},
   } = {},
@@ -43,7 +44,8 @@ export async function retryDriveDownload(
       lastError = error;
       if (attempt >= attempts || !isTransientDriveDownloadError(error)) throw error;
       onRetry(error, attempt);
-      await sleep(delays[Math.min(attempt - 1, delays.length - 1)] ?? 0);
+      const baseDelay = delays[Math.min(attempt - 1, delays.length - 1)] ?? 0;
+      await sleep(baseDelay + Math.floor(random() * 500));
     }
   }
   throw lastError;

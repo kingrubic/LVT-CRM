@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 struct WorkTaskItem: Identifiable, Equatable, Sendable {
     enum Kind: String, Sendable { case workItem, personalTask }
@@ -90,6 +91,7 @@ enum WorkHelpers {
 final class WorkRepository: Sendable {
     private let convex: ConvexHttpClient
     private let tokenProvider: @Sendable () -> String?
+    private let documentCache = WorkDocumentCache()
 
     init(convex: ConvexHttpClient, tokenProvider: @escaping @Sendable () -> String?) {
         self.convex = convex
@@ -247,6 +249,12 @@ final class WorkRepository: Sendable {
         } else {
             throw ConvexException(code: "WORK_FILE_UNAVAILABLE", message: "Tệp công văn chưa sẵn sàng để mở.")
         }
+        let sourceIdentity = document.privateFile
+            ? "private:\(document.id):\(document.fileName)"
+            : "public:\(document.id):\(document.fileURL)"
+        if let cached = await documentCache.cachedURL(sourceIdentity: sourceIdentity) {
+            return cached
+        }
         request.timeoutInterval = 180
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 180
@@ -255,15 +263,12 @@ final class WorkRepository: Sendable {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw ConvexException(code: "WORK_FILE_DOWNLOAD_FAILED", message: "Không thể tải tệp công văn. Hãy thử lại.")
         }
-        let safeName = document.fileName
-            .replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: ":", with: "-")
         let fallbackName = sourceURL.lastPathComponent.isEmpty ? "cong-van" : sourceURL.lastPathComponent
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("lvt-work-\(document.id)-\(safeName.isEmpty ? fallbackName : safeName)")
-        try? FileManager.default.removeItem(at: destination)
-        try FileManager.default.moveItem(at: temporaryURL, to: destination)
-        return destination
+        return try await documentCache.store(
+            downloadedURL: temporaryURL,
+            sourceIdentity: sourceIdentity,
+            fileName: document.fileName.isEmpty ? fallbackName : document.fileName
+        )
     }
 
     private func parseAssignments(_ items: [[String: Any]]?) -> [WorkDocumentAssignment] {
@@ -299,6 +304,122 @@ final class WorkRepository: Sendable {
                 departmentName: (item["departmentName"] as? String) ?? ""
             )
         }
+    }
+}
+
+private actor WorkDocumentCache {
+    private let ttl: TimeInterval = 24 * 60 * 60
+    private let maxBytes: Int64 = 1024 * 1024 * 1024
+    private let fileManager = FileManager.default
+
+    private var directory: URL {
+        let base = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        return base.appendingPathComponent("LvtCrmUIKit/work-documents", isDirectory: true)
+    }
+
+    func cachedURL(sourceIdentity: String) -> URL? {
+        let key = cacheKey(sourceIdentity)
+        guard let candidate = existingFile(for: key), isValid(candidate) else {
+            removeFiles(withKey: key)
+            return nil
+        }
+        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: candidate.path)
+        return candidate
+    }
+
+    func store(downloadedURL: URL, sourceIdentity: String, fileName: String) throws -> URL {
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var cacheDirectory = directory
+        try? cacheDirectory.setResourceValues(values)
+
+        let attributes = try fileManager.attributesOfItem(atPath: downloadedURL.path)
+        guard (attributes[.size] as? NSNumber)?.int64Value ?? 0 > 0 else {
+            throw ConvexException(code: "WORK_FILE_DOWNLOAD_FAILED", message: "Tệp công văn tải về không hợp lệ.")
+        }
+        let key = cacheKey(sourceIdentity)
+        removeFiles(withKey: key)
+        let destination = directory.appendingPathComponent("\(key)--\(sanitized(fileName))")
+        let staging = directory.appendingPathComponent(".\(key)-\(UUID().uuidString).tmp")
+        try fileManager.moveItem(at: downloadedURL, to: staging)
+        do {
+            try fileManager.moveItem(at: staging, to: destination)
+            try fileManager.setAttributes(
+                [.creationDate: Date(), .modificationDate: Date()],
+                ofItemAtPath: destination.path
+            )
+            try prune()
+            return destination
+        } catch {
+            try? fileManager.removeItem(at: staging)
+            throw error
+        }
+    }
+
+    private func existingFile(for key: String) -> URL? {
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+        return files.first { $0.lastPathComponent.hasPrefix("\(key)--") }
+    }
+
+    private func isValid(_ url: URL) -> Bool {
+        guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+              (attributes[.type] as? FileAttributeType) == .typeRegular,
+              (attributes[.size] as? NSNumber)?.int64Value ?? 0 > 0,
+              let created = attributes[.creationDate] as? Date else { return false }
+        return Date().timeIntervalSince(created) < ttl
+    }
+
+    private func prune() throws {
+        let files = try fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        var entries: [(URL, Int64, Date)] = []
+        for file in files {
+            guard let attributes = try? fileManager.attributesOfItem(atPath: file.path),
+                  (attributes[.type] as? FileAttributeType) == .typeRegular else { continue }
+            let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+            let created = attributes[.creationDate] as? Date ?? .distantPast
+            if size <= 0 || Date().timeIntervalSince(created) >= ttl {
+                try? fileManager.removeItem(at: file)
+                continue
+            }
+            entries.append((file, size, attributes[.modificationDate] as? Date ?? created))
+        }
+        var total = entries.reduce(Int64(0)) { $0 + $1.1 }
+        for entry in entries.sorted(by: { $0.2 < $1.2 }) where total > maxBytes {
+            try? fileManager.removeItem(at: entry.0)
+            total -= entry.1
+        }
+    }
+
+    private func removeFiles(withKey key: String) {
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: []
+        ) else { return }
+        for file in files where file.lastPathComponent.hasPrefix("\(key)--") {
+            try? fileManager.removeItem(at: file)
+        }
+    }
+
+    private func cacheKey(_ sourceIdentity: String) -> String {
+        SHA256.hash(data: Data(sourceIdentity.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func sanitized(_ fileName: String) -> String {
+        let value = fileName
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        return value.isEmpty ? "cong-van" : String(value.suffix(180))
     }
 }
 

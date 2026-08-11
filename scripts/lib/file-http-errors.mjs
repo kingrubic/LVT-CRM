@@ -23,7 +23,7 @@ export function classifyFileError(error) {
   if (/INVALID_FILE|SIZE_MISMATCH|INVALID_UPLOAD|ArgumentValidation|Invalid argument/i.test(message)) {
     return new FileHttpError(400, 'INVALID_FILE', error);
   }
-  if (/context deadline exceeded|client\.timeout|request canceled|timed? out|econnreset|temporarily unavailable/i.test(message)) {
+  if (/DRIVE_DOWNLOAD_QUEUE_FULL|context deadline exceeded|client\.timeout|request canceled|timed? out|econnreset|temporarily unavailable/i.test(message)) {
     return new FileHttpError(503, 'FILE_TEMPORARILY_UNAVAILABLE', error);
   }
   return new FileHttpError(500, 'FILE_SERVER_ERROR', error);

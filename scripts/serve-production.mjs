@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { ConvexHttpClient } from 'convex/browser';
 import { anyApi } from 'convex/server';
 import { DriveUploadStages } from './lib/drive-upload-stages.mjs';
+import { AsyncSemaphore, DriveFileCache, DRIVE_CACHE_TTL_MS } from './lib/drive-file-cache.mjs';
 import { retryDriveDownload } from './lib/drive-download-retry.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from './lib/file-content-policy.mjs';
 import { FileHttpError, classifyFileError } from './lib/file-http-errors.mjs';
@@ -34,6 +35,15 @@ const driveAccount = process.env.LVT_DRIVE_ACCOUNT || 'bemiagent@gmail.com';
 const maxFileSize = 20 * 1024 * 1024;
 const acceptedExtensions = new Set(['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg']);
 const execFileAsync = promisify(execFile);
+const driveFileCache = new DriveFileCache({
+  directory: process.env.LVT_DRIVE_CACHE_PATH || path.join(projectRoot, '.runtime', 'drive-file-cache'),
+  ttlMs: Number(process.env.LVT_DRIVE_CACHE_TTL_MS) || DRIVE_CACHE_TTL_MS,
+  maxBytes: Number(process.env.LVT_DRIVE_CACHE_MAX_BYTES) || 10 * 1024 ** 3,
+});
+const driveDownloadSemaphore = new AsyncSemaphore(
+  Number(process.env.LVT_DRIVE_DOWNLOAD_CONCURRENCY) || 8,
+  Number(process.env.LVT_DRIVE_DOWNLOAD_QUEUE_MAX) || 500,
+);
 const uploadStages = new DriveUploadStages(
   process.env.LVT_DRIVE_UPLOAD_STATE_PATH
     || path.join(projectRoot, '.runtime', 'drive-upload-stages.json'),
@@ -77,13 +87,15 @@ function safeFileName(request) {
   }
 }
 
-function applyPrivateDownloadHeaders(response, fileName, size) {
+function applyPrivateDownloadHeaders(response, fileName, size, etag, cacheStatus) {
   const policy = downloadContentPolicy(fileName);
-  response.setHeader('Cache-Control', 'private, no-store');
+  response.setHeader('Cache-Control', 'private, max-age=86400, must-revalidate');
   response.setHeader('Content-Disposition', `${policy.disposition}; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-  response.setHeader('Content-Length', size);
+  if (Number.isFinite(size)) response.setHeader('Content-Length', size);
   response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
   response.setHeader('Content-Type', policy.mimeType);
+  response.setHeader('ETag', etag);
+  response.setHeader('X-Cache', cacheStatus);
 }
 
 function driveFolderId() {
@@ -321,76 +333,63 @@ async function uploadToDrive(request, response) {
   }
 }
 
+async function downloadDriveFile(destination, file, requestLabel) {
+  await driveDownloadSemaphore.run(() => retryDriveDownload(
+    async () => {
+      await rm(destination, { force: true });
+      await execFileAsync(
+        '/opt/homebrew/bin/gog',
+        [
+          'drive',
+          'download',
+          file.driveFileId,
+          '--account',
+          driveAccount,
+          '--out',
+          destination,
+          '--no-input',
+        ],
+        { maxBuffer: 1024 * 1024, timeout: 90_000 },
+      );
+    },
+    {
+      onRetry: (error, attempt) => console.warn('LVT Drive download transient failure; retrying', {
+        requestLabel,
+        attempt,
+        code: error instanceof Error ? error.message.split('\n')[0] : 'UNKNOWN',
+      }),
+    },
+  ));
+}
+
+async function serveAuthorizedDriveFile(request, response, file, requestLabel) {
+  const sourceIdentity = `${file.driveFileId}:${file.fileSize || ''}`;
+  const entry = await driveFileCache.getOrCreate(
+    sourceIdentity,
+    (destination) => downloadDriveFile(destination, file, requestLabel),
+  );
+  applyPrivateDownloadHeaders(response, file.fileName, entry.size, entry.etag, entry.cacheStatus);
+  response.setHeader('Vary', 'Authorization');
+  if (request.headers['if-none-match'] === entry.etag) {
+    response.removeHeader('Content-Length');
+    response.writeHead(304);
+    response.end();
+    return;
+  }
+  response.writeHead(200);
+  await pipeline(createReadStream(entry.path), response);
+}
+
 async function downloadPeopleReviewFile(request, response, kind, fileId) {
   const client = await authorizedClient(request);
   const file = await client.query(anyApi.peopleReview.authorizeFileDownload, { kind, fileId });
-  const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'lvt-drive-download-'));
-  const temporaryFile = path.join(temporaryDirectory, 'download.bin');
-
-  try {
-    await execFileAsync(
-      '/opt/homebrew/bin/gog',
-      [
-        'drive',
-        'download',
-        file.driveFileId,
-        '--account',
-        driveAccount,
-        '--out',
-        temporaryFile,
-        '--no-input',
-      ],
-      { maxBuffer: 1024 * 1024 },
-    );
-    const metadata = await stat(temporaryFile);
-    applyPrivateDownloadHeaders(response, file.fileName, metadata.size);
-    response.writeHead(200);
-    await pipeline(createReadStream(temporaryFile), response);
-  } finally {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  await serveAuthorizedDriveFile(request, response, file, `people-review:${kind}:${fileId}`);
 }
 
 async function downloadFromDrive(request, response, documentId) {
   const client = await authorizedClient(request);
   const file = await client.query(anyApi.work.authorizeFileDownload, { documentId });
-  const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'lvt-drive-download-'));
-  const temporaryFile = path.join(temporaryDirectory, 'download.bin');
-
-  try {
-    await retryDriveDownload(
-      async () => {
-        await rm(temporaryFile, { force: true });
-        await execFileAsync(
-          '/opt/homebrew/bin/gog',
-          [
-            'drive',
-            'download',
-            file.driveFileId,
-            '--account',
-            driveAccount,
-            '--out',
-            temporaryFile,
-            '--no-input',
-          ],
-          { maxBuffer: 1024 * 1024, timeout: 90_000 },
-        );
-      },
-      {
-        onRetry: (error, attempt) => console.warn('LVT Drive download transient failure; retrying', {
-          documentId,
-          attempt,
-          code: error instanceof Error ? error.message.split('\n')[0] : 'UNKNOWN',
-        }),
-      },
-    );
-    const metadata = await stat(temporaryFile);
-    applyPrivateDownloadHeaders(response, file.fileName, metadata.size);
-    response.writeHead(200);
-    await pipeline(createReadStream(temporaryFile), response);
-  } finally {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  await serveAuthorizedDriveFile(request, response, file, `work:${documentId}`);
 }
 
 async function existingFile(candidate) {
@@ -510,6 +509,12 @@ const server = createServer(async (request, response) => {
       response.end();
     }
   }
+});
+
+driveFileCache.prune().catch((error) => {
+  console.error('LVT Drive cache startup prune failed', {
+    code: error instanceof Error ? error.message : 'UNKNOWN',
+  });
 });
 
 server.listen(port, host, () => {
