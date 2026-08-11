@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { ConvexHttpClient } from 'convex/browser';
 import { anyApi } from 'convex/server';
 import { DriveUploadStages } from './lib/drive-upload-stages.mjs';
+import { retryDriveDownload } from './lib/drive-download-retry.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from './lib/file-content-policy.mjs';
 import { FileHttpError, classifyFileError } from './lib/file-http-errors.mjs';
 import { matchDriveMutationRoute } from './lib/file-route-policy.mjs';
@@ -357,19 +358,31 @@ async function downloadFromDrive(request, response, documentId) {
   const temporaryFile = path.join(temporaryDirectory, 'download.bin');
 
   try {
-    await execFileAsync(
-      '/opt/homebrew/bin/gog',
-      [
-        'drive',
-        'download',
-        file.driveFileId,
-        '--account',
-        driveAccount,
-        '--out',
-        temporaryFile,
-        '--no-input',
-      ],
-      { maxBuffer: 1024 * 1024 },
+    await retryDriveDownload(
+      async () => {
+        await rm(temporaryFile, { force: true });
+        await execFileAsync(
+          '/opt/homebrew/bin/gog',
+          [
+            'drive',
+            'download',
+            file.driveFileId,
+            '--account',
+            driveAccount,
+            '--out',
+            temporaryFile,
+            '--no-input',
+          ],
+          { maxBuffer: 1024 * 1024, timeout: 90_000 },
+        );
+      },
+      {
+        onRetry: (error, attempt) => console.warn('LVT Drive download transient failure; retrying', {
+          documentId,
+          attempt,
+          code: error instanceof Error ? error.message.split('\n')[0] : 'UNKNOWN',
+        }),
+      },
     );
     const metadata = await stat(temporaryFile);
     applyPrivateDownloadHeaders(response, file.fileName, metadata.size);

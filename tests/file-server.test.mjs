@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { DriveUploadStages } from '../scripts/lib/drive-upload-stages.mjs';
+import { isTransientDriveDownloadError, retryDriveDownload } from '../scripts/lib/drive-download-retry.mjs';
 import { FileHttpError, classifyFileError } from '../scripts/lib/file-http-errors.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from '../scripts/lib/file-content-policy.mjs';
 import { matchDriveMutationRoute } from '../scripts/lib/file-route-policy.mjs';
@@ -34,6 +35,31 @@ test('file errors preserve truthful authentication, validation, and infrastructu
   assert.equal(classifyFileError(new Error('WORK_FILE_FORBIDDEN')).status, 403);
   assert.equal(classifyFileError(new Error('drive unavailable')).status, 500);
   assert.equal(classifyFileError(new FileHttpError(502, 'DRIVE_DELETE_FAILED')).status, 502);
+  assert.equal(classifyFileError(new Error('context deadline exceeded')).status, 503);
+});
+
+test('Drive downloads retry bounded transient timeouts but not authorization failures', async () => {
+  assert.equal(isTransientDriveDownloadError(new Error('context deadline exceeded')), true);
+  assert.equal(isTransientDriveDownloadError(new Error('WORK_FILE_FORBIDDEN')), false);
+
+  let calls = 0;
+  const result = await retryDriveDownload(async () => {
+    calls += 1;
+    if (calls < 3) throw new Error('Client.Timeout exceeded while awaiting headers');
+    return 'downloaded';
+  }, { delays: [0, 0], sleep: async () => {} });
+  assert.equal(result, 'downloaded');
+  assert.equal(calls, 3);
+
+  calls = 0;
+  await assert.rejects(
+    retryDriveDownload(async () => {
+      calls += 1;
+      throw new Error('WORK_FILE_FORBIDDEN');
+    }, { sleep: async () => {} }),
+    /WORK_FILE_FORBIDDEN/,
+  );
+  assert.equal(calls, 1);
 });
 
 test('upload and download MIME policy ignores a spoofed request or stored content type', () => {

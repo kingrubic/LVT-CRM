@@ -247,8 +247,11 @@ final class WorkRepository: Sendable {
         } else {
             throw ConvexException(code: "WORK_FILE_UNAVAILABLE", message: "Tệp công văn chưa sẵn sàng để mở.")
         }
-        request.timeoutInterval = 60
-        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
+        request.timeoutInterval = 180
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 180
+        configuration.timeoutIntervalForResource = 240
+        let (temporaryURL, response) = try await URLSession(configuration: configuration).download(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw ConvexException(code: "WORK_FILE_DOWNLOAD_FAILED", message: "Không thể tải tệp công văn. Hãy thử lại.")
         }
