@@ -65,8 +65,10 @@ final class RootTabBarController: UITabBarController {
             systemImage: "briefcase",
             viewController: dutiesViewController
         )
+        let repository = workRepository
         let workViewController = WorkViewController(
-            viewModel: WorkViewModel(repository: workRepository)
+            viewModel: WorkViewModel(repository: repository),
+            downloadDocument: { document in try await repository.downloadDocument(document) }
         )
         let work = navigationController(
             title: "Công việc",

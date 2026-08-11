@@ -42,6 +42,8 @@ struct WorkCompletionReviewItem: Identifiable, Equatable, Sendable {
 struct WorkApprovalItem: Identifiable, Equatable, Sendable {
     let id: String
     let fileName: String
+    let fileURL: String
+    let privateFile: Bool
     let content: String
     let deadline: String
     let status: String
@@ -87,9 +89,11 @@ enum WorkHelpers {
 
 final class WorkRepository: Sendable {
     private let convex: ConvexHttpClient
+    private let tokenProvider: @Sendable () -> String?
 
-    init(convex: ConvexHttpClient) {
+    init(convex: ConvexHttpClient, tokenProvider: @escaping @Sendable () -> String?) {
         self.convex = convex
+        self.tokenProvider = tokenProvider
     }
 
     func listMine() async throws -> WorkSnapshot {
@@ -107,6 +111,8 @@ final class WorkRepository: Sendable {
                 WorkApprovalItem(
                     id: (document["_id"] as? String) ?? "",
                     fileName: (document["fileName"] as? String) ?? "",
+                    fileURL: (document["fileUrl"] as? String) ?? "",
+                    privateFile: (document["privateFile"] as? Bool) ?? false,
                     content: (document["content"] as? String) ?? "",
                     deadline: (document["deadline"] as? String) ?? "",
                     status: (document["status"] as? String) ?? "",
@@ -124,6 +130,8 @@ final class WorkRepository: Sendable {
                 WorkApprovalItem(
                     id: (document["_id"] as? String) ?? "",
                     fileName: (document["fileName"] as? String) ?? "",
+                    fileURL: (document["fileUrl"] as? String) ?? "",
+                    privateFile: (document["privateFile"] as? Bool) ?? false,
                     content: (document["content"] as? String) ?? "",
                     deadline: (document["deadline"] as? String) ?? "",
                     status: (document["status"] as? String) ?? "",
@@ -221,6 +229,38 @@ final class WorkRepository: Sendable {
         if let qualityPercent { args["qualityPercent"] = qualityPercent }
         if let rejectionReason, !rejectionReason.isEmpty { args["rejectionReason"] = rejectionReason }
         _ = try await convex.mutation("work:reviewWorkCompletion", args: args)
+    }
+
+    func downloadDocument(_ document: WorkApprovalItem) async throws -> URL {
+        let sourceURL: URL
+        var request: URLRequest
+        if !document.fileURL.isEmpty, let url = URL(string: document.fileURL) {
+            sourceURL = url
+            request = URLRequest(url: url)
+        } else if document.privateFile,
+                  let encodedId = document.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let url = URL(string: "\(ConvexConfig.webURL)/api/files/\(encodedId)"),
+                  let token = tokenProvider(), !token.isEmpty {
+            sourceURL = url
+            request = URLRequest(url: url)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            throw ConvexException(code: "WORK_FILE_UNAVAILABLE", message: "Tệp công văn chưa sẵn sàng để mở.")
+        }
+        request.timeoutInterval = 60
+        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw ConvexException(code: "WORK_FILE_DOWNLOAD_FAILED", message: "Không thể tải tệp công văn. Hãy thử lại.")
+        }
+        let safeName = document.fileName
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let fallbackName = sourceURL.lastPathComponent.isEmpty ? "cong-van" : sourceURL.lastPathComponent
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lvt-work-\(document.id)-\(safeName.isEmpty ? fallbackName : safeName)")
+        try? FileManager.default.removeItem(at: destination)
+        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        return destination
     }
 
     private func parseAssignments(_ items: [[String: Any]]?) -> [WorkDocumentAssignment] {

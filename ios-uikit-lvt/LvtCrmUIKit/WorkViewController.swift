@@ -1,4 +1,5 @@
 import UIKit
+import QuickLook
 
 @MainActor
 final class WorkViewController: UITableViewController {
@@ -13,10 +14,15 @@ final class WorkViewController: UITableViewController {
     }
 
     private let viewModel: WorkViewModel
+    private let downloadDocument: (WorkApprovalItem) async throws -> URL
     private var pendingFocusId: String?
 
-    init(viewModel: WorkViewModel) {
+    init(
+        viewModel: WorkViewModel,
+        downloadDocument: @escaping (WorkApprovalItem) async throws -> URL
+    ) {
         self.viewModel = viewModel
+        self.downloadDocument = downloadDocument
         super.init(style: .insetGrouped)
         title = "Công việc"
     }
@@ -310,7 +316,10 @@ final class WorkViewController: UITableViewController {
     }
 
     private func showDocument(_ item: WorkApprovalItem) {
-        navigationController?.pushViewController(WorkDocumentViewController(document: item), animated: !UIAccessibility.isReduceMotionEnabled)
+        navigationController?.pushViewController(
+            WorkDocumentViewController(document: item, downloadDocument: downloadDocument),
+            animated: !UIAccessibility.isReduceMotionEnabled
+        )
     }
 
     private func showTask(_ item: WorkTaskItem) {
@@ -614,12 +623,19 @@ private final class WorkTaskDetailViewController: UIViewController {
     }
 }
 
-private final class WorkDocumentViewController: UITableViewController {
+private final class WorkDocumentViewController: UITableViewController, QLPreviewControllerDataSource {
     private let document: WorkApprovalItem
+    private let downloadDocument: (WorkApprovalItem) async throws -> URL
     private let groupedAssignments: [(String, [WorkDocumentAssignment])]
+    private var previewURL: URL?
+    private var openingFile = false
 
-    init(document: WorkApprovalItem) {
+    init(
+        document: WorkApprovalItem,
+        downloadDocument: @escaping (WorkApprovalItem) async throws -> URL
+    ) {
         self.document = document
+        self.downloadDocument = downloadDocument
         groupedAssignments = Dictionary(grouping: document.assignments, by: \.departmentName)
             .map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
         super.init(style: .insetGrouped)
@@ -649,6 +665,10 @@ private final class WorkDocumentViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "DocumentCell", for: indexPath)
         cell.selectionStyle = .none
+        cell.accessoryType = .none
+        cell.accessoryView = nil
+        cell.accessibilityTraits.remove(.button)
+        cell.accessibilityHint = nil
         var content = cell.defaultContentConfiguration()
         content.textProperties.numberOfLines = 0
         content.secondaryTextProperties.numberOfLines = 0
@@ -657,6 +677,12 @@ private final class WorkDocumentViewController: UITableViewController {
             let body = document.fileName.isEmpty ? "" : document.content
             content.secondaryText = [body, "Hạn: \(document.deadline)", "Phê duyệt: \(document.approvalCount)/\(document.approvalTotal)"].filter { !$0.isEmpty }.joined(separator: "\n")
             content.image = UIImage(systemName: document.fileName.isEmpty ? "doc.text" : "doc")
+            if !document.fileName.isEmpty {
+                cell.selectionStyle = .default
+                cell.accessoryType = .disclosureIndicator
+                cell.accessibilityTraits.insert(.button)
+                cell.accessibilityHint = "Mở tệp công văn"
+            }
         } else {
             let assignment = groupedAssignments[indexPath.section - 1].1[indexPath.row]
             content.text = assignment.content
@@ -668,6 +694,44 @@ private final class WorkDocumentViewController: UITableViewController {
         cell.contentConfiguration = content
         cell.accessibilityLabel = [content.text, content.secondaryText].compactMap { $0 }.joined(separator: ". ")
         return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard indexPath.section == 0, !document.fileName.isEmpty, !openingFile else { return }
+        openingFile = true
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.startAnimating()
+        tableView.cellForRow(at: indexPath)?.accessoryView = spinner
+        Task { [weak self] in
+            guard let self else { return }
+            defer {
+                openingFile = false
+                tableView.reloadRows(at: [indexPath], with: .none)
+            }
+            do {
+                previewURL = try await downloadDocument(document)
+                let preview = QLPreviewController()
+                preview.dataSource = self
+                present(preview, animated: !UIAccessibility.isReduceMotionEnabled)
+            } catch {
+                let alert = UIAlertController(
+                    title: "Không thể mở công văn",
+                    message: (error as? LocalizedError)?.errorDescription ?? "Hãy thử lại hoặc đăng nhập lại.",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "Đóng", style: .default))
+                present(alert, animated: true)
+            }
+        }
+    }
+
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+        previewURL == nil ? 0 : 1
+    }
+
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        previewURL! as NSURL
     }
 }
 
