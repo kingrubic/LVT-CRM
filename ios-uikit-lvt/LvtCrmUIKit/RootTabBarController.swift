@@ -140,9 +140,22 @@ private final class DashboardViewController: UIViewController {
     private let workRepository: WorkRepository
     private let onOpenDuties: () -> Void
     private let onOpenWork: () -> Void
-    private let dutiesCard = DashboardCard(title: "Công tác", icon: "briefcase.fill", tint: .systemBlue)
-    private let workCard = DashboardCard(title: "Công việc", icon: "checkmark.seal.fill", tint: .systemGreen)
-    private let statusLabel = UILabel()
+    private let dutiesCard = DashboardCard(
+        title: "Công tác",
+        subtitle: "Lịch điều phối",
+        icon: "briefcase.fill",
+        tint: DashboardPalette.dutiesAccent
+    )
+    private let workCard = DashboardCard(
+        title: "Công việc",
+        subtitle: "Tiến độ vận hành",
+        icon: "checkmark.seal.fill",
+        tint: DashboardPalette.workAccent
+    )
+    private let synchronizationView = DashboardSynchronizationView()
+    private let refreshButton = UIButton(type: .system)
+    private let headerRow = UIStackView()
+    private let refreshControl = UIRefreshControl()
     private var refreshTask: Task<Void, Never>?
 
     init(
@@ -166,56 +179,107 @@ private final class DashboardViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemGroupedBackground
+        navigationItem.largeTitleDisplayMode = .always
         configureView()
-        refresh()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (controller: DashboardViewController, _) in
+            controller.applyAppearance()
+        }
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (controller: DashboardViewController, _) in
+            controller.updateResponsiveLayout()
+        }
+        applyAppearance()
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        applyAppearance()
         refresh()
     }
 
     private func configureView() {
         let scrollView = UIScrollView()
         let stack = UIStackView()
-        let subtitle = UILabel()
-        let refreshButton = UIButton(type: .system)
+        let eyebrowLabel = UILabel()
+        let subtitleLabel = UILabel()
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.refreshControl = refreshControl
+        refreshControl.tintColor = DashboardPalette.primaryText
+        refreshControl.accessibilityLabel = "Làm mới tổng quan"
+        refreshControl.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .valueChanged)
+
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical
-        stack.spacing = 16
+        stack.spacing = 20
         stack.isLayoutMarginsRelativeArrangement = true
-        stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 20, leading: 20, bottom: 28, trailing: 20)
+        stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 24, leading: 20, bottom: 36, trailing: 20)
 
-        subtitle.text = "Tóm tắt công việc của bạn"
-        subtitle.font = .preferredFont(forTextStyle: .subheadline)
-        subtitle.textColor = .secondaryLabel
-        subtitle.adjustsFontForContentSizeCategory = true
+        eyebrowLabel.text = "TRUNG TÂM ĐIỀU HÀNH"
+        eyebrowLabel.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(
+            for: .systemFont(ofSize: 12, weight: .semibold),
+            maximumPointSize: 18
+        )
+        eyebrowLabel.adjustsFontForContentSizeCategory = true
+        eyebrowLabel.textColor = DashboardPalette.dutiesAccent
+        eyebrowLabel.numberOfLines = 0
+        eyebrowLabel.accessibilityTraits = .header
 
-        refreshButton.setTitle("Làm mới", for: .normal)
-        refreshButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        subtitleLabel.text = "Theo dõi những nội dung cần bạn xử lý."
+        subtitleLabel.font = .preferredFont(forTextStyle: .subheadline)
+        subtitleLabel.textColor = DashboardPalette.secondaryText
+        subtitleLabel.adjustsFontForContentSizeCategory = true
+        subtitleLabel.numberOfLines = 0
+        subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        var buttonConfiguration = UIButton.Configuration.tinted()
+        buttonConfiguration.title = "Làm mới"
+        buttonConfiguration.image = UIImage(systemName: "arrow.clockwise")
+        buttonConfiguration.imagePadding = 7
+        buttonConfiguration.cornerStyle = .capsule
+        buttonConfiguration.baseForegroundColor = DashboardPalette.dutiesAccent
+        buttonConfiguration.baseBackgroundColor = DashboardPalette.dutiesAccent.withAlphaComponent(0.16)
+        buttonConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = .preferredFont(forTextStyle: .subheadline)
+            return attributes
+        }
+        refreshButton.configuration = buttonConfiguration
         refreshButton.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .touchUpInside)
         refreshButton.accessibilityLabel = "Làm mới tổng quan"
+        refreshButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        let header = UIStackView(arrangedSubviews: [subtitle, UIView(), refreshButton])
-        header.alignment = .center
-        stack.addArrangedSubview(header)
+        headerRow.addArrangedSubview(subtitleLabel)
+        headerRow.addArrangedSubview(UIView())
+        headerRow.addArrangedSubview(refreshButton)
+        headerRow.spacing = 12
+
+        stack.addArrangedSubview(eyebrowLabel)
+        stack.setCustomSpacing(8, after: eyebrowLabel)
+        stack.addArrangedSubview(headerRow)
+        stack.setCustomSpacing(28, after: headerRow)
         stack.addArrangedSubview(dutiesCard)
         stack.addArrangedSubview(workCard)
-        stack.addArrangedSubview(statusLabel)
+        stack.setCustomSpacing(24, after: workCard)
+        stack.addArrangedSubview(synchronizationView)
         scrollView.addSubview(stack)
         view.addSubview(scrollView)
 
         dutiesCard.addAction(UIAction { [weak self] _ in self?.onOpenDuties() }, for: .touchUpInside)
         workCard.addAction(UIAction { [weak self] _ in self?.onOpenWork() }, for: .touchUpInside)
 
-        statusLabel.font = .preferredFont(forTextStyle: .footnote)
-        statusLabel.textColor = .secondaryLabel
-        statusLabel.numberOfLines = 0
-        statusLabel.textAlignment = .center
-        statusLabel.adjustsFontForContentSizeCategory = true
+        updateResponsiveLayout()
+        synchronizationView.setLoading()
+
+        let readableLeading = stack.leadingAnchor.constraint(
+            greaterThanOrEqualTo: view.readableContentGuide.leadingAnchor
+        )
+        readableLeading.priority = .defaultHigh
+        let readableTrailing = stack.trailingAnchor.constraint(
+            lessThanOrEqualTo: view.readableContentGuide.trailingAnchor
+        )
+        readableTrailing.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -227,19 +291,48 @@ private final class DashboardViewController: UIViewController {
             stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-            dutiesCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 150),
-            workCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 150),
+            readableLeading,
+            readableTrailing,
+            dutiesCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 224),
+            workCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 224),
         ])
     }
 
+    private func updateResponsiveLayout() {
+        let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        headerRow.axis = usesAccessibilityLayout ? .vertical : .horizontal
+        headerRow.alignment = usesAccessibilityLayout ? .leading : .center
+        dutiesCard.setUsesAccessibilityLayout(usesAccessibilityLayout)
+        workCard.setUsesAccessibilityLayout(usesAccessibilityLayout)
+    }
+
+    private func applyAppearance() {
+        view.backgroundColor = DashboardPalette.canvas
+        guard let navigationBar = navigationController?.navigationBar else { return }
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = DashboardPalette.canvas
+        appearance.shadowColor = .clear
+        appearance.titleTextAttributes = [.foregroundColor: DashboardPalette.primaryText]
+        appearance.largeTitleTextAttributes = [.foregroundColor: DashboardPalette.primaryText]
+        navigationBar.standardAppearance = appearance
+        navigationBar.scrollEdgeAppearance = appearance
+        navigationBar.compactAppearance = appearance
+        navigationBar.tintColor = DashboardPalette.dutiesAccent
+    }
+
     private func refresh() {
-        statusLabel.text = "Đang tải dữ liệu…"
-        statusLabel.accessibilityLabel = "Đang tải dữ liệu tổng quan"
+        refreshButton.isEnabled = false
+        synchronizationView.setLoading()
         dutiesCard.setLoading()
         workCard.setLoading()
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
             guard let self else { return }
+            defer {
+                refreshButton.isEnabled = true
+                refreshControl.endRefreshing()
+            }
             do {
                 async let duties = dutiesRepository.listMine()
                 async let work = workRepository.listMine()
@@ -262,127 +355,540 @@ private final class DashboardViewController: UIViewController {
                     secondaryTitle: "Cần thực hiện",
                     secondaryValue: String(pendingExecution)
                 )
-                statusLabel.text = "Cập nhật theo dữ liệu mới nhất"
-                statusLabel.accessibilityLabel = "Tổng quan đã cập nhật"
+                synchronizationView.setSynchronized()
             } catch is CancellationError {
                 return
             } catch {
                 dutiesCard.setError()
                 workCard.setError()
-                statusLabel.text = "Chưa tải được tổng quan. Chạm Làm mới để thử lại."
-                statusLabel.accessibilityLabel = "Chưa tải được tổng quan. Chạm Làm mới để thử lại."
+                synchronizationView.setError()
             }
         }
     }
 }
 
-private final class DashboardCard: UIControl {
-    private let titleLabel = UILabel()
-    private let iconView = UIImageView()
-    private let primaryValueLabel = UILabel()
-    private let primaryTitleLabel = UILabel()
-    private let secondaryValueLabel = UILabel()
-    private let secondaryTitleLabel = UILabel()
-    private let arrowView = UIImageView(image: UIImage(systemName: "chevron.right"))
-    private let tint: UIColor
-    private let contentStack = UIStackView()
+private enum DashboardPalette {
+    static let dutiesAccent = UIColor(red: 0.24, green: 0.58, blue: 1.00, alpha: 1)
+    static let workAccent = UIColor(red: 0.23, green: 0.78, blue: 0.52, alpha: 1)
 
-    init(title: String, icon: String, tint: UIColor) {
+    static let canvas = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.025, green: 0.055, blue: 0.105, alpha: 1)
+            : UIColor(red: 0.945, green: 0.965, blue: 0.985, alpha: 1)
+    }
+
+    static let cardStart = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.070, green: 0.115, blue: 0.180, alpha: 1)
+            : .white
+    }
+
+    static let cardEnd = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.045, green: 0.080, blue: 0.135, alpha: 1)
+            : UIColor(red: 0.925, green: 0.950, blue: 0.975, alpha: 1)
+    }
+
+    static let panelStart = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.060, green: 0.095, blue: 0.150, alpha: 1)
+            : UIColor(red: 0.975, green: 0.985, blue: 0.995, alpha: 1)
+    }
+
+    static let panelEnd = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.040, green: 0.068, blue: 0.115, alpha: 1)
+            : UIColor(red: 0.920, green: 0.945, blue: 0.970, alpha: 1)
+    }
+
+    static let primaryText = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.955, green: 0.975, blue: 1.000, alpha: 1)
+            : UIColor(red: 0.045, green: 0.085, blue: 0.145, alpha: 1)
+    }
+
+    static let secondaryText = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.630, green: 0.695, blue: 0.785, alpha: 1)
+            : UIColor(red: 0.310, green: 0.385, blue: 0.475, alpha: 1)
+    }
+
+    static let cardBorder = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor.white.withAlphaComponent(0.09)
+            : UIColor(red: 0.090, green: 0.180, blue: 0.300, alpha: 0.11)
+    }
+}
+
+private final class DashboardCard: UIControl {
+    private let tint: UIColor
+    private let backgroundView = DashboardGradientView(
+        colors: { [DashboardPalette.cardStart.resolvedColor(with: $0), DashboardPalette.cardEnd.resolvedColor(with: $0)] },
+        startPoint: CGPoint(x: 0, y: 0),
+        endPoint: CGPoint(x: 1, y: 1)
+    )
+    private let accentView: DashboardGradientView
+    private let iconTile: DashboardIconTile
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let primaryMetric: DashboardMetricView
+    private let secondaryMetric: DashboardMetricView
+    private let metricsStack = UIStackView()
+    private let arrowView = UIImageView(image: UIImage(systemName: "chevron.right"))
+
+    init(title: String, subtitle: String, icon: String, tint: UIColor) {
         self.tint = tint
+        self.accentView = DashboardGradientView(
+            colors: { _ in [tint, tint.withAlphaComponent(0.08)] },
+            startPoint: CGPoint(x: 0, y: 0.5),
+            endPoint: CGPoint(x: 1, y: 0.5)
+        )
+        self.iconTile = DashboardIconTile(icon: icon, tint: tint)
+        self.primaryMetric = DashboardMetricView(tint: tint)
+        self.secondaryMetric = DashboardMetricView(tint: tint)
         super.init(frame: .zero)
-        backgroundColor = .secondarySystemGroupedBackground
-        layer.cornerRadius = 18
-        layer.cornerCurve = .continuous
+        accessibilityLabel = title
         accessibilityTraits = [.button]
         accessibilityHint = "Mở danh sách \(title.lowercased())"
-        configure(title: title, icon: icon)
+        configure(title: title, subtitle: subtitle)
+        setLoading()
+        applyColors()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override var isHighlighted: Bool {
-        didSet { alpha = isHighlighted ? 0.7 : 1.0 }
+        didSet {
+            UIView.animate(withDuration: 0.16) {
+                self.transform = self.isHighlighted ? CGAffineTransform(scaleX: 0.985, y: 0.985) : .identity
+                self.alpha = self.isHighlighted ? 0.86 : 1
+            }
+        }
+    }
+
+    func setUsesAccessibilityLayout(_ enabled: Bool) {
+        metricsStack.axis = enabled ? .vertical : .horizontal
+        metricsStack.distribution = enabled ? .fill : .fillEqually
+        primaryMetric.setUsesAccessibilityLayout(enabled)
+        secondaryMetric.setUsesAccessibilityLayout(enabled)
     }
 
     func setLoading() {
-        primaryValueLabel.text = "—"
-        secondaryValueLabel.text = "—"
-        primaryTitleLabel.text = "Đang tải"
-        secondaryTitleLabel.text = "Đang tải"
+        primaryMetric.setLoading(title: "Sắp cập nhật")
+        secondaryMetric.setLoading(title: "Sắp cập nhật")
         accessibilityValue = "Đang tải"
     }
 
     func setError() {
-        primaryValueLabel.text = "—"
-        secondaryValueLabel.text = "—"
-        primaryTitleLabel.text = "Chưa tải được"
-        secondaryTitleLabel.text = "Chạm để mở"
+        primaryMetric.setError(title: "Chưa tải được")
+        secondaryMetric.setError(title: "Chạm để mở")
         accessibilityValue = "Chưa tải được dữ liệu"
     }
 
     func setValues(primaryTitle: String, primaryValue: String, secondaryTitle: String, secondaryValue: String) {
-        primaryValueLabel.text = primaryValue
-        primaryTitleLabel.text = primaryTitle
-        secondaryValueLabel.text = secondaryValue
-        secondaryTitleLabel.text = secondaryTitle
-        accessibilityLabel = "\(titleLabel.text ?? "Thẻ")"
+        primaryMetric.setValue(primaryValue, title: primaryTitle)
+        secondaryMetric.setValue(secondaryValue, title: secondaryTitle)
         accessibilityValue = "\(primaryTitle) \(primaryValue), \(secondaryTitle) \(secondaryValue)"
     }
 
-    private func configure(title: String, icon: String) {
-        titleLabel.text = title
-        titleLabel.font = .preferredFont(forTextStyle: .title3)
-        titleLabel.adjustsFontForContentSizeCategory = true
-        iconView.image = UIImage(systemName: icon)
-        iconView.tintColor = tint
-        iconView.contentMode = .scaleAspectFit
-        arrowView.tintColor = .tertiaryLabel
+    private func configure(title: String, subtitle: String) {
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.22
+        layer.shadowRadius = 22
+        layer.shadowOffset = CGSize(width: 0, height: 12)
 
-        let titleRow = UIStackView(arrangedSubviews: [iconView, titleLabel, UIView(), arrowView])
-        titleRow.axis = .horizontal
-        titleRow.alignment = .center
-        titleRow.spacing = 10
-        iconView.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        iconView.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        backgroundView.layer.cornerRadius = 24
+        backgroundView.layer.cornerCurve = .continuous
+        backgroundView.clipsToBounds = true
+        backgroundView.isUserInteractionEnabled = false
+        addSubview(backgroundView)
+
+        accentView.translatesAutoresizingMaskIntoConstraints = false
+        accentView.layer.cornerRadius = 1.5
+        accentView.isUserInteractionEnabled = false
+        addSubview(accentView)
+
+        titleLabel.text = title
+        titleLabel.font = .preferredFont(forTextStyle: .title2)
+        titleLabel.textColor = DashboardPalette.primaryText
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.numberOfLines = 0
+
+        subtitleLabel.text = subtitle.uppercased()
+        subtitleLabel.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(
+            for: .systemFont(ofSize: 11, weight: .semibold),
+            maximumPointSize: 16
+        )
+        subtitleLabel.textColor = DashboardPalette.secondaryText
+        subtitleLabel.adjustsFontForContentSizeCategory = true
+        subtitleLabel.numberOfLines = 0
+
+        let headingStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        headingStack.axis = .vertical
+        headingStack.spacing = 3
+
+        arrowView.tintColor = DashboardPalette.secondaryText
+        arrowView.contentMode = .scaleAspectFit
+        arrowView.setContentCompressionResistancePriority(.required, for: .horizontal)
         arrowView.widthAnchor.constraint(equalToConstant: 14).isActive = true
 
-        for label in [primaryValueLabel, secondaryValueLabel] {
-            label.font = .preferredFont(forTextStyle: .largeTitle)
-            label.adjustsFontForContentSizeCategory = true
-            label.textColor = tint
-        }
-        for label in [primaryTitleLabel, secondaryTitleLabel] {
-            label.font = .preferredFont(forTextStyle: .footnote)
-            label.textColor = .secondaryLabel
-            label.adjustsFontForContentSizeCategory = true
-        }
+        let titleRow = UIStackView(arrangedSubviews: [iconTile, headingStack, UIView(), arrowView])
+        titleRow.axis = .horizontal
+        titleRow.alignment = .center
+        titleRow.spacing = 14
 
-        let primary = UIStackView(arrangedSubviews: [primaryValueLabel, primaryTitleLabel])
-        let secondary = UIStackView(arrangedSubviews: [secondaryValueLabel, secondaryTitleLabel])
-        primary.alignment = .leading
-        secondary.alignment = .leading
-        primary.spacing = 2
-        secondary.spacing = 2
-        let metrics = UIStackView(arrangedSubviews: [primary, secondary])
-        metrics.axis = .horizontal
-        metrics.distribution = .fillEqually
-        metrics.spacing = 12
+        metricsStack.addArrangedSubview(primaryMetric)
+        metricsStack.addArrangedSubview(secondaryMetric)
+        metricsStack.axis = .horizontal
+        metricsStack.distribution = .fillEqually
+        metricsStack.alignment = .fill
+        metricsStack.spacing = 16
 
-        contentStack.axis = .vertical
-        contentStack.spacing = 16
-        contentStack.isLayoutMarginsRelativeArrangement = true
-        contentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18)
-        contentStack.addArrangedSubview(titleRow)
-        contentStack.addArrangedSubview(metrics)
+        let contentStack = UIStackView(arrangedSubviews: [titleRow, metricsStack])
         contentStack.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.axis = .vertical
+        contentStack.spacing = 24
         addSubview(contentStack)
+
         NSLayoutConstraint.activate([
-            contentStack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            contentStack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            contentStack.topAnchor.constraint(equalTo: topAnchor),
-            contentStack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            backgroundView.topAnchor.constraint(equalTo: topAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            accentView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
+            accentView.topAnchor.constraint(equalTo: topAnchor),
+            accentView.widthAnchor.constraint(equalToConstant: 116),
+            accentView.heightAnchor.constraint(equalToConstant: 3),
+            contentStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            contentStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
+            contentStack.topAnchor.constraint(equalTo: topAnchor, constant: 22),
+            contentStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -22),
         ])
+    }
+
+    private func applyColors() {
+        backgroundView.layer.borderWidth = 1
+        backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traitCollection).cgColor
+        titleLabel.textColor = DashboardPalette.primaryText
+        subtitleLabel.textColor = DashboardPalette.secondaryText
+        arrowView.tintColor = DashboardPalette.secondaryText
+        layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.12
+    }
+}
+
+private final class DashboardMetricView: UIView {
+    private let tint: UIColor
+    private let circleView = UIView()
+    private let valueLabel = UILabel()
+    private let titleLabel = UILabel()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let stack = UIStackView()
+
+    init(tint: UIColor) {
+        self.tint = tint
+        super.init(frame: .zero)
+        isAccessibilityElement = false
+        configure()
+        applyColors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func setUsesAccessibilityLayout(_ enabled: Bool) {
+        stack.axis = enabled ? .horizontal : .vertical
+        stack.alignment = .center
+        titleLabel.textAlignment = enabled ? .left : .center
+    }
+
+    func setLoading(title: String) {
+        valueLabel.isHidden = true
+        spinner.startAnimating()
+        titleLabel.text = title
+    }
+
+    func setError(title: String) {
+        spinner.stopAnimating()
+        valueLabel.isHidden = false
+        valueLabel.text = "!"
+        titleLabel.text = title
+    }
+
+    func setValue(_ value: String, title: String) {
+        spinner.stopAnimating()
+        valueLabel.isHidden = false
+        valueLabel.text = value
+        titleLabel.text = title
+    }
+
+    private func configure() {
+        circleView.translatesAutoresizingMaskIntoConstraints = false
+        circleView.layer.cornerRadius = 38
+        circleView.layer.cornerCurve = .continuous
+        circleView.layer.borderWidth = 1.5
+
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+        valueLabel.font = UIFontMetrics(forTextStyle: .title1).scaledFont(
+            for: .systemFont(ofSize: 32, weight: .bold),
+            maximumPointSize: 38
+        )
+        valueLabel.textAlignment = .center
+        valueLabel.adjustsFontForContentSizeCategory = true
+        valueLabel.adjustsFontSizeToFitWidth = true
+        valueLabel.minimumScaleFactor = 0.62
+
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.color = tint
+        circleView.addSubview(valueLabel)
+        circleView.addSubview(spinner)
+
+        titleLabel.font = .preferredFont(forTextStyle: .footnote)
+        titleLabel.textColor = DashboardPalette.secondaryText
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.numberOfLines = 0
+        titleLabel.textAlignment = .center
+
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 10
+        stack.addArrangedSubview(circleView)
+        stack.addArrangedSubview(titleLabel)
+        addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            circleView.widthAnchor.constraint(equalToConstant: 76),
+            circleView.heightAnchor.constraint(equalToConstant: 76),
+            valueLabel.leadingAnchor.constraint(equalTo: circleView.leadingAnchor, constant: 8),
+            valueLabel.trailingAnchor.constraint(equalTo: circleView.trailingAnchor, constant: -8),
+            valueLabel.centerYAnchor.constraint(equalTo: circleView.centerYAnchor),
+            spinner.centerXAnchor.constraint(equalTo: circleView.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: circleView.centerYAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    private func applyColors() {
+        circleView.backgroundColor = tint.withAlphaComponent(
+            traitCollection.userInterfaceStyle == .dark ? 0.11 : 0.09
+        )
+        circleView.layer.borderColor = tint.withAlphaComponent(0.42).cgColor
+        valueLabel.textColor = DashboardPalette.primaryText
+        titleLabel.textColor = DashboardPalette.secondaryText
+    }
+}
+
+private final class DashboardIconTile: UIView {
+    private let tint: UIColor
+    private let gradientLayer = CAGradientLayer()
+    private let iconView = UIImageView()
+
+    init(icon: String, tint: UIColor) {
+        self.tint = tint
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        layer.cornerRadius = 17
+        layer.cornerCurve = .continuous
+        layer.shadowColor = tint.cgColor
+        layer.shadowOpacity = 0.25
+        layer.shadowRadius = 16
+        layer.shadowOffset = .zero
+
+        gradientLayer.cornerRadius = 17
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+        layer.insertSublayer(gradientLayer, at: 0)
+
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.image = UIImage(systemName: icon)
+        iconView.tintColor = .white
+        iconView.contentMode = .scaleAspectFit
+        addSubview(iconView)
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 56),
+            heightAnchor.constraint(equalToConstant: 56),
+            iconView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 27),
+            iconView.heightAnchor.constraint(equalToConstant: 27),
+        ])
+        applyColors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
+    }
+
+    private func applyColors() {
+        gradientLayer.colors = [
+            tint.resolvedColor(with: traitCollection).cgColor,
+            tint.withAlphaComponent(0.55).resolvedColor(with: traitCollection).cgColor,
+        ]
+        layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.18
+    }
+}
+
+private final class DashboardSynchronizationView: UIView {
+    private let backgroundView = DashboardGradientView(
+        colors: { [DashboardPalette.panelStart.resolvedColor(with: $0), DashboardPalette.panelEnd.resolvedColor(with: $0)] },
+        startPoint: CGPoint(x: 0, y: 0),
+        endPoint: CGPoint(x: 1, y: 1)
+    )
+    private let symbolContainer = UIView()
+    private let symbolView = UIImageView()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let detailLabel = UILabel()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        configure()
+        applyColors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func setLoading() {
+        symbolView.isHidden = true
+        spinner.startAnimating()
+        detailLabel.text = "Đang lấy dữ liệu mới nhất…"
+        accessibilityLabel = "Đồng bộ dữ liệu. Đang lấy dữ liệu mới nhất."
+        accessibilityTraits = [.staticText, .updatesFrequently]
+    }
+
+    func setSynchronized() {
+        spinner.stopAnimating()
+        symbolView.isHidden = false
+        symbolView.image = UIImage(systemName: "checkmark")
+        symbolView.tintColor = DashboardPalette.workAccent
+        detailLabel.text = "Dữ liệu đang hiển thị đã được cập nhật."
+        accessibilityLabel = "Đồng bộ dữ liệu. Dữ liệu đang hiển thị đã được cập nhật."
+        accessibilityTraits = .staticText
+    }
+
+    func setError() {
+        spinner.stopAnimating()
+        symbolView.isHidden = false
+        symbolView.image = UIImage(systemName: "exclamationmark")
+        symbolView.tintColor = .systemOrange
+        detailLabel.text = "Chưa thể đồng bộ. Chạm Làm mới để thử lại."
+        accessibilityLabel = "Đồng bộ dữ liệu. Chưa thể đồng bộ. Chạm Làm mới để thử lại."
+        accessibilityTraits = .staticText
+    }
+
+    private func configure() {
+        isAccessibilityElement = true
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.10
+        layer.shadowRadius = 12
+        layer.shadowOffset = CGSize(width: 0, height: 6)
+
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        backgroundView.layer.cornerRadius = 18
+        backgroundView.layer.cornerCurve = .continuous
+        backgroundView.clipsToBounds = true
+        addSubview(backgroundView)
+
+        symbolContainer.translatesAutoresizingMaskIntoConstraints = false
+        symbolContainer.layer.cornerRadius = 18
+        symbolContainer.layer.cornerCurve = .continuous
+
+        symbolView.translatesAutoresizingMaskIntoConstraints = false
+        symbolView.contentMode = .scaleAspectFit
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.color = DashboardPalette.dutiesAccent
+        symbolContainer.addSubview(symbolView)
+        symbolContainer.addSubview(spinner)
+
+        let titleLabel = UILabel()
+        titleLabel.text = "Đồng bộ dữ liệu"
+        titleLabel.font = .preferredFont(forTextStyle: .headline)
+        titleLabel.textColor = DashboardPalette.primaryText
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.numberOfLines = 0
+
+        detailLabel.font = .preferredFont(forTextStyle: .footnote)
+        detailLabel.textColor = DashboardPalette.secondaryText
+        detailLabel.adjustsFontForContentSizeCategory = true
+        detailLabel.numberOfLines = 0
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 3
+
+        let contentStack = UIStackView(arrangedSubviews: [symbolContainer, textStack])
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.axis = .horizontal
+        contentStack.alignment = .center
+        contentStack.spacing = 13
+        addSubview(contentStack)
+
+        NSLayoutConstraint.activate([
+            backgroundView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            backgroundView.topAnchor.constraint(equalTo: topAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            symbolContainer.widthAnchor.constraint(equalToConstant: 36),
+            symbolContainer.heightAnchor.constraint(equalToConstant: 36),
+            symbolView.centerXAnchor.constraint(equalTo: symbolContainer.centerXAnchor),
+            symbolView.centerYAnchor.constraint(equalTo: symbolContainer.centerYAnchor),
+            symbolView.widthAnchor.constraint(equalToConstant: 16),
+            symbolView.heightAnchor.constraint(equalToConstant: 16),
+            spinner.centerXAnchor.constraint(equalTo: symbolContainer.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: symbolContainer.centerYAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            contentStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            contentStack.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+            contentStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
+        ])
+    }
+
+    private func applyColors() {
+        backgroundView.layer.borderWidth = 1
+        backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traitCollection).cgColor
+        symbolContainer.backgroundColor = DashboardPalette.dutiesAccent.withAlphaComponent(0.12)
+        detailLabel.textColor = DashboardPalette.secondaryText
+        layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.18 : 0.07
+    }
+}
+
+private final class DashboardGradientView: UIView {
+    private let gradientLayer = CAGradientLayer()
+    private let colors: (UITraitCollection) -> [UIColor]
+
+    init(
+        colors: @escaping (UITraitCollection) -> [UIColor],
+        startPoint: CGPoint,
+        endPoint: CGPoint
+    ) {
+        self.colors = colors
+        super.init(frame: .zero)
+        gradientLayer.startPoint = startPoint
+        gradientLayer.endPoint = endPoint
+        layer.insertSublayer(gradientLayer, at: 0)
+        applyColors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        gradientLayer.frame = bounds
+    }
+
+    private func applyColors() {
+        gradientLayer.colors = colors(traitCollection).map(\.cgColor)
     }
 }
 
