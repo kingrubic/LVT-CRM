@@ -48,7 +48,22 @@ async function assertGroupNameAvailable(ctx: { db: any }, name: string, excludeI
 async function findGroupByCode(ctx: { db: any }, code: string) {
   const normalized = normalizeEntityCode(code);
   const groups = await ctx.db.query("permissionGroups").collect();
-  return groups.find((g: { code?: string }) => normalizeEntityCode(g.code || "") === normalized) || null;
+  return (
+    groups.find((g: { code?: string }) => normalizeEntityCode(g.code || "") === normalized) || null
+  );
+}
+
+async function releaseInactiveCodeIfNeeded(
+  ctx: { db: any },
+  code: string,
+  keepId: string,
+) {
+  const duplicate = await findGroupByCode(ctx, code);
+  if (!duplicate) return;
+  if (String(duplicate._id) === String(keepId)) return;
+  if (duplicate.active) throw new Error("CODE_TAKEN");
+  // Soft-deleted group still holds the code — free it so an active group can reuse.
+  await ctx.db.patch(duplicate._id, { code: undefined, updatedAt: Date.now() });
 }
 
 /** Backfill missing codes for legacy permission groups. Safe to call repeatedly. */
@@ -168,8 +183,9 @@ export const update = mutation({
       description: args.description,
       menuAccess: args.menuAccess || current.menuAccess,
     });
+    await releaseInactiveCodeIfNeeded(ctx, input.code, args.id);
     const duplicate = await findGroupByCode(ctx, input.code);
-    if (duplicate && duplicate._id !== args.id) throw new Error("CODE_TAKEN");
+    if (duplicate && String(duplicate._id) !== String(args.id)) throw new Error("CODE_TAKEN");
     await assertGroupNameAvailable(ctx, input.name, args.id);
     const now = Date.now();
     await ctx.db.patch(args.id, {
