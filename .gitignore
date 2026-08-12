@@ -38,5 +38,8 @@ android-app/**/build/
 # Local tooling / archives
 .clawpatch/
 ios-app.zip
+ios-uikit-lvt.zip
 acceptance-platform/logs/
 acceptance-platform/*.bak*
+acceptance-platform/keychain-helper
+.claude/
