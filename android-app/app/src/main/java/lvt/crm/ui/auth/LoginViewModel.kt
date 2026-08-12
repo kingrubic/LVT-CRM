@@ -128,6 +128,7 @@ class LoginViewModel(
             isGenericServerError ->
                 "Không thể đăng nhập. Hãy kiểm tra email, mật khẩu rồi thử lại."
             err is ConvexException -> err.message
+                ?: ConvexHttpClient.humanize("SIGN_IN_FAILED")
             else -> ConvexHttpClient.humanize(err.message ?: "SIGN_IN_FAILED")
         }
     }

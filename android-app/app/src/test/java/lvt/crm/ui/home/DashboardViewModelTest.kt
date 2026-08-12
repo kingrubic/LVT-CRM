@@ -55,7 +55,7 @@ class DashboardViewModelTest {
                     isAdmin = false,
                     accessLevel = 4,
                     tasks = listOf(
-                        task(status = "pending_completion"),
+                        task(status = "pending_task"),
                         task(status = "completed"),
                     ),
                     approvals = listOf(

@@ -304,7 +304,9 @@ class WorkRepository(
         } else {
             throw ConvexException("WORK_FILE_UNAVAILABLE", "Tệp công văn chưa sẵn sàng để mở.")
         }
-        cache.cachedFile(sourceIdentity)?.let { return it }
+        cache.cachedFile(sourceIdentity)?.let { cached ->
+            return@withContext cached
+        }
         val tempDir = cacheDirFallback().apply { mkdirs() }
         val downloaded = File.createTempFile("lvt-work-", ".part", tempDir)
         try {
