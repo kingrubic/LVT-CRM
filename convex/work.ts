@@ -496,10 +496,8 @@ async function documentView(ctx: any, document: any, catalogData: any) {
     fileName: document.fileName,
     fileType: document.fileType,
     fileSize: document.fileSize,
-    fileUrl: document.driveFileId || !document.fileId
-      ? null
-      : await ctx.storage.getUrl(document.fileId),
-    privateFile: Boolean(document.driveFileId),
+    fileUrl: null,
+    privateFile: Boolean(document.driveFileId || document.fileId),
     content: document.content,
     deadline: document.deadline,
     status: document.status,
@@ -710,7 +708,7 @@ export const authorizeFileDownload = query({
   handler: async (ctx, args) => {
     const access = await requireWorkAccess(ctx);
     const document = await ctx.db.get(args.documentId);
-    if (!document?.active || !document.driveFileId) {
+    if (!document?.active || (!document.driveFileId && !document.fileId)) {
       throw new Error("WORK_FILE_NOT_FOUND");
     }
 
@@ -741,7 +739,11 @@ export const authorizeFileDownload = query({
 
     if (!allowed) throw new Error("WORK_FILE_FORBIDDEN");
     return {
-      driveFileId: document.driveFileId,
+      driveFileId: document.driveFileId || null,
+      storageId: document.fileId || null,
+      storageUrl: document.driveFileId || !document.fileId
+        ? null
+        : await ctx.storage.getUrl(document.fileId),
       driveChecksum: document.driveChecksum || null,
       fileName: document.fileName,
       fileType: document.fileType,
@@ -1837,10 +1839,8 @@ export const listMine = query({
           documentId: document._id,
           documentContent: document.content,
           fileName: document.fileName,
-          fileUrl: document.driveFileId || !document.fileId
-            ? null
-            : await ctx.storage.getUrl(document.fileId),
-          privateFile: Boolean(document.driveFileId),
+          fileUrl: null,
+          privateFile: Boolean(document.driveFileId || document.fileId),
           completion: myCompletion,
           qualityPercent: myCompletion?.qualityPercent ?? null,
           rejectionReason: myCompletion?.status === "rejected" ? myCompletion.rejectionReason : "",

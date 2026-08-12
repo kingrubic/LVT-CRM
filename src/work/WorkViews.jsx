@@ -21,16 +21,6 @@ function workUploadErrorMessage(code) {
   return 'Không thể tải tệp công văn lên. Vui lòng thử lại.';
 }
 
-function publicStorageUrl(shortLivedUrl) {
-  if (!shortLivedUrl) return '';
-  const uploadUrl = new URL(shortLivedUrl, window.location.origin);
-  const isInternalHost = uploadUrl.hostname === '127.0.0.1' || uploadUrl.hostname === 'localhost';
-  if (window.location.hostname === 'lvt.vscgroup.io.vn' && isInternalHost) {
-    return `${window.location.origin}${uploadUrl.pathname}${uploadUrl.search}${uploadUrl.hash}`;
-  }
-  return uploadUrl.toString();
-}
-
 function formatWorkDate(value) {
   if (!value) return '—';
   const [year, month, day] = value.split('-');
@@ -129,16 +119,10 @@ function PrivateFileLink({
     };
   }, [previewUrl]);
 
-  if ((!fileUrl && !privateFile) || !documentId) return null;
+  if (!documentId || !privateFile) return null;
 
   const fetchFileBlob = async () => {
     const headers = new Headers();
-    if (!privateFile) {
-      const response = await fetch(publicStorageUrl(fileUrl), { headers });
-      if (!response.ok) throw new Error(`FILE_DOWNLOAD_FAILED:${response.status}`);
-      return response.blob();
-    }
-
     const token = await fetchAccessToken({ forceRefreshToken: false });
     if (!token) throw new Error('AUTH_REQUIRED');
     headers.set('Authorization', 'Bearer ' + token);

@@ -4,6 +4,7 @@ import {
   getAuthUserId,
   invalidateSessions,
   modifyAccountCredentials,
+  retrieveAccount,
 } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
@@ -62,6 +63,27 @@ const FORGOT_PASSWORD_COOLDOWN_MS = 5 * 60 * 1000;
 
 function assertPasswordLength(password: string, code = "PASSWORD_TOO_SHORT") {
   if (!password || password.length < MIN_PASSWORD_LENGTH) throw new Error(code);
+}
+
+async function assertCurrentPassword(ctx: any, email: string, currentPassword: string) {
+  assertPasswordLength(currentPassword, "CURRENT_PASSWORD_INVALID");
+  try {
+    const retrieved = await retrieveAccount(ctx, {
+      provider: "password",
+      account: { id: normalizeEmail(email), secret: currentPassword },
+    });
+    if (retrieved === null) throw new Error("CURRENT_PASSWORD_INVALID");
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    if (
+      raw.includes("CURRENT_PASSWORD_INVALID") ||
+      raw.includes("InvalidSecret") ||
+      raw.includes("InvalidAccountId")
+    ) {
+      throw new Error("CURRENT_PASSWORD_INVALID");
+    }
+    throw error;
+  }
 }
 
 function randomTemporaryPassword(length = 12): string {
@@ -733,7 +755,7 @@ export const requestPasswordReset = action({
 });
 
 export const changeOwnPassword = action({
-  args: { newPassword: v.string() },
+  args: { newPassword: v.string(), currentPassword: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const userId = await authUserIdOrThrow(ctx);
     assertPasswordLength(args.newPassword, "PASSWORD_TOO_SHORT");
@@ -741,6 +763,10 @@ export const changeOwnPassword = action({
     if (!user || user.status !== "active") throw new Error("USER_NOT_ACTIVE");
     if (user.loginLockedAt) throw new Error("ACCOUNT_LOCKED");
     if (!user.email) throw new Error("USER_EMAIL_MISSING");
+    if (!user.mustChangePassword) {
+      if (!args.currentPassword) throw new Error("CURRENT_PASSWORD_REQUIRED");
+      await assertCurrentPassword(ctx, user.email, args.currentPassword);
+    }
 
     try {
       await modifyAccountCredentials(ctx, {

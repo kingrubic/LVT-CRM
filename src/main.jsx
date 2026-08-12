@@ -69,6 +69,8 @@ function messageFor(error) {
     EMAIL_TAKEN: 'Email này đã được sử dụng. Vui lòng chọn email khác.',
     TEMP_PASSWORD_TOO_SHORT: 'Mật khẩu tạm thời phải có ít nhất 8 ký tự.',
     PASSWORD_TOO_SHORT: 'Mật khẩu mới phải có ít nhất 8 ký tự.',
+    CURRENT_PASSWORD_REQUIRED: 'Vui lòng nhập mật khẩu hiện tại.',
+    CURRENT_PASSWORD_INVALID: 'Mật khẩu hiện tại không đúng.',
     CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể khóa chính tài khoản đang đăng nhập.',
     CANNOT_DELETE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể xóa chính tài khoản đang đăng nhập.',
     LAST_ACTIVE_ADMIN: 'Không thể khóa, xóa hoặc hạ quyền Administrator cuối cùng đang hoạt động.',
@@ -2333,6 +2335,7 @@ function PositionManagement() {
 function ProfileView({ session }) {
   const changeOwnPassword = useAction(anyApi.users.changeOwnPassword);
   const { user, department, permissionGroup, position, isOperationalManager } = session;
+  const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
@@ -2341,12 +2344,14 @@ function ProfileView({ session }) {
   const submit = async (event) => {
     event.preventDefault();
     setFeedback('');
+    if (!currentPassword) return setFeedback('Vui lòng nhập mật khẩu hiện tại.');
     if (password.length < 8) return setFeedback('Mật khẩu mới phải có ít nhất 8 ký tự.');
     if (password !== confirmation) return setFeedback('Xác nhận mật khẩu không khớp.');
     setPending(true);
     try {
-      await changeOwnPassword({ newPassword: password });
+      await changeOwnPassword({ currentPassword, newPassword: password });
       setFeedback('Đã đổi mật khẩu thành công.');
+      setCurrentPassword('');
       setPassword('');
       setConfirmation('');
     } catch (error) {
@@ -2446,6 +2451,10 @@ function ProfileView({ session }) {
             </div>
           </header>
 
+          <label className="profile-field">
+            <span>Mật khẩu hiện tại</span>
+            <input required type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          </label>
           <label className="profile-field">
             <span>Mật khẩu mới</span>
             <input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />

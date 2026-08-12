@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, stat, utimes, writeFile } from 'node:fs/pro
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { AsyncSemaphore, DriveFileCache } from '../scripts/lib/drive-file-cache.mjs';
+import { AsyncSemaphore, DriveFileCache, workFileCacheIdentity, workFileVersion } from '../scripts/lib/drive-file-cache.mjs';
 
 async function tempDirectory() {
   return mkdtemp(path.join(os.tmpdir(), 'lvt-drive-cache-test-'));
@@ -98,4 +98,20 @@ test('Drive download semaphore enforces concurrency and queue bound', async () =
   release();
   await Promise.all(jobs);
   assert.equal(maximum, 2);
+});
+
+test('work file cache identity never uses a public Drive or storage URL', () => {
+  assert.equal(
+    workFileVersion({ driveFileId: 'drv-1', driveChecksum: 'abc', fileSize: 12 }),
+    'abc',
+  );
+  assert.equal(
+    workFileCacheIdentity({ driveFileId: 'drv-1', driveChecksum: 'abc', fileSize: 12 }),
+    'drv-1:abc',
+  );
+  assert.equal(
+    workFileCacheIdentity({ storageId: 'kg2storage', fileSize: 2048 }),
+    'convex-storage:kg2storage:2048',
+  );
+  assert.throws(() => workFileCacheIdentity({ fileName: 'a.pdf' }), /WORK_FILE_NOT_FOUND/);
 });
