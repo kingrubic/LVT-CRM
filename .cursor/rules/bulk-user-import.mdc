@@ -1,0 +1,29 @@
+---
+description: SYS-011 bulk user Excel import and entity-code catalog rules
+alwaysApply: true
+---
+
+# Bulk user import (SYS-011)
+
+Canonical detail: `README.md` → **Import user hàng loạt**.
+
+## Must preserve
+
+- Admin-only. Bulk create **`role=user` only** (never admin/moderator).
+- `.xlsx` only, ≤ 2 MiB. Columns: `ho_ten`, `email`, `ma_phong_ban`, `ma_chuc_vu`, `ma_nhom_quyen`, `mat_khau_tam_thoi`
+- **Upload to Convex Storage first**, then server parse/validate/commit from `uploadId`. Never trust client rows for commit.
+- Staged file TTL **1 hour** (valid or invalid). Table: `userImportUploads`
+- All-or-nothing; preview only when every row valid; duplicate emails (file + DB) block import
+- Temp passwords in file (≥8); created users always `mustChangePassword=true`
+
+## Entity codes (department / position / permission group)
+
+- ≤20 chars, `A–Z0–9_-`, store/display uppercase; import match case-insensitive
+- Soft-delete; **block delete while users assigned**; recreate same **code** → reactivate
+- Permission-group missing codes: backfill via `permissionGroups.ensureCodes`
+
+## Code entry points
+
+- UI: `src/settings/UserBulkImport.jsx`
+- Backend: `convex/userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`
+- Tests: `tests/user-import.test.mjs`

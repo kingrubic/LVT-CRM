@@ -1,0 +1,35 @@
+---
+description: LVT CRM project map, roles, and where to read deeper docs
+alwaysApply: true
+---
+
+# LVT CRM — core context
+
+Production: `https://lvt.vscgroup.io.vn`. Stack: React 19 + Vite (`src/`), Convex self-hosted (`convex/`), private file gateway `scripts/serve-production.mjs`.
+
+## Read first (do not rediscover from scratch)
+
+- Product + import rules: `README.md`
+- Agent operating invariants: `CLAUDE.md`
+- Existing Cursor git rule: `.cursor/rules/sync-git-after-changes.mdc`
+
+## Project map
+
+- Web UI: `src/` (`main.jsx` shell; `settings/`, `work/`, `boarding/`, `reports/`, `notifications/`)
+- Backend: `convex/` — never hand-edit `convex/_generated/`
+- Native: `ios-uikit-lvt/` only when scoped; preserve `ios-app/` and `android-app/` unless asked
+- Tests: `npm test` → `tests/*.test.mjs`
+
+## Roles
+
+- `admin` — Thiết lập tối cao + account lifecycle
+- `moderator` — operational manager; no supreme settings
+- `user` — menus from `permissionGroups.menuAccess`
+- Server auth is source of truth; UI visibility is not enforcement
+
+## Working rules
+
+- Stay inside this repo; start with `git status --short`; preserve unrelated dirty files
+- Smallest coherent change; do not invent business rules — check README/CLAUDE/schema/tests
+- After web/backend changes: `npm test`, `npm run build:production`, `git diff --check`
+- Convex deploy/codegen only via repo wrapper scripts; never inline admin keys/secrets

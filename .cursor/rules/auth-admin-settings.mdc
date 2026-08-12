@@ -1,0 +1,14 @@
+---
+description: Auth, admin catalog, and supreme-settings conventions
+globs: convex/users.ts,convex/departments.ts,convex/positions.ts,convex/permissionGroups.ts,convex/sessions.ts,convex/loginSecurity.ts,src/main.jsx,src/settings/**/*,src/profile/**/*
+alwaysApply: false
+---
+
+# Auth & supreme settings
+
+- Login: email + password (Convex Auth). No public signup.
+- Supreme settings UI/API: **admin only** (`adminPermissionOrThrow`)
+- Catalog codes (PB / chức vụ / nhóm quyền): ≤20, `A–Z0–9_-`, uppercase; see `convex/entityCodes.ts`
+- Soft-delete catalogs; refuse delete when users still assigned (`HAS_ASSIGNED_USERS`)
+- Never log/commit plaintext passwords or auth secrets
+- Bulk import rules: `.cursor/rules/bulk-user-import.mdc` and `README.md`

@@ -9,6 +9,7 @@ Vận hành production:
 
 - Build: `npm run build:production`
 - Chạy local production: `npm run start`
+- **Hướng dẫn AI session:** Cursor đọc `.cursor/rules/*.mdc`; Claude Code đọc `CLAUDE.md`; chi tiết sản phẩm/import user trong `README.md`.
 - Auto-start Colima + Convex: LaunchAgent `ai.lvt.crm.convex` chạy `./scripts/lvt-convex-ensure.sh` (RunAtLoad + KeepAlive). Log: `~/Library/Logs/lvt-crm-convex-ensure.log`.
 - Backup Convex gồm file storage: `./scripts/lvt-convex-backup.sh`
 - Backup tự động hằng đêm lúc 00:30, lưu ngoài repo dưới `/Users/vsc_agent/clawd/backups/lvt-crm-convex/nightly/`.

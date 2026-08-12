@@ -1,0 +1,27 @@
+---
+description: Work documents, private Drive files, and cache authorization invariants
+globs: convex/work*.ts,convex/drive*.ts,scripts/**/*.{mjs,js},src/work/**/*,ios-uikit-lvt/**
+alwaysApply: false
+---
+
+# Work documents & private files
+
+Full text: `CLAUDE.md` sections **Work-document** / **Private file and cache** / **Upload and cleanup**.
+
+## Work documents
+
+- First approval locks edit/delete forever — do **not** lock only on `status === "approved"`; use `convex/workDocumentPolicy.ts`
+- Soft-delete first; inactive docs must deny access even if Drive cleanup lags
+- File replace is staged: publish DB only after new upload validates; never delete old Drive object before DB success
+
+## Private files / cache
+
+- New uploads = private Drive; Convex keeps identity/checksum/metadata, not public links
+- Authorize before serving shared cache or client local cache; metadata `private, no-store`
+- Version via SHA-256 `fileVersion` when possible; stale local content must not bypass auth/version failure
+- Purpose-scoped cleanup (`work` vs `people-review`); no cross-module auth fallback
+
+## Verify
+
+- Web/backend: `npm test` + `npm run build:production`
+- UIKit (when scoped): `xcodebuild` gate in `CLAUDE.md`

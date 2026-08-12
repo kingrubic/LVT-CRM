@@ -20,6 +20,7 @@
 - Tests: Node test runner under `tests/*.test.mjs`.
 - Production frontend: `https://lvt.vscgroup.io.vn`.
 - Self-hosted Convex deployment commands must use the repository wrapper scripts; never expose or inline admin keys.
+- Cursor agents also load `.cursor/rules/*.mdc` (core + import always-on; work/auth rules by glob). Keep those rules in sync when changing invariants.
 
 ## Engineering discipline
 
