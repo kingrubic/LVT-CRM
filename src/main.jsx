@@ -58,6 +58,12 @@ const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', 
 function messageFor(error) {
   // Convex often wraps codes: "[Request ID] Server Error\nCODE", "Uncaught Error: CODE", etc.
   const raw = String(error?.data ?? error?.message ?? error ?? 'UNKNOWN_ERROR');
+  if (/ArgumentValidationError|extraneous field|extra field `code`/i.test(raw)) {
+    return 'Máy chủ chưa nhận đủ cấu hình mã nhóm quyền. Vui lòng tải lại trang sau khi hệ thống cập nhật, rồi thử lại.';
+  }
+  if (/does not match the schema/i.test(raw)) {
+    return 'Dữ liệu không khớp schema máy chủ. Vui lòng liên hệ quản trị viên để triển khai lại Convex.';
+  }
   const messages = {
     USER_NOT_ACTIVE: 'Tài khoản không còn hoạt động. Vui lòng liên hệ quản trị viên.',
     ACCOUNT_LOCKED:
@@ -93,6 +99,7 @@ function messageFor(error) {
     INVALID_POSITION_LEVEL: 'Cấp bậc chức vụ phải từ 1 đến 5 sao.',
     INVALID_CODE: 'Mã không hợp lệ. Tối đa 20 ký tự; chỉ dùng chữ, số, gạch ngang hoặc gạch dưới.',
     INVALID_NAME: 'Tên không hợp lệ. Vui lòng nhập lại.',
+    INVALID_MENU: 'Cấu hình quyền menu không hợp lệ.',
     CODE_TAKEN: 'Mã này đã được sử dụng. Vui lòng chọn mã khác.',
     HAS_ASSIGNED_USERS: 'Không thể xóa vì vẫn còn người dùng đang được gán. Hãy gỡ hết user trước.',
     IMPORT_FILE_TOO_LARGE: 'File import vượt quá giới hạn 2 MB.',
@@ -2029,20 +2036,35 @@ function PermissionGroupManagement() {
   const submit = async (event) => {
     event.preventDefault();
     const menuAccess = toMenuAccess(form.access);
-    const payload = {
-      name: form.name,
-      code: form.code,
-      description: form.description || undefined,
-      menuAccess,
-    };
     if (editing) {
-      const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật nhóm quyền.');
+      const ok = await run(
+        'save',
+        () =>
+          update({
+            id: editing._id,
+            name: form.name.trim(),
+            code: form.code.trim(),
+            description: form.description.trim() ? form.description.trim() : undefined,
+            menuAccess,
+          }),
+        'Đã cập nhật nhóm quyền.',
+      );
       if (ok) {
         setEditing(null);
         setForm(emptyForm());
       }
     } else {
-      const ok = await run('save', () => create(payload), 'Đã tạo nhóm quyền. Có thể thêm user bên dưới.');
+      const ok = await run(
+        'save',
+        () =>
+          create({
+            name: form.name.trim(),
+            code: form.code.trim(),
+            description: form.description.trim() ? form.description.trim() : undefined,
+            menuAccess,
+          }),
+        'Đã tạo nhóm quyền. Có thể thêm user bên dưới.',
+      );
       if (ok) setForm(emptyForm());
     }
   };
