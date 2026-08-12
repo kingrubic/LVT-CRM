@@ -266,7 +266,7 @@ npx convex run internal.users.provisionFirstAdmin \
 
 ### Import user hàng loạt (SYS-011 · chỉ Administrator)
 
-UI: **Thiết lập người dùng** — nút *Tải file nhập liệu mẫu* + *Import file nhập liệu* (`src/settings/UserBulkImport.jsx`).
+UI: **Thiết lập người dùng** — nút *Tải file nhập liệu mẫu* + *Import file nhập liệu* + *Xuất DS người dùng* (`src/settings/UserBulkImport.jsx`).
 
 **Phạm vi**
 
@@ -294,6 +294,15 @@ UI: **Thiết lập người dùng** — nút *Tải file nhập liệu mẫu* +
 4. Nếu tạo dở dang giữa chừng: soft-disable các user đã tạo (`importRollbackAt`); lần import sau **được phép dùng lại email đó** (reactivate + mật khẩu tạm mới). Email user disable bình thường vẫn chặn trùng. Mã catalog active trùng nhau → chặn import.
 
 **Code chính:** `convex/userImport.ts`, `userImportParse.ts`, `userImportSheet.ts`, `userImportValidate.ts`, `entityCodes.ts`; test `tests/user-import.test.mjs`.
+
+### Xuất danh sách người dùng (SYS-012 · chỉ Administrator)
+
+- Nút **Xuất DS người dùng** cạnh import (màu khác); xuất **client-side** `.xlsx`.
+- Chỉ user `status === "active"`. Không xuất vai trò / mật khẩu.
+- Cột (header có dấu): `Họ tên`, `Email`, `Mã phòng ban`, `Tên phòng ban`, `Mã chức vụ`, `Tên chức vụ`, `Mã nhóm quyền`, `Tên nhóm quyền`.
+- Admin/Moderator: `Mã nhóm quyền` trống, `Tên nhóm quyền` = `Quản trị viên`.
+- Tên file: `danh_sach_nguoi_dung_YYYYMMDD_01.xlsx` — số thứ tự tăng theo ngày trên trình duyệt (`localStorage`), qua ngày mới reset `01`.
+- Code: `src/lib/userExport.js`; test `tests/user-export.test.mjs`.
 
 ## Authorization (server)
 

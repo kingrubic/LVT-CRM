@@ -41,6 +41,28 @@
   background: #f5f8fc;
 }
 
+.user-bulk-import .export-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #0f766e;
+  border-radius: 10px;
+  color: #0f766e;
+  background: #ecfdf8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.user-bulk-import .export-button:hover {
+  background: #d7f7ef;
+}
+
+.user-bulk-import .export-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .user-bulk-import .primary-button {
   min-width: 190px;
 }

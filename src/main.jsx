@@ -1417,7 +1417,12 @@ function UserManagement() {
           </p>
         </div>
       </div>
-      <UserBulkImport />
+      <UserBulkImport
+        users={users}
+        departments={data?.departments || []}
+        positions={data?.positions || []}
+        permissionGroups={data?.permissionGroups || []}
+      />
       <div className="lockout-settings">
         <h3>Giới hạn đăng nhập thất bại</h3>
         <p>

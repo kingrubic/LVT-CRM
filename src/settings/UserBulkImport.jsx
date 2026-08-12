@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAction, useMutation } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { assertImportFileMeta } from '../lib/userImport.js';
+import { downloadActiveUsersWorkbook } from '../lib/userExport.js';
 import {
   downloadUserImportErrorPdf,
   downloadUserImportTemplate,
@@ -11,7 +12,13 @@ import {
  * Bulk user import: upload .xlsx to server first, then server parses/validates/commits
  * from that stored file. File is retained 1 hour whether valid or not.
  */
-export default function UserBulkImport({ onImported = null } = {}) {
+export default function UserBulkImport({
+  onImported = null,
+  users = [],
+  departments = [],
+  positions = [],
+  permissionGroups = [],
+} = {}) {
   const fileInputRef = useRef(null);
   const generateUploadUrl = useMutation(anyApi.userImport.generateUploadUrl);
   const registerUpload = useMutation(anyApi.userImport.registerUpload);
@@ -30,6 +37,26 @@ export default function UserBulkImport({ onImported = null } = {}) {
   useEffect(() => {
     void ensureCodes({}).catch(() => {});
   }, [ensureCodes]);
+
+  const handleExportUsers = () => {
+    try {
+      const exported = downloadActiveUsersWorkbook({
+        users,
+        departments,
+        positions,
+        permissionGroups,
+      });
+      setFeedback({
+        type: 'ok',
+        text:
+          exported.rowCount > 0
+            ? `Đã xuất ${exported.rowCount} người dùng active → ${exported.fileName}`
+            : `Không có người dùng active để xuất (${exported.fileName}).`,
+      });
+    } catch {
+      setFeedback({ type: 'error', text: 'Không thể xuất danh sách người dùng. Vui lòng thử lại.' });
+    }
+  };
 
   const resetStage = () => {
     setErrors([]);
@@ -160,7 +187,7 @@ export default function UserBulkImport({ onImported = null } = {}) {
       </div>
       <p className="user-bulk-import-help">
         Chỉ tạo tài khoản vai trò User. File được tải lên server trước, rồi hệ thống đọc lại file đó để kiểm tra
-        và tạo user. File (kể cả khi lỗi) tự xóa sau 1 giờ.
+        và tạo user. File (kể cả khi lỗi) tự xóa sau 1 giờ. Nút xuất chỉ lấy user đang active, không gồm mật khẩu/vai trò.
       </p>
       <div className="user-bulk-import-actions">
         <button type="button" className="secondary-button" onClick={downloadUserImportTemplate} disabled={Boolean(busy)}>
@@ -168,6 +195,9 @@ export default function UserBulkImport({ onImported = null } = {}) {
         </button>
         <button type="button" className="primary-button" onClick={handlePickFile} disabled={Boolean(busy)}>
           {busy === 'upload' || busy === 'validate' ? 'Đang xử lý…' : 'Import file nhập liệu'}
+        </button>
+        <button type="button" className="export-button" onClick={handleExportUsers} disabled={Boolean(busy)}>
+          Xuất DS người dùng
         </button>
         <input
           ref={fileInputRef}

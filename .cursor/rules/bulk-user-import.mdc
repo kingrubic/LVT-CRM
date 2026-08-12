@@ -24,8 +24,16 @@ Canonical detail: `README.md` → **Import user hàng loạt**.
 - Soft-delete; **block delete while users assigned**; recreate same **code** → reactivate
 - Permission-group missing codes: backfill via `permissionGroups.ensureCodes`
 
+## Export users (SYS-012)
+
+- Admin-only client `.xlsx` of **active** users; no role/password columns
+- Headers with Vietnamese diacritics for admin office use
+- Admin/mod: empty group code, group name `Quản trị viên`
+- Filename `danh_sach_nguoi_dung_YYYYMMDD_NN.xlsx` via daily `localStorage` counter
+- Code: `src/lib/userExport.js`; tests: `tests/user-export.test.mjs`
+
 ## Code entry points
 
 - UI: `src/settings/UserBulkImport.jsx`
 - Backend: `convex/userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`
-- Tests: `tests/user-import.test.mjs`
+- Tests: `tests/user-import.test.mjs`, `tests/user-export.test.mjs`
