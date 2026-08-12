@@ -209,6 +209,20 @@ export const hasActiveAdmin = internalQuery({
   },
 });
 
+/** Refuse disable/delete/demote when this is the last active administrator. */
+export const assertNotLastActiveAdmin = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.role !== "admin" || target.status !== "active") return true;
+    const others = (await ctx.db.query("users").collect()).some(
+      (user) => user.role === "admin" && user.status === "active" && user._id !== args.userId,
+    );
+    if (!others) throw new Error("LAST_ACTIVE_ADMIN");
+    return true;
+  },
+});
+
 export const assertRoleAndAssignments = internalQuery({
   args: {
     role: v.string(),
@@ -451,6 +465,10 @@ export const update = action({
       throw new Error("EMAIL_CHANGE_UNSUPPORTED");
     }
 
+    if (target.role === "admin" && input.role !== "admin") {
+      await ctx.runQuery(internal.users.assertNotLastActiveAdmin, { userId: args.id });
+    }
+
     await ctx.runQuery(internal.users.assertRoleAndAssignments, {
       role: input.role,
       departmentId: input.departmentId,
@@ -496,6 +514,9 @@ export const setDisabled = action({
     if (!target) throw new Error("USER_NOT_FOUND");
     if (args.disabled && target._id === actorId && target.status === "active") {
       throw new Error("CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT");
+    }
+    if (args.disabled && target.role === "admin" && target.status === "active") {
+      await ctx.runQuery(internal.users.assertNotLastActiveAdmin, { userId: args.id });
     }
 
     if (args.disabled) {
@@ -546,6 +567,9 @@ export const remove = action({
     if (target._id === actorId && target.status === "active") {
       throw new Error("CANNOT_DELETE_OWN_ACTIVE_ACCOUNT");
     }
+    if (target.role === "admin" && target.status === "active") {
+      await ctx.runQuery(internal.users.assertNotLastActiveAdmin, { userId: args.id });
+    }
 
     // Convex Auth has no documented account-delete helper. Keep the user row and
     // auth account intact, but perform a safe soft-delete: disable + revoke all
@@ -557,6 +581,8 @@ export const remove = action({
         status: "disabled",
       });
       await invalidateSessions(ctx, { userId: args.id });
+      await ctx.runMutation(internal.push.removeAllForUser, { userId: String(args.id) });
+      await ctx.runMutation(internal.sessions.removeAllMetadataForUser, { userId: args.id });
     } catch {
       await auditBestEffort(ctx, {
         actorUserId: actorId,
@@ -624,8 +650,9 @@ export const resetPassword = action({
 
 /**
  * Public forgot-password for web / Android / future iOS.
- * Always returns { ok: true } when the email looks valid (no account enumeration),
- * except when mail delivery fails after credentials were rotated.
+ * Always returns { ok: true } when the email looks valid (no account enumeration).
+ * Email is sent before credentials rotate so a mail failure cannot lock the account
+ * with an unknown password.
  */
 export const requestPasswordReset = action({
   args: { email: v.string() },
@@ -647,31 +674,6 @@ export const requestPasswordReset = action({
     }
 
     const temporaryPassword = randomTemporaryPassword(12);
-    await ctx.runMutation(internal.users.patchById, {
-      id: user._id,
-      actorUserId: "system:requestPasswordReset",
-      mustChangePassword: true,
-      lastPasswordResetAt: Date.now(),
-    });
-
-    try {
-      await modifyAccountCredentials(ctx, {
-        provider: "password",
-        account: { id: email, secret: temporaryPassword },
-      });
-      await invalidateSessions(ctx, { userId: user._id });
-      await ctx.runMutation(internal.push.removeAllForUser, { userId: String(user._id) });
-      await ctx.runMutation(internal.sessions.removeAllMetadataForUser, { userId: user._id });
-    } catch {
-      await auditBestEffort(ctx, {
-        actorUserId: "system:requestPasswordReset",
-        action: "user.password_forgot_reset_failed",
-        targetUserId: user._id,
-        targetEmail: email,
-        details: JSON.stringify({ stage: "credentials" }),
-      });
-      throw new Error("PASSWORD_RESET_FAILED");
-    }
 
     try {
       await ctx.runAction(internal.mail.sendPasswordResetEmail, {
@@ -695,6 +697,31 @@ export const requestPasswordReset = action({
       throw new Error(code);
     }
 
+    try {
+      await modifyAccountCredentials(ctx, {
+        provider: "password",
+        account: { id: email, secret: temporaryPassword },
+      });
+      await invalidateSessions(ctx, { userId: user._id });
+      await ctx.runMutation(internal.push.removeAllForUser, { userId: String(user._id) });
+      await ctx.runMutation(internal.sessions.removeAllMetadataForUser, { userId: user._id });
+      await ctx.runMutation(internal.users.patchById, {
+        id: user._id,
+        actorUserId: "system:requestPasswordReset",
+        mustChangePassword: true,
+        lastPasswordResetAt: Date.now(),
+      });
+    } catch {
+      await auditBestEffort(ctx, {
+        actorUserId: "system:requestPasswordReset",
+        action: "user.password_forgot_reset_failed",
+        targetUserId: user._id,
+        targetEmail: email,
+        details: JSON.stringify({ stage: "credentials" }),
+      });
+      throw new Error("PASSWORD_RESET_FAILED");
+    }
+
     await auditBestEffort(ctx, {
       actorUserId: "system:requestPasswordReset",
       action: "user.password_forgot_reset",
@@ -712,6 +739,7 @@ export const changeOwnPassword = action({
     assertPasswordLength(args.newPassword, "PASSWORD_TOO_SHORT");
     const user = await ctx.runQuery(internal.users.currentForPasswordChange, { userId });
     if (!user || user.status !== "active") throw new Error("USER_NOT_ACTIVE");
+    if (user.loginLockedAt) throw new Error("ACCOUNT_LOCKED");
     if (!user.email) throw new Error("USER_EMAIL_MISSING");
 
     try {

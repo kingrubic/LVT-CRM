@@ -945,7 +945,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
                       </span>
                     </label>
                   ))}
-                  {!options.approvers.length ? <p className="work-muted">Chưa có user cấp 4 hoặc 5 sao.</p> : null}
+                  {!options.approvers.length ? <p className="work-muted">Chưa có user cấp 4 hoặc 5 sao (không gồm Administrator/Moderator).</p> : null}
                 </div>
               </div>
             </div>
@@ -1436,7 +1436,8 @@ export function WorkUserView({ focusTarget = null }) {
             <div className="work-empty"><span>✓</span><h3>Không có công văn cần xử lý</h3><p>Khi Admin chỉ định bạn duyệt, hồ sơ sẽ xuất hiện tại đây.</p></div>
           ) : data.approvals.map((document) => {
             const ownApproval = document.approvers.find((person) => String(person._id) === String(data.userId));
-            const canDecide = document.status === 'pending' && ownApproval && !ownApproval.approved && !ownApproval.rejected;
+            const canApprove = document.status === 'pending' && ownApproval && !ownApproval.approved && !ownApproval.rejected;
+            const canReject = canApprove && document.approvalCount === 0;
             return (
               <article className="work-user-card approval-card" key={document._id} data-focus-id={document._id}>
                 <div className="work-user-card-top">
@@ -1469,14 +1470,16 @@ export function WorkUserView({ focusTarget = null }) {
                     </section>
                   ))}
                 </div>
-                {canDecide ? (
+                {canApprove ? (
                   <div className="work-approval-actions">
                     <button type="button" className="work-primary-button" disabled={decidingId === document._id} onClick={() => void handleDecision(document._id, 'approve')}>
                       ✓ Tôi duyệt công văn này
                     </button>
-                    <button type="button" className="work-reject-button" disabled={decidingId === document._id} onClick={() => void handleDecision(document._id, 'reject')}>
-                      × Tôi không duyệt công văn này
-                    </button>
+                    {canReject ? (
+                      <button type="button" className="work-reject-button" disabled={decidingId === document._id} onClick={() => void handleDecision(document._id, 'reject')}>
+                        × Tôi không duyệt công văn này
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </article>

@@ -1,5 +1,6 @@
 import {
   isValidEntityCode,
+  listDuplicateActiveCodes,
   listInvalidActiveCodes,
   normalizeEntityCode,
 } from "./entityCodes";
@@ -56,20 +57,30 @@ export function validateUserImportRows(
     errors.push({ rowNumber, message, detail });
   };
 
+  const groupsForCatalog = context.permissionGroups.map((g) => ({ ...g, code: g.code || "" }));
   const invalidCatalog = [
     ...listInvalidActiveCodes(context.departments, "Phòng ban"),
     ...listInvalidActiveCodes(context.positions, "Chức vụ"),
-    ...listInvalidActiveCodes(
-      context.permissionGroups.map((g) => ({ ...g, code: g.code || "" })),
-      "Nhóm quyền",
-    ),
+    ...listInvalidActiveCodes(groupsForCatalog, "Nhóm quyền"),
   ];
-  if (invalidCatalog.length) {
+  const duplicateCatalog = [
+    ...listDuplicateActiveCodes(context.departments, "Phòng ban"),
+    ...listDuplicateActiveCodes(context.positions, "Chức vụ"),
+    ...listDuplicateActiveCodes(groupsForCatalog, "Nhóm quyền"),
+  ];
+  if (invalidCatalog.length || duplicateCatalog.length) {
     for (const item of invalidCatalog) {
       pushError(
         0,
         `Mã ${item.label} không hợp lệ — vui lòng sửa trước khi import`,
         `${item.name} (mã hiện tại: ${item.code}). Mã tối đa 20 ký tự, chỉ gồm chữ, số, _ và -.`,
+      );
+    }
+    for (const item of duplicateCatalog) {
+      pushError(
+        0,
+        `Mã ${item.label} bị trùng — vui lòng sửa trước khi import`,
+        `${item.name} (mã hiện tại: ${item.code}).`,
       );
     }
     return { ok: false as const, errors, preview: [] as const };

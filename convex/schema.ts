@@ -34,6 +34,8 @@ export default defineSchema({
     lastPasswordResetAt: v.optional(v.number()),
     /** Set when failed-login lockout triggers; cleared only by admin unlock. */
     loginLockedAt: v.optional(v.number()),
+    /** Set when a bulk-import rollback disables this row; cleared on successful re-import. */
+    importRollbackAt: v.optional(v.number()),
     failedLoginCount: v.optional(v.number()),
     failedLoginWindowStart: v.optional(v.number()),
     createdBy: v.optional(v.string()),

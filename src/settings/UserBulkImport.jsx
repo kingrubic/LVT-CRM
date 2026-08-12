@@ -142,7 +142,11 @@ export default function UserBulkImport({ onImported = null } = {}) {
           ? 'Phát hiện email trùng khi ghi dữ liệu. Không tạo tài khoản nào (đã hoàn tác nếu có).'
           : message.includes('IMPORT_VALIDATION_FAILED')
             ? 'Dữ liệu trên server không còn hợp lệ. Vui lòng import lại file.'
-            : 'Import thất bại. Vui lòng thử lại.',
+            : message.includes('IMPORT_UPLOAD_EXPIRED')
+              ? 'File import đã hết hạn (giữ tối đa 1 giờ). Vui lòng tải lại.'
+              : message.includes('IMPORT_UPLOAD_ALREADY_COMMITTED')
+                ? 'File import này đã được nhập. Vui lòng tải file mới nếu cần nhập tiếp.'
+                : 'Import thất bại. Vui lòng thử lại.',
       });
     } finally {
       setBusy(null);

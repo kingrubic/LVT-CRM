@@ -1,5 +1,6 @@
 import {
   assertEntityCode,
+  describeDuplicateActiveCodes,
   describeInvalidEntityCodes,
   isValidEntityCode,
   normalizeEntityCode,
@@ -87,7 +88,12 @@ export function validateUserImportRows(rows, context) {
     ...describeInvalidEntityCodes(context.positions, 'Chức vụ'),
     ...describeInvalidEntityCodes(context.permissionGroups, 'Nhóm quyền'),
   ];
-  if (invalidCatalog.length) {
+  const duplicateCatalog = [
+    ...describeDuplicateActiveCodes(context.departments, 'Phòng ban'),
+    ...describeDuplicateActiveCodes(context.positions, 'Chức vụ'),
+    ...describeDuplicateActiveCodes(context.permissionGroups, 'Nhóm quyền'),
+  ];
+  if (invalidCatalog.length || duplicateCatalog.length) {
     for (const item of invalidCatalog) {
       pushError(
         0,
@@ -95,7 +101,14 @@ export function validateUserImportRows(rows, context) {
         `${item.name} (mã hiện tại: ${item.code}). Mã tối đa 20 ký tự, chỉ gồm chữ, số, _ và -.`,
       );
     }
-    return { ok: false, errors, preview: [], invalidCatalog };
+    for (const item of duplicateCatalog) {
+      pushError(
+        0,
+        `Mã ${item.label} bị trùng — vui lòng sửa trước khi import`,
+        `${item.name} (mã hiện tại: ${item.code}).`,
+      );
+    }
+    return { ok: false, errors, preview: [], invalidCatalog: [...invalidCatalog, ...duplicateCatalog] };
   }
 
   const { departmentsByCode, positionsByCode, groupsByCode } = buildCodeMaps(context);

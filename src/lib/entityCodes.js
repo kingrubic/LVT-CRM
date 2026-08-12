@@ -90,3 +90,25 @@ export function describeInvalidEntityCodes(entities, label) {
       id: item._id,
     }));
 }
+
+/** Active catalog rows that share a normalized code (legacy/corrupt data). */
+export function describeDuplicateActiveCodes(entities, label) {
+  const seen = new Map();
+  const duplicates = [];
+  for (const item of entities || []) {
+    if (item.active === false || !item.code) continue;
+    const code = normalizeEntityCode(item.code);
+    if (!code) continue;
+    if (seen.has(code)) {
+      duplicates.push({
+        label,
+        name: item.name || '(không tên)',
+        code,
+        id: item._id,
+      });
+    } else {
+      seen.set(code, true);
+    }
+  }
+  return duplicates;
+}

@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { DriveUploadStages } from '../scripts/lib/drive-upload-stages.mjs';
 import { isTransientDriveDownloadError, retryDriveDownload } from '../scripts/lib/drive-download-retry.mjs';
-import { canMutateWorkDocument } from '../convex/workDocumentPolicy.ts';
+import { canMutateWorkDocument, canRejectWorkDocument } from '../convex/workDocumentPolicy.ts';
 import { FileHttpError, classifyFileError } from '../scripts/lib/file-http-errors.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from '../scripts/lib/file-content-policy.mjs';
 import { matchDriveMutationRoute } from '../scripts/lib/file-route-policy.mjs';
@@ -45,6 +45,19 @@ test('work documents lock permanently after the first approval', () => {
   assert.equal(canMutateWorkDocument({ status: 'rejected', approvedByUserIds: [] }), true);
   assert.equal(canMutateWorkDocument({ status: 'pending', approvedByUserIds: ['vice-principal'] }), false);
   assert.equal(canMutateWorkDocument({ status: 'approved', approvedByUserIds: ['principal'] }), false);
+});
+
+test('reject is blocked after any approval so the document cannot get stuck immutable+rejected', () => {
+  assert.equal(canRejectWorkDocument({ status: 'pending', approvedByUserIds: [], rejectedByUserIds: [] }), true);
+  assert.equal(
+    canRejectWorkDocument({ status: 'pending', approvedByUserIds: ['vice-principal'], rejectedByUserIds: [] }),
+    false,
+  );
+  assert.equal(
+    canRejectWorkDocument({ status: 'rejected', approvedByUserIds: [], rejectedByUserIds: ['principal'] }),
+    false,
+  );
+  assert.equal(canRejectWorkDocument({ status: 'approved', approvedByUserIds: ['principal'] }), false);
 });
 
 test('Drive downloads retry bounded transient timeouts but not authorization failures', async () => {
