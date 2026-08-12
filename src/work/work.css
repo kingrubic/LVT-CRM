@@ -1,13 +1,13 @@
 .work-management,
 .work-user-view {
-  --work-ink: #16243e;
-  --work-navy: #14355f;
-  --work-blue: #28639a;
-  --work-teal: #138f7b;
-  --work-coral: #e36d55;
-  --work-gold: #e9ad43;
-  --work-paper: #fffdf7;
-  --work-line: #dce5eb;
+  --work-ink: var(--lvt-ink, #16243e);
+  --work-navy: var(--lvt-navy, #14355f);
+  --work-blue: var(--lvt-blue, #28639a);
+  --work-teal: var(--lvt-teal, #138f7b);
+  --work-coral: var(--lvt-coral, #e36d55);
+  --work-gold: var(--lvt-gold, #e9ad43);
+  --work-paper: var(--lvt-paper, #fffdf7);
+  --work-line: var(--lvt-line, #dce5eb);
   max-width: 1480px;
   margin: 0 auto;
   padding: 28px 34px 58px;

@@ -1,11 +1,11 @@
 .modern-management {
-  --mgmt-ink: #17243d;
-  --mgmt-blue: #194d7d;
-  --mgmt-teal: #159783;
-  --mgmt-coral: #ef765f;
-  --mgmt-gold: #f2b94b;
-  --mgmt-paper: #fffdf7;
-  --mgmt-line: #dce5ec;
+  --mgmt-ink: var(--lvt-ink, #16243e);
+  --mgmt-blue: var(--lvt-navy, #14355f);
+  --mgmt-teal: var(--lvt-teal, #138f7b);
+  --mgmt-coral: var(--lvt-coral, #e36d55);
+  --mgmt-gold: var(--lvt-gold, #e9ad43);
+  --mgmt-paper: var(--lvt-paper, #fffdf7);
+  --mgmt-line: var(--lvt-line, #dce5eb);
   color: var(--mgmt-ink);
   font-family: "Montserrat Variable", "Montserrat", sans-serif;
 }
@@ -21,8 +21,8 @@
   border-radius: 18px;
   color: #fff;
   background:
-    radial-gradient(circle at 84% 10%, rgba(242, 185, 75, .3), transparent 25%),
-    linear-gradient(120deg, #14345f, #156c78);
+    radial-gradient(circle at 80% 0%, rgba(230, 167, 66, .31), transparent 27%),
+    linear-gradient(120deg, #102a51 0%, #165273 57%, #127c79 120%);
   box-shadow: 0 18px 45px rgba(20, 60, 96, .2);
   animation: management-rise .35s ease both;
 }
@@ -216,7 +216,7 @@
 }
 
 .modern-management .admin-form > .primary-button:hover {
-  background: #113b66;
+  background: #102a51;
 }
 
 .permission-groups-management .admin-form .perm-matrix {

@@ -1,11 +1,11 @@
 .profile-workspace {
-  --profile-ink: #16243e;
-  --profile-navy: #14355f;
-  --profile-teal: #138f7b;
-  --profile-coral: #e36d55;
-  --profile-gold: #e9ad43;
-  --profile-paper: #fffdf7;
-  --profile-line: #dce5eb;
+  --profile-ink: var(--lvt-ink, #16243e);
+  --profile-navy: var(--lvt-navy, #14355f);
+  --profile-teal: var(--lvt-teal, #138f7b);
+  --profile-coral: var(--lvt-coral, #e36d55);
+  --profile-gold: var(--lvt-gold, #e9ad43);
+  --profile-paper: var(--lvt-paper, #fffdf7);
+  --profile-line: var(--lvt-line, #dce5eb);
 }
 
 .profile-hero {

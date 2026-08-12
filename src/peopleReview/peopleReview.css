@@ -1,76 +1,128 @@
 .pr-view {
-  --pr-ink: #1d2a33;
-  --pr-muted: #5d6d78;
-  --pr-line: #d7e0e6;
-  --pr-paper: #f7fafb;
-  --pr-teal: #0f7f78;
-  --pr-coral: #c44b3c;
-  --pr-gold: #b8841d;
+  --pr-ink: var(--lvt-ink, #16243e);
+  --pr-navy: var(--lvt-navy, #14355f);
+  --pr-muted: var(--lvt-muted, #6b7c8d);
+  --pr-line: var(--lvt-line, #dce5eb);
+  --pr-paper: var(--lvt-paper, #fffdf7);
+  --pr-teal: var(--lvt-teal, #138f7b);
+  --pr-coral: var(--lvt-coral, #e36d55);
+  --pr-gold: var(--lvt-gold, #e9ad43);
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 28px 34px 58px;
   display: grid;
   gap: 1.25rem;
   color: var(--pr-ink);
+  font-family: "Montserrat Variable", "Montserrat", sans-serif;
 }
 
 .pr-loading,
 .pr-empty,
 .pr-muted {
-  color: var(--pr-muted);
+  color: var(--pr-muted, var(--lvt-muted, #6b7c8d));
   font-size: 0.92rem;
 }
 
+.pr-loading {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 28px 34px;
+  font-family: "Montserrat Variable", "Montserrat", sans-serif;
+}
+
+.pr-modal .pr-loading {
+  padding: 0;
+}
+
 .pr-hero {
+  position: relative;
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  align-items: end;
-  padding: 1.25rem 1.4rem;
-  border: 1px solid var(--pr-line);
-  border-radius: 18px;
+  gap: 26px;
+  align-items: center;
+  overflow: hidden;
+  padding: 29px 32px;
+  border-radius: 20px;
+  color: #fff;
   background:
-    radial-gradient(circle at top right, rgba(15, 127, 120, 0.12), transparent 40%),
-    linear-gradient(180deg, #fff, var(--pr-paper));
+    radial-gradient(circle at 80% 0%, rgba(230, 167, 66, .31), transparent 27%),
+    linear-gradient(120deg, #102a51 0%, #165273 57%, #127c79 120%);
+  box-shadow: 0 21px 50px rgba(18, 53, 87, .2);
+}
+
+.pr-hero::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  opacity: .16;
+  background-image: radial-gradient(#fff .7px, transparent .7px);
+  background-size: 13px 13px;
+  mask-image: linear-gradient(90deg, transparent 15%, #000);
+}
+
+.pr-hero > div:first-child {
+  position: relative;
+  z-index: 1;
 }
 
 .pr-kicker {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: var(--pr-teal);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  border-radius: 999px;
+  color: #caf1e8;
+  background: rgba(255, 255, 255, .08);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
   text-transform: uppercase;
 }
 
 .pr-hero h2 {
-  margin: 0;
-  font-size: 1.7rem;
+  margin: 0 0 7px;
+  font-size: clamp(25px, 3vw, 37px);
+  letter-spacing: -.045em;
 }
 
 .pr-hero p {
-  margin: 0.4rem 0 0;
-  max-width: 46rem;
-  color: var(--pr-muted);
+  max-width: 650px;
+  margin: 0;
+  color: #d5e8ed;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .pr-hero-stamp {
-  min-width: 88px;
-  padding: 0.8rem 0.9rem;
-  border-radius: 14px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  flex: 0 0 auto;
+  transform: rotate(3deg);
+  border: 1px solid rgba(255, 255, 255, .46);
+  border-radius: 25px;
+  color: var(--pr-ink);
+  background: var(--pr-paper);
+  box-shadow: 8px 9px 0 rgba(8, 41, 64, .22);
   text-align: center;
-  color: #fff;
-  background: var(--pr-teal);
 }
 
 .pr-hero-stamp strong {
   display: block;
-  font-size: 1.6rem;
-  line-height: 1;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 39px;
+  line-height: .86;
 }
 
 .pr-hero-stamp span {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  color: #4a6e7b;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
 }
 
 .pr-layout {
@@ -119,7 +171,7 @@
 
 .pr-people-self button.is-active,
 .pr-person-row.is-active {
-  outline: 2px solid rgba(15, 127, 120, 0.35);
+  outline: 2px solid rgba(19, 143, 123, 0.35);
 }
 
 .pr-dept-group + .pr-dept-group {
@@ -182,14 +234,14 @@
 
 .pr-mini-button.primary {
   color: #fff;
-  background: var(--pr-teal);
-  border-color: var(--pr-teal);
+  background: var(--pr-navy);
+  border-color: var(--pr-navy);
 }
 
 .pr-primary-button {
   padding: 0.65rem 1rem;
   color: #fff;
-  background: var(--pr-teal);
+  background: var(--pr-navy);
 }
 
 .pr-outline-button,
@@ -468,8 +520,23 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .pr-view {
+    padding: 20px 16px 36px;
+  }
+
   .pr-hero {
     flex-direction: column;
-    align-items: start;
+    align-items: flex-start;
+    padding: 24px 22px;
+  }
+
+  .pr-hero-stamp {
+    width: 82px;
+    height: 82px;
+    border-radius: 20px;
+  }
+
+  .pr-hero-stamp strong {
+    font-size: 28px;
   }
 }
