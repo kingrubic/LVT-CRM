@@ -1,12 +1,12 @@
 .duty-reports-view {
-  --report-ink: #14213d;
-  --report-navy: #173f78;
-  --report-blue: #3268ad;
-  --report-teal: #16a085;
-  --report-coral: #ef765f;
-  --report-sun: #f4b942;
-  --report-paper: #fffdf7;
-  --report-line: #dfe7ef;
+  --report-ink: var(--lvt-ink, #16243e);
+  --report-navy: var(--lvt-navy, #14355f);
+  --report-blue: var(--lvt-blue, #28639a);
+  --report-teal: var(--lvt-teal, #138f7b);
+  --report-coral: var(--lvt-coral, #e36d55);
+  --report-sun: var(--lvt-gold, #e9ad43);
+  --report-paper: var(--lvt-paper, #fffdf7);
+  --report-line: var(--lvt-line, #dce5eb);
   max-width: 1480px;
   margin: 0 auto;
   padding: 28px 34px 54px;
@@ -26,8 +26,8 @@
   border-radius: 18px;
   color: #fff;
   background:
-    radial-gradient(circle at 82% 22%, rgba(44, 212, 179, .28), transparent 24%),
-    linear-gradient(120deg, #102c58 0%, #194c83 58%, #1a7a84 130%);
+    radial-gradient(circle at 80% 0%, rgba(230, 167, 66, .31), transparent 27%),
+    linear-gradient(120deg, #102a51 0%, #165273 57%, #127c79 120%);
   box-shadow: 0 20px 48px rgba(21, 55, 103, .2);
   animation: report-rise .45s ease both;
 }

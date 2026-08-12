@@ -2,8 +2,8 @@
   width: min(100%, 960px);
   margin: 0 auto 18px;
   padding: 18px;
-  border: 1px solid #e1e7f1;
-  border-radius: 10px;
+  border: 1px solid var(--lvt-line, #dce5eb);
+  border-radius: 16px;
   background: #fff;
   box-sizing: border-box;
 }

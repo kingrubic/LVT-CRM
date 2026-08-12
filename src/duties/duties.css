@@ -1,11 +1,11 @@
 .duty-workspace {
-  --duty-ink: #16243e;
-  --duty-navy: #14355f;
-  --duty-teal: #138f7b;
-  --duty-coral: #e36d55;
-  --duty-gold: #e9ad43;
-  --duty-paper: #fffdf7;
-  --duty-line: #dce5eb;
+  --duty-ink: var(--lvt-ink, #16243e);
+  --duty-navy: var(--lvt-navy, #14355f);
+  --duty-teal: var(--lvt-teal, #138f7b);
+  --duty-coral: var(--lvt-coral, #e36d55);
+  --duty-gold: var(--lvt-gold, #e9ad43);
+  --duty-paper: var(--lvt-paper, #fffdf7);
+  --duty-line: var(--lvt-line, #dce5eb);
 }
 
 .duty-workspace .duty-hero {

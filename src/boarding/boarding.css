@@ -1,11 +1,11 @@
 .boarding-management,
 .boarding-report {
-  --boarding-ink: #17243d;
-  --boarding-blue: #194d7d;
-  --boarding-teal: #159783;
-  --boarding-coral: #ef765f;
-  --boarding-gold: #f2b94b;
-  --boarding-paper: #fffdf7;
+  --boarding-ink: var(--lvt-ink, #16243e);
+  --boarding-blue: var(--lvt-navy, #14355f);
+  --boarding-teal: var(--lvt-teal, #138f7b);
+  --boarding-coral: var(--lvt-coral, #e36d55);
+  --boarding-gold: var(--lvt-gold, #e9ad43);
+  --boarding-paper: var(--lvt-paper, #fffdf7);
   max-width: 1480px;
   margin: 0 auto;
   padding: 28px 34px 54px;
@@ -25,8 +25,8 @@
   border-radius: 18px;
   color: #fff;
   background:
-    radial-gradient(circle at 82% 8%, rgba(242, 185, 75, .3), transparent 24%),
-    linear-gradient(120deg, #14345f, #156c78);
+    radial-gradient(circle at 80% 0%, rgba(230, 167, 66, .31), transparent 27%),
+    linear-gradient(120deg, #102a51 0%, #165273 57%, #127c79 120%);
   box-shadow: 0 18px 45px rgba(20, 60, 96, .2);
 }
 
@@ -378,7 +378,7 @@
 }
 
 .boarding-primary-button:hover {
-  background: #113b66;
+  background: #102a51;
 }
 
 .boarding-primary-button:disabled {

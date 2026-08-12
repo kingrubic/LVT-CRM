@@ -1,10 +1,11 @@
 .notifications-view {
-  --notice-ink: #183653;
-  --notice-teal: #168879;
-  --notice-paper: #fffef9;
+  --notice-ink: var(--lvt-ink, #16243e);
+  --notice-teal: var(--lvt-teal, #138f7b);
+  --notice-paper: var(--lvt-paper, #fffdf7);
   max-width: 1280px;
   margin: 0 auto;
-  padding: 30px 34px 56px;
+  padding: 28px 34px 58px;
+  font-family: "Montserrat Variable", "Montserrat", sans-serif;
 }
 
 .notifications-hero {
@@ -14,13 +15,13 @@
   justify-content: space-between;
   gap: 28px;
   overflow: hidden;
-  padding: 34px 38px;
-  border-radius: 24px;
+  padding: 29px 32px;
+  border-radius: 20px;
   color: #f8fbff;
   background:
-    radial-gradient(circle at 78% 8%, rgba(243, 188, 78, .25), transparent 24%),
-    linear-gradient(115deg, #123463, #126b77 58%, #1b8b78);
-  box-shadow: 0 22px 48px rgba(22, 72, 105, .2);
+    radial-gradient(circle at 80% 0%, rgba(230, 167, 66, .31), transparent 27%),
+    linear-gradient(120deg, #102a51 0%, #165273 57%, #127c79 120%);
+  box-shadow: 0 21px 50px rgba(18, 53, 87, .2);
 }
 
 .notifications-hero::after {
@@ -50,7 +51,7 @@
 
 .notifications-hero h2 {
   margin: 18px 0 8px;
-  font-size: clamp(30px, 4vw, 48px);
+  font-size: clamp(25px, 3vw, 37px);
   letter-spacing: -.045em;
 }
 
@@ -86,7 +87,7 @@
 }
 
 .notifications-toolbar p { margin: 0; color: #7c8c99; font-size: 11px; }
-.notifications-toolbar button { min-height: 38px; padding: 0 13px; border: 1px solid #c8dedb; border-radius: 10px; color: #176f65; background: #edf8f5; font-size: 10px; font-weight: 850; }
+.notifications-toolbar button { min-height: 38px; padding: 0 13px; border: 1px solid #b6d1d4; border-radius: 10px; color: #126e66; background: #edf8f5; font-size: 10px; font-weight: 850; }
 .notifications-toolbar button:disabled { opacity: .5; cursor: not-allowed; }
 
 .notification-category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
@@ -240,7 +241,7 @@
 .notification-popover-item.unread strong { color: #173b57; font-weight: 900; }
 .notification-popover-item small { color: #95a1a9; font-size: 9px; }
 .notification-popover-empty { padding: 38px 18px; color: #8796a0; text-align: center; font-size: 11px; }
-.notification-popover-footer { width: 100%; min-height: 42px; border: 0; color: #176f65; background: #edf8f5; font-size: 10px; font-weight: 900; }
+.notification-popover-footer { width: 100%; min-height: 42px; border: 0; color: #126e66; background: #edf8f5; font-size: 10px; font-weight: 900; }
 
 @keyframes notification-ring {
   0%, 100% { transform: rotate(0); }
