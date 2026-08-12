@@ -105,7 +105,29 @@ class LoginViewModelTest {
         assertEquals(1, resetCalls)
         assertFalse(viewModel.uiState.value.loading)
         assertTrue(viewModel.uiState.value.error == null)
+        assertEquals(LoginMode.SignIn, viewModel.uiState.value.mode)
         assertTrue(viewModel.uiState.value.info?.contains("mật khẩu tạm") == true)
+    }
+
+    @Test
+    fun genericServerErrorIsMasked() = runTest(dispatcher) {
+        val viewModel = LoginViewModel(
+            object : SignInGateway {
+                override suspend fun signIn(email: String, password: String): Result<UserSession> =
+                    Result.failure(IllegalStateException("[Request ID: abc] Server Error"))
+
+                override suspend fun requestPasswordReset(email: String): Result<Unit> =
+                    Result.success(Unit)
+            },
+        )
+        viewModel.onEmailChange("user@example.com")
+        viewModel.onPasswordChange("password")
+        viewModel.signIn()
+        advanceUntilIdle()
+        assertEquals(
+            "Không thể đăng nhập. Hãy kiểm tra email, mật khẩu rồi thử lại.",
+            viewModel.uiState.value.error,
+        )
     }
 
     private fun session() = UserSession(

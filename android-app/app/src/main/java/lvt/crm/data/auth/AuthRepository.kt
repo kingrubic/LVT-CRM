@@ -168,13 +168,17 @@ class AuthRepository(
         }
     }
 
-    suspend fun changePassword(newPassword: String): Result<Unit> {
+    suspend fun changePassword(newPassword: String, currentPassword: String? = null): Result<Unit> {
         val generation = authGeneration.get()
         if (newPassword.length < 8) {
             return Result.failure(ConvexException("PASSWORD_TOO_SHORT", ConvexHttpClient.humanize("PASSWORD_TOO_SHORT")))
         }
         try {
-            convex.action("users:changeOwnPassword", JSONObject().put("newPassword", newPassword))
+            val args = JSONObject().put("newPassword", newPassword)
+            if (!currentPassword.isNullOrBlank()) {
+                args.put("currentPassword", currentPassword)
+            }
+            convex.action("users:changeOwnPassword", args)
         } catch (e: ConvexException) {
             return Result.failure(e)
         } catch (e: Exception) {

@@ -13,8 +13,8 @@ android {
         applicationId = "lvt.crm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.5.6"
+        versionCode = 15
+        versionName = "0.5.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     }
@@ -29,6 +29,11 @@ android {
                 "CONVEX_URL",
                 "\"${project.findProperty("lvt.convex.debug.url") ?: "http://10.0.2.2:3210"}\"",
             )
+            buildConfigField(
+                "String",
+                "WEB_URL",
+                "\"${project.findProperty("lvt.web.debug.url") ?: "https://lvt.vscgroup.io.vn"}\"",
+            )
         }
         release {
             isMinifyEnabled = true
@@ -41,6 +46,11 @@ android {
                 "String",
                 "CONVEX_URL",
                 "\"${project.findProperty("lvt.convex.release.url") ?: "https://lvt-convex.vscgroup.io.vn"}\"",
+            )
+            buildConfigField(
+                "String",
+                "WEB_URL",
+                "\"${project.findProperty("lvt.web.release.url") ?: "https://lvt.vscgroup.io.vn"}\"",
             )
         }
     }

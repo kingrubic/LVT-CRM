@@ -100,6 +100,7 @@ class LoginViewModel(
             _uiState.update {
                 if (result.isSuccess) {
                     it.copy(
+                        mode = LoginMode.SignIn,
                         loading = false,
                         error = null,
                         info = "Nếu email tồn tại trong hệ thống, mật khẩu tạm đã được gửi. Kiểm tra hộp thư rồi đăng nhập và đổi mật khẩu mới.",
@@ -115,15 +116,21 @@ class LoginViewModel(
         }
     }
 
-    private fun humanizeError(err: Throwable): String =
-        when {
+    private fun humanizeError(err: Throwable): String {
+        val raw = err.message.orEmpty()
+        val isGenericServerError = raw.equals("Server Error", ignoreCase = true) ||
+            Regex("""^\[Request ID:[^\]]+]\s*Server Error\s*$""", RegexOption.IGNORE_CASE).matches(raw)
+        return when {
             err.message == "EMAIL_PASSWORD_REQUIRED" ->
                 "Vui lòng nhập email và mật khẩu."
             err.message == "EMAIL_REQUIRED" ->
                 "Vui lòng nhập email."
+            isGenericServerError ->
+                "Không thể đăng nhập. Hãy kiểm tra email, mật khẩu rồi thử lại."
             err is ConvexException -> err.message
             else -> ConvexHttpClient.humanize(err.message ?: "SIGN_IN_FAILED")
         }
+    }
 
     companion object {
         fun factory(authRepository: AuthRepository): ViewModelProvider.Factory =

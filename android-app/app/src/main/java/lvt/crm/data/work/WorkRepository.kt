@@ -1,7 +1,16 @@
 package lvt.crm.data.work
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import lvt.crm.data.convex.ConvexConfig
+import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.convex.ConvexHttpClient
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
+import java.io.File
+import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 data class WorkTaskItem(
     val id: String,
@@ -52,6 +61,8 @@ data class WorkApprovalItem(
     val approvalTotal: Int,
     val myDecision: String,
     val assignments: List<WorkDocumentAssignment> = emptyList(),
+    val fileUrl: String = "",
+    val privateFile: Boolean = false,
 )
 
 data class WorkSnapshot(
@@ -92,7 +103,17 @@ interface WorkOperations {
 
 class WorkRepository(
     private val convex: ConvexHttpClient,
+    private val tokenProvider: () -> String? = { null },
+    cacheDir: File? = null,
+    private val webUrl: String = ConvexConfig.webUrl,
 ) : WorkOperations {
+    private val documentCache = cacheDir?.let { WorkDocumentCache(File(it, "work-documents")) }
+    private val downloadHttp = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .writeTimeout(45, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
     override suspend fun listMine(): WorkSnapshot {
         val result = convex.query("work:listMine")
         val isAdmin = result.optBoolean("isAdmin", false)
@@ -127,6 +148,8 @@ class WorkRepository(
                     approvalTotal = document.optInt("approvalTotal"),
                     myDecision = myDecision,
                     assignments = parseAssignments(document.optJSONArray("assignments")),
+                    fileUrl = document.optString("fileUrl"),
+                    privateFile = document.optBoolean("privateFile", false),
                 )
             }
         }
@@ -148,6 +171,8 @@ class WorkRepository(
                     approvalTotal = document.optInt("approvalTotal"),
                     myDecision = "",
                     assignments = parseAssignments(document.optJSONArray("assignments")),
+                    fileUrl = document.optString("fileUrl"),
+                    privateFile = document.optBoolean("privateFile", false),
                 )
             }
             completionReviews = parseCompletionReviews(adminResult.optJSONArray("pendingCompletionReviews"))
@@ -237,6 +262,80 @@ class WorkRepository(
         if (!rejectionReason.isNullOrBlank()) args.put("rejectionReason", rejectionReason)
         convex.mutation("work:reviewWorkCompletion", args)
     }
+
+    suspend fun downloadDocument(document: WorkApprovalItem): File = withContext(Dispatchers.IO) {
+        val cache = documentCache
+            ?: throw ConvexException("WORK_FILE_UNAVAILABLE", "Tệp công văn chưa sẵn sàng để mở.")
+        val request: Request
+        val sourceIdentity: String
+        val publicUrl = document.fileUrl.trim()
+        if (publicUrl.isNotEmpty()) {
+            request = Request.Builder().url(publicUrl).get().build()
+            sourceIdentity = "public:${document.id}:$publicUrl"
+        } else if (document.privateFile) {
+            val token = tokenProvider()?.takeIf { it.isNotBlank() }
+                ?: throw ConvexException("WORK_FILE_FORBIDDEN", "Bạn không còn quyền mở tệp công văn này.")
+            val encodedId = URLEncoder.encode(document.id, Charsets.UTF_8.name()).replace("+", "%20")
+            val base = webUrl.trimEnd('/')
+            val metadataRequest = Request.Builder()
+                .url("$base/api/files/$encodedId/metadata")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            val metadata = downloadHttp.newCall(metadataRequest).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    throw ConvexException("WORK_FILE_FORBIDDEN", "Bạn không còn quyền mở tệp công văn này.")
+                }
+                runCatching { JSONObject(body) }.getOrElse {
+                    throw ConvexException("WORK_FILE_FORBIDDEN", "Bạn không còn quyền mở tệp công văn này.")
+                }
+            }
+            val fileVersion = metadata.optString("fileVersion")
+            if (fileVersion.isBlank()) {
+                throw ConvexException("WORK_FILE_FORBIDDEN", "Bạn không còn quyền mở tệp công văn này.")
+            }
+            request = Request.Builder()
+                .url("$base/api/files/$encodedId")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            sourceIdentity = "private:${document.id}:$fileVersion"
+        } else {
+            throw ConvexException("WORK_FILE_UNAVAILABLE", "Tệp công văn chưa sẵn sàng để mở.")
+        }
+        cache.cachedFile(sourceIdentity)?.let { return it }
+        val tempDir = cacheDirFallback().apply { mkdirs() }
+        val downloaded = File.createTempFile("lvt-work-", ".part", tempDir)
+        try {
+            downloadHttp.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw ConvexException("WORK_FILE_DOWNLOAD_FAILED", "Không thể tải tệp công văn. Hãy thử lại.")
+                }
+                val body = response.body
+                    ?: throw ConvexException("WORK_FILE_DOWNLOAD_FAILED", "Không thể tải tệp công văn. Hãy thử lại.")
+                body.byteStream().use { input ->
+                    downloaded.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+            if (downloaded.length() <= 0L) {
+                throw ConvexException("WORK_FILE_DOWNLOAD_FAILED", "Không thể tải tệp công văn. Hãy thử lại.")
+            }
+            return@withContext cache.store(
+                downloaded,
+                sourceIdentity,
+                document.fileName.ifBlank { "cong-van" },
+            )
+        } catch (error: ConvexException) {
+            downloaded.delete()
+            throw error
+        } catch (_: Exception) {
+            downloaded.delete()
+            throw ConvexException("WORK_FILE_DOWNLOAD_FAILED", "Không thể tải tệp công văn. Hãy thử lại.")
+        }
+    }
+
+    private fun cacheDirFallback(): File = File(System.getProperty("java.io.tmpdir") ?: ".", "lvt-work-temp")
 }
 
 private fun parseAssignments(items: org.json.JSONArray?): List<WorkDocumentAssignment> {

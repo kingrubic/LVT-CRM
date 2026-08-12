@@ -7,46 +7,34 @@ import android.os.Build
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.WorkOutline
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -63,17 +51,23 @@ import lvt.crm.push.NotificationMarkReadWorker
 import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.auth.LoginScreen
 import lvt.crm.ui.auth.LoginViewModel
-import lvt.crm.ui.components.SchoolLogo
 import lvt.crm.ui.duties.DutiesScreen
 import lvt.crm.ui.duties.DutiesViewModel
+import lvt.crm.ui.home.DashboardScreen
+import lvt.crm.ui.home.DashboardViewModel
 import lvt.crm.ui.home.PlaceholderScreen
 import lvt.crm.ui.notifications.NotificationsScreen
 import lvt.crm.ui.notifications.NotificationsViewModel
 import lvt.crm.ui.profile.ProfileScreen
+import lvt.crm.ui.work.WorkFileOpener
 import lvt.crm.ui.work.WorkScreen
 import lvt.crm.ui.work.WorkViewModel
+import lvt.crm.data.convex.ConvexException
+import lvt.crm.data.work.WorkApprovalItem
+import kotlinx.coroutines.launch
 
 private object Routes {
+    const val Overview = "overview"
     const val Notifications = "notifications"
     const val Duties = "duties"
     const val Work = "work"
@@ -138,20 +132,38 @@ private fun MainShell(
 ) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
-    val current = backStack?.destination?.route ?: Routes.Notifications
+    val current = backStack?.destination?.route ?: Routes.Overview
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fileOpener = remember(container.workRepository) {
+        WorkFileOpener(context, container.workRepository)
+    }
     val notificationsViewModel: NotificationsViewModel = viewModel(
         factory = NotificationsViewModel.factory(container.notificationsRepository),
     )
     val notificationState by notificationsViewModel.uiState.collectAsState()
     var focusTarget by remember { mutableStateOf<NotificationDestination?>(null) }
     var tabOpenToken by remember { mutableStateOf(0) }
+    var fileError by remember { mutableStateOf<String?>(null) }
 
     val tabs = listOf(
+        Triple(Routes.Overview, R.string.nav_overview, Icons.Outlined.Dashboard),
         Triple(Routes.Notifications, R.string.nav_notifications, Icons.Outlined.Notifications),
         Triple(Routes.Duties, R.string.nav_duties, Icons.Outlined.WorkOutline),
         Triple(Routes.Work, R.string.nav_work, Icons.Outlined.TaskAlt),
         Triple(Routes.Profile, R.string.nav_profile, Icons.Outlined.Person),
     )
+
+    fun openDocument(document: WorkApprovalItem) {
+        scope.launch {
+            runCatching { fileOpener.open(document) }
+                .onFailure { failure ->
+                    fileError = (failure as? ConvexException)?.message
+                        ?: failure.message
+                        ?: "Không thể mở tệp công văn."
+                }
+        }
+    }
 
     fun openNotification(item: NotificationItem) {
         val destination = NotificationDestination(
@@ -187,40 +199,20 @@ private fun MainShell(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            LvtAppBar(sessionName)
-        },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
-            ) {
+            NavigationBar {
                 tabs.forEach { (route, labelRes, icon) ->
                     NavigationBarItem(
                         selected = current == route,
                         onClick = {
                             tabOpenToken += 1
                             focusTarget = null
-                            if (route == Routes.Notifications) {
-                                if (current != Routes.Notifications) {
-                                    val returnedToNotifications = navController.popBackStack(
-                                        route = Routes.Notifications,
-                                        inclusive = false,
-                                    )
-                                    if (!returnedToNotifications) {
-                                        navController.navigate(Routes.Notifications) {
-                                            launchSingleTop = true
-                                        }
-                                    }
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
                                 }
-                            } else {
-                                navController.navigate(route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
                         },
                         icon = {
@@ -238,30 +230,63 @@ private fun MainShell(
                                         }
                                     },
                                 ) {
-                                    Icon(icon, contentDescription = null)
+                                    Icon(icon, contentDescription = stringResource(labelRes))
                                 }
                             } else {
-                                Icon(icon, contentDescription = null)
+                                Icon(icon, contentDescription = stringResource(labelRes))
                             }
                         },
                         label = { Text(stringResource(labelRes)) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
                     )
                 }
             }
         },
     ) { padding ->
+        if (fileError != null) {
+            AlertDialog(
+                onDismissRequest = { fileError = null },
+                title = { Text("Không mở được tệp") },
+                text = { Text(fileError.orEmpty()) },
+                confirmButton = {
+                    TextButton(onClick = { fileError = null }) { Text("Đóng") }
+                },
+            )
+        }
         NavHost(
             navController = navController,
-            startDestination = Routes.Notifications,
+            startDestination = Routes.Overview,
             modifier = Modifier.padding(padding),
         ) {
+            composable(Routes.Overview) {
+                val vm: DashboardViewModel = viewModel(
+                    factory = DashboardViewModel.factory(
+                        container.dutiesRepository,
+                        container.workRepository,
+                    ),
+                )
+                DashboardScreen(
+                    viewModel = vm,
+                    tabOpenToken = tabOpenToken,
+                    onOpenDuties = {
+                        navController.navigate(Routes.Duties) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onOpenWork = {
+                        navController.navigate(Routes.Work) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+            }
             composable(Routes.Notifications) {
                 NotificationsScreen(
                     viewModel = notificationsViewModel,
@@ -291,6 +316,7 @@ private fun MainShell(
                         ?.takeIf { it.route == Routes.Work }
                         ?.sourceId,
                     tabOpenToken = tabOpenToken,
+                    onOpenDocument = ::openDocument,
                 )
             }
             composable(Routes.Profile) {
@@ -302,54 +328,8 @@ private fun MainShell(
                     positionName = positionName,
                     authRepository = container.authRepository,
                     sessionsRepository = container.sessionsRepository,
+                    appearanceStore = container.appearanceStore,
                     onSignOut = onSignOut,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LvtAppBar(sessionName: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 1.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .height(68.dp)
-                .padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SchoolLogo(size = 42.dp)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "THCS Lê Văn Tám",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    "CRM nội bộ",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    sessionName.trim().firstOrNull()?.uppercase() ?: "L",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
         }

@@ -11,6 +11,7 @@ import lvt.crm.data.notifications.NotificationsRepository
 import lvt.crm.data.work.WorkRepository
 import lvt.crm.push.NotificationScheduler
 import lvt.crm.push.FcmTokenRegistrar
+import lvt.crm.ui.theme.AppearanceStore
 
 class AppContainer(context: Context) {
     val appContext = context.applicationContext
@@ -35,6 +36,11 @@ class AppContainer(context: Context) {
     )
     val dutiesRepository = DutiesRepository(convex)
     val notificationsRepository = NotificationsRepository(convex)
-    val workRepository = WorkRepository(convex)
+    val workRepository = WorkRepository(
+        convex,
+        tokenProvider = { tokenStore.accessToken },
+        cacheDir = appContext.cacheDir,
+    )
     val notificationScheduler = NotificationScheduler(appContext)
+    val appearanceStore = AppearanceStore(appContext)
 }

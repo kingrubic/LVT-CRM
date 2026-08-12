@@ -31,11 +31,14 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import lvt.crm.data.notifications.NotificationItem
-import lvt.crm.ui.components.ScreenHeader
+import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatePanel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -76,38 +79,25 @@ fun NotificationsScreen(
         if (visibleItems.isNotEmpty()) listState.scrollToItem(0)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 18.dp),
-    ) {
-        ScreenHeader(
-            title = "Thông báo",
-            subtitle = "Những việc cần chú ý sắp tới",
-            icon = Icons.Outlined.Notifications,
-            refreshing = state.refreshing,
-            onRefresh = { viewModel.refresh() },
-            refreshContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            refreshContentColor = MaterialTheme.colorScheme.secondary,
-            trailing = {
-                if (state.unreadCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiary),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            if (state.unreadCount > 99) "99+" else state.unreadCount.toString(),
-                            color = MaterialTheme.colorScheme.onTertiary,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
+    LvtScreen(
+        title = "Thông báo",
+        refreshing = state.refreshing,
+        onRefresh = { viewModel.refresh() },
+        actions = {
+            if (state.unreadCount > 0) {
+                Badge {
+                    Text(
+                        if (state.unreadCount > 99) "99+" else state.unreadCount.toString(),
+                    )
                 }
-            },
-        )
-
+            }
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+        ) {
         when {
             state.loading -> {
                 Column(
@@ -151,18 +141,17 @@ fun NotificationsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilterPill(
-                        label = "${state.unreadCount} chưa đọc",
+                    FilterChip(
                         selected = unreadOnly,
-                        accent = true,
                         onClick = { unreadOnly = !unreadOnly },
+                        label = { Text("${state.unreadCount} chưa đọc") },
                     )
                     if (state.settings.milestonesHours.isNotEmpty()) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            FilterPill(
-                                label = milestoneSummary(state.settings.milestonesHours),
-                            )
-                        }
+                        AssistChip(
+                            onClick = {},
+                            enabled = false,
+                            label = { Text(milestoneSummary(state.settings.milestonesHours)) },
+                        )
                     }
                 }
                 state.actionError?.let {
@@ -235,6 +224,7 @@ fun NotificationsScreen(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -383,53 +373,6 @@ private fun NotificationCard(
             }
         }
     }
-}
-
-@Composable
-private fun FilterPill(
-    label: String,
-    selected: Boolean = false,
-    accent: Boolean = false,
-    onClick: (() -> Unit)? = null,
-) {
-    val contentColor = if (accent) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Text(
-        label,
-        style = MaterialTheme.typography.labelLarge,
-        color = contentColor,
-        modifier = Modifier
-            .clip(CircleShape)
-            .then(
-                if (onClick != null) {
-                    Modifier.clickable(onClick = onClick)
-                } else {
-                    Modifier
-                },
-            )
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f)
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.01f)
-                },
-            )
-            .border(
-                BorderStroke(
-                    width = 1.dp,
-                    color = if (accent) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.outlineVariant
-                    },
-                ),
-                CircleShape,
-            )
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    )
 }
 
 internal fun visibleNotifications(

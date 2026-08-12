@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AssignmentLate
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -42,8 +43,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -62,7 +66,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import lvt.crm.data.work.WorkTaskItem
@@ -70,7 +73,7 @@ import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkDocumentAssignment
 import lvt.crm.data.work.needsCompletion
-import lvt.crm.ui.components.ScreenHeader
+import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatePanel
 import lvt.crm.ui.components.StatusPill
 import lvt.crm.ui.components.StatusTone
@@ -80,6 +83,7 @@ fun WorkScreen(
     viewModel: WorkViewModel,
     focusId: String?,
     tabOpenToken: Int,
+    onOpenDocument: (WorkApprovalItem) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
     if (state.isAdmin) {
@@ -88,6 +92,7 @@ fun WorkScreen(
             focusId = focusId,
             onRefresh = viewModel::refresh,
             onReview = viewModel::reviewCompletion,
+            onOpenDocument = onOpenDocument,
         )
         return
     }
@@ -95,6 +100,10 @@ fun WorkScreen(
     var pendingApprovalAction by remember { mutableStateOf<ApprovalAction?>(null) }
     var pendingCompletionTask by remember { mutableStateOf<WorkTaskItem?>(null) }
     var pendingFilterOnly by rememberSaveable { mutableStateOf(false) }
+    var selectedApprovalId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
+    var missingFocus by remember { mutableStateOf(false) }
+    var consumedFocusId by remember { mutableStateOf<String?>(null) }
     val canApproveDocuments = state.accessLevel >= 4
     val orderedApprovals = orderedWorkApprovals(state.approvals)
     val pendingApprovalCount = orderedApprovals.count { it.myDecision.isBlank() }
@@ -108,6 +117,24 @@ fun WorkScreen(
         canApproveDocuments && pendingFilterOnly && focusId == null -> emptyList()
         !canApproveDocuments && pendingFilterOnly && focusId == null -> state.tasks.filter { needsCompletion(it.status) }
         else -> state.tasks
+    }
+    val selectedApproval = state.approvals.firstOrNull { it.id == selectedApprovalId }
+    val selectedTask = state.tasks.firstOrNull { it.id == selectedTaskId }
+
+    BackHandler(enabled = selectedApprovalId != null || selectedTaskId != null) {
+        selectedApprovalId = null
+        selectedTaskId = null
+    }
+    LaunchedEffect(focusId, state.loading, state.approvals, state.tasks) {
+        if (focusId.isNullOrBlank() || state.loading || consumedFocusId == focusId) return@LaunchedEffect
+        consumedFocusId = focusId
+        val approval = state.approvals.firstOrNull { it.id == focusId }
+        val task = state.tasks.firstOrNull { it.id == focusId }
+        when {
+            approval != null -> selectedApprovalId = approval.id
+            task != null -> selectedTaskId = task.id
+            else -> missingFocus = true
+        }
     }
 
     LaunchedEffect(focusId, visibleApprovals, visibleTasks) {
@@ -126,19 +153,46 @@ fun WorkScreen(
         if (visibleApprovals.isNotEmpty() || visibleTasks.isNotEmpty()) listState.scrollToItem(0)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 18.dp),
-    ) {
-        ScreenHeader(
-            title = "Công việc",
-            subtitle = "Theo dõi tiến độ và hoàn thành",
-            icon = Icons.Outlined.TaskAlt,
-            refreshing = state.refreshing,
-            onRefresh = { viewModel.refresh() },
+    if (missingFocus) {
+        AlertDialog(
+            onDismissRequest = { missingFocus = false },
+            title = { Text("Không tìm thấy công việc") },
+            text = { Text("Mục này không còn tồn tại hoặc bạn không có quyền xem.") },
+            confirmButton = {
+                TextButton(onClick = { missingFocus = false }) { Text("Đóng") }
+            },
         )
+    }
 
+    selectedApproval?.let { document ->
+        WorkDocumentDetailScreen(
+            document = document,
+            onBack = { selectedApprovalId = null },
+            onOpenFile = { onOpenDocument(document) },
+        )
+    } ?: selectedTask?.let { task ->
+        WorkTaskDetailScreen(
+            task = task,
+            busy = state.busyTaskId != null,
+            onBack = { selectedTaskId = null },
+            onComplete = {
+                if (task.isAdmin) {
+                    viewModel.requestComplete(task)
+                } else {
+                    pendingCompletionTask = task
+                }
+            },
+        )
+    } ?: LvtScreen(
+        title = "Công việc",
+        refreshing = state.refreshing,
+        onRefresh = { viewModel.refresh() },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+        ) {
         when {
             state.loading -> {
                 Column(
@@ -181,7 +235,7 @@ fun WorkScreen(
                         .padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    WorkFilterPill(
+                    WorkFilterChip(
                         label = if (canApproveDocuments) {
                             "$pendingApprovalCount công việc chờ duyệt"
                         } else {
@@ -239,6 +293,8 @@ fun WorkScreen(
                                 onDecision = { approve ->
                                     pendingApprovalAction = ApprovalAction(approval, approve)
                                 },
+                                onOpenDocument = { onOpenDocument(approval) },
+                                onOpenDetail = { selectedApprovalId = approval.id },
                             )
                         }
                     }
@@ -265,6 +321,7 @@ fun WorkScreen(
                             task = task,
                             focused = task.id == focusId,
                             busy = state.busyTaskId != null || state.busyApprovalId != null,
+                            onOpen = { selectedTaskId = task.id },
                             onComplete = {
                                 if (task.isAdmin) {
                                     viewModel.requestComplete(task)
@@ -276,6 +333,7 @@ fun WorkScreen(
                     }
                 }
             }
+        }
         }
     }
 
@@ -330,9 +388,9 @@ fun WorkScreen(
             text = {
                 Text(
                     if (approvalAction.approve) {
-                        "Ba có chắc chắn duyệt công văn này không? Quyết định sẽ không thể thay đổi."
+                        "Bạn có chắc chắn duyệt công văn này không? Quyết định sẽ không thể thay đổi."
                     } else {
-                        "Ba có chắc chắn không duyệt công văn này không? Quyết định sẽ không thể thay đổi."
+                        "Bạn có chắc chắn không duyệt công văn này không? Quyết định sẽ không thể thay đổi."
                     },
                 )
             },
@@ -361,7 +419,7 @@ fun WorkScreen(
             title = { Text("Xác nhận hoàn thành") },
             text = {
                 Text(
-                    "Ba có chắc chắn báo đã hoàn thành công việc “${completionTask.title}” không?",
+                    "Bạn có chắc chắn báo đã hoàn thành công việc “${completionTask.title}” không?",
                 )
             },
             confirmButton = {
@@ -391,6 +449,7 @@ private fun AdminWorkScreen(
     focusId: String?,
     onRefresh: () -> Unit,
     onReview: (WorkCompletionReviewItem, Boolean, Int?, String?) -> Unit,
+    onOpenDocument: (WorkApprovalItem) -> Unit,
 ) {
     var filter by rememberSaveable { mutableStateOf(AdminDocumentFilter.All) }
     var selectedDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -407,9 +466,14 @@ private fun AdminWorkScreen(
     BackHandler(enabled = selectedDocumentId != null && selectedReview == null) {
         selectedDocumentId = null
     }
-    LaunchedEffect(focusId, state.approvals) {
+    LaunchedEffect(focusId, state.approvals, state.completionReviews, state.loading) {
+        if (focusId.isNullOrBlank() || state.loading) return@LaunchedEffect
+        val review = state.completionReviews.firstOrNull { it.workItemId == focusId }
         val focusedDocument = focusedAdminDocument(state.approvals, focusId)
-        if (focusedDocument != null) selectedDocumentId = focusedDocument.id
+        when {
+            review != null -> selectedReview = review
+            focusedDocument != null -> selectedDocumentId = focusedDocument.id
+        }
     }
     LaunchedEffect(selectedDocumentId, selectedDocument) {
         if (selectedDocumentId != null && selectedDocument == null && !state.loading) {
@@ -417,23 +481,26 @@ private fun AdminWorkScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 18.dp),
-    ) {
-        ScreenHeader(
-            title = if (selectedDocument == null) "Công văn" else "Công việc",
-            subtitle = if (selectedDocument == null) {
-                "Công văn chờ duyệt và đã duyệt"
-            } else {
-                "Theo dõi tiến độ theo phòng ban và người thực hiện"
-            },
-            icon = Icons.Outlined.TaskAlt,
+    Column(modifier = Modifier.fillMaxSize()) {
+        LvtScreen(
+            title = if (selectedDocument == null) "Công việc" else "Chi tiết công văn",
             refreshing = state.refreshing,
             onRefresh = onRefresh,
-        )
-
+            navigationIcon = if (selectedDocument != null) {
+                {
+                    IconButton(onClick = { selectedDocumentId = null }) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại")
+                    }
+                }
+            } else {
+                null
+            },
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+            ) {
         when {
             state.loading -> LoadingWorkPanel()
             state.error != null -> WorkLoadError(state.error.orEmpty(), onRefresh)
@@ -502,18 +569,12 @@ private fun AdminWorkScreen(
             }
             else -> {
                 val document = selectedDocument ?: return@Column
-                TextButton(
-                    onClick = { selectedDocumentId = null },
-                    modifier = Modifier.padding(bottom = 6.dp),
-                ) {
-                    Text("← Danh sách công văn")
-                }
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    item { DocumentSummaryCard(document) }
+                    item { DocumentSummaryCard(document, onOpenDocument = { onOpenDocument(document) }) }
                     if (document.assignments.isEmpty()) {
                         item {
                             StatePanel(
@@ -557,6 +618,8 @@ private fun AdminWorkScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
+        }
+            }
         }
     }
 
@@ -702,26 +765,14 @@ private fun AdminDocumentTabs(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 14.dp)
-            .clip(MaterialTheme.shapes.large)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .52f))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(bottom = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         tabs.forEach { (value, label) ->
-            val isSelected = selected == value
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = .01f))
-                    .clickable { onSelect(value) }
-                    .padding(vertical = 10.dp),
+            FilterChip(
+                selected = selected == value,
+                onClick = { onSelect(value) },
+                label = { Text(label) },
             )
         }
     }
@@ -756,7 +807,10 @@ internal fun focusedAdminDocument(
 }
 
 @Composable
-private fun DocumentSummaryCard(document: WorkApprovalItem) {
+private fun DocumentSummaryCard(
+    document: WorkApprovalItem,
+    onOpenDocument: () -> Unit,
+) {
     val members = document.assignments.flatMap { it.members }
     val completedCount = members.count { it.status in completedWorkStatuses }
     Card(
@@ -766,8 +820,8 @@ private fun DocumentSummaryCard(document: WorkApprovalItem) {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .7f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
+        Column(modifier = Modifier.padding(18.dp)) {
         Row(
-            modifier = Modifier.padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -842,6 +896,15 @@ private fun DocumentSummaryCard(document: WorkApprovalItem) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+            FilledTonalButton(
+                onClick = onOpenDocument,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+            ) {
+                Text("Mở tệp")
             }
         }
     }
@@ -1004,30 +1067,15 @@ private fun memberStatusPill(status: String): Pair<String, StatusTone>? = when (
 }
 
 @Composable
-private fun WorkFilterPill(
+private fun WorkFilterChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Text(
-        label,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f)
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.01f)
-                },
-            )
-            .border(
-                BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                CircleShape,
-            )
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
     )
 }
 
@@ -1060,6 +1108,8 @@ private fun ApprovalCard(
     focused: Boolean,
     busy: Boolean,
     onDecision: (Boolean) -> Unit,
+    onOpenDocument: () -> Unit,
+    onOpenDetail: () -> Unit,
 ) {
     val isPending = approval.myDecision.isBlank()
     val accentColor = when (approval.myDecision) {
@@ -1104,6 +1154,7 @@ private fun ApprovalCard(
                     .background(accentColor),
             )
             Card(
+                onClick = onOpenDetail,
                 modifier = Modifier.weight(1f),
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = cardContainerColor),
@@ -1160,6 +1211,13 @@ private fun ApprovalCard(
                         icon = Icons.Outlined.CheckCircle,
                         text = "Đã duyệt ${approval.approvalCount}/${approval.approvalTotal}",
                     )
+                    TextButton(
+                        onClick = onOpenDocument,
+                        enabled = !busy,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Text("Mở tệp")
+                    }
                     if (isPending) {
                         Row(
                             modifier = Modifier
@@ -1219,6 +1277,7 @@ private fun WorkCard(
     task: WorkTaskItem,
     focused: Boolean,
     busy: Boolean,
+    onOpen: () -> Unit,
     onComplete: () -> Unit,
 ) {
     val canComplete = needsCompletion(task.status)
@@ -1266,6 +1325,7 @@ private fun WorkCard(
                     .background(accentColor),
             )
             Card(
+                onClick = onOpen,
                 modifier = Modifier.weight(1f),
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = cardContainerColor),
@@ -1412,12 +1472,12 @@ private fun DetailLine(
     }
 }
 
-private fun workStatusLabel(task: WorkTaskItem): String {
+internal fun workStatusLabel(task: WorkTaskItem): String {
     val base = workStatusLabel(task.status)
     return if (task.qualityPercent != null) "$base · ${task.qualityPercent}%" else base
 }
 
-private fun workStatusLabel(status: String): String {
+internal fun workStatusLabel(status: String): String {
     return when (status) {
         "pending_task", "pending" -> "Chưa hoàn thành"
         "overdue" -> "Quá hạn"
@@ -1429,7 +1489,7 @@ private fun workStatusLabel(status: String): String {
     }
 }
 
-private fun workStatusTone(status: String): StatusTone = when (status) {
+internal fun workStatusTone(status: String): StatusTone = when (status) {
     "completed", "approved", "done" -> StatusTone.Positive
     "overdue", "rejected_completion", "rejected" -> StatusTone.Warning
     "pending_completion", "pending_approval" -> StatusTone.Primary

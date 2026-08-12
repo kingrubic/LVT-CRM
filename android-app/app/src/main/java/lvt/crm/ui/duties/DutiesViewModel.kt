@@ -17,6 +17,29 @@ import lvt.crm.data.duties.DutiesRepository
 import lvt.crm.data.duties.DutiesOperations
 import lvt.crm.data.duties.DutyItem
 
+enum class DutyFilter {
+    All,
+    Ongoing,
+    Upcoming,
+    Ended,
+    ;
+
+    val title: String
+        get() = when (this) {
+            All -> "Tất cả"
+            Ongoing -> "Đang diễn ra"
+            Upcoming -> "Sắp tới"
+            Ended -> "Đã kết thúc"
+        }
+
+    fun includes(duty: DutyItem): Boolean = when (this) {
+        All -> true
+        Ongoing -> duty.isOngoing
+        Upcoming -> duty.isUpcoming
+        Ended -> duty.isOverdue
+    }
+}
+
 data class DutiesUiState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
@@ -25,7 +48,11 @@ data class DutiesUiState(
     val attendanceConfirmationEnabled: Boolean = false,
     val duties: List<DutyItem> = emptyList(),
     val busyDutyId: String? = null,
-)
+    val filter: DutyFilter = DutyFilter.All,
+) {
+    val visibleDuties: List<DutyItem>
+        get() = duties.filter(filter::includes)
+}
 
 class DutiesViewModel(
     private val repository: DutiesOperations,
@@ -76,6 +103,10 @@ class DutiesViewModel(
                 releaseOperation()
             }
         }
+    }
+
+    fun setFilter(filter: DutyFilter) {
+        _uiState.update { it.copy(filter = filter) }
     }
 
     fun setAttendance(dutyId: String, status: String) {

@@ -4,9 +4,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -15,11 +18,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +61,53 @@ fun SchoolLogo(
                 .padding(size * 0.08f)
                 .clip(CircleShape),
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LvtScreen(
+    title: String,
+    refreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
+    navigationIcon: @Composable (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text(title) },
+            navigationIcon = { navigationIcon?.invoke() },
+            actions = {
+                if (onRefresh != null) {
+                    IconButton(onClick = onRefresh, enabled = !refreshing) {
+                        if (refreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "Làm mới")
+                        }
+                    }
+                }
+                actions()
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+        )
+        if (onRefresh != null) {
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize(),
+                content = content,
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), content = content)
+        }
     }
 }
 

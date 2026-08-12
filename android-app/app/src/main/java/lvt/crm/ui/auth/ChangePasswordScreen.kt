@@ -62,6 +62,8 @@ fun ChangePasswordScreen(
     onCancel: (() -> Unit)? = null,
 ) {
     // Keep password material out of saved instance state; only the enclosing route is restorable.
+    var currentPassword by remember { mutableStateOf("") }
+    var currentVisible by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -125,6 +127,21 @@ fun ChangePasswordScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
+                    if (allowCancel) {
+                        PasswordField(
+                            value = currentPassword,
+                            onValueChange = {
+                                currentPassword = it
+                                error = null
+                                success = null
+                            },
+                            label = "Mật khẩu hiện tại",
+                            visible = currentVisible,
+                            onToggleVisibility = { currentVisible = !currentVisible },
+                            enabled = !loading,
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
                     PasswordField(
                         value = password,
                         onValueChange = {
@@ -186,6 +203,8 @@ fun ChangePasswordScreen(
                     Button(
                         onClick = {
                             when {
+                                allowCancel && currentPassword.isBlank() ->
+                                    error = "Vui lòng nhập mật khẩu hiện tại."
                                 password.length < 8 ->
                                     error = "Mật khẩu phải có ít nhất 8 ký tự."
                                 password != confirmation ->
@@ -194,12 +213,16 @@ fun ChangePasswordScreen(
                                     loading = true
                                     error = null
                                     success = null
-                                    val result = authRepository.changePassword(password)
+                                    val result = authRepository.changePassword(
+                                        password,
+                                        currentPassword = currentPassword.takeIf { allowCancel },
+                                    )
                                     loading = false
                                     result.fold(
                                         onSuccess = {
                                             password = ""
                                             confirmation = ""
+                                            currentPassword = ""
                                             passwordVisible = false
                                             confirmationVisible = false
                                             success = "Đã đổi mật khẩu."

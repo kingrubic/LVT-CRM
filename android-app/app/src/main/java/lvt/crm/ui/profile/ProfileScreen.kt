@@ -1,6 +1,7 @@
 package lvt.crm.ui.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,15 +22,20 @@ import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Business
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.LockReset
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.Brightness6
+import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,15 +47,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.outlined.Devices
 import lvt.crm.R
 import lvt.crm.data.auth.AuthRepository
 import lvt.crm.data.auth.SessionsRepository
 import lvt.crm.ui.auth.ChangePasswordScreen
-import lvt.crm.ui.components.InfoRow
-import lvt.crm.ui.components.ScreenHeader
+import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatusPill
 import lvt.crm.ui.components.StatusTone
+import lvt.crm.ui.theme.AppearanceMode
+import lvt.crm.ui.theme.AppearanceStore
 
 @Composable
 fun ProfileScreen(
@@ -60,10 +66,14 @@ fun ProfileScreen(
     positionName: String?,
     authRepository: AuthRepository,
     sessionsRepository: SessionsRepository,
+    appearanceStore: AppearanceStore,
     onSignOut: () -> Unit,
 ) {
     var changingPassword by rememberSaveable { mutableStateOf(false) }
     var showingDevices by rememberSaveable { mutableStateOf(false) }
+    var confirmSignOut by rememberSaveable { mutableStateOf(false) }
+    var pickingAppearance by rememberSaveable { mutableStateOf(false) }
+    val appearance by appearanceStore.mode.collectAsState()
 
     if (changingPassword) {
         BackHandler { changingPassword = false }
@@ -87,25 +97,19 @@ fun ProfileScreen(
         return
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
-    ) {
-        ScreenHeader(
-            title = stringResource(R.string.nav_profile),
-            subtitle = "Hồ sơ và bảo mật tài khoản",
-            icon = Icons.Outlined.Person,
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
+    LvtScreen(title = stringResource(R.string.nav_profile)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
         ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            ) {
             Row(
                 modifier = Modifier.padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -146,85 +150,132 @@ fun ProfileScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-                InfoRow(
-                    icon = Icons.Outlined.Email,
-                    label = "Email đăng nhập",
-                    value = email,
-                )
-                departmentName?.takeIf { it.isNotBlank() }?.let {
-                    InfoRow(
-                        icon = Icons.Outlined.Business,
-                        label = "Phòng ban",
-                        value = it,
-                    )
-                }
-                positionName?.takeIf { it.isNotBlank() }?.let {
-                    InfoRow(
-                        icon = Icons.Outlined.Badge,
-                        label = "Chức vụ",
-                        value = it,
-                    )
-                }
-                InfoRow(
-                    icon = Icons.Outlined.AdminPanelSettings,
-                    label = "Quyền trên ứng dụng",
-                    value = "Theo vai trò và nhóm quyền được phân công",
+        Card(modifier = Modifier.fillMaxWidth()) {
+            ListItem(
+                headlineContent = { Text("Email đăng nhập") },
+                supportingContent = { Text(email) },
+                leadingContent = { Icon(Icons.Outlined.Email, contentDescription = null) },
+            )
+            departmentName?.takeIf { it.isNotBlank() }?.let {
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("Tổ hoặc phòng") },
+                    supportingContent = { Text(it) },
+                    leadingContent = { Icon(Icons.Outlined.Business, contentDescription = null) },
                 )
             }
+            positionName?.takeIf { it.isNotBlank() }?.let {
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("Chức vụ") },
+                    supportingContent = { Text(it) },
+                    leadingContent = { Icon(Icons.Outlined.Badge, contentDescription = null) },
+                )
+            }
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text("Vai trò") },
+                supportingContent = { Text(roleLabel(role)) },
+                leadingContent = { Icon(Icons.Outlined.AdminPanelSettings, contentDescription = null) },
+            )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = { showingDevices = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Icon(Icons.Outlined.Devices, contentDescription = null)
-            Text(
-                stringResource(R.string.devices),
-                modifier = Modifier.padding(start = 8.dp),
+        Spacer(modifier = Modifier.height(12.dp))
+        Card(modifier = Modifier.fillMaxWidth()) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.devices)) },
+                supportingContent = { Text("Phiên đăng nhập trên các thiết bị") },
+                leadingContent = { Icon(Icons.Outlined.Devices, contentDescription = null) },
+                modifier = Modifier.clickable { showingDevices = true },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.change_password)) },
+                supportingContent = { Text("Cần mật khẩu hiện tại") },
+                leadingContent = { Icon(Icons.Outlined.LockReset, contentDescription = null) },
+                modifier = Modifier.clickable { changingPassword = true },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.appearance)) },
+                supportingContent = { Text(appearance.title) },
+                leadingContent = { Icon(Icons.Outlined.Brightness6, contentDescription = null) },
+                modifier = Modifier.clickable { pickingAppearance = true },
             )
         }
-        Spacer(modifier = Modifier.height(10.dp))
-        Button(
-            onClick = { changingPassword = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Icon(Icons.Outlined.LockReset, contentDescription = null)
-            Text(
-                stringResource(R.string.change_password),
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        FilledTonalButton(
-            onClick = onSignOut,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
-            Text(
-                stringResource(R.string.sign_out),
-                modifier = Modifier.padding(start = 8.dp),
+        Spacer(modifier = Modifier.height(16.dp))
+        Card(modifier = Modifier.fillMaxWidth()) {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        stringResource(R.string.sign_out),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
+                leadingContent = {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.Logout,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                modifier = Modifier.clickable { confirmSignOut = true },
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            title = { Text(stringResource(R.string.sign_out_confirm_title)) },
+            text = { Text(stringResource(R.string.sign_out_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmSignOut = false
+                    onSignOut()
+                }) { Text(stringResource(R.string.confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSignOut = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+    if (pickingAppearance) {
+        AlertDialog(
+            onDismissRequest = { pickingAppearance = false },
+            title = { Text(stringResource(R.string.appearance)) },
+            text = {
+                Column {
+                    AppearanceMode.entries.forEach { mode ->
+                        ListItem(
+                            headlineContent = { Text(mode.title) },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = mode == appearance,
+                                    onClick = {
+                                        appearanceStore.set(mode)
+                                        pickingAppearance = false
+                                    },
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                appearanceStore.set(mode)
+                                pickingAppearance = false
+                            },
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { pickingAppearance = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 }
 

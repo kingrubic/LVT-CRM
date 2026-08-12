@@ -106,9 +106,9 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
                 Column(modifier = Modifier.padding(22.dp)) {
                     Text(

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.LocationOn
@@ -30,6 +29,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,11 +49,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import lvt.crm.data.duties.DutyItem
-import lvt.crm.ui.components.ScreenHeader
+import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatePanel
 import lvt.crm.ui.components.StatusPill
 import lvt.crm.ui.components.StatusTone
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DutiesScreen(
     viewModel: DutiesViewModel,
@@ -83,26 +86,27 @@ fun DutiesScreen(
     }
 
     LaunchedEffect(focusId, state.duties) {
-        val index = state.duties.indexOfFirst { it.id == focusId }
-        if (index >= 0) listState.animateScrollToItem(index)
+        if (!focusId.isNullOrBlank()) {
+            val match = state.duties.firstOrNull { it.id == focusId }
+            if (match != null) selectedDutyId = match.id
+            val index = state.visibleDuties.indexOfFirst { it.id == focusId }
+            if (index >= 0) listState.animateScrollToItem(index)
+        }
     }
     LaunchedEffect(tabOpenToken) {
         if (state.duties.isNotEmpty()) listState.scrollToItem(0)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 18.dp),
+    LvtScreen(
+        title = "Công tác",
+        refreshing = state.refreshing,
+        onRefresh = { viewModel.refresh() },
     ) {
-        ScreenHeader(
-            title = "Công tác",
-            subtitle = "Lịch và xác nhận tham gia",
-            icon = Icons.Outlined.EventAvailable,
-            refreshing = state.refreshing,
-            onRefresh = { viewModel.refresh() },
-        )
-
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+        ) {
         when {
             state.loading -> {
                 Column(
@@ -139,6 +143,27 @@ fun DutiesScreen(
                 )
             }
             else -> {
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DutyFilter.entries.forEach { filter ->
+                        FilterChip(
+                            selected = state.filter == filter,
+                            onClick = { viewModel.setFilter(filter) },
+                            label = { Text(filter.title) },
+                        )
+                    }
+                }
+                if (state.visibleDuties.isEmpty()) {
+                    StatePanel(
+                        icon = Icons.Outlined.EventBusy,
+                        title = "Không có công tác",
+                        message = "Không có công tác thuộc bộ lọc đang chọn.",
+                    )
+                } else {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -146,10 +171,10 @@ fun DutiesScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     StatusPill(
-                        label = "${state.duties.size} công tác",
+                        label = "${state.visibleDuties.size} công tác",
                         tone = StatusTone.Primary,
                     )
-                    val ongoing = state.duties.count { it.isOngoing }
+                    val ongoing = state.visibleDuties.count { it.isOngoing }
                     if (ongoing > 0) {
                         StatusPill(
                             label = "$ongoing đang diễn ra",
@@ -180,7 +205,7 @@ fun DutiesScreen(
                     contentPadding = PaddingValues(bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(state.duties, key = { it.id }) { duty ->
+                    items(state.visibleDuties, key = { it.id }) { duty ->
                         DutyCard(
                             duty = duty,
                             focused = duty.id == focusId,
@@ -192,7 +217,9 @@ fun DutiesScreen(
                         )
                     }
                 }
+                }
             }
+        }
         }
     }
 }
@@ -309,21 +336,19 @@ private fun DutyDetailScreen(
     onAttend: () -> Unit,
     onAbsent: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 18.dp),
+    LvtScreen(
+        title = "Chi tiết công tác",
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại danh sách công tác")
+            }
+        },
     ) {
-        ScreenHeader(
-            title = "Chi tiết công tác",
-            subtitle = "Thông tin tham gia và lịch thực hiện",
-            icon = Icons.Outlined.EventAvailable,
-            trailing = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại danh sách công tác")
-                }
-            },
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+        ) {
         actionError?.let {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
@@ -384,6 +409,7 @@ private fun DutyDetailScreen(
                     }
                 }
             }
+        }
         }
     }
 }

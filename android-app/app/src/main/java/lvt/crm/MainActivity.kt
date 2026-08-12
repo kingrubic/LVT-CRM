@@ -32,7 +32,8 @@ class MainActivity : ComponentActivity() {
         val container = (application as LvtApplication).container
         setContent {
             val pending by pendingDestination.collectAsState()
-            LvtCrmTheme {
+            val appearance by container.appearanceStore.mode.collectAsState()
+            LvtCrmTheme(appearanceMode = appearance) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     LvtRoot(
                         container = container,
