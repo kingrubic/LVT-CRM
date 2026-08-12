@@ -12,8 +12,10 @@ Canonical detail: `README.md` → **Import user hàng loạt**.
 - Admin-only. Bulk create **`role=user` only** (never admin/moderator).
 - `.xlsx` only, ≤ 2 MiB. Columns: `ho_ten`, `email`, `ma_phong_ban`, `ma_chuc_vu`, `ma_nhom_quyen`, `mat_khau_tam_thoi`
 - **Upload to Convex Storage first**, then server parse/validate/commit from `uploadId`. Never trust client rows for commit.
-- Staged file TTL **1 hour** (valid or invalid). Table: `userImportUploads`
-- All-or-nothing; preview only when every row valid; duplicate emails (file + DB) block import
+- Staged file TTL **1 hour** (valid or invalid); also reject validate/commit when past `expiresAt` or blob > 2 MiB. Table: `userImportUploads`
+- Commit once (`committed` / `committing`). All-or-nothing; preview only when every row valid
+- Duplicate emails (file + DB) block import, except rows marked `importRollbackAt` which a retry may reactivate
+- Duplicate active catalog codes block import
 - Temp passwords in file (≥8); created users always `mustChangePassword=true`
 
 ## Entity codes (department / position / permission group)

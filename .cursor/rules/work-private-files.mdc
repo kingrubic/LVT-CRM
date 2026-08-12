@@ -11,12 +11,17 @@ Full text: `CLAUDE.md` sections **Work-document** / **Private file and cache** /
 ## Work documents
 
 - First approval locks edit/delete forever — do **not** lock only on `status === "approved"`; use `convex/workDocumentPolicy.ts`
+- Reject only while nobody has approved (`canRejectWorkDocument`)
+- Approvers = active level 4+ **users**, never admin/moderator
+- Completions require parent document `active` and `status === "approved"`
 - Soft-delete first; inactive docs must deny access even if Drive cleanup lags
 - File replace is staged: publish DB only after new upload validates; never delete old Drive object before DB success
 
 ## Private files / cache
 
 - New uploads = private Drive; Convex keeps identity/checksum/metadata, not public links
+- Never return Drive or Convex Storage URLs to the browser; always `/api/files/:documentId` after auth
+- Legacy `fileId` uses the same gateway + 24-hour server cache as Drive
 - Authorize before serving shared cache or client local cache; metadata `private, no-store`
 - Version via SHA-256 `fileVersion` when possible; stale local content must not bypass auth/version failure
 - Purpose-scoped cleanup (`work` vs `people-review`); no cross-module auth fallback

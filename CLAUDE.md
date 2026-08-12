@@ -36,6 +36,11 @@
 ## Authorization and privacy invariants
 
 - `admin` and `moderator` are operational managers; only `admin` has supreme settings/account authority.
+- Do not disable, delete, or demote the last active admin (`LAST_ACTIVE_ADMIN`).
+- Login failures stay distinct and blocking: invalid credentials, `ACCOUNT_LOCKED`, `USER_NOT_ACTIVE`.
+- `loginLockedAt` is enforced at sign-in **and** on authenticated calls (`currentUserOrThrow`).
+- Forgot-password sends email **before** rotating credentials. Mail failure must not leave an unknown password. Per-user cooldown only; do not add IP rate limits.
+- Profile password change requires `currentPassword`. The forced `mustChangePassword` gate (web / Android / iOS) only sends `newPassword`.
 - Work access requires an active account with no pending mandatory password change. Ordinary users also require the `work` menu not to be hidden.
 - Work-document create/update/delete operations require the operational-manager `work:write` gate.
 - Every protected Convex mutation/query must re-check authorization server-side.
@@ -52,20 +57,25 @@
   - another approver is still pending;
   - aggregate `status` remains `pending`;
   - the deadline later passes.
+- Reject is allowed only while `approvedByUserIds` is empty (`canRejectWorkDocument`). A later reject would leave the document both rejected and immutable.
 - Do not implement the lock using only `status === "approved"`. Use the shared policy in `convex/workDocumentPolicy.ts`.
+- Approvers must be active **non-admin, non-moderator** users at position level 4 or above. Operational managers manage documents; they cannot be designated approvers (`ADMIN_USE_MANAGEMENT`).
+- Completing or reviewing work/personal tasks requires the parent document to still be `active` and `status === "approved"`.
 - Editing a mutable document resets prior approval/rejection decisions and sends the revised document through approval again.
 - Replacing assignments deactivates superseded work items/personal tasks and creates the new active work graph atomically with the document update.
 - Deletion is soft-delete first. Once inactive, authorization must deny access even if Drive/cache cleanup is delayed.
 - File replacement is staged: upload and validate the new file before publishing metadata. Never delete the old Drive file before the database update succeeds.
 - Superseded Drive files are removed through purpose-scoped cleanup jobs. Keep `work` and `people-review` cleanup authorization separate.
-- Approvers must be active users at position level 4 or above. Department and individual assignees must be active, assignment deadlines use `YYYY-MM-DD`, and duplicate department assignments are invalid.
+- Department and individual assignees must be active, assignment deadlines use `YYYY-MM-DD`, and duplicate department assignments are invalid.
 - New files must pass the shared extension allowlist, be non-empty, and remain within the 20 MiB limit.
 - Preserve the legacy Convex Storage compatibility/migration path. New work uploads use private Drive storage, but existing `fileId` records are still valid until explicitly migrated.
 
 ## Private file and cache invariants
 
 - New work uploads are private Google Drive objects; Convex stores identity/checksum/metadata, not public Drive links.
-- Prefer SHA-256 checksum as `fileVersion`; legacy fallback may use stable Drive identity plus file size.
+- Never return Drive links or Convex `storage.getUrl()` to the browser. Preview/download always go through `/api/files/:documentId` after authorization.
+- Legacy `fileId` (Convex Storage) uses the same authorized gateway and 24-hour server cache as Drive objects.
+- Prefer SHA-256 checksum as `fileVersion`; fallback is Drive identity plus size, or `convex-storage:{fileId}:{size}` for unmigrated files.
 - Upload prewarm copies the already received file into shared server cache. It is best-effort: cache failure must not turn a valid Drive upload/database commit into a failed business operation.
 - Shared cache remains authorize-first, atomic, bounded by TTL/size, single-flight, and concurrency-limited.
 - Do not cache failed, partial, empty, unauthorized, forbidden, or not-found responses.
@@ -129,8 +139,11 @@ Canonical product detail lives in `README.md` → **Import user hàng loạt**. 
 - Admin-only; bulk create **`user` role only** (never admin/moderator).
 - Excel `.xlsx` only, ≤ 2 MiB. Columns: `ho_ten`, `email`, `ma_phong_ban`, `ma_chuc_vu`, `ma_nhom_quyen`, `mat_khau_tam_thoi`.
 - **Upload to Convex Storage first**, then server parse/validate/commit from that `uploadId`. Never trust client-supplied rows for commit.
-- Keep staged files **1 hour** (success or validation failure), then purge.
-- All-or-nothing validation; preview only when every row is valid; duplicate emails (file + DB) block import.
+- Keep staged files **1 hour** (success or validation failure), then purge. Validate/commit must also reject when `Date.now() > expiresAt` or the stored blob exceeds 2 MiB.
+- Commit is single-use (`committed` / `committing`). Never trust client-supplied rows.
+- All-or-nothing validation; preview only when every row is valid; duplicate emails (file + active/disabled-non-rollback DB) block import.
+- Mid-batch failure soft-disables created rows (`importRollbackAt`); a retry may reactivate those emails. Ordinary disabled accounts still block.
+- Duplicate active catalog codes block import.
 - Entity codes (department / position / permission group): ≤20, `A–Z0–9_-`, stored uppercase; case-insensitive match on import.
 - Soft-delete catalogs; **block delete while users are assigned**; recreate with same **code** reactivates.
 
