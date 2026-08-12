@@ -8,41 +8,25 @@ import {
   internalQuery,
   mutation,
 } from "./_generated/server";
-import { authUserIdOrThrow } from "./lib";
+import { adminPermissionOrThrow, authUserIdOrThrow } from "./lib";
 import { validateUserImportRows } from "./userImportValidate";
 
 const USER_IMPORT_TTL_MS = 60 * 60 * 1000;
 const USER_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
 
-const importRowValidator = v.object({
-  rowNumber: v.number(),
-  ho_ten: v.string(),
-  email: v.string(),
-  ma_phong_ban: v.string(),
-  ma_chuc_vu: v.string(),
-  ma_nhom_quyen: v.string(),
-  mat_khau_tam_thoi: v.string(),
-});
-
 export const listDepartmentsInternal = internalQuery({
   args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query("departments").collect();
-  },
+  handler: async (ctx) => await ctx.db.query("departments").collect(),
 });
 
 export const listPositionsInternal = internalQuery({
   args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query("positions").collect();
-  },
+  handler: async (ctx) => await ctx.db.query("positions").collect(),
 });
 
 export const listPermissionGroupsInternal = internalQuery({
   args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query("permissionGroups").collect();
-  },
+  handler: async (ctx) => await ctx.db.query("permissionGroups").collect(),
 });
 
 export const listUserEmailsInternal = internalQuery({
@@ -55,9 +39,7 @@ export const listUserEmailsInternal = internalQuery({
 
 export const getUploadInternal = internalQuery({
   args: { uploadId: v.id("userImportUploads") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.uploadId);
-  },
+  handler: async (ctx, args) => await ctx.db.get(args.uploadId),
 });
 
 export const markUploadCommitted = internalMutation({
@@ -75,51 +57,47 @@ export const markUploadCommitted = internalMutation({
   },
 });
 
-export const insertCreatedUser = internalMutation({
+export const auditImportedUser = internalMutation({
   args: {
     email: v.string(),
-    name: v.string(),
+    userId: v.id("users"),
     departmentId: v.string(),
     permissionGroupId: v.string(),
     positionId: v.string(),
     actorUserId: v.id("users"),
-    authUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    // Auth createAccount already inserted the users row; patch CRM fields if needed.
-    const now = Date.now();
-    await ctx.db.patch(args.authUserId, {
-      email: args.email,
-      name: args.name,
-      role: "user",
-      departmentId: args.departmentId,
-      permissionGroupId: args.permissionGroupId,
-      positionId: args.positionId,
-      status: "active",
-      mustChangePassword: true,
-      createdBy: args.actorUserId,
-      updatedBy: args.actorUserId,
-      updatedAt: now,
-    });
     await ctx.db.insert("auditLogs", {
       actorUserId: args.actorUserId,
       action: "user.import_create",
-      targetUserId: args.authUserId,
+      targetUserId: args.userId,
       targetEmail: args.email,
       details: JSON.stringify({
         departmentId: args.departmentId,
         permissionGroupId: args.permissionGroupId,
         positionId: args.positionId,
       }),
-      at: now,
+      at: Date.now(),
     });
   },
 });
 
-export const deleteImportedUser = internalMutation({
-  args: { userId: v.id("users") },
+/** Soft-disable users created mid-batch when import rolls back. */
+export const rollbackImportedUser = internalMutation({
+  args: { userId: v.id("users"), actorUserId: v.id("users") },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.userId);
+    const now = Date.now();
+    await ctx.db.patch(args.userId, {
+      status: "disabled",
+      updatedAt: now,
+      updatedBy: args.actorUserId,
+    });
+    await ctx.db.insert("auditLogs", {
+      actorUserId: args.actorUserId,
+      action: "user.import_rollback",
+      targetUserId: args.userId,
+      at: now,
+    });
   },
 });
 
@@ -127,8 +105,7 @@ export const purgeImportUpload = internalMutation({
   args: { uploadId: v.id("userImportUploads") },
   handler: async (ctx, args) => {
     const upload = await ctx.db.get(args.uploadId);
-    if (!upload) return;
-    if (upload.status === "expired") return;
+    if (!upload || upload.status === "expired") return;
     try {
       await ctx.storage.delete(upload.storageId);
     } catch {
@@ -141,7 +118,7 @@ export const purgeImportUpload = internalMutation({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await ctx.runQuery(internal.users.requireAdmin, { permission: "users:write" });
+    await adminPermissionOrThrow(ctx, "users:write");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -153,9 +130,7 @@ export const registerUpload = mutation({
     fileSize: v.number(),
   },
   handler: async (ctx, args) => {
-    const { user } = await (
-      await import("./lib")
-    ).adminPermissionOrThrow(ctx, "users:write");
+    const { user } = await adminPermissionOrThrow(ctx, "users:write");
     const fileName = args.fileName.trim();
     if (!fileName.toLowerCase().endsWith(".xlsx")) throw new Error("INVALID_IMPORT_FILE");
     if (!args.fileSize || args.fileSize > USER_IMPORT_MAX_BYTES) throw new Error("IMPORT_FILE_TOO_LARGE");
@@ -170,6 +145,7 @@ export const registerUpload = mutation({
       createdAt: now,
       expiresAt,
     });
+    // Always purge after 1 hour — success or validation failure.
     await ctx.scheduler.runAfter(USER_IMPORT_TTL_MS, internal.userImport.purgeImportUpload, {
       uploadId,
     });
@@ -183,24 +159,125 @@ export const registerUpload = mutation({
   },
 });
 
-export const validateRows = action({
-  args: {
-    rows: v.array(importRowValidator),
-  },
-  handler: async (ctx, args) => {
+type UploadDoc = {
+  _id: Id<"userImportUploads">;
+  storageId: Id<"_storage">;
+  fileName: string;
+  fileSize: number;
+  uploadedBy: Id<"users">;
+  status: string;
+  rowCount?: number;
+  createdAt: number;
+  expiresAt: number;
+};
+
+type ValidateLoadResult = {
+  upload: UploadDoc;
+  ok: boolean;
+  errors: { rowNumber: number; message: string; detail: string | null }[];
+  preview: {
+    rowNumber: number;
+    name: string;
+    email: string;
+    role: "user";
+    departmentCode: string;
+    positionCode: string;
+    permissionGroupCode: string;
+    departmentId: string;
+    positionId: string;
+    permissionGroupId: string;
+    departmentName: string;
+    positionName: string;
+    permissionGroupName: string;
+    temporaryPassword: string;
+  }[];
+};
+
+async function loadAndValidateUpload(
+  ctx: { runQuery: any; runAction: any },
+  args: { uploadId: Id<"userImportUploads">; actorId: Id<"users"> },
+): Promise<ValidateLoadResult> {
+  const upload = (await ctx.runQuery(internal.userImport.getUploadInternal, {
+    uploadId: args.uploadId,
+  })) as UploadDoc | null;
+  if (!upload) throw new Error("IMPORT_UPLOAD_NOT_FOUND");
+  if (String(upload.uploadedBy) !== String(args.actorId)) throw new Error("FORBIDDEN");
+  if (upload.status === "expired") throw new Error("IMPORT_UPLOAD_EXPIRED");
+
+  const parsed = (await ctx.runAction(internal.userImportParse.parseStorageXlsx, {
+    storageId: upload.storageId,
+  })) as {
+    ok: boolean;
+    message: string | null;
+    rows: {
+      rowNumber: number;
+      ho_ten: string;
+      email: string;
+      ma_phong_ban: string;
+      ma_chuc_vu: string;
+      ma_nhom_quyen: string;
+      mat_khau_tam_thoi: string;
+    }[];
+  };
+  if (!parsed.ok) {
+    return {
+      upload,
+      ok: false,
+      errors: [
+        {
+          rowNumber: 0,
+          message:
+            parsed.message === "INVALID_IMPORT_HEADERS"
+              ? "File không đúng mẫu. Vui lòng dùng file nhập liệu mẫu của hệ thống."
+              : parsed.message === "IMPORT_FILE_EMPTY"
+                ? "File import trống."
+                : "Không đọc được file import từ server.",
+          detail: parsed.message,
+        },
+      ],
+      preview: [],
+    };
+  }
+
+  const [departments, positions, permissionGroups, existingEmails] = await Promise.all([
+    ctx.runQuery(internal.userImport.listDepartmentsInternal, {}),
+    ctx.runQuery(internal.userImport.listPositionsInternal, {}),
+    ctx.runQuery(internal.userImport.listPermissionGroupsInternal, {}),
+    ctx.runQuery(internal.userImport.listUserEmailsInternal, {}),
+  ]);
+  const result = validateUserImportRows(parsed.rows, {
+    departments,
+    positions,
+    permissionGroups,
+    existingEmails,
+  });
+  return { upload, ok: result.ok, errors: result.errors, preview: result.ok ? result.preview : [] };
+}
+
+/** Validate by re-reading the staged server file (upload first, then check). */
+export const validateUpload = action({
+  args: { uploadId: v.id("userImportUploads") },
+  handler: async (ctx, args): Promise<{
+    ok: boolean;
+    errors: { rowNumber: number; message: string; detail: string | null }[];
+    preview: {
+      rowNumber: number;
+      name: string;
+      email: string;
+      role: string;
+      departmentCode: string;
+      positionCode: string;
+      permissionGroupCode: string;
+      departmentName: string;
+      positionName: string;
+      permissionGroupName: string;
+    }[];
+    fileName: string;
+    expiresAt: number;
+  }> => {
+    const actorId = await authUserIdOrThrow(ctx);
     await ctx.runQuery(internal.users.requireAdmin, { permission: "users:write" });
-    const [departments, positions, permissionGroups, existingEmails] = await Promise.all([
-      ctx.runQuery(internal.userImport.listDepartmentsInternal, {}),
-      ctx.runQuery(internal.userImport.listPositionsInternal, {}),
-      ctx.runQuery(internal.userImport.listPermissionGroupsInternal, {}),
-      ctx.runQuery(internal.userImport.listUserEmailsInternal, {}),
-    ]);
-    const result = validateUserImportRows(args.rows, {
-      departments,
-      positions,
-      permissionGroups,
-      existingEmails,
-    });
+    const result = await loadAndValidateUpload(ctx, { uploadId: args.uploadId, actorId });
     return {
       ok: result.ok,
       errors: result.errors,
@@ -218,38 +295,22 @@ export const validateRows = action({
             permissionGroupName: row.permissionGroupName,
           }))
         : [],
+      fileName: result.upload.fileName,
+      expiresAt: result.upload.expiresAt,
     };
   },
 });
 
+/** Commit by re-reading the same staged server file — never trust client rows. */
 export const commit = action({
-  args: {
-    uploadId: v.id("userImportUploads"),
-    rows: v.array(importRowValidator),
-  },
-  handler: async (ctx, args): Promise<{ createdCount: number; users: { email: string; name: string }[] }> => {
+  args: { uploadId: v.id("userImportUploads") },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ createdCount: number; users: { email: string; name: string }[] }> => {
     const actorId = await authUserIdOrThrow(ctx);
     await ctx.runQuery(internal.users.requireAdmin, { permission: "users:write" });
-
-    const upload = await ctx.runQuery(internal.userImport.getUploadInternal, {
-      uploadId: args.uploadId,
-    });
-    if (!upload) throw new Error("IMPORT_UPLOAD_NOT_FOUND");
-    if (upload.uploadedBy !== actorId) throw new Error("FORBIDDEN");
-    if (upload.status === "expired") throw new Error("IMPORT_UPLOAD_EXPIRED");
-
-    const [departments, positions, permissionGroups, existingEmails] = await Promise.all([
-      ctx.runQuery(internal.userImport.listDepartmentsInternal, {}),
-      ctx.runQuery(internal.userImport.listPositionsInternal, {}),
-      ctx.runQuery(internal.userImport.listPermissionGroupsInternal, {}),
-      ctx.runQuery(internal.userImport.listUserEmailsInternal, {}),
-    ]);
-    const result = validateUserImportRows(args.rows, {
-      departments,
-      positions,
-      permissionGroups,
-      existingEmails,
-    });
+    const result = await loadAndValidateUpload(ctx, { uploadId: args.uploadId, actorId });
     if (!result.ok) throw new Error("IMPORT_VALIDATION_FAILED");
 
     const created: Id<"users">[] = [];
@@ -278,20 +339,22 @@ export const commit = action({
         const userId = createdAccount.user._id as Id<"users">;
         created.push(userId);
         createdUsers.push({ email: row.email, name: row.name });
-        await ctx.runMutation(internal.userImport.insertCreatedUser, {
+        await ctx.runMutation(internal.userImport.auditImportedUser, {
           email: row.email,
-          name: row.name,
+          userId,
           departmentId: row.departmentId,
           permissionGroupId: row.permissionGroupId,
           positionId: row.positionId,
           actorUserId: actorId,
-          authUserId: userId,
         });
       }
     } catch (error) {
       for (const userId of created.reverse()) {
         try {
-          await ctx.runMutation(internal.userImport.deleteImportedUser, { userId });
+          await ctx.runMutation(internal.userImport.rollbackImportedUser, {
+            userId,
+            actorUserId: actorId,
+          });
         } catch {
           // Best-effort rollback.
         }

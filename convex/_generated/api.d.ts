@@ -30,6 +30,8 @@ import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 import type * as settings from "../settings.js";
 import type * as userImport from "../userImport.js";
+import type * as userImportParse from "../userImportParse.js";
+import type * as userImportSheet from "../userImportSheet.js";
 import type * as userImportValidate from "../userImportValidate.js";
 import type * as users from "../users.js";
 import type * as work from "../work.js";
@@ -64,6 +66,8 @@ declare const fullApi: ApiFromModules<{
   sessions: typeof sessions;
   settings: typeof settings;
   userImport: typeof userImport;
+  userImportParse: typeof userImportParse;
+  userImportSheet: typeof userImportSheet;
   userImportValidate: typeof userImportValidate;
   users: typeof users;
   work: typeof work;

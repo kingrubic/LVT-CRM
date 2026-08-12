@@ -97,6 +97,8 @@ function messageFor(error) {
     HAS_ASSIGNED_USERS: 'Không thể xóa vì vẫn còn người dùng đang được gán. Hãy gỡ hết user trước.',
     IMPORT_FILE_TOO_LARGE: 'File import vượt quá giới hạn 2 MB.',
     INVALID_IMPORT_FILE: 'Chỉ chấp nhận file Excel (.xlsx).',
+    INVALID_IMPORT_HEADERS: 'File không đúng mẫu. Vui lòng dùng file nhập liệu mẫu của hệ thống.',
+    IMPORT_FILE_EMPTY: 'File import trống.',
     IMPORT_UPLOAD_NOT_FOUND: 'Không tìm thấy file import đã tải lên.',
     IMPORT_UPLOAD_EXPIRED: 'File import đã hết hạn (giữ tối đa 1 giờ). Vui lòng tải lại.',
     IMPORT_VALIDATION_FAILED: 'Dữ liệu import không hợp lệ. Vui lòng kiểm tra lại file.',

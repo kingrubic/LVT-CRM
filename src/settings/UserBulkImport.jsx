@@ -1,29 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAction, useMutation } from 'convex/react';
 import { anyApi } from 'convex/server';
+import { assertImportFileMeta } from '../lib/userImport.js';
 import {
   downloadUserImportErrorPdf,
   downloadUserImportTemplate,
-  parseUserImportFile,
 } from '../lib/userImportExcel.js';
 
 /**
- * Bulk user import panel for Thiết lập người dùng (admin only).
- * Flow: template download → upload xlsx (stored 1h) → validate → preview → commit.
+ * Bulk user import: upload .xlsx to server first, then server parses/validates/commits
+ * from that stored file. File is retained 1 hour whether valid or not.
  */
 export default function UserBulkImport({ onImported = null } = {}) {
   const fileInputRef = useRef(null);
   const generateUploadUrl = useMutation(anyApi.userImport.generateUploadUrl);
   const registerUpload = useMutation(anyApi.userImport.registerUpload);
   const ensureCodes = useMutation(anyApi.permissionGroups.ensureCodes);
-  const validateRows = useAction(anyApi.userImport.validateRows);
+  const validateUpload = useAction(anyApi.userImport.validateUpload);
   const commitImport = useAction(anyApi.userImport.commit);
 
   const [busy, setBusy] = useState(null);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const [errors, setErrors] = useState([]);
   const [preview, setPreview] = useState([]);
-  const [rawRows, setRawRows] = useState([]);
   const [uploadId, setUploadId] = useState(null);
   const [fileName, setFileName] = useState('');
   const [result, setResult] = useState(null);
@@ -35,7 +34,6 @@ export default function UserBulkImport({ onImported = null } = {}) {
   const resetStage = () => {
     setErrors([]);
     setPreview([]);
-    setRawRows([]);
     setUploadId(null);
     setFileName('');
     setResult(null);
@@ -57,17 +55,21 @@ export default function UserBulkImport({ onImported = null } = {}) {
     setPreview([]);
 
     try {
-      const parsed = await parseUserImportFile(file);
-      if (!parsed.ok) {
-        setFeedback({ type: 'error', text: parsed.message });
+      const meta = assertImportFileMeta(file);
+      if (!meta.ok) {
+        setFeedback({ type: 'error', text: meta.message });
         setBusy(null);
         return;
       }
 
+      // 1) Upload to server first (stable source of truth).
       const uploadUrl = await generateUploadUrl({});
       const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
-        headers: { 'Content-Type': file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+        headers: {
+          'Content-Type':
+            file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
         body: file,
       });
       if (!uploadResponse.ok) {
@@ -82,16 +84,16 @@ export default function UserBulkImport({ onImported = null } = {}) {
 
       setUploadId(registered.uploadId);
       setFileName(file.name);
-      setRawRows(parsed.rows);
 
+      // 2) Only after upload succeeds: server reads the stored file and validates.
       setBusy('validate');
-      const validation = await validateRows({ rows: parsed.rows });
+      const validation = await validateUpload({ uploadId: registered.uploadId });
       if (!validation.ok) {
         setErrors(validation.errors || []);
         setPreview([]);
         setFeedback({
           type: 'error',
-          text: `File có ${validation.errors.length} lỗi. Vui lòng sửa và import lại.`,
+          text: `File đã lưu trên server nhưng có ${validation.errors.length} lỗi. Sửa file rồi import lại (file hiện tại tự xóa sau 1 giờ).`,
         });
         setBusy(null);
         return;
@@ -101,7 +103,7 @@ export default function UserBulkImport({ onImported = null } = {}) {
       setPreview(validation.preview || []);
       setFeedback({
         type: 'ok',
-        text: `File hợp lệ (${validation.preview.length} dòng). Kiểm tra xem trước rồi xác nhận import.`,
+        text: `Đã tải lên server và hợp lệ (${validation.preview.length} dòng). Kiểm tra xem trước rồi xác nhận import.`,
       });
     } catch (error) {
       const message = String(error?.message || error || '');
@@ -111,7 +113,7 @@ export default function UserBulkImport({ onImported = null } = {}) {
           ? 'File vượt quá giới hạn 2 MB.'
           : message.includes('INVALID_IMPORT_FILE')
             ? 'Chỉ chấp nhận file Excel (.xlsx).'
-            : 'Không thể xử lý file import. Vui lòng thử lại.',
+            : 'Không thể tải / kiểm tra file import. Vui lòng thử lại.',
       });
       resetStage();
     } finally {
@@ -120,15 +122,16 @@ export default function UserBulkImport({ onImported = null } = {}) {
   };
 
   const handleCommit = async () => {
-    if (!uploadId || !rawRows.length || !preview.length) return;
+    if (!uploadId || !preview.length) return;
     setBusy('commit');
     try {
-      const committed = await commitImport({ uploadId, rows: rawRows });
+      // 3) Commit re-reads the same server file — no client rows.
+      const committed = await commitImport({ uploadId });
       setResult(committed);
       setPreview([]);
       setFeedback({
         type: 'ok',
-        text: `Đã import thành công ${committed.createdCount} tài khoản User. File được giữ trên server 1 giờ.`,
+        text: `Đã import thành công ${committed.createdCount} tài khoản User. File gốc vẫn giữ trên server đến hết 1 giờ.`,
       });
       onImported?.();
     } catch (error) {
@@ -138,7 +141,7 @@ export default function UserBulkImport({ onImported = null } = {}) {
         text: message.includes('EMAIL_TAKEN')
           ? 'Phát hiện email trùng khi ghi dữ liệu. Không tạo tài khoản nào (đã hoàn tác nếu có).'
           : message.includes('IMPORT_VALIDATION_FAILED')
-            ? 'Dữ liệu không còn hợp lệ. Vui lòng import lại file.'
+            ? 'Dữ liệu trên server không còn hợp lệ. Vui lòng import lại file.'
             : 'Import thất bại. Vui lòng thử lại.',
       });
     } finally {
@@ -152,8 +155,8 @@ export default function UserBulkImport({ onImported = null } = {}) {
         <strong>Import người dùng hàng loạt</strong>
       </div>
       <p className="user-bulk-import-help">
-        Chỉ tạo tài khoản vai trò User. Tải file mẫu, điền đủ cột, rồi import file .xlsx (tối đa 2 MB).
-        Mã phòng ban / chức vụ / nhóm quyền phải khớp hệ thống (không phân biệt hoa thường).
+        Chỉ tạo tài khoản vai trò User. File được tải lên server trước, rồi hệ thống đọc lại file đó để kiểm tra
+        và tạo user. File (kể cả khi lỗi) tự xóa sau 1 giờ.
       </p>
       <div className="user-bulk-import-actions">
         <button type="button" className="secondary-button" onClick={downloadUserImportTemplate} disabled={Boolean(busy)}>
