@@ -56,11 +56,14 @@ Mỗi nhóm quy định quyền trên **6** menu **Chức năng chính**:
 
 Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (chỉ xem phạm vi thông thường) · **`view_all`** (xem mọi user, không chỉnh sửa) · **`edit`** (thêm/sửa nội dung khi module sẵn sàng).
 
-Gán user: form Thiết lập người dùng **hoặc** nút **Thêm user** trong Thiết lập nhóm quyền.
+- Mỗi nhóm có **mã** (`code`): tối đa **20** ký tự, chỉ `A–Z 0–9 _ -`, luôn lưu/hiển thị **IN HOA**; dùng trong file import user (`ma_nhom_quyen`).
+- Nhóm cũ thiếu mã được backfill tự động (`permissionGroups.ensureCodes`): chữ cái đầu mỗi từ tên (bỏ dấu), nếu trùng thì 3 rồi 4 ký tự đầu, rồi thêm số.
+- Gán user: form Thiết lập người dùng **hoặc** nút **Thêm user** trong Thiết lập nhóm quyền.
+- Xóa = soft-delete (`active=false`). **Không cho xóa** nếu còn user đang gán (`HAS_ASSIGNED_USERS`). Tạo lại trùng **mã** (không phải tên) → bật lại bản ghi soft-deleted.
 
 ### Phòng ban (`departments`)
 
-CRUD phòng ban (tên + mã). Gán user khi tạo user hoặc từ màn phòng ban. Xóa = soft-delete (`active=false`) + gỡ gán user.
+CRUD phòng ban (tên + mã). Rule mã giống nhóm quyền/chức vụ (≤20, `A–Z0–9_-`, IN HOA). Gán user khi tạo user hoặc từ màn phòng ban. Xóa = soft-delete; **chặn xóa** khi còn user đang gán. Tạo lại trùng mã → reactivate.
 
 ### Chức vụ (`positions`)
 
@@ -75,6 +78,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 - Cùng cấp không duyệt nhau; chỉ **cấp cao hơn** duyệt cấp thấp hơn (`canApproveLevel` trong `convex/lib.ts`).
 - Task nhiều cấp duyệt: cấp cao hơn được **duyệt thay** cấp thấp; mỗi lần duyệt ghi `approvalLogs` (actor, level, task, on-behalf, thời điểm).
+- Rule mã / soft-delete / chặn xóa khi còn user / reactivate theo mã: giống phòng ban.
 - Gán user: form user hoặc nút **Thêm user** trong Thiết lập chức vụ.
 
 ### Cấu trúc menu
@@ -97,8 +101,9 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `users` (+ authTables) | Hồ sơ, `role`, `departmentId`, `permissionGroupId`, `positionId`, status, `mustChangePassword` |
 | `departments` | Phòng ban (`code` unique) |
 | `locations` | Địa điểm công tác |
-| `permissionGroups` | Nhóm quyền + `menuAccess[]` |
-| `positions` | Chức vụ + `level` 1–5 |
+| `permissionGroups` | Nhóm quyền + `code` + `menuAccess[]` |
+| `positions` | Chức vụ + `code` + `level` 1–5 |
+| `userImportUploads` | File Excel import user tạm (Convex Storage, TTL 1 giờ) |
 | `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |
 | `boardingPeriods` | Kỳ bán trú |
 | `officeDocuments` | Công văn, tệp đính kèm, người duyệt và trạng thái duyệt |
@@ -110,7 +115,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
 
 Cấu trúc frontend gợi ý:
 
@@ -241,13 +246,44 @@ npx convex run internal.users.provisionFirstAdmin \
 ## Admin user lifecycle
 
 1. Administrator tạo user: email (unique, trim+lowercase), tên, **role** (`admin`|`moderator`|`user`), phòng ban / chức vụ / nhóm quyền (tùy chọn), temporary password ≥8. `createAccount` (provider `password`).
-2. `mustChangePassword=true`; audit không chứa password.
+2. `mustChangePassword=true`; audit không chứa password. **Mọi user đăng nhập lần đầu / sau reset đều phải đổi mật khẩu.**
 3. User `signIn` only. Flag còn true → chỉ form đổi MK; server chặn thao tác admin.
 4. `changeOwnPassword` → `modifyAccountCredentials`, `invalidateSessions` (giữ session hiện tại), clear flag.
 5. Admin reset MK → flag + credentials + revoke mọi session target.
 6. Disable → `disabled` + invalidate; `beforeSessionCreation` từ chối user không active.
 7. Remove → soft-delete (`disabled` + revoke). Không xóa auth tables trực tiếp. Cấm tự xóa active account.
 8. Public `signUp` / `reset` / email verification bị từ chối trong `convex/auth.ts`.
+
+### Import user hàng loạt (SYS-011 · chỉ Administrator)
+
+UI: **Thiết lập người dùng** — nút *Tải file nhập liệu mẫu* + *Import file nhập liệu* (`src/settings/UserBulkImport.jsx`).
+
+**Phạm vi**
+
+- Chỉ tạo tài khoản `role=user`. Moderator/Admin phải tạo tay trên web.
+- Chỉ file **`.xlsx`**, tối đa **2 MB**. Không CSV.
+- All-or-nothing: một dòng lỗi → không commit; báo lỗi theo dòng + tải PDF báo cáo.
+- Chỉ khi **mọi dòng hợp lệ** mới hiện xem trước → Admin xác nhận mới tạo user.
+
+**Cột file mẫu (không dấu)**
+
+`ho_ten`, `email`, `ma_phong_ban`, `ma_chuc_vu`, `ma_nhom_quyen`, `mat_khau_tam_thoi`
+
+- Không có cột vai trò (luôn `user`).
+- Không được để trống bất kỳ cột nào → `"Vui lòng điền đầy đủ các cột thông tin người dùng"`.
+- PB / chức vụ / nhóm quyền map theo **mã** (không phân biệt hoa thường; chuẩn hóa IN HOA). Sai/không khớp → `"Thông tin [Phòng ban, Chức vụ, Nhóm quyền] không chính xác, vui lòng đảm bảo chính xác với hệ thống"`.
+- Trùng email trong file hoặc đã có trong DB → `"Phát hiện email trùng, vui lòng kiểm tra lại"` (chi tiết dòng / email).
+- Mật khẩu tạm do admin điền trong file, ≥ 8 ký tự; user tạo ra luôn `mustChangePassword=true`.
+- Mã PB/chức vụ/nhóm quyền đang dùng trong hệ thống nếu sai rule (≤20, `A–Z0–9_-`) → chặn import và chỉ rõ mục nào admin phải sửa trước.
+
+**Flow server-first (bắt buộc)**
+
+1. Client chỉ kiểm tra extension/size tối thiểu, rồi **upload file lên Convex Storage** + `userImport.registerUpload` (TTL **1 giờ**, kể cả khi file lỗi hoặc đã import thành công).
+2. `userImport.validateUpload({ uploadId })` — server đọc lại file từ storage (`userImportParse.parseStorageXlsx`), validate, trả errors hoặc preview.
+3. `userImport.commit({ uploadId })` — server **đọc lại cùng file**, validate lần nữa, rồi tạo user. **Không tin rows từ client.**
+4. Nếu tạo dở dang giữa chừng: soft-disable các user đã tạo trong lô (`user.import_rollback`); auth account không hard-delete được.
+
+**Code chính:** `convex/userImport.ts`, `userImportParse.ts`, `userImportSheet.ts`, `userImportValidate.ts`, `entityCodes.ts`; test `tests/user-import.test.mjs`.
 
 ## Authorization (server)
 

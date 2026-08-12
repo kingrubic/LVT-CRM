@@ -1,0 +1,141 @@
+# LVT CRM — Claude Code Instructions
+
+## Scope and operating boundaries
+
+- Work only inside this repository. Never scan `/Users/vsc_agent`, the user home, sibling workspaces, or unrelated projects.
+- Start with `git status --short`. Preserve unrelated dirty and untracked files.
+- Never modify or commit `ios-uikit-lvt.zip`, archives, `.derivedData`, runtime caches, logs, secrets, credentials, or local environment files.
+- Do not read macOS Keychain, `.env*`, token stores, OAuth data, private backups, or files outside this repository unless the owner explicitly asks for a narrowly scoped operational task.
+- Do not commit, push, deploy, restart services, delete external data, or change production configuration unless explicitly requested.
+- If discovery is needed, inspect this repository only. Prefer targeted file reads/searches over broad filesystem scans.
+
+## Project map
+
+- Web: React 19 + Vite under `src/`.
+- Backend: self-hosted Convex under `convex/`.
+- Private file gateway and production static server: `scripts/serve-production.mjs` plus `scripts/lib/`.
+- Standalone native UIKit app: `ios-uikit-lvt/` (`vn.lvt.crm.uikit`).
+- Existing SwiftUI workspace: `ios-app/`; preserve it unless the task explicitly targets it.
+- Android app: `android-app/`; touch only when explicitly in scope.
+- Tests: Node test runner under `tests/*.test.mjs`.
+- Production frontend: `https://lvt.vscgroup.io.vn`.
+- Self-hosted Convex deployment commands must use the repository wrapper scripts; never expose or inline admin keys.
+
+## Engineering discipline
+
+1. Read the relevant implementation, schema, tests, and call sites before editing.
+2. State assumptions when the source does not establish a business rule; do not invent one.
+3. Make the smallest coherent change and preserve unrelated work.
+4. Backend authorization and invariants are the source of truth. UI visibility is only UX and never sufficient enforcement.
+5. Treat external storage, database state, cache state, and client state as separate failure domains.
+6. Prefer staged operations, atomic publication, soft-delete, and compensating cleanup over destructive in-place flows.
+7. Do not report completion without real tests/builds and relevant end-to-end verification.
+8. Never fabricate command output, deployment state, live behavior, or test results.
+
+## Authorization and privacy invariants
+
+- `admin` and `moderator` are operational managers; only `admin` has supreme settings/account authority.
+- Work access requires an active account with no pending mandatory password change. Ordinary users also require the `work` menu not to be hidden.
+- Work-document create/update/delete operations require the operational-manager `work:write` gate.
+- Every protected Convex mutation/query must re-check authorization server-side.
+- Every private-file metadata/download request must authenticate and authorize the current user.
+- Never put bearer tokens, OAuth tokens, Drive IDs intended to remain private, passwords, or secrets in public URLs, logs, source, bundles, commits, or error messages.
+- Cached file content is never public. Authorization is checked before serving server cache and before clients reuse local cache.
+- A revoked session or removed file permission must not be bypassed by browser/iOS cache.
+
+## Work-document business invariants
+
+- Admin/mod may edit or delete a work document only while `approvedByUserIds` is empty.
+- `pending`, `rejected`, and overdue documents remain editable/deletable only when nobody has approved.
+- The first approval permanently locks editing and deletion, even when:
+  - another approver is still pending;
+  - aggregate `status` remains `pending`;
+  - the deadline later passes.
+- Do not implement the lock using only `status === "approved"`. Use the shared policy in `convex/workDocumentPolicy.ts`.
+- Editing a mutable document resets prior approval/rejection decisions and sends the revised document through approval again.
+- Replacing assignments deactivates superseded work items/personal tasks and creates the new active work graph atomically with the document update.
+- Deletion is soft-delete first. Once inactive, authorization must deny access even if Drive/cache cleanup is delayed.
+- File replacement is staged: upload and validate the new file before publishing metadata. Never delete the old Drive file before the database update succeeds.
+- Superseded Drive files are removed through purpose-scoped cleanup jobs. Keep `work` and `people-review` cleanup authorization separate.
+- Approvers must be active users at position level 4 or above. Department and individual assignees must be active, assignment deadlines use `YYYY-MM-DD`, and duplicate department assignments are invalid.
+- New files must pass the shared extension allowlist, be non-empty, and remain within the 20 MiB limit.
+- Preserve the legacy Convex Storage compatibility/migration path. New work uploads use private Drive storage, but existing `fileId` records are still valid until explicitly migrated.
+
+## Private file and cache invariants
+
+- New work uploads are private Google Drive objects; Convex stores identity/checksum/metadata, not public Drive links.
+- Prefer SHA-256 checksum as `fileVersion`; legacy fallback may use stable Drive identity plus file size.
+- Upload prewarm copies the already received file into shared server cache. It is best-effort: cache failure must not turn a valid Drive upload/database commit into a failed business operation.
+- Shared cache remains authorize-first, atomic, bounded by TTL/size, single-flight, and concurrency-limited.
+- Do not cache failed, partial, empty, unauthorized, forbidden, or not-found responses.
+- Each web/iOS preview of a private work file must first call the authenticated no-store metadata endpoint and compare `fileVersion`.
+- A matching version may use device/browser cache. A changed version must download and replace the local copy. Failed authorization/version checks must not fall back to stale local content.
+- Metadata responses are `private, no-store`. Cacheable content responses are private, use ETag/revalidation, and vary by `Authorization`; authorization still runs before a `304` response.
+- Browser metadata failure removes related Cache API entries. UIKit cache identity includes `documentId` plus `fileVersion`, uses staged writes, rejects empty files, is excluded from backup, and remains TTL/LRU bounded.
+- Updating/deleting a Drive object invalidates related shared cache entries. Cleanup failure must not reactivate an inactive document.
+- Do not weaken these metadata/content cache semantics without a security review.
+
+## Upload and cleanup safety
+
+- Preserve staged-upload settlement semantics: once the Convex mutation commits, retry settlement without repeating the business mutation.
+- If the business mutation definitively did not commit, clean up the staged upload.
+- Cleanup endpoints must be purpose-scoped and authorize the exact cleanup job/object.
+- Never use a broad fallback from one module's authorization to another module.
+- Drive downloads retry only transient network/rate-limit failures with bounded exponential backoff and jitter; never retry authorization/not-found failures as if they were transient.
+- A cleanup failure after upload registration fails must not replace or hide the original registration error.
+- Derive download MIME/disposition from the validated filename rather than client/storage MIME claims; preserve `nosniff` and sandboxed content policy.
+- Do not make optional maintenance work a prerequisite for a successful core transaction.
+
+## Generated code and schema
+
+- Treat `convex/_generated/` as generated output; do not hand-edit it.
+- Schema/function changes must typecheck and, when deployment/codegen is explicitly requested, use repository scripts:
+  - `npm run typecheck:convex-codegen`
+  - `npm run convex:deploy`
+- Never run a Convex deploy merely to make generated files change unless deployment is in scope.
+
+## Required verification
+
+For web/backend/server changes, run:
+
+```bash
+npm test
+npm run build:production
+git diff --check
+```
+
+For standalone UIKit changes, also run from `ios-uikit-lvt/`:
+
+```bash
+xcodebuild -project LvtCrmUIKit.xcodeproj -scheme LvtCrmUIKit \
+  -destination 'generic/platform=iOS Simulator' \
+  -configuration Debug \
+  -derivedDataPath /tmp/lvt-uikit-build \
+  build CODE_SIGNING_ALLOWED=NO
+```
+
+Additional rules:
+
+- Run focused tests first when useful, then the full required gate.
+- A simulator build validates compilation/configuration, not APNs or physical-device behavior.
+- For live/deployment tasks, verify health, live hashed assets/routes, authorization failure behavior, and the actual changed workflow before reporting success.
+- Before finishing, show `git status --short`, confirm `ios-app` was untouched unless explicitly scoped, and report remaining risks honestly.
+
+## Bulk user import invariants (SYS-011)
+
+Canonical product detail lives in `README.md` → **Import user hàng loạt**. Do not weaken these rules without owner confirmation:
+
+- Admin-only; bulk create **`user` role only** (never admin/moderator).
+- Excel `.xlsx` only, ≤ 2 MiB. Columns: `ho_ten`, `email`, `ma_phong_ban`, `ma_chuc_vu`, `ma_nhom_quyen`, `mat_khau_tam_thoi`.
+- **Upload to Convex Storage first**, then server parse/validate/commit from that `uploadId`. Never trust client-supplied rows for commit.
+- Keep staged files **1 hour** (success or validation failure), then purge.
+- All-or-nothing validation; preview only when every row is valid; duplicate emails (file + DB) block import.
+- Entity codes (department / position / permission group): ≤20, `A–Z0–9_-`, stored uppercase; case-insensitive match on import.
+- Soft-delete catalogs; **block delete while users are assigned**; recreate with same **code** reactivates.
+
+## How to ask questions
+
+- First answer questions that the repository source, tests, schema, README, or this file can resolve.
+- Ask the owner only when a business/product decision is genuinely missing or conflicting.
+- Group unresolved questions by impact: blocking, security/data integrity, then UX/non-blocking.
+- Do not silently choose a destructive, irreversible, permission-expanding, or privacy-weakening interpretation.
