@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertEntityCode, generateCodeFromName, normalizeEntityCode } from "./entityCodes";
 import {
   adminPermissionOrThrow,
   defaultMenuAccess,
@@ -18,10 +19,12 @@ const accessValidator = v.union(
 
 function cleanGroup(args: {
   name: string;
+  code: string;
   description?: string;
   menuAccess?: { menu: string; access: MenuAccess }[];
 }) {
   const name = args.name.trim();
+  const code = assertEntityCode(args.code);
   if (!name || name.length > 120) throw new Error("INVALID_NAME");
   const description = args.description?.trim() || undefined;
   if (description && description.length > 500) throw new Error("INVALID_DESCRIPTION");
@@ -32,7 +35,7 @@ function cleanGroup(args: {
       throw new Error("INVALID_MENU");
     }
   }
-  return { name, description, menuAccess };
+  return { name, code, description, menuAccess };
 }
 
 async function assertGroupNameAvailable(ctx: { db: any }, name: string, excludeId?: string) {
@@ -41,6 +44,35 @@ async function assertGroupNameAvailable(ctx: { db: any }, name: string, excludeI
     throw new Error("PERMISSION_GROUP_NAME_TAKEN");
   }
 }
+
+async function findGroupByCode(ctx: { db: any }, code: string) {
+  const normalized = normalizeEntityCode(code);
+  const groups = await ctx.db.query("permissionGroups").collect();
+  return groups.find((g: { code?: string }) => normalizeEntityCode(g.code || "") === normalized) || null;
+}
+
+/** Backfill missing codes for legacy permission groups. Safe to call repeatedly. */
+export const ensureCodes = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await adminPermissionOrThrow(ctx, "permissionGroups:write");
+    const groups = await ctx.db.query("permissionGroups").collect();
+    const used = new Set(
+      groups.map((g) => normalizeEntityCode(g.code || "")).filter(Boolean),
+    );
+    const now = Date.now();
+    let patched = 0;
+    for (const group of groups) {
+      // Only backfill missing codes. Invalid existing codes must be fixed by admin.
+      if (group.code) continue;
+      const code = generateCodeFromName(group.name, used);
+      used.add(code);
+      await ctx.db.patch(group._id, { code, updatedAt: now });
+      patched += 1;
+    }
+    return { patched };
+  },
+});
 
 export const list = query({
   args: {},
@@ -51,8 +83,6 @@ export const list = query({
       ctx.db.query("users").collect(),
     ]);
     return {
-      // Older groups predate the Notifications menu. Normalize on read so every
-      // surface (editor, card badges, and API consumers) shows the same access.
       groups: groups
         .map((group) => ({ ...group, menuAccess: normalizeMenuAccess(group.menuAccess) }))
         .sort((a, b) => a.name.localeCompare(b.name, "vi")),
@@ -72,6 +102,7 @@ export const list = query({
 export const create = mutation({
   args: {
     name: v.string(),
+    code: v.string(),
     description: v.optional(v.string()),
     menuAccess: v.optional(
       v.array(v.object({ menu: v.string(), access: accessValidator })),
@@ -80,8 +111,26 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const actor = await adminPermissionOrThrow(ctx, "permissionGroups:write");
     const input = cleanGroup(args);
-    await assertGroupNameAvailable(ctx, input.name);
+    const existing = await findGroupByCode(ctx, input.code);
+    await assertGroupNameAvailable(ctx, input.name, existing && !existing.active ? existing._id : undefined);
     const now = Date.now();
+
+    if (existing) {
+      if (existing.active) throw new Error("CODE_TAKEN");
+      await ctx.db.patch(existing._id, {
+        ...input,
+        active: true,
+        updatedAt: now,
+      });
+      await ctx.db.insert("auditLogs", {
+        actorUserId: actor.user._id,
+        action: "permissionGroup.reactivate",
+        details: JSON.stringify({ id: existing._id, name: input.name, code: input.code }),
+        at: now,
+      });
+      return existing._id;
+    }
+
     const id = await ctx.db.insert("permissionGroups", {
       ...input,
       active: true,
@@ -91,7 +140,7 @@ export const create = mutation({
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
       action: "permissionGroup.create",
-      details: JSON.stringify({ id, name: input.name }),
+      details: JSON.stringify({ id, name: input.name, code: input.code }),
       at: now,
     });
     return id;
@@ -102,6 +151,7 @@ export const update = mutation({
   args: {
     id: v.id("permissionGroups"),
     name: v.string(),
+    code: v.string(),
     description: v.optional(v.string()),
     menuAccess: v.optional(
       v.array(v.object({ menu: v.string(), access: accessValidator })),
@@ -114,9 +164,12 @@ export const update = mutation({
     if (!current) throw new Error("PERMISSION_GROUP_NOT_FOUND");
     const input = cleanGroup({
       name: args.name,
+      code: args.code,
       description: args.description,
       menuAccess: args.menuAccess || current.menuAccess,
     });
+    const duplicate = await findGroupByCode(ctx, input.code);
+    if (duplicate && duplicate._id !== args.id) throw new Error("CODE_TAKEN");
     await assertGroupNameAvailable(ctx, input.name, args.id);
     const now = Date.now();
     await ctx.db.patch(args.id, {
@@ -127,7 +180,7 @@ export const update = mutation({
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
       action: "permissionGroup.update",
-      details: JSON.stringify({ id: args.id, name: input.name }),
+      details: JSON.stringify({ id: args.id, name: input.name, code: input.code }),
       at: now,
     });
   },
@@ -139,23 +192,19 @@ export const remove = mutation({
     const actor = await adminPermissionOrThrow(ctx, "permissionGroups:write");
     const current = await ctx.db.get(args.id);
     if (!current) throw new Error("PERMISSION_GROUP_NOT_FOUND");
-    const now = Date.now();
-    await ctx.db.patch(args.id, { active: false, updatedAt: now });
     const users = await ctx.db
       .query("users")
       .withIndex("by_permission_group", (q) => q.eq("permissionGroupId", args.id))
       .collect();
-    for (const user of users) {
-      await ctx.db.patch(user._id, {
-        permissionGroupId: undefined,
-        updatedAt: now,
-        updatedBy: actor.user._id,
-      });
+    if (users.length > 0) {
+      throw new Error("HAS_ASSIGNED_USERS");
     }
+    const now = Date.now();
+    await ctx.db.patch(args.id, { active: false, updatedAt: now });
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
       action: "permissionGroup.remove",
-      details: JSON.stringify({ id: args.id, clearedUsers: users.length }),
+      details: JSON.stringify({ id: args.id, code: current.code }),
       at: now,
     });
   },

@@ -1,0 +1,66 @@
+.user-bulk-import {
+  width: min(100%, 960px);
+  margin: 0 auto 18px;
+  padding: 18px;
+  border: 1px solid #e1e7f1;
+  border-radius: 10px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.user-bulk-import-help {
+  margin: 0 0 14px;
+  color: #526078;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.user-bulk-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.user-bulk-import .secondary-button,
+.modern-management .secondary-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #d8e1e8;
+  border-radius: 10px;
+  color: #365a7b;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.user-bulk-import .secondary-button:hover,
+.modern-management .secondary-button:hover {
+  background: #f5f8fc;
+}
+
+.user-bulk-import .primary-button {
+  min-width: 190px;
+}
+
+.user-bulk-import-errors,
+.user-bulk-import-preview,
+.user-bulk-import-result {
+  margin-top: 16px;
+}
+
+.user-table-head-2,
+.user-row-2 {
+  grid-template-columns: 1.2fr 1.4fr;
+}
+
+.user-table-head-3,
+.user-row-3 {
+  grid-template-columns: 70px 1.4fr 1.6fr;
+}
+
+.user-bulk-import .user-table {
+  margin-top: 10px;
+}

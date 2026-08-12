@@ -11,6 +11,8 @@ import BoardingManagement from './boarding/BoardingManagement';
 import BoardingReportsView from './boarding/BoardingReportsView';
 import { WorkManagement, WorkUserView } from './work/WorkViews';
 import DisplaySettings from './settings/DisplaySettings';
+import UserBulkImport from './settings/UserBulkImport';
+import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
@@ -89,9 +91,16 @@ function messageFor(error) {
     INVALID_PERMISSION_GROUP: 'Nhóm quyền không hợp lệ hoặc đã ngưng sử dụng.',
     INVALID_POSITION: 'Chức vụ không hợp lệ hoặc đã ngưng sử dụng.',
     INVALID_POSITION_LEVEL: 'Cấp bậc chức vụ phải từ 1 đến 5 sao.',
-    INVALID_CODE: 'Mã không hợp lệ. Chỉ dùng chữ in hoa, số, gạch ngang hoặc gạch dưới.',
+    INVALID_CODE: 'Mã không hợp lệ. Tối đa 20 ký tự; chỉ dùng chữ, số, gạch ngang hoặc gạch dưới.',
     INVALID_NAME: 'Tên không hợp lệ. Vui lòng nhập lại.',
     CODE_TAKEN: 'Mã này đã được sử dụng. Vui lòng chọn mã khác.',
+    HAS_ASSIGNED_USERS: 'Không thể xóa vì vẫn còn người dùng đang được gán. Hãy gỡ hết user trước.',
+    IMPORT_FILE_TOO_LARGE: 'File import vượt quá giới hạn 2 MB.',
+    INVALID_IMPORT_FILE: 'Chỉ chấp nhận file Excel (.xlsx).',
+    IMPORT_UPLOAD_NOT_FOUND: 'Không tìm thấy file import đã tải lên.',
+    IMPORT_UPLOAD_EXPIRED: 'File import đã hết hạn (giữ tối đa 1 giờ). Vui lòng tải lại.',
+    IMPORT_VALIDATION_FAILED: 'Dữ liệu import không hợp lệ. Vui lòng kiểm tra lại file.',
+    USER_IMPORT_FAILED: 'Import người dùng thất bại. Các tài khoản đã tạo trong lô này đã được vô hiệu hóa.',
     DEPARTMENT_NAME_TAKEN: 'Đã có phòng ban trùng tên, vui lòng đặt tên khác.',
     LOCATION_NAME_TAKEN: 'Đã có địa điểm trùng tên, vui lòng đặt tên khác.',
     PERMISSION_GROUP_NAME_TAKEN: 'Đã có nhóm quyền trùng tên, vui lòng đặt tên khác.',
@@ -1401,6 +1410,7 @@ function UserManagement() {
           </p>
         </div>
       </div>
+      <UserBulkImport />
       <div className="lockout-settings">
         <h3>Giới hạn đăng nhập thất bại</h3>
         <p>
@@ -1778,7 +1788,7 @@ function DepartmentManagement() {
         </label>
         <label>
           Mã
-          <input required maxLength={32} value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+          <input required maxLength={20} value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
         </label>
         <button className="primary-button" disabled={Boolean(pending)}>
           {editing ? 'Lưu' : '+ Thêm phòng ban'}
@@ -1807,7 +1817,7 @@ function DepartmentManagement() {
                   type="button"
                   className="danger-button"
                   onClick={() => {
-                    if (window.confirm(`Xóa phòng ban ${item.name}? User trong phòng ban sẽ được gỡ gán.`)) {
+                    if (window.confirm(`Xóa phòng ban ${item.name}? Chỉ xóa được khi không còn user đang gán.`)) {
                       void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa phòng ban.');
                     }
                   }}
@@ -1970,44 +1980,63 @@ function PermissionGroupManagement() {
   const remove = useMutation(anyApi.permissionGroups.remove);
   const assignUser = useMutation(anyApi.permissionGroups.assignUser);
   const unassignUser = useMutation(anyApi.permissionGroups.unassignUser);
-  const [form, setForm] = useState({ name: '', description: '', access: defaultAccessForm() });
+  const ensureCodes = useMutation(anyApi.permissionGroups.ensureCodes);
+  const [form, setForm] = useState({ name: '', code: '', description: '', access: defaultAccessForm() });
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
+  const [codesReady, setCodesReady] = useState(false);
   const { pending, feedback, run } = useFeedback();
 
   const groups = (data?.groups || []).filter((g) => g.active);
   const menus = data?.menus || PRIMARY_MENUS.map(([id, label]) => ({ id, label }));
   const users = data?.users || [];
 
+  useEffect(() => {
+    if (!data || codesReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await ensureCodes({});
+      } catch {
+        // Non-blocking: import validation will still catch missing/invalid codes.
+      } finally {
+        if (!cancelled) setCodesReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data, codesReady, ensureCodes]);
+
   const toMenuAccess = (accessMap) => menus.map((m) => ({ menu: m.id, access: accessMap[m.id] || 'hidden' }));
+
+  const emptyForm = () => ({ name: '', code: '', description: '', access: defaultAccessForm() });
 
   const startEdit = (item) => {
     setEditing(item);
     const access = defaultAccessForm();
     for (const entry of item.menuAccess || []) access[entry.menu] = entry.access;
-    setForm({ name: item.name, description: item.description || '', access });
+    setForm({ name: item.name, code: item.code || '', description: item.description || '', access });
   };
 
   const submit = async (event) => {
     event.preventDefault();
     const menuAccess = toMenuAccess(form.access);
+    const payload = {
+      name: form.name,
+      code: form.code,
+      description: form.description || undefined,
+      menuAccess,
+    };
     if (editing) {
-      const ok = await run(
-        'save',
-        () => update({ id: editing._id, name: form.name, description: form.description || undefined, menuAccess }),
-        'Đã cập nhật nhóm quyền.',
-      );
+      const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật nhóm quyền.');
       if (ok) {
         setEditing(null);
-        setForm({ name: '', description: '', access: defaultAccessForm() });
+        setForm(emptyForm());
       }
     } else {
-      const ok = await run(
-        'save',
-        () => create({ name: form.name, description: form.description || undefined, menuAccess }),
-        'Đã tạo nhóm quyền. Có thể thêm user bên dưới.',
-      );
-      if (ok) setForm({ name: '', description: '', access: defaultAccessForm() });
+      const ok = await run('save', () => create(payload), 'Đã tạo nhóm quyền. Có thể thêm user bên dưới.');
+      if (ok) setForm(emptyForm());
     }
   };
 
@@ -2021,6 +2050,7 @@ function PermissionGroupManagement() {
           <h2>Thiết lập nhóm quyền</h2>
           <p>
             Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem, Xem tối cao (xem mọi user nhưng không chỉnh sửa), hoặc Sửa.
+            Mã nhóm quyền (tối đa 20 ký tự) dùng khi import user hàng loạt.
           </p>
         </div>
       </div>
@@ -2036,7 +2066,7 @@ function PermissionGroupManagement() {
               className="text-button"
               onClick={() => {
                 setEditing(null);
-                setForm({ name: '', description: '', access: defaultAccessForm() });
+                setForm(emptyForm());
               }}
             >
               Hủy
@@ -2046,6 +2076,16 @@ function PermissionGroupManagement() {
         <label>
           Tên nhóm quyền
           <input required maxLength={120} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+        </label>
+        <label>
+          Mã nhóm quyền
+          <input
+            required
+            maxLength={20}
+            value={form.code}
+            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+          />
+          <small>Chữ in hoa, số, _ hoặc -; tối đa 20 ký tự. Dùng trong file import user.</small>
         </label>
         <label>
           Mô tả (tùy chọn)
@@ -2088,6 +2128,7 @@ function PermissionGroupManagement() {
               <div className="mgmt-card-head">
                 <div>
                   <strong>{item.name}</strong>
+                  <span className="code-tag">{item.code || 'CHƯA CÓ MÃ'}</span>
                   {item.description && <span className="muted-block">{item.description}</span>}
                 </div>
                 <div className="row-actions">
@@ -2098,7 +2139,7 @@ function PermissionGroupManagement() {
                     type="button"
                     className="danger-button"
                     onClick={() => {
-                      if (window.confirm(`Xóa nhóm quyền ${item.name}? User trong nhóm sẽ được gỡ gán.`)) {
+                      if (window.confirm(`Xóa nhóm quyền ${item.name}? Chỉ xóa được khi không còn user đang gán.`)) {
                         void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa nhóm quyền.');
                       }
                     }}
@@ -2209,7 +2250,7 @@ function PositionManagement() {
         </label>
         <label>
           Mã
-          <input required maxLength={32} value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+          <input required maxLength={20} value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
         </label>
         <label>
           Cấp bậc (1–5 sao)
@@ -2253,7 +2294,7 @@ function PositionManagement() {
                   type="button"
                   className="danger-button"
                   onClick={() => {
-                    if (window.confirm(`Xóa chức vụ ${item.name}? User mang chức vụ này sẽ được gỡ gán.`)) {
+                    if (window.confirm(`Xóa chức vụ ${item.name}? Chỉ xóa được khi không còn user đang gán.`)) {
                       void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa chức vụ.');
                     }
                   }}

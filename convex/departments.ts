@@ -1,12 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { assertEntityCode } from "./entityCodes";
 import { adminPermissionOrThrow, hasActiveNameConflict } from "./lib";
 
 function cleanDepartment(args: { name: string; code: string }) {
   const name = args.name.trim();
-  const code = args.code.trim().toUpperCase();
+  const code = assertEntityCode(args.code);
   if (!name || name.length > 120) throw new Error("INVALID_NAME");
-  if (!code || code.length > 32 || !/^[A-Z0-9_-]+$/.test(code)) throw new Error("INVALID_CODE");
   return { name, code };
 }
 
@@ -44,10 +44,30 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const actor = await adminPermissionOrThrow(ctx, "departments:write");
     const input = cleanDepartment(args);
-    const existing = await ctx.db.query("departments").withIndex("by_code", (q) => q.eq("code", input.code)).unique();
-    if (existing) throw new Error("CODE_TAKEN");
-    await assertDepartmentNameAvailable(ctx, input.name);
+    const existing = await ctx.db
+      .query("departments")
+      .withIndex("by_code", (q) => q.eq("code", input.code))
+      .unique();
+    await assertDepartmentNameAvailable(ctx, input.name, existing && !existing.active ? existing._id : undefined);
     const now = Date.now();
+
+    if (existing) {
+      if (existing.active) throw new Error("CODE_TAKEN");
+      // Soft-deleted code match → reactivate.
+      await ctx.db.patch(existing._id, {
+        ...input,
+        active: true,
+        updatedAt: now,
+      });
+      await ctx.db.insert("auditLogs", {
+        actorUserId: actor.user._id,
+        action: "department.reactivate",
+        details: JSON.stringify({ id: existing._id, ...input }),
+        at: now,
+      });
+      return existing._id;
+    }
+
     const id = await ctx.db.insert("departments", {
       ...input,
       active: true,
@@ -76,7 +96,10 @@ export const update = mutation({
     const current = await ctx.db.get(args.id);
     if (!current) throw new Error("DEPARTMENT_NOT_FOUND");
     const input = cleanDepartment(args);
-    const duplicate = await ctx.db.query("departments").withIndex("by_code", (q) => q.eq("code", input.code)).unique();
+    const duplicate = await ctx.db
+      .query("departments")
+      .withIndex("by_code", (q) => q.eq("code", input.code))
+      .unique();
     if (duplicate && duplicate._id !== args.id) throw new Error("CODE_TAKEN");
     await assertDepartmentNameAvailable(ctx, input.name, args.id);
     const now = Date.now();
@@ -100,17 +123,19 @@ export const remove = mutation({
     const actor = await adminPermissionOrThrow(ctx, "departments:write");
     const current = await ctx.db.get(args.id);
     if (!current) throw new Error("DEPARTMENT_NOT_FOUND");
-    const now = Date.now();
-    // Soft-delete: deactivate and clear user assignments.
-    await ctx.db.patch(args.id, { active: false, updatedAt: now });
-    const users = await ctx.db.query("users").withIndex("by_department", (q) => q.eq("departmentId", args.id)).collect();
-    for (const user of users) {
-      await ctx.db.patch(user._id, { departmentId: undefined, updatedAt: now, updatedBy: actor.user._id });
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_department", (q) => q.eq("departmentId", args.id))
+      .collect();
+    if (users.length > 0) {
+      throw new Error("HAS_ASSIGNED_USERS");
     }
+    const now = Date.now();
+    await ctx.db.patch(args.id, { active: false, updatedAt: now });
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
       action: "department.remove",
-      details: JSON.stringify({ id: args.id, code: current.code, clearedUsers: users.length }),
+      details: JSON.stringify({ id: args.id, code: current.code }),
       at: now,
     });
   },

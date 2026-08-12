@@ -84,6 +84,8 @@ export default defineSchema({
    */
   permissionGroups: defineTable({
     name: v.string(),
+    /** Admin-defined uppercase code (≤20, A-Z0-9_-). Optional only for legacy rows pending backfill. */
+    code: v.optional(v.string()),
     description: v.optional(v.string()),
     /** One entry per system menu: hidden | view | view_all | edit */
     menuAccess: v.array(
@@ -94,7 +96,22 @@ export default defineSchema({
     ),
     active: v.boolean(),
     ...timestamps,
-  }).index("by_name", ["name"]),
+  })
+    .index("by_name", ["name"])
+    .index("by_code", ["code"]),
+  /**
+   * Temporary bulk-user-import Excel uploads retained for 1 hour (even after commit).
+   */
+  userImportUploads: defineTable({
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    fileSize: v.number(),
+    uploadedBy: v.id("users"),
+    status: v.string(), // uploaded | committed | expired
+    rowCount: v.optional(v.number()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  }).index("by_expiresAt", ["expiresAt"]),
   /**
    * Job positions (Chức vụ) with approval rank 1–5 (gold stars).
    * Higher rank may approve for lower ranks; full workflow uses this later.
