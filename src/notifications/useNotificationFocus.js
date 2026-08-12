@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+export const DUTY_NOTIFICATION_FOCUS_TYPES = ['duty', 'duty_assigned'];
+
 /**
  * Scrolls to and briefly highlights the element matching focusTarget.sourceId
  * via [data-focus-id]. Token changes re-trigger focus for the same id.

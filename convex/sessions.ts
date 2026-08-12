@@ -179,6 +179,8 @@ export const touchCurrent = mutation({
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .unique();
     if (existing) {
+      const user = await ctx.db.get(existing.userId);
+      if (!user || user.status !== "active" || user.loginLockedAt) return;
       await ctx.db.patch(existing._id, { lastActiveAt: Date.now() });
     }
   },

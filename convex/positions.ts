@@ -156,6 +156,7 @@ export const assignUser = mutation({
     if (!position?.active) throw new Error("INVALID_POSITION");
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("USER_NOT_FOUND");
+    if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
     const now = Date.now();
     await ctx.db.patch(args.userId, {
       positionId: args.positionId,

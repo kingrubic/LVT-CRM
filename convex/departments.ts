@@ -149,6 +149,7 @@ export const assignUser = mutation({
     if (!department?.active) throw new Error("INVALID_DEPARTMENT");
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("USER_NOT_FOUND");
+    if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
     const now = Date.now();
     await ctx.db.patch(args.userId, {
       departmentId: args.departmentId,

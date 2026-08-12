@@ -88,3 +88,29 @@ export function listInvalidActiveCodes(
       id: item._id,
     }));
 }
+
+/** Active catalog rows that share a normalized code (legacy/corrupt data). */
+export function listDuplicateActiveCodes(
+  entities: { _id?: string; name?: string; code?: string; active?: boolean }[],
+  label: string,
+) {
+  const seen = new Map<string, { name: string; code: string }>();
+  const duplicates: { label: string; name: string; code: string; id?: string }[] = [];
+  for (const item of entities || []) {
+    if (item.active === false || !item.code) continue;
+    const code = normalizeEntityCode(item.code);
+    if (!code) continue;
+    const previous = seen.get(code);
+    if (previous) {
+      duplicates.push({
+        label,
+        name: item.name || "(không tên)",
+        code,
+        id: item._id,
+      });
+    } else {
+      seen.set(code, { name: item.name || "", code });
+    }
+  }
+  return duplicates;
+}

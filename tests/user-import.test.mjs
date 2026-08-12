@@ -11,6 +11,11 @@ import {
   rowsFromSheetMatrix,
   validateUserImportRows,
 } from '../src/lib/userImport.js';
+import {
+  USER_IMPORT_MAX_BYTES,
+  assertImportUploadUsable,
+  emailOccupiesImportSlot,
+} from '../convex/userImportPolicy.ts';
 
 test('normalizeEntityCode uppercases and strips diacritics', () => {
   assert.equal(normalizeEntityCode(' giáo '), 'GIAO');
@@ -131,4 +136,68 @@ test('invalid catalog codes block import before row checks', () => {
   );
   assert.equal(result.ok, false);
   assert.match(result.errors[0].message, /Phòng ban/);
+});
+
+test('duplicate active catalog codes block import instead of silently picking one', () => {
+  const result = validateUserImportRows(
+    [
+      {
+        rowNumber: 2,
+        ho_ten: 'A',
+        email: 'a@school.vn',
+        ma_phong_ban: 'TOAN',
+        ma_chuc_vu: 'GV',
+        ma_nhom_quyen: 'GVCN',
+        mat_khau_tam_thoi: 'Matkhau12',
+      },
+    ],
+    {
+      departments: [
+        { _id: 'd1', name: 'Toán', code: 'TOAN', active: true },
+        { _id: 'd2', name: 'Toán 2', code: 'toan', active: true },
+      ],
+      positions: [{ _id: 'p1', name: 'GV', code: 'GV', active: true }],
+      permissionGroups: [{ _id: 'g1', name: 'G', code: 'GVCN', active: true }],
+      existingEmails: [],
+    },
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.errors[0].message, /trùng/);
+});
+
+test('import upload TTL and commit state are enforced independently of purge status', () => {
+  const actorId = 'admin1';
+  const base = { uploadedBy: actorId, status: 'uploaded', expiresAt: 1_000, fileSize: 12 };
+  assert.doesNotThrow(() => assertImportUploadUsable(base, { actorId, now: 999, forCommit: true }));
+  assert.throws(
+    () => assertImportUploadUsable(base, { actorId, now: 1_001, forCommit: true }),
+    /IMPORT_UPLOAD_EXPIRED/,
+  );
+  assert.throws(
+    () => assertImportUploadUsable({ ...base, status: 'expired' }, { actorId, now: 500, forCommit: true }),
+    /IMPORT_UPLOAD_EXPIRED/,
+  );
+  assert.throws(
+    () => assertImportUploadUsable({ ...base, status: 'committed' }, { actorId, now: 500, forCommit: true }),
+    /IMPORT_UPLOAD_ALREADY_COMMITTED/,
+  );
+  assert.throws(
+    () => assertImportUploadUsable({ ...base, status: 'committing' }, { actorId, now: 500, forCommit: true }),
+    /IMPORT_UPLOAD_IN_PROGRESS/,
+  );
+  assert.throws(
+    () => assertImportUploadUsable(base, { actorId: 'other', now: 500, forCommit: true }),
+    /FORBIDDEN/,
+  );
+  assert.equal(USER_IMPORT_MAX_BYTES, 2 * 1024 * 1024);
+});
+
+test('rolled-back import users do not occupy emails for a retry', () => {
+  assert.equal(emailOccupiesImportSlot({ email: 'a@school.vn', status: 'active' }), true);
+  assert.equal(emailOccupiesImportSlot({ email: 'a@school.vn', status: 'disabled' }), true);
+  assert.equal(
+    emailOccupiesImportSlot({ email: 'a@school.vn', status: 'disabled', importRollbackAt: 1 }),
+    false,
+  );
+  assert.equal(emailOccupiesImportSlot({ email: '', status: 'active' }), false);
 });

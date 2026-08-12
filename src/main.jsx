@@ -14,7 +14,7 @@ import DisplaySettings from './settings/DisplaySettings';
 import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
-import { menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
+import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
@@ -69,15 +69,18 @@ function messageFor(error) {
     EMAIL_TAKEN: 'Email này đã được sử dụng. Vui lòng chọn email khác.',
     TEMP_PASSWORD_TOO_SHORT: 'Mật khẩu tạm thời phải có ít nhất 8 ký tự.',
     PASSWORD_TOO_SHORT: 'Mật khẩu mới phải có ít nhất 8 ký tự.',
+    CURRENT_PASSWORD_REQUIRED: 'Vui lòng nhập mật khẩu hiện tại.',
+    CURRENT_PASSWORD_INVALID: 'Mật khẩu hiện tại không đúng.',
     CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể khóa chính tài khoản đang đăng nhập.',
     CANNOT_DELETE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể xóa chính tài khoản đang đăng nhập.',
-    USER_REMOVE_FAILED: 'Không thể xóa tài khoản. Vui lòng thử lại hoặc liên hệ kỹ thuật.',
+    LAST_ACTIVE_ADMIN: 'Không thể khóa, xóa hoặc hạ quyền Administrator cuối cùng đang hoạt động.',
+    USER_REMOVE_FAILED: 'Không thể xóa tài khoản. Vui lòng liên hệ kỹ thuật.',
     USER_CREATE_FAILED: 'Không thể tạo tài khoản. Vui lòng thử lại.',
     USER_UPDATE_FAILED: 'Không thể cập nhật tài khoản. Vui lòng thử lại.',
     PASSWORD_CHANGED_SYNC_PENDING: 'Mật khẩu đã đổi nhưng hệ thống chưa cập nhật xong. Vui lòng liên hệ quản trị viên.',
     PASSWORD_RESET_FAILED: 'Không thể đặt lại mật khẩu. Vui lòng thử lại.',
     PASSWORD_RESET_EMAIL_FAILED:
-      'Đã tạo mật khẩu tạm nhưng chưa gửi được email. Vui lòng liên hệ quản trị viên.',
+      'Không gửi được email khôi phục mật khẩu. Tài khoản chưa đổi mật khẩu. Vui lòng thử lại.',
     MAIL_NOT_CONFIGURED: 'Hệ thống chưa cấu hình gửi email. Vui lòng liên hệ quản trị viên.',
     MAIL_AUTH_FAILED: 'Không xác thực được tài khoản gửi email. Vui lòng liên hệ quản trị viên.',
     PASSWORD_CHANGE_FAILED: 'Không thể đổi mật khẩu. Vui lòng thử lại.',
@@ -101,6 +104,8 @@ function messageFor(error) {
     IMPORT_FILE_EMPTY: 'File import trống.',
     IMPORT_UPLOAD_NOT_FOUND: 'Không tìm thấy file import đã tải lên.',
     IMPORT_UPLOAD_EXPIRED: 'File import đã hết hạn (giữ tối đa 1 giờ). Vui lòng tải lại.',
+    IMPORT_UPLOAD_ALREADY_COMMITTED: 'File import này đã được nhập. Vui lòng tải file mới nếu cần nhập tiếp.',
+    IMPORT_UPLOAD_IN_PROGRESS: 'File import đang được nhập. Vui lòng đợi hoàn tất.',
     IMPORT_VALIDATION_FAILED: 'Dữ liệu import không hợp lệ. Vui lòng kiểm tra lại file.',
     USER_IMPORT_FAILED: 'Import người dùng thất bại. Các tài khoản đã tạo trong lô này đã được vô hiệu hóa.',
     DEPARTMENT_NAME_TAKEN: 'Đã có phòng ban trùng tên, vui lòng đặt tên khác.',
@@ -132,7 +137,7 @@ function messageFor(error) {
     WORK_DEPARTMENTS_REQUIRED: 'Vui lòng thêm ít nhất một phòng ban nhận việc.',
     WORK_DEPARTMENT_DUPLICATE: 'Mỗi phòng ban chỉ được nhận một đầu việc trong cùng công văn.',
     WORK_APPROVERS_REQUIRED: 'Vui lòng chọn ít nhất một người duyệt.',
-    INVALID_WORK_APPROVER: 'Người duyệt phải là user đang hoạt động cấp 4 hoặc 5 sao.',
+    INVALID_WORK_APPROVER: 'Người duyệt phải là user đang hoạt động cấp 4 hoặc 5 sao, không phải Administrator/Moderator.',
     WORK_APPROVER_REQUIRED: 'Chỉ user cấp 4 hoặc 5 sao mới được duyệt công văn.',
     WORK_APPROVER_FORBIDDEN: 'Bạn không nằm trong danh sách duyệt công văn này.',
     WORK_NOT_APPROVED: 'Công văn chưa được duyệt đủ.',
@@ -665,7 +670,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const { pending, feedback, run } = useFeedback();
 
   useNotificationFocus(focusTarget, {
-    acceptSourceTypes: ['duty'],
+    acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES,
     onMatch: (target) => setExpanded(String(target.sourceId)),
   });
 
@@ -1072,7 +1077,7 @@ function DutiesUserView({ access, focusTarget = null }) {
   const { pending, feedback, run } = useFeedback();
   const canEdit = access === 'edit' || data?.canEdit;
 
-  useNotificationFocus(focusTarget, { acceptSourceTypes: ['duty'] });
+  useNotificationFocus(focusTarget, { acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES });
 
   if (data === undefined) return <LoadingView label="Đang tải danh sách công tác…" />;
   const assignedDuties = data.duties.filter((item) => item.isMine);
@@ -2330,6 +2335,7 @@ function PositionManagement() {
 function ProfileView({ session }) {
   const changeOwnPassword = useAction(anyApi.users.changeOwnPassword);
   const { user, department, permissionGroup, position, isOperationalManager } = session;
+  const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
@@ -2338,12 +2344,14 @@ function ProfileView({ session }) {
   const submit = async (event) => {
     event.preventDefault();
     setFeedback('');
+    if (!currentPassword) return setFeedback('Vui lòng nhập mật khẩu hiện tại.');
     if (password.length < 8) return setFeedback('Mật khẩu mới phải có ít nhất 8 ký tự.');
     if (password !== confirmation) return setFeedback('Xác nhận mật khẩu không khớp.');
     setPending(true);
     try {
-      await changeOwnPassword({ newPassword: password });
+      await changeOwnPassword({ currentPassword, newPassword: password });
       setFeedback('Đã đổi mật khẩu thành công.');
+      setCurrentPassword('');
       setPassword('');
       setConfirmation('');
     } catch (error) {
@@ -2443,6 +2451,10 @@ function ProfileView({ session }) {
             </div>
           </header>
 
+          <label className="profile-field">
+            <span>Mật khẩu hiện tại</span>
+            <input required type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          </label>
           <label className="profile-field">
             <span>Mật khẩu mới</span>
             <input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />

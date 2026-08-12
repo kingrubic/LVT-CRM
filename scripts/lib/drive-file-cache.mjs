@@ -3,6 +3,21 @@ import { mkdir, open, readFile, readdir, rename, rm, stat } from 'node:fs/promis
 import path from 'node:path';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+export const DRIVE_CACHE_TTL_MS = DAY_MS;
+
+/** Stable cache/version key: SHA-256 when present, else Drive id+size, else Convex storage id. */
+export function workFileVersion(file) {
+  if (file?.driveChecksum) return String(file.driveChecksum);
+  if (file?.driveFileId) return `${file.driveFileId}:${file.fileSize || ''}`;
+  if (file?.storageId) return `convex-storage:${file.storageId}:${file.fileSize || 0}`;
+  throw new Error('WORK_FILE_NOT_FOUND');
+}
+
+export function workFileCacheIdentity(file) {
+  if (file?.driveFileId) return `${file.driveFileId}:${workFileVersion(file)}`;
+  if (file?.storageId) return workFileVersion(file);
+  throw new Error('WORK_FILE_NOT_FOUND');
+}
 
 export class AsyncSemaphore {
   constructor(limit = 8, maxQueue = 500) {
@@ -203,5 +218,3 @@ export class DriveFileCache {
     this.maintenance = this.maintenance.then(() => this.prune()).catch(() => {});
   }
 }
-
-export const DRIVE_CACHE_TTL_MS = DAY_MS;

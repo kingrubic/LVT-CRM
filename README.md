@@ -14,13 +14,15 @@ Vận hành production:
 - Backup Convex gồm file storage: `./scripts/lvt-convex-backup.sh`
 - Backup tự động hằng đêm lúc 00:30, lưu ngoài repo dưới `/Users/vsc_agent/clawd/backups/lvt-crm-convex/nightly/`.
 - Admin key chỉ đọc từ macOS Keychain bởi script deploy/backup; không lưu trong `.env.local`, source hoặc bundle.
-- File công văn mới được lưu private trong Google Drive của tài khoản vận hành; Convex chỉ giữ Drive file ID, SHA-256 và metadata. Trình duyệt không nhận link Drive: frontend gửi Convex Auth token đến `/api/files/:documentId`, server kiểm tra quyền CRM rồi mới stream file.
+- File công văn (Drive mới **và** Convex Storage cũ) không bao giờ đưa link cho trình duyệt. Frontend gửi Convex Auth token đến `/api/files/:documentId`; server kiểm tra quyền, lấy từ **cache server 24 giờ** (hoặc tải Drive/storage một lần rồi cache), rồi mới stream. Upload Drive prewarm cache (best-effort).
 - Drive OAuth do `gog` quản lý ngoài repo. Folder ID được đọc từ macOS Keychain với service `lvt-crm-drive-folder-id`; không commit OAuth token/credential hoặc bật “Anyone with the link”.
 - Quên mật khẩu (web / Android / API iOS): `users.requestPasswordReset` gửi mật khẩu tạm qua Gmail API từ `thcslevantambinhthanh@gmail.com`. Cấu hình Convex env `GMAIL_*` (xem `.env.example`); lấy refresh token một lần bằng `node scripts/gmail-oauth-setup.mjs`. Không commit `client_secret*.json`.
 
 ## Phạm vi hiện tại
 
-- Xác thực **email + password only**. Không public signup, không email verification. Quên mật khẩu tự phục vụ: gửi mật khẩu tạm + bắt buộc đổi MK (`mustChangePassword`).
+- Xác thực **email + password only**. Không public signup, không email verification. Sai email/mật khẩu, tài khoản **khóa đăng nhập**, và tài khoản **disable** mỗi loại một thông báo rõ, không cho login.
+- Quên mật khẩu tự phục vụ: gửi mật khẩu tạm **trước**, chỉ xoay credential khi mail thành công; cooldown 5 phút/user, **không** rate-limit IP. Sau đó bắt buộc đổi MK (`mustChangePassword`).
+- Đổi MK trên hồ sơ (**Thông tin cá nhân**) phải nhập **mật khẩu hiện tại**. Cổng đổi MK bắt buộc (lần đầu / admin reset, web + Android/iOS) chỉ hỏi MK mới.
 - **Ba vai trò hệ thống** trên `users.role`:
   - `admin` — **Administrator**: toàn quyền, bao gồm **Thiết lập tối cao** và quản lý tài khoản.
   - `moderator` — **Moderator**: toàn quyền nghiệp vụ và **Quản trị hệ thống**, không thấy/không truy cập **Thiết lập tối cao**.
@@ -82,6 +84,12 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 - Rule mã / soft-delete / chặn xóa khi còn user / reactivate theo mã: giống phòng ban.
 - Gán user: form user hoặc nút **Thêm user** trong Thiết lập chức vụ.
 
+### Công việc / công văn
+
+- Người duyệt = user **đang hoạt động cấp 4★ hoặc 5★**, **không** gồm Administrator/Moderator (họ quản lý công văn, không đứng trong chuỗi duyệt).
+- Lần duyệt **đầu tiên** khóa sửa/xóa vĩnh viễn (`canMutateWorkDocument`) — kể cả khi status còn `pending`. Từ chối chỉ được khi **chưa ai duyệt**.
+- File đính kèm: xem/tải qua `/api/files/:documentId` + cache server; không trả URL Drive hay Convex Storage cho client.
+
 ### Cấu trúc menu
 
 1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc · Bán trú), Thông báo, Công tác, Công việc, Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
@@ -92,14 +100,14 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 - Feed tính theo mốc giờ trước hạn (mặc định `48 · 24 · 12 · 0` / Đến hạn) cho **Công tác** và **Công việc** được gán cho user.
 - Chuông trên header + trang Thông báo; đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` = `edit`.
-- **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`).
+- **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác.
 - Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; bật/tắt nguồn thông báo Công tác/Công việc; chỉnh danh sách mốc giờ.
 
 ## Schema chính
 
 | Bảng | Mục đích |
 |------|----------|
-| `users` (+ authTables) | Hồ sơ, `role`, `departmentId`, `permissionGroupId`, `positionId`, status, `mustChangePassword` |
+| `users` (+ authTables) | Hồ sơ, `role`, `departmentId`, `permissionGroupId`, `positionId`, status, `mustChangePassword`, `loginLockedAt`, `importRollbackAt` |
 | `departments` | Phòng ban (`code` unique) |
 | `locations` | Địa điểm công tác |
 | `permissionGroups` | Nhóm quyền + `code` + `menuAccess[]` |
@@ -248,12 +256,13 @@ npx convex run internal.users.provisionFirstAdmin \
 
 1. Administrator tạo user: email (unique, trim+lowercase), tên, **role** (`admin`|`moderator`|`user`), phòng ban / chức vụ / nhóm quyền (tùy chọn), temporary password ≥8. `createAccount` (provider `password`).
 2. `mustChangePassword=true`; audit không chứa password. **Mọi user đăng nhập lần đầu / sau reset đều phải đổi mật khẩu.**
-3. User `signIn` only. Flag còn true → chỉ form đổi MK; server chặn thao tác admin.
-4. `changeOwnPassword` → `modifyAccountCredentials`, `invalidateSessions` (giữ session hiện tại), clear flag.
+3. User `signIn` only. Flag còn true → chỉ form đổi MK; server chặn thao tác nghiệp vụ. `loginLockedAt` chặn login **và** mutation/query đã đăng nhập (`currentUserOrThrow`).
+4. Đổi MK hồ sơ: `changeOwnPassword` **bắt buộc `currentPassword`**. Cổng `mustChangePassword` (web/Android/iOS) chỉ gửi `newPassword`. Sau đó `modifyAccountCredentials`, `invalidateSessions` (giữ session hiện tại), clear flag.
 5. Admin reset MK → flag + credentials + revoke mọi session target.
-6. Disable → `disabled` + invalidate; `beforeSessionCreation` từ chối user không active.
-7. Remove → soft-delete (`disabled` + revoke). Không xóa auth tables trực tiếp. Cấm tự xóa active account.
+6. Disable → `disabled` + invalidate sessions + xóa push token / device metadata; `beforeSessionCreation` từ chối user không active.
+7. Remove → soft-delete giống disable (kèm dọn push/device). Không xóa auth tables trực tiếp. Cấm tự xóa active account. Cấm khóa/xóa/hạ quyền **admin đang hoạt động cuối cùng** (`LAST_ACTIVE_ADMIN`).
 8. Public `signUp` / `reset` / email verification bị từ chối trong `convex/auth.ts`.
+9. Quên mật khẩu: gửi email trước; thất bại mail **không** xoay credential. Không rate-limit IP.
 
 ### Import user hàng loạt (SYS-011 · chỉ Administrator)
 
@@ -280,9 +289,9 @@ UI: **Thiết lập người dùng** — nút *Tải file nhập liệu mẫu* +
 **Flow server-first (bắt buộc)**
 
 1. Client chỉ kiểm tra extension/size tối thiểu, rồi **upload file lên Convex Storage** + `userImport.registerUpload` (TTL **1 giờ**, kể cả khi file lỗi hoặc đã import thành công).
-2. `userImport.validateUpload({ uploadId })` — server đọc lại file từ storage (`userImportParse.parseStorageXlsx`), validate, trả errors hoặc preview.
-3. `userImport.commit({ uploadId })` — server **đọc lại cùng file**, validate lần nữa, rồi tạo user. **Không tin rows từ client.**
-4. Nếu tạo dở dang giữa chừng: soft-disable các user đã tạo trong lô (`user.import_rollback`); auth account không hard-delete được.
+2. `userImport.validateUpload({ uploadId })` — server đọc lại file từ storage (`userImportParse.parseStorageXlsx`), **chặn nếu quá `expiresAt` hoặc blob > 2 MiB**, validate, trả errors hoặc preview.
+3. `userImport.commit({ uploadId })` — server **đọc lại cùng file**, validate lần nữa, claim `committing`, rồi tạo user. **Không tin rows từ client.** File đã `committed` không commit lại.
+4. Nếu tạo dở dang giữa chừng: soft-disable các user đã tạo (`importRollbackAt`); lần import sau **được phép dùng lại email đó** (reactivate + mật khẩu tạm mới). Email user disable bình thường vẫn chặn trùng. Mã catalog active trùng nhau → chặn import.
 
 **Code chính:** `convex/userImport.ts`, `userImportParse.ts`, `userImportSheet.ts`, `userImportValidate.ts`, `entityCodes.ts`; test `tests/user-import.test.mjs`.
 

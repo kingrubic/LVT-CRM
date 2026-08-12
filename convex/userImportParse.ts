@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import * as XLSX from "xlsx";
 import { internalAction } from "./_generated/server";
+import { USER_IMPORT_MAX_BYTES } from "./userImportPolicy";
 import { rowsFromSheetMatrix } from "./userImportSheet";
 
 /**
@@ -25,6 +26,13 @@ export const parseStorageXlsx = internalAction({
       return {
         ok: false as const,
         message: "IMPORT_FILE_EMPTY",
+        rows: [] as const,
+      };
+    }
+    if (buffer.length > USER_IMPORT_MAX_BYTES) {
+      return {
+        ok: false as const,
+        message: "IMPORT_FILE_TOO_LARGE",
         rows: [] as const,
       };
     }

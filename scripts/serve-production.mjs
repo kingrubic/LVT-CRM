@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { copyFile, mkdtemp, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { ConvexHttpClient } from 'convex/browser';
 import { anyApi } from 'convex/server';
 import { DriveUploadStages } from './lib/drive-upload-stages.mjs';
-import { AsyncSemaphore, DriveFileCache, DRIVE_CACHE_TTL_MS } from './lib/drive-file-cache.mjs';
+import { AsyncSemaphore, DriveFileCache, DRIVE_CACHE_TTL_MS, workFileCacheIdentity, workFileVersion } from './lib/drive-file-cache.mjs';
 import { retryDriveDownload } from './lib/drive-download-retry.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from './lib/file-content-policy.mjs';
 import { FileHttpError, classifyFileError } from './lib/file-http-errors.mjs';
@@ -85,14 +85,6 @@ function safeFileName(request) {
   } catch {
     return null;
   }
-}
-
-function driveFileVersion(file) {
-  return String(file.driveChecksum || `${file.driveFileId}:${file.fileSize || ''}`);
-}
-
-function driveCacheIdentity(file) {
-  return `${file.driveFileId}:${driveFileVersion(file)}`;
 }
 
 function applyPrivateDownloadHeaders(response, fileName, size, etag, cacheStatus) {
@@ -320,7 +312,7 @@ async function uploadToDrive(request, response) {
       stage.driveChecksum = driveChecksum;
       try {
         await driveFileCache.getOrCreate(
-          driveCacheIdentity({ driveFileId: uploaded.id, driveChecksum, fileSize: received }),
+          workFileCacheIdentity({ driveFileId: uploaded.id, driveChecksum, fileSize: received }),
           (destination) => copyFile(temporaryFile, destination),
         );
       } catch (cacheError) {
@@ -387,11 +379,22 @@ async function downloadDriveFile(destination, file, requestLabel) {
   ));
 }
 
+async function downloadLegacyStorageFile(destination, file) {
+  if (!file.storageUrl) throw new Error('WORK_FILE_NOT_FOUND');
+  const response = await fetch(file.storageUrl);
+  if (!response.ok) throw new Error('WORK_FILE_NOT_FOUND');
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length) throw new Error('EMPTY_FILE');
+  await writeFile(destination, bytes);
+}
+
 async function serveAuthorizedDriveFile(request, response, file, requestLabel) {
-  const sourceIdentity = driveCacheIdentity(file);
+  const sourceIdentity = workFileCacheIdentity(file);
   const entry = await driveFileCache.getOrCreate(
     sourceIdentity,
-    (destination) => downloadDriveFile(destination, file, requestLabel),
+    (destination) => file.driveFileId
+      ? downloadDriveFile(destination, file, requestLabel)
+      : downloadLegacyStorageFile(destination, file),
   );
   applyPrivateDownloadHeaders(response, file.fileName, entry.size, entry.etag, entry.cacheStatus);
   response.setHeader('Vary', 'Authorization');
@@ -421,7 +424,7 @@ async function workFileMetadata(request, response, documentId) {
   response.end(`${JSON.stringify({
     fileName: file.fileName,
     fileSize: file.fileSize,
-    fileVersion: driveFileVersion(file),
+    fileVersion: workFileVersion(file),
   })}\n`);
 }
 

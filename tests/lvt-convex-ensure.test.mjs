@@ -10,15 +10,16 @@ const validationEnd = script.indexOf('\nlog() {');
 assert.notEqual(validationEnd, -1, 'could not isolate interval validation');
 
 const validationPrelude = `${script.slice(0, validationEnd)}\nexit 0\n`;
+const zshAvailable = spawnSync('zsh', ['-c', 'exit 0'], { encoding: 'utf8' }).status === 0;
 
 function validateInterval(value) {
-  return spawnSync('/bin/zsh', ['-c', validationPrelude], {
+  return spawnSync('zsh', ['-c', validationPrelude], {
     encoding: 'utf8',
     env: { ...process.env, LVT_CONVEX_ENSURE_INTERVAL: value },
   });
 }
 
-test('Convex ensure interval accepts only integers from 1 through 3600', () => {
+test('Convex ensure interval accepts only integers from 1 through 3600', { skip: zshAvailable ? false : 'zsh is required to execute lvt-convex-ensure.sh' }, () => {
   assert.doesNotMatch(validationPrelude, /=~\s*['"]/, 'zsh regex operand must not be quoted');
 
   for (const value of ['1', '20', '3600']) {

@@ -218,6 +218,7 @@ export const assignUser = mutation({
     if (!group?.active) throw new Error("INVALID_PERMISSION_GROUP");
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("USER_NOT_FOUND");
+    if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
     const now = Date.now();
     await ctx.db.patch(args.userId, {
       permissionGroupId: args.permissionGroupId,

@@ -126,6 +126,7 @@ export async function currentUserOrThrow(ctx: DbCtx) {
   const userId = await authUserIdOrThrow(ctx);
   const user = await ctx.db.get(userId);
   if (!user) throw new Error("UNAUTHENTICATED");
+  if (user.loginLockedAt) throw new Error("ACCOUNT_LOCKED");
   return user;
 }
 

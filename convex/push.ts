@@ -11,6 +11,7 @@ export const registerToken = mutation({
   handler: async (ctx, args) => {
     const user = await currentUserOrThrow(ctx);
     if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
+    if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
     const token = args.token.trim();
     if (!token || token.length > 4096) throw new Error("INVALID_PUSH_TOKEN");
     const existing = await ctx.db

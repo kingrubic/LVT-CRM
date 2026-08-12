@@ -7,6 +7,11 @@ alwaysApply: false
 # Auth & supreme settings
 
 - Login: email + password (Convex Auth). No public signup.
+- Distinct blocking login errors: invalid credentials, `ACCOUNT_LOCKED`, `USER_NOT_ACTIVE`.
+- `loginLockedAt` is enforced at sign-in and on authenticated calls (`currentUserOrThrow`).
+- Forgot-password: send email **before** rotating credentials; per-user cooldown only (no IP rate limit).
+- Profile `changeOwnPassword` requires `currentPassword`. Forced `mustChangePassword` gate only sends `newPassword`.
+- Do not disable/delete/demote the last active admin (`LAST_ACTIVE_ADMIN`).
 - Supreme settings UI/API: **admin only** (`adminPermissionOrThrow`)
 - Catalog codes (PB / chức vụ / nhóm quyền): ≤20, `A–Z0–9_-`, uppercase; see `convex/entityCodes.ts`
 - Soft-delete catalogs; refuse delete when users still assigned (`HAS_ASSIGNED_USERS`)

@@ -20,7 +20,7 @@ import {
   registerDriveUploadStage,
   releaseDriveUploadCleanup,
 } from "./driveUploadStages";
-import { canMutateWorkDocument } from "./workDocumentPolicy";
+import { canMutateWorkDocument, canRejectWorkDocument } from "./workDocumentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -202,7 +202,11 @@ async function validateDocumentWorkflow(
   if (!approverUserIds.length) throw new Error("WORK_APPROVERS_REQUIRED");
   for (const userId of approverUserIds) {
     const approver = activeUsers.find((user: any) => String(user._id) === userId);
-    if (!approver || activePositionLevel(approver, positions) < 4) {
+    if (
+      !approver ||
+      isOperationalManagerRole(approver.role) ||
+      activePositionLevel(approver, positions) < 4
+    ) {
       throw new Error("INVALID_WORK_APPROVER");
     }
   }
@@ -492,10 +496,8 @@ async function documentView(ctx: any, document: any, catalogData: any) {
     fileName: document.fileName,
     fileType: document.fileType,
     fileSize: document.fileSize,
-    fileUrl: document.driveFileId || !document.fileId
-      ? null
-      : await ctx.storage.getUrl(document.fileId),
-    privateFile: Boolean(document.driveFileId),
+    fileUrl: null,
+    privateFile: Boolean(document.driveFileId || document.fileId),
     content: document.content,
     deadline: document.deadline,
     status: document.status,
@@ -706,7 +708,7 @@ export const authorizeFileDownload = query({
   handler: async (ctx, args) => {
     const access = await requireWorkAccess(ctx);
     const document = await ctx.db.get(args.documentId);
-    if (!document?.active || !document.driveFileId) {
+    if (!document?.active || (!document.driveFileId && !document.fileId)) {
       throw new Error("WORK_FILE_NOT_FOUND");
     }
 
@@ -737,7 +739,11 @@ export const authorizeFileDownload = query({
 
     if (!allowed) throw new Error("WORK_FILE_FORBIDDEN");
     return {
-      driveFileId: document.driveFileId,
+      driveFileId: document.driveFileId || null,
+      storageId: document.fileId || null,
+      storageUrl: document.driveFileId || !document.fileId
+        ? null
+        : await ctx.storage.getUrl(document.fileId),
       driveChecksum: document.driveChecksum || null,
       fileName: document.fileName,
       fileType: document.fileType,
@@ -779,6 +785,10 @@ export const formOptions = query({
         }))
         .sort((a: any, b: any) => a.name.localeCompare(b.name, "vi")),
       approvers: activeUsers
+        .filter(
+          (user: any) =>
+            !isOperationalManagerRole(user.role) && activePositionLevel(user, positions) >= 4,
+        )
         .map((user: any) => ({
           _id: user._id,
           name: user.name || user.email || "Chưa đặt tên",
@@ -792,7 +802,6 @@ export const formOptions = query({
             || "",
           level: activePositionLevel(user, positions),
         }))
-        .filter((user: any) => user.level >= 4)
         .sort((a: any, b: any) => b.level - a.level || a.name.localeCompare(b.name, "vi")),
     };
   },
@@ -1332,18 +1341,18 @@ export const rejectDocument = mutation({
     }
     const rejectedByUserIds = document.rejectedByUserIds || [];
     if (rejectedByUserIds.some((id: string) => String(id) === String(access.user._id))) return;
-    if (
-      document.status !== "pending" ||
-      document.approvedByUserIds.some((id: string) => String(id) === String(access.user._id))
-    ) {
+    if (!canRejectWorkDocument(document)) {
       throw new Error("WORK_DOCUMENT_ALREADY_DECIDED");
     }
+    const related = await relatedDocumentWork(ctx, args.documentId);
+    const now = Date.now();
     await ctx.db.patch(args.documentId, {
       rejectedByUserIds: [...rejectedByUserIds, access.user._id],
       status: "rejected",
       updatedBy: access.user._id,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
+    await deactivateRelatedDocumentWork(ctx, related, access.user._id, now);
     await ctx.db.insert("auditLogs", {
       actorUserId: access.user._id,
       targetEmail: access.user.email,
@@ -1440,6 +1449,12 @@ export const completePersonalTask = mutation({
     if (!task?.active) throw new Error("PERSONAL_WORK_NOT_FOUND");
     if (!task.assigneeUserIds.some((id: string) => String(id) === String(access.user._id))) {
       throw new Error("PERSONAL_WORK_FORBIDDEN");
+    }
+    const parentItem = await ctx.db.get(task.workItemId as Id<"workItems">);
+    if (!parentItem?.active) throw new Error("WORK_ITEM_NOT_FOUND");
+    const parentDocument = await ctx.db.get(parentItem.documentId as Id<"officeDocuments">);
+    if (!parentDocument?.active || parentDocument.status !== "approved") {
+      throw new Error("WORK_NOT_APPROVED");
     }
     const existing = completionForUser(task, String(access.user._id));
     if (existing?.status === "approved" || existing?.status === "pending_approval") return;
@@ -1571,6 +1586,8 @@ export const reviewWorkCompletion = mutation({
     if (!access.isAdmin) throw new Error("WORK_COMPLETION_REVIEWER_REQUIRED");
     const item = await ctx.db.get(args.workItemId);
     if (!item?.active) throw new Error("WORK_ITEM_NOT_FOUND");
+    const document = await ctx.db.get(item.documentId as Id<"officeDocuments">);
+    if (!document?.active || document.status !== "approved") throw new Error("WORK_NOT_APPROVED");
     const existing = completionForUser(item, args.userId);
     if (!existing || existing.status !== "pending_approval") {
       throw new Error("WORK_COMPLETION_NOT_PENDING");
@@ -1629,6 +1646,12 @@ export const reviewPersonalCompletion = mutation({
     const access = await requireWorkAccess(ctx);
     const task = await ctx.db.get(args.taskId);
     if (!task?.active) throw new Error("PERSONAL_WORK_NOT_FOUND");
+    const parentItem = await ctx.db.get(task.workItemId as Id<"workItems">);
+    if (!parentItem?.active) throw new Error("WORK_ITEM_NOT_FOUND");
+    const parentDocument = await ctx.db.get(parentItem.documentId as Id<"officeDocuments">);
+    if (!parentDocument?.active || parentDocument.status !== "approved") {
+      throw new Error("WORK_NOT_APPROVED");
+    }
     const existing = completionForUser(task, args.userId);
     if (!existing || existing.status !== "pending_approval") {
       throw new Error("WORK_COMPLETION_NOT_PENDING");
@@ -1638,11 +1661,10 @@ export const reviewPersonalCompletion = mutation({
     const targetLevel = target ? activePositionLevel(target, access.positions) : 0;
     let canReview = access.isAdmin;
     if (!canReview && assignerMode === WORK_ASSIGNER_MODE_SUPERVISOR) {
-      // L2/L3 review subordinates; Admin/Mod already covered above for supervisors.
+      // L2/L3 review level-1 subordinates only (matches listMine badge/UI).
       canReview =
         (access.level === 2 || access.level === 3) &&
-        targetLevel > 0 &&
-        targetLevel < access.level &&
+        targetLevel === 1 &&
         String(target?.departmentId || "") === String(access.user.departmentId || "");
     }
     if (!canReview) throw new Error("WORK_COMPLETION_REVIEWER_REQUIRED");
@@ -1817,10 +1839,8 @@ export const listMine = query({
           documentId: document._id,
           documentContent: document.content,
           fileName: document.fileName,
-          fileUrl: document.driveFileId || !document.fileId
-            ? null
-            : await ctx.storage.getUrl(document.fileId),
-          privateFile: Boolean(document.driveFileId),
+          fileUrl: null,
+          privateFile: Boolean(document.driveFileId || document.fileId),
           completion: myCompletion,
           qualityPercent: myCompletion?.qualityPercent ?? null,
           rejectionReason: myCompletion?.status === "rejected" ? myCompletion.rejectionReason : "",
