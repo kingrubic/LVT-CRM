@@ -134,6 +134,15 @@ Canonical product detail lives in `README.md` → **Import user hàng loạt**. 
 - Entity codes (department / position / permission group): ≤20, `A–Z0–9_-`, stored uppercase; case-insensitive match on import.
 - Soft-delete catalogs; **block delete while users are assigned**; recreate with same **code** reactivates.
 
+## Bulk user export invariants (SYS-012)
+
+Canonical detail: `README.md` → **Xuất danh sách người dùng**.
+
+- Admin-only client-side `.xlsx` of **active** users only; never export role or password.
+- Headers use Vietnamese diacritics (office use, not re-import).
+- Admin/moderator rows: empty permission-group code, name `Quản trị viên`.
+- Filename `danh_sach_nguoi_dung_YYYYMMDD_NN.xlsx` with daily browser counter reset.
+
 ## How to ask questions
 
 - First answer questions that the repository source, tests, schema, README, or this file can resolve.
