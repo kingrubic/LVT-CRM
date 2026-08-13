@@ -133,6 +133,17 @@
   max-width: 760px;
 }
 
+.users-management.modern-management > .user-bulk-import,
+.users-management.modern-management > .lockout-settings,
+.users-management.modern-management > .admin-form,
+.users-management.modern-management > .admin-form.compact-form {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  box-sizing: border-box;
+}
+
 .modern-management .admin-form .form-heading {
   justify-content: space-between;
   min-height: 45px;

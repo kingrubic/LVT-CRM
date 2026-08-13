@@ -1,6 +1,6 @@
 .user-bulk-import {
-  width: min(100%, 960px);
-  margin: 0 auto 18px;
+  width: 100%;
+  margin: 0 0 18px;
   padding: 18px;
   border: 1px solid var(--lvt-line, #dce5eb);
   border-radius: 16px;
