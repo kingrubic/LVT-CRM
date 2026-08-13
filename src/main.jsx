@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
@@ -725,6 +725,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [editorOpen, setEditorOpen] = useState(allowManage);
+  const editorRef = useRef(null);
   const { pending, feedback, run } = useFeedback();
 
   useNotificationFocus(focusTarget, {
@@ -787,6 +788,19 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     }
   };
 
+  const closeEditor = () => {
+    setEditing(null);
+    setForm(emptyDutyForm());
+    setEditorOpen(false);
+  };
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    window.requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [editorOpen]);
+
   if ((allowManage && options === undefined) || listData === undefined) return <LoadingView label="Đang tải công tác…" />;
 
   return (
@@ -818,79 +832,64 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           <span>{allowManage ? 'QUẢN LÝ CÔNG TÁC' : 'LỊCH TRÌNH'}</span>
           <h3>Kho công tác</h3>
         </div>
-        {allowManage ? (
-          <button
-            type="button"
-            className="work-primary-button"
-            onClick={() => {
-              if (editorOpen && editing) {
-                setEditing(null);
-                setForm(emptyDutyForm());
-              }
-              setEditorOpen((open) => !open);
-            }}
-          >
-            <span>{editorOpen ? '×' : '+'}</span> {editorOpen ? 'Đóng biểu mẫu' : 'Thêm công tác'}
+        {allowManage && !editorOpen ? (
+          <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
+            <span>+</span> Thêm công tác
           </button>
         ) : null}
       </div>
 
-      {allowManage && editorOpen ? <form className="work-editor duty-modern-editor" onSubmit={submit}>
+      {allowManage && editorOpen ? <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
         <div className="work-editor-title">
           <div>
             <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
             <h3>{editing ? 'Sửa công tác' : 'Thêm công tác'}</h3>
           </div>
-          {editing && (
-            <button type="button" className="work-ghost-button" onClick={() => { setEditing(null); setForm(emptyDutyForm()); }}>
-              Hủy chỉnh sửa
+          <div className="duty-editor-heading-actions">
+            {editing ? (
+              <button type="button" className="work-ghost-button" onClick={() => { setEditing(null); setForm(emptyDutyForm()); }}>
+                Hủy chỉnh sửa
+              </button>
+            ) : null}
+            <button type="button" className="duty-editor-close" onClick={closeEditor} aria-label="Đóng biểu mẫu">
+              <span aria-hidden="true">×</span> Đóng
             </button>
-          )}
+          </div>
         </div>
 
-        <label>
-          Từ ngày
-          <div className="inline-fields">
-            <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
+        <fieldset className="duty-schedule-fieldset">
+          <legend>Thời gian</legend>
+          <div className="duty-schedule-heading">
+            <p>Chọn khoảng ngày và giờ diễn ra công tác.</p>
             <label className="check-inline">
               <input type="checkbox" checked={form.allDay} onChange={(e) => setField('allDay', e.target.checked)} />
-              Cả ngày
+              <span>Cả ngày</span>
             </label>
           </div>
-        </label>
+          <div className="duty-schedule-grid">
+            <label>
+              Từ ngày
+              <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
+            </label>
+            <label className={form.allDay ? 'field-disabled' : undefined}>
+              Đến ngày
+              <input required type="date" value={form.allDay ? form.startDate : form.endDate} disabled={form.allDay} onChange={(e) => setField('endDate', e.target.value)} />
+            </label>
+            <label className={form.allDay ? 'field-disabled' : undefined}>
+              Từ giờ
+              <input required type="time" value={form.startTime} disabled={form.allDay} onChange={(e) => setField('startTime', e.target.value)} />
+            </label>
+            <label className={form.allDay ? 'field-disabled' : undefined}>
+              Đến giờ
+              <input required type="time" value={form.endTime} disabled={form.allDay} onChange={(e) => setField('endTime', e.target.value)} />
+            </label>
+          </div>
+          {form.allDay ? <small>Đã chọn Cả ngày — ngày kết thúc sẽ trùng ngày bắt đầu và không áp dụng giờ.</small> : null}
+        </fieldset>
 
-        <label className={form.allDay ? 'field-disabled' : undefined}>
-          Đến ngày
-          <input
-            required
-            type="date"
-            value={form.allDay ? form.startDate : form.endDate}
-            disabled={form.allDay}
-            onChange={(e) => setField('endDate', e.target.value)}
-          />
-          {form.allDay ? <small>Đã chọn Cả ngày — Đến ngày trùng Từ ngày.</small> : null}
-        </label>
-
-        <label>
-          Từ giờ
-          <input required type="time" value={form.startTime} onChange={(e) => setField('startTime', e.target.value)} />
-        </label>
-
-        <label>
-          Đến giờ
-          <input required type="time" value={form.endTime} onChange={(e) => setField('endTime', e.target.value)} />
-        </label>
-
-        <label>
+        <label className="duty-content-field">
           Nội dung
-          <textarea
-            required
-            maxLength={200}
-            rows={3}
-            value={form.content}
-            onChange={(e) => setField('content', e.target.value)}
-            placeholder="Nội dung công tác (tối đa 200 ký tự)"
-          />
+          <textarea required maxLength={200} rows={3} value={form.content} onChange={(e) => setField('content', e.target.value)} placeholder="Nội dung công tác (tối đa 200 ký tự)" />
           <small>{form.content.length}/200</small>
         </label>
 
