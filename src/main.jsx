@@ -289,6 +289,45 @@ function AppShell({ session }) {
     if (!allowed.has(active)) setActive(defaultActive);
   }, [active, canManageOperations, defaultActive, isAdmin, visiblePrimaryMenus]);
 
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+
+    const scrollY = window.scrollY;
+    const previousBodyStyle = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.classList.add('mobile-nav-open');
+    Object.assign(document.body.style, {
+      position: 'fixed',
+      top: `-${scrollY}px`,
+      left: '0',
+      right: '0',
+      width: '100%',
+      overflow: 'hidden',
+    });
+    document.documentElement.style.overflow = 'hidden';
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.documentElement.classList.remove('mobile-nav-open');
+      Object.assign(document.body.style, previousBodyStyle);
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [mobileOpen]);
+
   const title = useMemo(() => {
     if (active === 'profile' || active === 'settings') return 'Thông tin cá nhân';
     const all = [...PRIMARY_MENUS, ...SYSTEM_MANAGEMENT_MENUS, ...SUPREME_SETTINGS];
@@ -315,7 +354,11 @@ function AppShell({ session }) {
 
   return (
     <div className={`shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-      <aside className={`shell-sidebar ${mobileOpen ? 'is-open' : ''}`}>
+      <aside
+        className={`shell-sidebar ${mobileOpen ? 'is-open' : ''}`}
+        aria-label="Menu điều hướng"
+        {...(mobileOpen ? { role: 'dialog', 'aria-modal': true } : {})}
+      >
         <div className="school-brand">
           <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
           <div>
@@ -376,6 +419,14 @@ function AppShell({ session }) {
           </span>
         </div>
       </aside>
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="mobile-nav-overlay"
+          aria-label="Đóng menu"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
       <main className="shell-main">
         <header className="shell-header">
           <button
