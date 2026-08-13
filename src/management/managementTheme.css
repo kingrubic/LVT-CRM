@@ -133,8 +133,7 @@
   max-width: 760px;
 }
 
-.users-management.modern-management > .user-bulk-import,
-.users-management.modern-management > .lockout-settings,
+.users-management.modern-management > .user-settings-quick-grid,
 .users-management.modern-management > .admin-form,
 .users-management.modern-management > .admin-form.compact-form {
   width: 100%;
@@ -142,6 +141,27 @@
   margin-left: 0;
   margin-right: 0;
   box-sizing: border-box;
+}
+
+.user-settings-quick-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+  align-items: stretch;
+}
+
+.user-settings-quick-grid > .user-bulk-import,
+.user-settings-quick-grid > .lockout-settings {
+  height: 100%;
+  margin: 0;
+}
+
+@media (min-width: 1100px) {
+  .user-settings-quick-grid {
+    grid-template-columns: minmax(0, 9fr) minmax(0, 11fr);
+    gap: 24px;
+  }
 }
 
 .modern-management .admin-form .form-heading {

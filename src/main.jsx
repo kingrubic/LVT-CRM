@@ -1424,59 +1424,61 @@ function UserManagement() {
           </p>
         </div>
       </div>
-      <UserBulkImport
-        users={users}
-        departments={data?.departments || []}
-        positions={data?.positions || []}
-        permissionGroups={data?.permissionGroups || []}
-      />
-      <div className="lockout-settings">
-        <h3>Giới hạn đăng nhập thất bại</h3>
-        <p>
-          Khi vượt số lần sai trong khung thời gian, tài khoản bị khóa và chỉ Administrator mở khóa thủ công.
-          Người dùng sẽ thấy thông báo trên màn hình đăng nhập và nhận email hướng dẫn liên hệ admin.
-        </p>
-        <form
-          className="lockout-settings-grid"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(
-              'lockout',
-              () =>
-                updateLockoutSettings({
-                  maxFailedAttempts: Number(lockoutForm.maxFailedAttempts),
-                  windowMinutes: Number(lockoutForm.windowMinutes),
-                }),
-              'Đã cập nhật giới hạn đăng nhập thất bại.',
-            );
-          }}
-        >
-          <label>
-            Số lần sai tối đa
-            <input
-              required
-              type="number"
-              min={1}
-              max={50}
-              value={lockoutForm.maxFailedAttempts}
-              onChange={(e) => setLockoutForm((prev) => ({ ...prev, maxFailedAttempts: e.target.value }))}
-            />
-          </label>
-          <label>
-            Trong vòng (phút)
-            <input
-              required
-              type="number"
-              min={1}
-              max={1440}
-              value={lockoutForm.windowMinutes}
-              onChange={(e) => setLockoutForm((prev) => ({ ...prev, windowMinutes: e.target.value }))}
-            />
-          </label>
-          <button type="submit" className="primary-button" disabled={Boolean(pending)}>
-            Lưu cấu hình
-          </button>
-        </form>
+      <div className="user-settings-quick-grid">
+        <UserBulkImport
+          users={users}
+          departments={data?.departments || []}
+          positions={data?.positions || []}
+          permissionGroups={data?.permissionGroups || []}
+        />
+        <div className="lockout-settings">
+          <h3>Giới hạn đăng nhập thất bại</h3>
+          <p>
+            Khi vượt số lần sai trong khung thời gian, tài khoản bị khóa và chỉ Administrator mở khóa thủ công.
+            Người dùng sẽ thấy thông báo trên màn hình đăng nhập và nhận email hướng dẫn liên hệ admin.
+          </p>
+          <form
+            className="lockout-settings-grid"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(
+                'lockout',
+                () =>
+                  updateLockoutSettings({
+                    maxFailedAttempts: Number(lockoutForm.maxFailedAttempts),
+                    windowMinutes: Number(lockoutForm.windowMinutes),
+                  }),
+                'Đã cập nhật giới hạn đăng nhập thất bại.',
+              );
+            }}
+          >
+            <label>
+              Số lần sai tối đa
+              <input
+                required
+                type="number"
+                min={1}
+                max={50}
+                value={lockoutForm.maxFailedAttempts}
+                onChange={(e) => setLockoutForm((prev) => ({ ...prev, maxFailedAttempts: e.target.value }))}
+              />
+            </label>
+            <label>
+              Trong vòng (phút)
+              <input
+                required
+                type="number"
+                min={1}
+                max={1440}
+                value={lockoutForm.windowMinutes}
+                onChange={(e) => setLockoutForm((prev) => ({ ...prev, windowMinutes: e.target.value }))}
+              />
+            </label>
+            <button type="submit" className="primary-button" disabled={Boolean(pending)}>
+              Lưu cấu hình
+            </button>
+          </form>
+        </div>
       </div>
       <div className={`feedback ${feedback.type}`} role="status" aria-live="polite">
         {feedback.text}

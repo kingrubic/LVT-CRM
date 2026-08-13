@@ -137,6 +137,8 @@
 }
 
 .lockout-settings {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   margin-bottom: 18px;
   padding: 16px 18px;
@@ -163,6 +165,22 @@
   gap: 12px;
   align-items: end;
   justify-content: start;
+}
+
+.user-settings-quick-grid .lockout-settings-grid {
+  margin-top: auto;
+}
+
+@media (min-width: 1100px) {
+  .user-settings-quick-grid .lockout-settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .user-settings-quick-grid .lockout-settings .primary-button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
 }
 
 .lockout-settings .primary-button {
