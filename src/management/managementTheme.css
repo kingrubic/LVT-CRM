@@ -225,6 +225,53 @@
   line-height: 1.5;
 }
 
+.permission-groups-management .permission-code-field {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.permission-groups-management .admin-form > label input,
+.permission-groups-management .permission-code-field > input {
+  height: 44px;
+  min-height: 44px;
+}
+
+.permission-groups-management .field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #596b80;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.permission-groups-management .field-label-row > label {
+  display: inline;
+}
+
+.permission-groups-management .field-help-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #8495a7;
+  border-radius: 50%;
+  color: #687b8f;
+  background: transparent;
+  font: 850 10px/1 inherit;
+  cursor: help;
+}
+
+.permission-groups-management .field-help-trigger:hover,
+.permission-groups-management .field-help-trigger:focus-visible {
+  border-color: #159783;
+  outline: none;
+  color: #126f61;
+  box-shadow: 0 0 0 3px rgba(21, 151, 131, .11);
+}
+
 .users-management .admin-form > label {
   align-self: start;
   align-content: start;

@@ -2163,16 +2163,26 @@ function PermissionGroupManagement() {
           Tên nhóm quyền
           <input required maxLength={120} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
         </label>
-        <label>
-          Mã nhóm quyền
+        <div className="permission-code-field">
+          <div className="field-label-row">
+            <label htmlFor="permission-group-code">Mã nhóm quyền</label>
+            <button
+              type="button"
+              className="field-help-trigger"
+              aria-label="Quy tắc mã nhóm quyền"
+              title="Chữ in hoa, số, _ hoặc -; tối đa 20 ký tự. Dùng trong file import user."
+            >
+              !
+            </button>
+          </div>
           <input
+            id="permission-group-code"
             required
             maxLength={20}
             value={form.code}
             onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
           />
-          <small>Chữ in hoa, số, _ hoặc -; tối đa 20 ký tự. Dùng trong file import user.</small>
-        </label>
+        </div>
         <label>
           Mô tả (tùy chọn)
           <input maxLength={500} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
