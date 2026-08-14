@@ -15,6 +15,7 @@ import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
+import { pathnameForMenu, pathnameForReportSection, routeForPathname } from './navigationRoutes';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
@@ -272,22 +273,46 @@ function AppShell({ session }) {
   const defaultActive = canManageOperations
     ? 'reports'
     : visiblePrimaryMenus[0]?.[0] || 'profile';
-  const [active, setActive] = useState(defaultActive);
+  const initialRoute = routeForPathname(window.location.pathname);
+  const [active, setActive] = useState(initialRoute?.menu || defaultActive);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [reportSection, setReportSection] = useState('duties');
+  const [reportSection, setReportSection] = useState(initialRoute?.reportSection || 'duties');
   const [focusTarget, setFocusTarget] = useState(null);
 
+  const allowedMenus = useMemo(() => new Set([
+    ...visiblePrimaryMenus.map(([id]) => id),
+    ...(canManageOperations ? SYSTEM_MANAGEMENT_MENUS.map(([id]) => id) : []),
+    ...(isAdmin ? SUPREME_SETTINGS.map(([id]) => id) : []),
+    'profile',
+    'settings',
+  ]), [canManageOperations, isAdmin, visiblePrimaryMenus]);
+
   useEffect(() => {
-    const allowed = new Set([
-      ...visiblePrimaryMenus.map(([id]) => id),
-      ...(canManageOperations ? SYSTEM_MANAGEMENT_MENUS.map(([id]) => id) : []),
-      ...(isAdmin ? SUPREME_SETTINGS.map(([id]) => id) : []),
-      'profile',
-      'settings',
-    ]);
-    if (!allowed.has(active)) setActive(defaultActive);
-  }, [active, canManageOperations, defaultActive, isAdmin, visiblePrimaryMenus]);
+    const currentRoute = routeForPathname(window.location.pathname);
+    if (!allowedMenus.has(active) || !currentRoute || !allowedMenus.has(currentRoute.menu)) {
+      setActive(defaultActive);
+      setReportSection('duties');
+      window.history.replaceState({}, '', pathnameForMenu(defaultActive));
+    }
+  }, [active, allowedMenus, defaultActive]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = routeForPathname(window.location.pathname);
+      if (route && allowedMenus.has(route.menu)) {
+        setActive(route.menu);
+        if (route.reportSection) setReportSection(route.reportSection);
+      } else {
+        setActive(defaultActive);
+        setReportSection('duties');
+        window.history.replaceState({}, '', pathnameForMenu(defaultActive));
+      }
+      setMobileOpen(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [allowedMenus, defaultActive]);
 
   useEffect(() => {
     if (!mobileOpen) return undefined;
@@ -334,8 +359,21 @@ function AppShell({ session }) {
     return all.find(([id]) => id === active)?.[1] || 'Lê Văn Tám CRM';
   }, [active]);
 
-  const choose = (id) => {
+  const choose = (id, { replace = false } = {}) => {
     setActive(id);
+    if (id === 'reports') setReportSection('duties');
+    const pathname = pathnameForMenu(id);
+    if (window.location.pathname !== pathname) {
+      window.history[replace ? 'replaceState' : 'pushState']({}, '', pathname);
+    }
+    setMobileOpen(false);
+  };
+
+  const chooseReportSection = (section) => {
+    setActive('reports');
+    setReportSection(section);
+    const pathname = pathnameForReportSection(section);
+    if (window.location.pathname !== pathname) window.history.pushState({}, '', pathname);
     setMobileOpen(false);
   };
 
@@ -381,10 +419,7 @@ function AppShell({ session }) {
                 {id === 'reports' && active === 'reports' ? (
                   <ReportSubmenu
                     active={reportSection}
-                    onChoose={(section) => {
-                      setReportSection(section);
-                      setMobileOpen(false);
-                    }}
+                    onChoose={chooseReportSection}
                   />
                 ) : null}
               </React.Fragment>
