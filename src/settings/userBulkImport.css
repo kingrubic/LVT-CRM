@@ -10,11 +10,8 @@
   box-sizing: border-box;
 }
 
-.user-bulk-import-help {
-  margin: 0 0 14px;
-  color: #526078;
-  font-size: 13px;
-  line-height: 1.45;
+.user-bulk-import > .form-heading {
+  margin-bottom: 14px;
 }
 
 .user-bulk-import-actions {

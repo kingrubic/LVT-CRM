@@ -250,7 +250,8 @@
   display: inline;
 }
 
-.permission-groups-management .field-help-trigger {
+.permission-groups-management .field-help-trigger,
+.users-management .field-help-trigger {
   display: inline-grid;
   place-items: center;
   width: 16px;
@@ -265,7 +266,9 @@
 }
 
 .permission-groups-management .field-help-trigger:hover,
-.permission-groups-management .field-help-trigger:focus-visible {
+.permission-groups-management .field-help-trigger:focus-visible,
+.users-management .field-help-trigger:hover,
+.users-management .field-help-trigger:focus-visible {
   border-color: #159783;
   outline: none;
   color: #126f61;

@@ -184,11 +184,15 @@ export default function UserBulkImport({
     <div className="user-bulk-import">
       <div className="form-heading">
         <strong>Import người dùng hàng loạt</strong>
+        <button
+          type="button"
+          className="field-help-trigger"
+          aria-label="Thông tin import người dùng hàng loạt"
+          title="Chỉ tạo tài khoản vai trò User. File được tải lên server trước, rồi hệ thống đọc lại file đó để kiểm tra và tạo user. File (kể cả khi lỗi) tự xóa sau 1 giờ. Nút xuất chỉ lấy user đang active, không gồm mật khẩu/vai trò."
+        >
+          !
+        </button>
       </div>
-      <p className="user-bulk-import-help">
-        Chỉ tạo tài khoản vai trò User. File được tải lên server trước, rồi hệ thống đọc lại file đó để kiểm tra
-        và tạo user. File (kể cả khi lỗi) tự xóa sau 1 giờ. Nút xuất chỉ lấy user đang active, không gồm mật khẩu/vai trò.
-      </p>
       <div className="user-bulk-import-actions">
         <button type="button" className="secondary-button" onClick={downloadUserImportTemplate} disabled={Boolean(busy)}>
           Tải file nhập liệu mẫu

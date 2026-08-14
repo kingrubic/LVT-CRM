@@ -148,15 +148,16 @@
   box-sizing: border-box;
 }
 
-.lockout-settings h3 {
-  margin: 0 0 6px;
-  font-size: 15px;
+.lockout-settings-heading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
 }
 
-.lockout-settings > p {
-  margin: 0 0 12px;
-  color: #64748b;
-  font-size: 12px;
+.lockout-settings-heading h3 {
+  margin: 0;
+  font-size: 15px;
 }
 
 .lockout-settings-grid {

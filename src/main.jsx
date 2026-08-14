@@ -1482,11 +1482,17 @@ function UserManagement() {
           permissionGroups={data?.permissionGroups || []}
         />
         <div className="lockout-settings">
-          <h3>Giới hạn đăng nhập thất bại</h3>
-          <p>
-            Khi vượt số lần sai trong khung thời gian, tài khoản bị khóa và chỉ Administrator mở khóa thủ công.
-            Người dùng sẽ thấy thông báo trên màn hình đăng nhập và nhận email hướng dẫn liên hệ admin.
-          </p>
+          <div className="lockout-settings-heading">
+            <h3>Giới hạn đăng nhập thất bại</h3>
+            <button
+              type="button"
+              className="field-help-trigger"
+              aria-label="Thông tin giới hạn đăng nhập thất bại"
+              title="Khi vượt số lần sai trong khung thời gian, tài khoản bị khóa và chỉ Administrator mở khóa thủ công. Người dùng sẽ thấy thông báo trên màn hình đăng nhập và nhận email hướng dẫn liên hệ admin."
+            >
+              !
+            </button>
+          </div>
           <form
             className="lockout-settings-grid"
             onSubmit={(event) => {
