@@ -17,6 +17,7 @@
 .user-bulk-import-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
   margin-bottom: 12px;
 }
