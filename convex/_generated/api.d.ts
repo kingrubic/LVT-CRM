@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as assignmentPolicy from "../assignmentPolicy.js";
 import type * as auth from "../auth.js";
 import type * as boarding from "../boarding.js";
 import type * as departments from "../departments.js";
@@ -45,6 +46,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  assignmentPolicy: typeof assignmentPolicy;
   auth: typeof auth;
   boarding: typeof boarding;
   departments: typeof departments;
