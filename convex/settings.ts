@@ -7,6 +7,10 @@ import {
   getBooleanSystemSetting,
   getNumberArraySystemSetting,
   getWorkAssignerMode,
+  getWorkVisibilityMode,
+  WORK_VISIBILITY_CREATOR,
+  WORK_VISIBILITY_SCHOOL,
+  WORK_VISIBILITY_SETTING_KEY,
   NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
   NOTIFICATION_MILESTONES_DEFAULT,
   NOTIFICATION_MILESTONES_SETTING_KEY,
@@ -98,6 +102,7 @@ export const displaySettings = query({
       notificationWorkEnabled,
       notificationMilestonesHours,
       workAssignerMode,
+      workVisibilityMode,
     ] = await Promise.all([
       getBooleanSystemSetting(
         ctx,
@@ -120,6 +125,7 @@ export const displaySettings = query({
         NOTIFICATION_MILESTONES_DEFAULT,
       ),
       getWorkAssignerMode(ctx),
+      getWorkVisibilityMode(ctx),
     ]);
     return {
       dutyAttendanceConfirmationEnabled,
@@ -127,6 +133,7 @@ export const displaySettings = query({
       notificationWorkEnabled,
       notificationMilestonesHours,
       workAssignerMode,
+      workVisibilityMode,
       workAssignerAdminMod: workAssignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD,
       workAssignerSupervisor: workAssignerMode === WORK_ASSIGNER_MODE_SUPERVISOR,
     };
@@ -214,6 +221,25 @@ export const updateDisplaySettings = mutation({
       at: now,
     });
     return value;
+  },
+});
+
+export const updateWorkVisibilityMode = mutation({
+  args: {
+    mode: v.union(v.literal("creator"), v.literal("school")),
+  },
+  handler: async (ctx, args) => {
+    const actor = await adminPermissionOrThrow(ctx, "settings:write");
+    const mode = args.mode === WORK_VISIBILITY_CREATOR ? WORK_VISIBILITY_CREATOR : WORK_VISIBILITY_SCHOOL;
+    const now = Date.now();
+    await upsertStringSetting(ctx, WORK_VISIBILITY_SETTING_KEY, mode, actor.user._id, now);
+    await ctx.db.insert("auditLogs", {
+      actorUserId: actor.user._id,
+      action: "settings.work_visibility_mode.update",
+      details: JSON.stringify({ mode }),
+      at: now,
+    });
+    return { mode };
   },
 });
 

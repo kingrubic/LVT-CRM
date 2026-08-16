@@ -27,9 +27,9 @@ Vận hành production:
   - `admin` — **Administrator**: toàn quyền, bao gồm **Thiết lập tối cao** và quản lý tài khoản.
   - `moderator` — **Moderator**: toàn quyền nghiệp vụ và **Quản trị hệ thống**, không thấy/không truy cập **Thiết lập tối cao**.
   - `user` — **User**: các chức năng chính theo **nhóm quyền** do Administrator gán.
-- Administrator quản lý thông số tối cao; Administrator và Moderator cùng quản lý bán trú, công việc và các module nghiệp vụ.
+- Administrator quản lý thông số tối cao; Administrator và Moderator cùng quản lý nghiệp vụ (công tác, công việc, …).
 - Mật khẩu băm bởi Convex Auth (Scrypt); plaintext không lưu / không ghi audit. Tài khoản tạo/reset có `mustChangePassword=true`.
-- **Đã có luồng dữ liệu:** Công tác (lịch + xác nhận tham gia), Công việc (công văn / duyệt / phòng ban / cá nhân), Bán trú, Báo cáo (Công tác · Công việc · Bán trú), Thông báo (mốc hạn + click mở đúng mục), Địa điểm, Thiết lập hiển thị.
+- **Đã có luồng dữ liệu:** Công tác (lịch + xác nhận tham gia, địa điểm nhập text), Công việc (tạo/giao ngay, nộp + duyệt hoàn thành), Báo cáo (Công tác · Công việc; Bán trú đang ẩn), Thông báo (mốc hạn + click mở đúng mục), Thiết lập hiển thị.
 - **Vẫn placeholder:** Lớp chủ nhiệm, Đánh giá nhân sự.
 
 ## Mô hình phân quyền
@@ -86,22 +86,23 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Công việc / công văn
 
-- Người duyệt = user **đang hoạt động cấp 4★ hoặc 5★**, **không** gồm Administrator/Moderator (họ quản lý công văn, không đứng trong chuỗi duyệt).
-- Lần duyệt **đầu tiên** khóa sửa/xóa vĩnh viễn (`canMutateWorkDocument`) — kể cả khi status còn `pending`. Từ chối chỉ được khi **chưa ai duyệt**.
-- File đính kèm: xem/tải qua `/api/files/:documentId` + cache server; không trả URL Drive hay Convex Storage cho client.
+- Công việc **không duyệt công văn**. Tạo xong là giao ngay. User **Nộp** kèm file bằng chứng; **người tạo** mới đánh dấu hoàn thành (kèm %) hoặc trả về (kèm lý do, có thể đổi hạn).
+- Sửa/xóa: người tạo đến khi user nộp; admin/mod mọi lúc.
+- File đính kèm công việc là tùy chọn. Danh sách ưu tiên **tên công việc**.
+- File xem/tải qua `/api/files/:documentId` + cache server; không trả URL Drive hay Convex Storage cho client.
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc · Bán trú), Thông báo, Công tác, Công việc, Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
-2. **Quản trị hệ thống**: Quản lý công tác, Quản lý bán trú, Quản lý công việc (Administrator và Moderator).
-3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, địa điểm, nhóm quyền, chức vụ, **Thiết lập hiển thị**.
+1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Thông báo, Công tác (nút **Tạo công tác** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
+2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
+3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 
 ### Thông báo & Thiết lập hiển thị
 
 - Feed tính theo mốc giờ trước hạn (mặc định `48 · 24 · 12 · 0` / Đến hạn) cho **Công tác** và **Công việc** được gán cho user.
 - Chuông trên header + trang Thông báo; đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` = `edit`.
 - **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác.
-- Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; bật/tắt nguồn thông báo Công tác/Công việc; chỉnh danh sách mốc giờ.
+- Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; **Ai nhìn thấy công việc?** (chỉ người tạo / người tạo+người nhận+4/5★+admin/mod); bật/tắt nguồn thông báo Công tác/Công việc; chỉnh danh sách mốc giờ.
 
 ## Schema chính
 
@@ -109,14 +110,14 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 |------|----------|
 | `users` (+ authTables) | Hồ sơ, `role`, `departmentId`, `permissionGroupId`, `positionId`, status, `mustChangePassword`, `loginLockedAt`, `importRollbackAt` |
 | `departments` | Phòng ban (`code` unique) |
-| `locations` | Địa điểm công tác |
+| `locations` | Địa điểm (catalog cũ; công tác mới dùng `duties.locationText`) |
 | `permissionGroups` | Nhóm quyền + `code` + `menuAccess[]` |
 | `positions` | Chức vụ + `code` + `level` 1–5 |
 | `userImportUploads` | File Excel import user tạm (Convex Storage, TTL 1 giờ) |
 | `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |
-| `boardingPeriods` | Kỳ bán trú |
-| `officeDocuments` | Công văn, tệp đính kèm, người duyệt và trạng thái duyệt |
-| `workItems` | Công việc phòng ban sau khi công văn được duyệt |
+| `boardingPeriods` | Kỳ bán trú (menu đang ẩn) |
+| `officeDocuments` | Công việc đã giao, tên, tệp đính kèm tùy chọn |
+| `workItems` | Phân công phòng ban / cá nhân và tiến độ nộp |
 | `personalTasks` | Đầu mục cá nhân, người thực hiện, deadline và trạng thái hoàn thành |
 | `systemSettings` | Cờ hiển thị / cấu hình thông báo |
 | `notificationReads` / `notificationDismissals` | Đã đọc / đã xóa theo `notificationKey` |

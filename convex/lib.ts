@@ -1,6 +1,11 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import {
+  canCreateAssignments,
+  normalizeWorkVisibilityMode,
+  WORK_VISIBILITY_DEFAULT,
+} from "./assignmentPolicy";
 
 export type DbCtx = QueryCtx | MutationCtx;
 
@@ -29,6 +34,15 @@ export const WORK_ASSIGNER_MODE_ADMIN_MOD = "admin_mod";
 export const WORK_ASSIGNER_MODE_SUPERVISOR = "supervisor";
 export const WORK_ASSIGNER_MODE_DEFAULT = WORK_ASSIGNER_MODE_ADMIN_MOD;
 export type WorkAssignerMode = typeof WORK_ASSIGNER_MODE_ADMIN_MOD | typeof WORK_ASSIGNER_MODE_SUPERVISOR;
+
+/** Who may browse others' live work besides creator + assignee. */
+export const WORK_VISIBILITY_SETTING_KEY = "workVisibilityMode";
+export {
+  WORK_VISIBILITY_CREATOR,
+  WORK_VISIBILITY_DEFAULT,
+  WORK_VISIBILITY_SCHOOL,
+  type WorkVisibilityMode,
+} from "./assignmentPolicy";
 
 /** Failed-login lockout (SYS-008). Stored as single-element numberValues arrays. */
 export const LOGIN_MAX_FAILED_ATTEMPTS_SETTING_KEY = "login.maxFailedAttempts";
@@ -189,6 +203,30 @@ export async function getWorkAssignerMode(ctx: DbCtx): Promise<WorkAssignerMode>
   return value === WORK_ASSIGNER_MODE_SUPERVISOR
     ? WORK_ASSIGNER_MODE_SUPERVISOR
     : WORK_ASSIGNER_MODE_ADMIN_MOD;
+}
+
+export async function getWorkVisibilityMode(ctx: DbCtx) {
+  const value = await getStringSystemSetting(
+    ctx,
+    WORK_VISIBILITY_SETTING_KEY,
+    WORK_VISIBILITY_DEFAULT,
+  );
+  return normalizeWorkVisibilityMode(value);
+}
+
+export async function assignmentCreatorOrThrow(ctx: DbCtx) {
+  const user = await currentUserOrThrow(ctx);
+  if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
+  if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
+  const positions = await ctx.db.query("positions").collect();
+  const level = activePositionLevel(user, positions);
+  if (!canCreateAssignments(user.role, level)) throw new Error("ASSIGNMENT_CREATE_FORBIDDEN");
+  return {
+    user,
+    level,
+    isOps: isOperationalManagerRole(user.role),
+    positions,
+  };
 }
 
 /** Administrator-only gate for supreme settings and user lifecycle operations. */

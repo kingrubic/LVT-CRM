@@ -82,7 +82,7 @@ class DashboardViewModelTest {
         assertEquals(1, state.upcomingDuties)
         assertEquals(2, state.ongoingDuties)
         assertEquals(1, state.pendingApproval)
-        assertEquals(2, state.pendingExecution)
+        assertEquals(1, state.pendingExecution)
     }
 
     private fun duty(upcoming: Boolean = false, ongoing: Boolean = false) = DutyItem(

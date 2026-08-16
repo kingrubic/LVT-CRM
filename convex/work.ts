@@ -1,14 +1,27 @@
 import { v } from "convex/values";
 import {
   activePositionLevel,
+  assignmentCreatorOrThrow,
   currentUserOrThrow,
   getWorkAssignerMode,
+  getWorkVisibilityMode,
   isOperationalManagerRole,
-  operationalManagerPermissionOrThrow,
+  isSameDepartmentSubordinate,
   resolveUserMenuAccess,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
   WORK_ASSIGNER_MODE_SUPERVISOR,
 } from "./lib";
+import {
+  canCreateAssignments,
+  canCreatorMutateWork,
+  canReviewWorkCompletion,
+  canSeeArchivedWork,
+  canSeeLiveWork,
+  cleanWorkTitle,
+  isWorkItemArchived,
+  isWorkReleased,
+  workListTitle,
+} from "./assignmentPolicy";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -20,7 +33,7 @@ import {
   registerDriveUploadStage,
   releaseDriveUploadCleanup,
 } from "./driveUploadStages";
-import { canMutateWorkDocument, canRejectWorkDocument } from "./workDocumentPolicy";
+import { canMutateWorkDocument } from "./workDocumentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -46,6 +59,11 @@ type CompletionRow = {
   reviewedAt?: number;
   reviewedBy?: string;
   rejectionReason?: string;
+  driveFileId?: string;
+  driveChecksum?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
 };
 
 function completionsOf(item: any): CompletionRow[] {
@@ -199,7 +217,6 @@ async function validateDocumentWorkflow(
   const approverUserIds = [
     ...new Set(approverInputs.map((id) => String(id).trim()).filter(Boolean)),
   ];
-  if (!approverUserIds.length) throw new Error("WORK_APPROVERS_REQUIRED");
   for (const userId of approverUserIds) {
     const approver = activeUsers.find((user: any) => String(user._id) === userId);
     if (
@@ -300,6 +317,48 @@ async function createWorkDriveCleanupJob(
 
 function assignmentTypeOf(item: any): "department" | "individual" {
   return item?.assignmentType === "individual" ? "individual" : "department";
+}
+
+async function requireWorkWrite(ctx: any) {
+  const actor = await assignmentCreatorOrThrow(ctx);
+  if (actor.isOps) return actor;
+  const menuAccess = await resolveUserMenuAccess(ctx, actor.user);
+  if ((menuAccess.work || "hidden") === "hidden") {
+    throw new Error("FORBIDDEN: work menu hidden");
+  }
+  return actor;
+}
+
+async function releasePendingWorkDocuments(ctx: any) {
+  const documents = await ctx.db.query("officeDocuments").collect();
+  const now = Date.now();
+  for (const document of documents) {
+    if (!document.active || document.status !== "pending") continue;
+    await ctx.db.patch(document._id, {
+      status: "approved",
+      updatedAt: now,
+    });
+  }
+}
+
+async function assertWorkAssignmentsForActor(
+  ctx: any,
+  assignmentInputs: DocumentAssignmentInput[],
+  actor: { user: any; isOps: boolean; positions: any[] },
+) {
+  const { assignments } = await validateDocumentWorkflow(ctx, assignmentInputs, []);
+  if (!actor.isOps) {
+    for (const assignment of assignments) {
+      if (assignment.type !== "individual") throw new Error("WORK_DEPARTMENT_FORBIDDEN");
+      for (const userId of assignment.userIds) {
+        const target = await ctx.db.get(userId);
+        if (!target || !isSameDepartmentSubordinate(actor.user, target, actor.positions)) {
+          throw new Error("NOT_A_SUBORDINATE");
+        }
+      }
+    }
+  }
+  return assignments;
 }
 
 async function requireWorkAccess(ctx: any) {
@@ -465,7 +524,7 @@ function personView(user: any, catalogData: any, status?: string) {
   };
 }
 
-async function documentView(ctx: any, document: any, catalogData: any) {
+async function documentView(ctx: any, document: any, catalogData: any, items: any[] = []) {
   const rejectedByUserIds = document.rejectedByUserIds || [];
   const assignments = documentAssignments(document).map((assignment: any) => {
     const type = assignment.type === "individual" ? "individual" : "department";
@@ -493,6 +552,7 @@ async function documentView(ctx: any, document: any, catalogData: any) {
     }));
   return {
     _id: document._id,
+    title: workListTitle(document),
     fileName: document.fileName,
     fileType: document.fileType,
     fileSize: document.fileSize,
@@ -511,8 +571,10 @@ async function documentView(ctx: any, document: any, catalogData: any) {
     approvalCount: document.approvedByUserIds.length,
     approvalTotal: document.approverUserIds.length,
     createdAt: document.createdAt,
-    canEdit: canMutateWorkDocument(document),
-    canDelete: canMutateWorkDocument(document),
+    createdBy: document.createdBy,
+    archived: false,
+    canEdit: canMutateWorkDocument(document, items),
+    canDelete: canMutateWorkDocument(document, items),
   };
 }
 
@@ -573,7 +635,7 @@ function completionView(item: any, userId: string, catalogData: any) {
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await operationalManagerPermissionOrThrow(ctx, "work:write");
+    await requireWorkAccess(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -581,7 +643,7 @@ export const generateUploadUrl = mutation({
 export const authorizeFileUpload = query({
   args: {},
   handler: async (ctx) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkAccess(ctx);
     return { userId: String(actor.user._id) };
   },
 });
@@ -589,7 +651,7 @@ export const authorizeFileUpload = query({
 export const registerDriveUpload = mutation({
   args: { cleanupToken: v.string(), driveFileId: v.string() },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkAccess(ctx);
     await registerDriveUploadStage(ctx, args, String(actor.user._id), "work");
   },
 });
@@ -597,7 +659,7 @@ export const registerDriveUpload = mutation({
 export const claimStagedUploadCleanup = mutation({
   args: { cleanupToken: v.string(), claimId: v.string() },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkAccess(ctx);
     return await claimDriveUploadCleanup(ctx, args, String(actor.user._id), "work");
   },
 });
@@ -605,7 +667,7 @@ export const claimStagedUploadCleanup = mutation({
 export const finalizeStagedUpload = mutation({
   args: { cleanupToken: v.string() },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkAccess(ctx);
     await finalizeDriveUploadStage(ctx, args.cleanupToken, String(actor.user._id), "work");
   },
 });
@@ -613,7 +675,7 @@ export const finalizeStagedUpload = mutation({
 export const completeStagedUploadCleanup = mutation({
   args: { cleanupToken: v.string(), claimId: v.string() },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkAccess(ctx);
     await completeDriveUploadCleanup(ctx, args, String(actor.user._id), "work");
   },
 });
@@ -621,7 +683,7 @@ export const completeStagedUploadCleanup = mutation({
 export const releaseStagedUploadCleanup = mutation({
   args: { cleanupToken: v.string(), claimId: v.string() },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkAccess(ctx);
     await releaseDriveUploadCleanup(ctx, args, String(actor.user._id), "work");
   },
 });
@@ -629,7 +691,7 @@ export const releaseStagedUploadCleanup = mutation({
 export const isDriveFileReferenced = query({
   args: { driveFileId: v.string() },
   handler: async (ctx, args) => {
-    await operationalManagerPermissionOrThrow(ctx, "work:write");
+    await requireWorkWrite(ctx);
     const documents = await ctx.db
       .query("officeDocuments")
       .withIndex("by_drive_file", (q: any) => q.eq("driveFileId", args.driveFileId))
@@ -645,7 +707,7 @@ export const isDriveFileReferenced = query({
 export const authorizeDriveCleanupJob = query({
   args: { cleanupJobId: v.id("driveCleanupJobs") },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkWrite(ctx);
     const job = await ctx.db.get(args.cleanupJobId);
     if (
       !job?.active
@@ -668,7 +730,7 @@ export const authorizeDriveCleanupJob = query({
 export const completeDriveCleanupJob = mutation({
   args: { cleanupJobId: v.id("driveCleanupJobs") },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkWrite(ctx);
     const job = await ctx.db.get(args.cleanupJobId);
     if (
       !job?.active
@@ -712,14 +774,14 @@ export const authorizeFileDownload = query({
       throw new Error("WORK_FILE_NOT_FOUND");
     }
 
-    let allowed = access.isAdmin;
+    let allowed = access.isAdmin || String(document.createdBy) === String(access.user._id);
     if (!allowed) {
       allowed = document.approverUserIds.some(
         (id: string) => String(id) === String(access.user._id),
       );
     }
 
-    if (!allowed && document.status === "approved") {
+    if (!allowed && isWorkReleased(document)) {
       const workItems = (await ctx.db.query("workItems").collect()).filter(
         (item: any) => item.active && String(item.documentId) === String(document._id),
       );
@@ -755,20 +817,29 @@ export const authorizeFileDownload = query({
 export const formOptions = query({
   args: {},
   handler: async (ctx) => {
-    await operationalManagerPermissionOrThrow(ctx, "work:write");
-    const assignerMode = await getWorkAssignerMode(ctx);
+    const actor = await requireWorkWrite(ctx);
+    const visibilityMode = await getWorkVisibilityMode(ctx);
     const { activeUsers, departments, positions } = await catalog(ctx);
+    const users = activeUsers.filter((user: any) => {
+      if (actor.isOps) return true;
+      return isSameDepartmentSubordinate(actor.user, user, actor.positions);
+    });
     return {
-      assignerMode,
-      departments: departments
-        .filter((department: any) => department.active)
-        .sort((a: any, b: any) => a.name.localeCompare(b.name, "vi"))
-        .map((department: any) => ({
-          _id: department._id,
-          name: department.name,
-          code: department.code,
-        })),
-      users: activeUsers
+      canCreate: true,
+      isOps: actor.isOps,
+      visibilityMode,
+      assignerMode: WORK_ASSIGNER_MODE_ADMIN_MOD,
+      departments: actor.isOps
+        ? departments
+            .filter((department: any) => department.active)
+            .sort((a: any, b: any) => a.name.localeCompare(b.name, "vi"))
+            .map((department: any) => ({
+              _id: department._id,
+              name: department.name,
+              code: department.code,
+            }))
+        : [],
+      users: users
         .map((user: any) => ({
           _id: user._id,
           name: user.name || user.email || "Chưa đặt tên",
@@ -784,38 +855,21 @@ export const formOptions = query({
           level: activePositionLevel(user, positions),
         }))
         .sort((a: any, b: any) => a.name.localeCompare(b.name, "vi")),
-      approvers: activeUsers
-        .filter(
-          (user: any) =>
-            !isOperationalManagerRole(user.role) && activePositionLevel(user, positions) >= 4,
-        )
-        .map((user: any) => ({
-          _id: user._id,
-          name: user.name || user.email || "Chưa đặt tên",
-          email: user.email || "",
-          departmentId: user.departmentId,
-          departmentName:
-            departments.find((department: any) => String(department._id) === String(user.departmentId))
-              ?.name || "",
-          positionName:
-            positions.find((position: any) => String(position._id) === String(user.positionId))?.name
-            || "",
-          level: activePositionLevel(user, positions),
-        }))
-        .sort((a: any, b: any) => b.level - a.level || a.name.localeCompare(b.name, "vi")),
+      approvers: [],
     };
   },
 });
 
 export const createDocument = mutation({
   args: {
+    title: v.string(),
     fileId: v.optional(v.id("_storage")),
     driveFileId: v.optional(v.string()),
     driveChecksum: v.optional(v.string()),
     cleanupToken: v.optional(v.string()),
-    fileName: v.string(),
-    fileType: v.string(),
-    fileSize: v.number(),
+    fileName: v.optional(v.string()),
+    fileType: v.optional(v.string()),
+    fileSize: v.optional(v.number()),
     assignments: v.array(
       v.object({
         type: v.optional(v.union(v.literal("department"), v.literal("individual"))),
@@ -825,18 +879,18 @@ export const createDocument = mutation({
         deadline: v.string(),
       }),
     ),
-    approverUserIds: v.array(v.string()),
+    approverUserIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
-    const { fileName, fileType } = validateDocumentFile(args.fileName, args.fileSize);
-    if (!args.driveFileId && !args.fileId) throw new Error("WORK_FILE_REQUIRED");
+    const actor = await requireWorkWrite(ctx);
+    await releasePendingWorkDocuments(ctx);
+    const title = cleanWorkTitle(args.title);
+    const hasFile = Boolean(args.driveFileId || args.fileId);
+    const file = hasFile
+      ? validateDocumentFile(args.fileName || "", args.fileSize || 0)
+      : { fileName: "", fileType: "" };
     if (args.driveFileId && !args.cleanupToken) throw new Error("UPLOAD_NOT_FOUND");
-    const { assignments, approverUserIds } = await validateDocumentWorkflow(
-      ctx,
-      args.assignments,
-      args.approverUserIds,
-    );
+    const assignments = await assertWorkAssignmentsForActor(ctx, args.assignments, actor);
 
     const now = Date.now();
     if (args.driveFileId && args.cleanupToken) {
@@ -853,17 +907,18 @@ export const createDocument = mutation({
       driveFileId: args.driveFileId,
       driveChecksum: args.driveChecksum,
       storageProvider: args.driveFileId ? "google_drive" : "convex",
-      fileName,
-      fileType,
-      fileSize: args.fileSize,
+      fileName: file.fileName,
+      fileType: file.fileType,
+      fileSize: hasFile ? args.fileSize || 0 : 0,
+      title,
       departmentId: firstAssignment.departmentId || "",
       content: firstAssignment.content,
       deadline: firstAssignment.deadline,
       assignments: storedAssignments(assignments),
-      approverUserIds,
+      approverUserIds: [],
       approvedByUserIds: [],
       rejectedByUserIds: [],
-      status: "pending",
+      status: "approved",
       active: true,
       createdBy: actor.user._id,
       updatedBy: actor.user._id,
@@ -878,21 +933,37 @@ export const createDocument = mutation({
       action: "work.document.create",
       details: JSON.stringify({
         documentId,
+        title,
         assignmentCount: assignments.length,
         departmentCount: assignments.filter((item) => item.type === "department").length,
         individualCount: assignments.filter((item) => item.type === "individual").length,
-        approverCount: approverUserIds.length,
       }),
       at: now,
     });
-    await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
-      userIds: approverUserIds,
-      title: "Công việc mới cần duyệt",
-      body: `Công văn ${fileName} đang chờ quyết định của bạn.`,
-      kind: "work",
-      sourceType: "approval",
-      sourceId: String(documentId),
-    });
+    const recipients = new Set<string>();
+    const users = (await ctx.db.query("users").collect()).filter((row: any) => row.status === "active");
+    for (const assignment of assignments) {
+      if (assignment.type === "individual") {
+        for (const id of assignment.userIds) recipients.add(String(id));
+      } else {
+        for (const user of users) {
+          if (String(user.departmentId || "") === String(assignment.departmentId || "")) {
+            recipients.add(String(user._id));
+          }
+        }
+      }
+    }
+    recipients.delete(String(actor.user._id));
+    if (recipients.size) {
+      await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+        userIds: [...recipients],
+        title: "Công việc mới",
+        body: title,
+        kind: "work",
+        sourceType: "department_work",
+        sourceId: String(documentId),
+      });
+    }
     return documentId;
   },
 });
@@ -900,6 +971,7 @@ export const createDocument = mutation({
 export const updateDocument = mutation({
   args: {
     documentId: v.id("officeDocuments"),
+    title: v.optional(v.string()),
     driveFileId: v.optional(v.string()),
     driveChecksum: v.optional(v.string()),
     cleanupToken: v.optional(v.string()),
@@ -915,13 +987,18 @@ export const updateDocument = mutation({
         deadline: v.string(),
       }),
     ),
-    approverUserIds: v.array(v.string()),
+    approverUserIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkWrite(ctx);
     const document = await ctx.db.get(args.documentId);
     if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
-    if (!canMutateWorkDocument(document)) throw new Error("WORK_DOCUMENT_IMMUTABLE");
+    const relatedBefore = await relatedDocumentWork(ctx, args.documentId);
+    const creatorMutable = canCreatorMutateWork(relatedBefore.workItems);
+    if (!actor.isOps && String(document.createdBy) !== String(actor.user._id)) {
+      throw new Error("WORK_UPDATE_FORBIDDEN");
+    }
+    if (!actor.isOps && !creatorMutable) throw new Error("WORK_DOCUMENT_IMMUTABLE");
 
     const replacementRequested =
       args.driveFileId !== undefined
@@ -953,11 +1030,7 @@ export const updateDocument = mutation({
       };
     }
 
-    const { assignments, approverUserIds } = await validateDocumentWorkflow(
-      ctx,
-      args.assignments,
-      args.approverUserIds,
-    );
+    const assignments = await assertWorkAssignmentsForActor(ctx, args.assignments, actor);
     if (replacement) {
       await commitDriveUploadStage(
         ctx,
@@ -967,9 +1040,10 @@ export const updateDocument = mutation({
       );
     }
 
-    const related = await relatedDocumentWork(ctx, args.documentId);
+    const related = relatedBefore;
     const now = Date.now();
     const firstAssignment = assignments[0];
+    const title = args.title !== undefined ? cleanWorkTitle(args.title) : document.title;
     await ctx.db.patch(args.documentId, {
       ...(replacement
         ? {
@@ -982,14 +1056,13 @@ export const updateDocument = mutation({
             fileSize: replacement.fileSize,
           }
         : {}),
+      ...(title ? { title } : {}),
       departmentId: firstAssignment.departmentId || "",
       content: firstAssignment.content,
       deadline: firstAssignment.deadline,
       assignments: storedAssignments(assignments),
-      approverUserIds,
-      approvedByUserIds: [],
-      rejectedByUserIds: [],
-      status: "pending",
+      approverUserIds: [],
+      status: "approved",
       updatedBy: actor.user._id,
       updatedAt: now,
     });
@@ -1015,20 +1088,35 @@ export const updateDocument = mutation({
         replacementFile: Boolean(replacement),
         cleanupJobId,
         assignmentCount: assignments.length,
-        approverCount: approverUserIds.length,
         deactivatedWorkItemCount: deactivated.workItemCount,
         deactivatedPersonalTaskCount: deactivated.personalTaskCount,
       }),
       at: now,
     });
-    await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
-      userIds: approverUserIds,
-      title: "Công việc cần duyệt lại",
-      body: `Công văn ${replacement?.fileName || document.fileName} đã được cập nhật.`,
-      kind: "work",
-      sourceType: "approval",
-      sourceId: String(args.documentId),
-    });
+    const recipients = new Set<string>();
+    const users = (await ctx.db.query("users").collect()).filter((row: any) => row.status === "active");
+    for (const assignment of assignments) {
+      if (assignment.type === "individual") {
+        for (const id of assignment.userIds) recipients.add(String(id));
+      } else {
+        for (const user of users) {
+          if (String(user.departmentId || "") === String(assignment.departmentId || "")) {
+            recipients.add(String(user._id));
+          }
+        }
+      }
+    }
+    recipients.delete(String(actor.user._id));
+    if (recipients.size) {
+      await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+        userIds: [...recipients],
+        title: "Công việc đã cập nhật",
+        body: workListTitle({ title, fileName: replacement?.fileName || document.fileName, content: firstAssignment.content }),
+        kind: "work",
+        sourceType: "department_work",
+        sourceId: String(args.documentId),
+      });
+    }
     return { documentId: args.documentId, cleanupJobId };
   },
 });
@@ -1036,12 +1124,17 @@ export const updateDocument = mutation({
 export const deleteDocument = mutation({
   args: { documentId: v.id("officeDocuments") },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "work:write");
+    const actor = await requireWorkWrite(ctx);
     const document = await ctx.db.get(args.documentId);
     if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
-    if (!canMutateWorkDocument(document)) throw new Error("WORK_DOCUMENT_IMMUTABLE");
-
     const related = await relatedDocumentWork(ctx, args.documentId);
+    if (!actor.isOps && String(document.createdBy) !== String(actor.user._id)) {
+      throw new Error("WORK_UPDATE_FORBIDDEN");
+    }
+    if (!actor.isOps && !canCreatorMutateWork(related.workItems)) {
+      throw new Error("WORK_DOCUMENT_IMMUTABLE");
+    }
+
     const now = Date.now();
     await ctx.db.patch(args.documentId, {
       active: false,
@@ -1111,82 +1204,79 @@ export const driveMigrationStatus = internalQuery({
 export const listAdmin = query({
   args: {},
   handler: async (ctx) => {
-    await operationalManagerPermissionOrThrow(ctx, "work:write");
-    const assignerMode = await getWorkAssignerMode(ctx);
-    const [documents, workItems, personalTasks, catalogData] = await Promise.all([
+    const actor = await requireWorkWrite(ctx);
+    const visibilityMode = await getWorkVisibilityMode(ctx);
+    const [documents, workItems, catalogData] = await Promise.all([
       ctx.db.query("officeDocuments").collect(),
       ctx.db.query("workItems").collect(),
-      ctx.db.query("personalTasks").collect(),
       catalog(ctx),
     ]);
     const activeDocuments = documents.filter((document: any) => document.active);
     const activeWorkItems = workItems.filter((item: any) => item.active);
+    const usersById = new Map<string, { status?: string }>(
+      catalogData.users.map((user: any) => [String(user._id), user]),
+    );
+    const visibleDocuments = activeDocuments.filter((document: any) => {
+      const items = activeWorkItems.filter((workItem: any) => String(workItem.documentId) === String(document._id));
+      const archived = items.some((item: any) => isWorkItemArchived(document, item, usersById))
+        || isWorkItemArchived(document, { assignmentType: "department" }, usersById);
+      if (archived) return canSeeArchivedWork(actor.user.role);
+      const isAssignee = items.some((item: any) => {
+        if (assignmentTypeOf(item) === "individual") {
+          return (item.assigneeUserIds || []).some((id: string) => String(id) === String(actor.user._id));
+        }
+        return String(item.departmentId || "") === String(actor.user.departmentId || "");
+      });
+      return canSeeLiveWork({
+        actorUserId: String(actor.user._id),
+        actorRole: actor.user.role,
+        actorLevel: actor.level,
+        createdBy: String(document.createdBy),
+        isAssignee,
+        visibilityMode,
+      });
+    });
     const views = await Promise.all(
-      activeDocuments.map(async (document: any) => {
+      visibleDocuments.map(async (document: any) => {
         const items = activeWorkItems.filter(
           (workItem: any) => String(workItem.documentId) === String(document._id),
         );
         const excludedIndividuals = individualAssigneeIdsForDocument(items, document._id);
         const assignmentViews = items.map((item: any) => {
           const type = assignmentTypeOf(item);
-          if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD || type === "individual") {
-            const members = type === "individual"
-              ? (item.assigneeUserIds || [])
-                  .map((id: string) =>
-                    catalogData.activeUsers.find((user: any) => String(user._id) === String(id)),
-                  )
-                  .filter(Boolean)
-              : departmentRosterMembers(item, document, catalogData, excludedIndividuals);
-            const approvedIds = approvedUserIds(item);
-            return {
-              _id: item._id,
-              type,
-              departmentId: item.departmentId,
-              departmentName:
-                type === "individual"
-                  ? "Cá nhân"
-                  : String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
-                    || "Chưa gán phòng ban",
-              content: item.content,
-              deadline: item.deadline,
-              status: adminModItemStatus(item, members),
-              taskCount: members.length,
-              taskCompletedCount: members.filter((member: any) =>
-                approvedIds.some((id: string) => String(id) === String(member._id)),
-              ).length,
-              members: members.map((member: any) => ({
-                ...personView(member, catalogData, userItemStatus(item, String(member._id))),
-                qualityPercent: completionForUser(item, String(member._id))?.qualityPercent ?? null,
-                rejectionReason: completionForUser(item, String(member._id))?.rejectionReason || "",
-              })),
-            };
-          }
-          const tasks = personalTasks.filter(
-            (task: any) => String(task.workItemId) === String(item._id) && task.active,
-          );
+          const members = type === "individual"
+            ? (item.assigneeUserIds || [])
+                .map((id: string) =>
+                  catalogData.activeUsers.find((user: any) => String(user._id) === String(id)),
+                )
+                .filter(Boolean)
+            : departmentRosterMembers(item, document, catalogData, excludedIndividuals);
+          const approvedIds = approvedUserIds(item);
           return {
             _id: item._id,
             type,
             departmentId: item.departmentId,
             departmentName:
-              String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
-              || "Chưa gán phòng ban",
+              type === "individual"
+                ? "Cá nhân"
+                : String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
+                  || "Chưa gán phòng ban",
             content: item.content,
             deadline: item.deadline,
-            status: completionStatus(tasks),
-            taskCount: tasks.length,
-            taskCompletedCount: tasks.filter((task: any) =>
-              task.assigneeUserIds.every((id: string) =>
-                task.completedUserIds.some(
-                  (completedId: string) => String(completedId) === String(id),
-                ),
-              ),
+            status: adminModItemStatus(item, members),
+            taskCount: members.length,
+            taskCompletedCount: members.filter((member: any) =>
+              approvedIds.some((id: string) => String(id) === String(member._id)),
             ).length,
-            members: [],
+            members: members.map((member: any) => ({
+              ...personView(member, catalogData, userItemStatus(item, String(member._id))),
+              qualityPercent: completionForUser(item, String(member._id))?.qualityPercent ?? null,
+              rejectionReason: completionForUser(item, String(member._id))?.rejectionReason || "",
+            })),
           };
         });
         return {
-          ...(await documentView(ctx, document, catalogData)),
+          ...(await documentView(ctx, document, catalogData, items)),
           assignments: assignmentViews,
           workStatus: overallCompletionStatus(
             assignmentViews.map((assignment: any) => assignment.status),
@@ -1199,67 +1289,44 @@ export const listAdmin = query({
       }),
     );
     const pendingCompletionReviews = [];
-    if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
-      for (const item of activeWorkItems) {
-        const document = activeDocuments.find(
-          (row: any) => String(row._id) === String(item.documentId),
-        );
-        if (!document || document.status !== "approved") continue;
-        for (const row of completionsOf(item)) {
-          if (row.status !== "pending_approval") continue;
-          const person = catalogData.activeUsers.find(
-            (user: any) => String(user._id) === String(row.userId),
-          );
-          pendingCompletionReviews.push({
-            kind: "work_item",
-            workItemId: item._id,
-            taskId: null,
-            userId: row.userId,
-            userName: person?.name || person?.email || "—",
-            content: item.content,
-            deadline: item.deadline,
-            submittedAt: row.submittedAt,
-            submittedLate: row.submittedLate,
-            type: assignmentTypeOf(item),
-            departmentName:
-              assignmentTypeOf(item) === "individual"
-                ? "Cá nhân"
-                : String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
-                  || "Chưa gán phòng ban",
-          });
-        }
+    for (const item of activeWorkItems) {
+      const document = activeDocuments.find(
+        (row: any) => String(row._id) === String(item.documentId),
+      );
+      if (!document || !isWorkReleased(document)) continue;
+      if (!canReviewWorkCompletion({ actorUserId: String(actor.user._id), createdBy: String(document.createdBy) })) {
+        continue;
       }
-    } else {
-      for (const task of personalTasks.filter((item: any) => item.active)) {
-        for (const row of completionsOf(task)) {
-          if (row.status !== "pending_approval") continue;
-          const person = catalogData.activeUsers.find(
-            (user: any) => String(user._id) === String(row.userId),
-          );
-          const item = activeWorkItems.find(
-            (workItem: any) => String(workItem._id) === String(task.workItemId),
-          );
-          pendingCompletionReviews.push({
-            kind: "personal_task",
-            workItemId: item?._id || null,
-            taskId: task._id,
-            userId: row.userId,
-            userName: person?.name || person?.email || "—",
-            content: task.title,
-            deadline: task.deadline,
-            submittedAt: row.submittedAt,
-            submittedLate: row.submittedLate,
-            type: "individual",
-            departmentName: item
-              ? String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
-              : "",
-          });
-        }
+      for (const row of completionsOf(item)) {
+        if (row.status !== "pending_approval") continue;
+        const person = catalogData.activeUsers.find(
+          (user: any) => String(user._id) === String(row.userId),
+        );
+        pendingCompletionReviews.push({
+          kind: "work_item",
+          workItemId: item._id,
+          taskId: null,
+          userId: row.userId,
+          userName: person?.name || person?.email || "—",
+          content: item.content,
+          deadline: item.deadline,
+          submittedAt: row.submittedAt,
+          submittedLate: row.submittedLate,
+          type: assignmentTypeOf(item),
+          departmentName:
+            assignmentTypeOf(item) === "individual"
+              ? "Cá nhân"
+              : String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
+                || "Chưa gán phòng ban",
+        });
       }
     }
 
     return {
-      assignerMode,
+      assignerMode: WORK_ASSIGNER_MODE_ADMIN_MOD,
+      visibilityMode,
+      canCreate: true,
+      isOps: actor.isOps,
       documents: views.sort((a, b) => b.createdAt - a.createdAt),
       pendingCompletionReviews: pendingCompletionReviews.sort(
         (a, b) => a.deadline.localeCompare(b.deadline) || a.submittedAt - b.submittedAt,
@@ -1270,104 +1337,15 @@ export const listAdmin = query({
 
 export const approveDocument = mutation({
   args: { documentId: v.id("officeDocuments") },
-  handler: async (ctx, args) => {
-    const access = await requireWorkAccess(ctx);
-    if (access.isAdmin) throw new Error("ADMIN_USE_MANAGEMENT");
-    if (access.level < 4) throw new Error("WORK_APPROVER_REQUIRED");
-    const document = await ctx.db.get(args.documentId);
-    if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
-    if (!document.approverUserIds.some((id: string) => String(id) === String(access.user._id))) {
-      throw new Error("WORK_APPROVER_FORBIDDEN");
-    }
-    if (document.approvedByUserIds.some((id: string) => String(id) === String(access.user._id))) return;
-    if (document.status !== "pending" || (document.rejectedByUserIds || []).length) {
-      throw new Error("WORK_DOCUMENT_ALREADY_DECIDED");
-    }
-    const approvedByUserIds = [...document.approvedByUserIds, access.user._id];
-    const status = document.approverUserIds.every((id: string) =>
-      approvedByUserIds.some((approvedId: string) => String(approvedId) === String(id)),
-    ) ? "approved" : "pending";
-    await ctx.db.patch(args.documentId, {
-      approvedByUserIds,
-      status,
-      updatedBy: access.user._id,
-      updatedAt: Date.now(),
-    });
-    await ctx.db.insert("auditLogs", {
-      actorUserId: access.user._id,
-      targetEmail: access.user.email,
-      action: "work.document.approve",
-      details: JSON.stringify({ documentId: args.documentId, status }),
-      at: Date.now(),
-    });
-    if (status === "approved") {
-      const users = (await ctx.db.query("users").collect()).filter(
-        (row: any) => row.status === "active",
-      );
-      const recipients = new Set<string>();
-      for (const assignment of document.assignments || []) {
-        if (assignment.type === "individual") {
-          for (const id of assignment.userIds || []) recipients.add(String(id));
-        } else {
-          for (const user of users) {
-            if (String(user.departmentId || "") === String(assignment.departmentId || "")) {
-              recipients.add(String(user._id));
-            }
-          }
-        }
-      }
-      await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
-        userIds: [...recipients],
-        title: "Công việc đã được duyệt",
-        body: `Công văn ${document.fileName} đã được duyệt và có hiệu lực.`,
-        kind: "work",
-        sourceType: "department_work",
-        sourceId: String(args.documentId),
-      });
-    }
+  handler: async () => {
+    throw new Error("WORK_APPROVAL_DISABLED");
   },
 });
 
 export const rejectDocument = mutation({
   args: { documentId: v.id("officeDocuments") },
-  handler: async (ctx, args) => {
-    const access = await requireWorkAccess(ctx);
-    if (access.isAdmin) throw new Error("ADMIN_USE_MANAGEMENT");
-    if (access.level < 4) throw new Error("WORK_APPROVER_REQUIRED");
-    const document = await ctx.db.get(args.documentId);
-    if (!document?.active) throw new Error("WORK_DOCUMENT_NOT_FOUND");
-    if (!document.approverUserIds.some((id: string) => String(id) === String(access.user._id))) {
-      throw new Error("WORK_APPROVER_FORBIDDEN");
-    }
-    const rejectedByUserIds = document.rejectedByUserIds || [];
-    if (rejectedByUserIds.some((id: string) => String(id) === String(access.user._id))) return;
-    if (!canRejectWorkDocument(document)) {
-      throw new Error("WORK_DOCUMENT_ALREADY_DECIDED");
-    }
-    const related = await relatedDocumentWork(ctx, args.documentId);
-    const now = Date.now();
-    await ctx.db.patch(args.documentId, {
-      rejectedByUserIds: [...rejectedByUserIds, access.user._id],
-      status: "rejected",
-      updatedBy: access.user._id,
-      updatedAt: now,
-    });
-    await deactivateRelatedDocumentWork(ctx, related, access.user._id, now);
-    await ctx.db.insert("auditLogs", {
-      actorUserId: access.user._id,
-      targetEmail: access.user.email,
-      action: "work.document.reject",
-      details: JSON.stringify({ documentId: args.documentId, status: "rejected" }),
-      at: Date.now(),
-    });
-    await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
-      userIds: [String(document.createdBy)],
-      title: "Công văn bị từ chối",
-      body: `Công văn ${document.fileName} đã bị từ chối.`,
-      kind: "work",
-      sourceType: "completion_rejected",
-      sourceId: String(args.documentId),
-    });
+  handler: async () => {
+    throw new Error("WORK_APPROVAL_DISABLED");
   },
 });
 
@@ -1394,7 +1372,7 @@ export const createPersonalTask = mutation({
       throw new Error("WORK_DEPARTMENT_FORBIDDEN");
     }
     const document = await ctx.db.get(item.documentId as Id<"officeDocuments">);
-    if (!document?.active || document.status !== "approved") throw new Error("WORK_NOT_APPROVED");
+    if (!isWorkReleased(document)) throw new Error("WORK_NOT_APPROVED");
     const title = args.title.trim();
     if (!title || title.length > 200) throw new Error("INVALID_PERSONAL_WORK_TITLE");
     const deadline = assertDate(args.deadline);
@@ -1453,7 +1431,7 @@ export const completePersonalTask = mutation({
     const parentItem = await ctx.db.get(task.workItemId as Id<"workItems">);
     if (!parentItem?.active) throw new Error("WORK_ITEM_NOT_FOUND");
     const parentDocument = await ctx.db.get(parentItem.documentId as Id<"officeDocuments">);
-    if (!parentDocument?.active || parentDocument.status !== "approved") {
+    if (!isWorkReleased(parentDocument)) {
       throw new Error("WORK_NOT_APPROVED");
     }
     const existing = completionForUser(task, String(access.user._id));
@@ -1502,18 +1480,19 @@ export const completePersonalTask = mutation({
 export const completeWorkItem = mutation({
   args: {
     workItemId: v.id("workItems"),
-    qualityPercent: v.optional(v.number()),
+    driveFileId: v.optional(v.string()),
+    driveChecksum: v.optional(v.string()),
+    cleanupToken: v.optional(v.string()),
+    fileName: v.optional(v.string()),
+    fileType: v.optional(v.string()),
+    fileSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const assignerMode = await getWorkAssignerMode(ctx);
-    if (assignerMode !== WORK_ASSIGNER_MODE_ADMIN_MOD) {
-      throw new Error("WORK_ADMIN_MOD_MODE_REQUIRED");
-    }
     const access = await requireWorkAccess(ctx);
     const item = await ctx.db.get(args.workItemId);
     if (!item?.active) throw new Error("WORK_ITEM_NOT_FOUND");
     const document = await ctx.db.get(item.documentId as Id<"officeDocuments">);
-    if (!document?.active || document.status !== "approved") throw new Error("WORK_NOT_APPROVED");
+    if (!isWorkReleased(document)) throw new Error("WORK_NOT_APPROVED");
 
     const catalogData = await catalog(ctx);
     const siblingItems = (await ctx.db.query("workItems").collect()).filter(
@@ -1534,36 +1513,42 @@ export const completeWorkItem = mutation({
     if (existing?.status === "approved" || existing?.status === "pending_approval") return;
     if (!existing && isUserApproved(item, String(access.user._id))) return;
 
-    const late = item.deadline < todayInVietnam();
-    const now = Date.now();
-    const bypassReview = access.isAdmin;
-    if (bypassReview) {
-      if (args.qualityPercent === undefined) throw new Error("QUALITY_PERCENT_REQUIRED");
-      const qualityPercent = assertQualityPercent(args.qualityPercent);
-      const completions = upsertCompletion(item, {
-        userId: String(access.user._id),
-        status: "approved",
-        submittedAt: now,
-        submittedLate: late,
-        qualityPercent,
-        reviewedAt: now,
-        reviewedBy: String(access.user._id),
-      });
-      const synced = syncApprovedArrays(completions);
-      await ctx.db.patch(args.workItemId, {
-        completions,
-        ...synced,
-        updatedBy: access.user._id,
-        updatedAt: now,
-      });
-      return;
+    const hasEvidence = Boolean(args.driveFileId);
+    let evidence: {
+      driveFileId?: string;
+      driveChecksum?: string;
+      fileName?: string;
+      fileType?: string;
+      fileSize?: number;
+    } = {};
+    if (hasEvidence) {
+      if (!args.cleanupToken || args.fileName === undefined || args.fileSize === undefined) {
+        throw new Error("WORK_EVIDENCE_REQUIRED");
+      }
+      const file = validateDocumentFile(args.fileName, args.fileSize);
+      await commitDriveUploadStage(
+        ctx,
+        { cleanupToken: args.cleanupToken, driveFileId: args.driveFileId as string },
+        String(access.user._id),
+        "work",
+      );
+      evidence = {
+        driveFileId: args.driveFileId,
+        driveChecksum: args.driveChecksum,
+        fileName: file.fileName,
+        fileType: file.fileType,
+        fileSize: args.fileSize,
+      };
     }
 
+    const late = item.deadline < todayInVietnam();
+    const now = Date.now();
     const completions = upsertCompletion(item, {
       userId: String(access.user._id),
       status: "pending_approval",
       submittedAt: now,
       submittedLate: late,
+      ...evidence,
     });
     await ctx.db.patch(args.workItemId, {
       completions,
@@ -1580,19 +1565,23 @@ export const reviewWorkCompletion = mutation({
     decision: v.union(v.literal("approve"), v.literal("reject")),
     qualityPercent: v.optional(v.number()),
     rejectionReason: v.optional(v.string()),
+    deadline: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const access = await requireWorkAccess(ctx);
-    if (!access.isAdmin) throw new Error("WORK_COMPLETION_REVIEWER_REQUIRED");
     const item = await ctx.db.get(args.workItemId);
     if (!item?.active) throw new Error("WORK_ITEM_NOT_FOUND");
     const document = await ctx.db.get(item.documentId as Id<"officeDocuments">);
-    if (!document?.active || document.status !== "approved") throw new Error("WORK_NOT_APPROVED");
+    if (!isWorkReleased(document)) throw new Error("WORK_NOT_APPROVED");
+    if (!canReviewWorkCompletion({ actorUserId: String(access.user._id), createdBy: String(document.createdBy) })) {
+      throw new Error("WORK_COMPLETION_REVIEWER_REQUIRED");
+    }
     const existing = completionForUser(item, args.userId);
     if (!existing || existing.status !== "pending_approval") {
       throw new Error("WORK_COMPLETION_NOT_PENDING");
     }
     const now = Date.now();
+    const nextDeadline = args.deadline ? assertDate(args.deadline) : item.deadline;
     if (args.decision === "approve") {
       if (args.qualityPercent === undefined) throw new Error("QUALITY_PERCENT_REQUIRED");
       const qualityPercent = assertQualityPercent(args.qualityPercent);
@@ -1608,6 +1597,7 @@ export const reviewWorkCompletion = mutation({
       await ctx.db.patch(args.workItemId, {
         completions,
         ...synced,
+        deadline: nextDeadline,
         updatedBy: access.user._id,
         updatedAt: now,
       });
@@ -1627,6 +1617,7 @@ export const reviewWorkCompletion = mutation({
     await ctx.db.patch(args.workItemId, {
       completions,
       ...synced,
+      deadline: nextDeadline,
       updatedBy: access.user._id,
       updatedAt: now,
     });
@@ -1649,7 +1640,7 @@ export const reviewPersonalCompletion = mutation({
     const parentItem = await ctx.db.get(task.workItemId as Id<"workItems">);
     if (!parentItem?.active) throw new Error("WORK_ITEM_NOT_FOUND");
     const parentDocument = await ctx.db.get(parentItem.documentId as Id<"officeDocuments">);
-    if (!parentDocument?.active || parentDocument.status !== "approved") {
+    if (!isWorkReleased(parentDocument)) {
       throw new Error("WORK_NOT_APPROVED");
     }
     const existing = completionForUser(task, args.userId);
@@ -1731,11 +1722,7 @@ export const listMine = query({
       tasksByItem.set(String(task.workItemId), list);
     }
 
-    const visibleApprovalDocs = access.level >= 4
-      ? activeDocuments.filter((document: any) =>
-          document.approverUserIds.some((id: string) => String(id) === String(access.user._id)),
-        )
-      : [];
+    const visibleApprovalDocs: any[] = [];
 
     const approvalViews = await Promise.all(
       visibleApprovalDocs.map(async (document: any) => {
@@ -1783,7 +1770,7 @@ export const listMine = query({
           };
         });
         return {
-          ...(await documentView(ctx, document, catalogData)),
+          ...(await documentView(ctx, document, catalogData, items)),
           assignments,
           workStatus: overallCompletionStatus(
             assignments.map((assignment: any) => assignment.status),
@@ -1800,7 +1787,7 @@ export const listMine = query({
       const myWorkItems = [];
       for (const item of activeWorkItems) {
         const document = docsById.get(String(item.documentId));
-        if (!document || document.status !== "approved") continue;
+        if (!document || !isWorkReleased(document)) continue;
         const siblings = activeWorkItems.filter(
           (row: any) => String(row.documentId) === String(item.documentId),
         );
@@ -1837,6 +1824,7 @@ export const listMine = query({
           status: userItemStatus(item, String(access.user._id)),
           collectiveStatus: adminModItemStatus(item, members),
           documentId: document._id,
+          documentTitle: workListTitle(document),
           documentContent: document.content,
           fileName: document.fileName,
           fileUrl: null,
@@ -1866,10 +1854,12 @@ export const listMine = query({
       }
 
       const pendingCompletionReviews = [];
-      if (access.isAdmin) {
-        for (const item of activeWorkItems) {
-          const document = docsById.get(String(item.documentId));
-          if (!document || document.status !== "approved") continue;
+      for (const item of activeWorkItems) {
+        const document = docsById.get(String(item.documentId));
+        if (!document || !isWorkReleased(document)) continue;
+        if (!canReviewWorkCompletion({ actorUserId: String(access.user._id), createdBy: String(document.createdBy) })) {
+          continue;
+        }
           for (const row of completionsOf(item)) {
             if (row.status !== "pending_approval") continue;
             const person = catalogData.activeUsers.find(
@@ -1893,14 +1883,14 @@ export const listMine = query({
                     || "Chưa gán phòng ban",
             });
           }
-        }
       }
 
       return {
         userId: access.user._id,
         level: access.level,
         isAdmin: access.isAdmin,
-        assignerMode,
+        canCreate: canCreateAssignments(access.user.role, access.isAdmin ? 0 : access.level) || access.isAdmin,
+        assignerMode: WORK_ASSIGNER_MODE_ADMIN_MOD,
         assignableUsers: [],
         approvals: approvalViews.sort((a, b) => a.deadline.localeCompare(b.deadline)),
         departmentWorks: [],
@@ -2079,7 +2069,7 @@ async function workItemViewWithContext(
         })),
       status: taskOverallStatus(task),
     })),
-    document: await documentView(ctx, document, catalogData),
+    document: await documentView(ctx, document, catalogData, [item]),
   };
 }
 
@@ -2105,51 +2095,20 @@ export const badge = query({
     }
 
     let count = 0;
-    if (access.level >= 4) {
-      count += activeDocuments.filter((document: any) =>
-        document.approverUserIds.some((id: string) => String(id) === String(access.user._id)) &&
-        document.status === "pending" &&
-        !document.approvedByUserIds.some((id: string) => String(id) === String(access.user._id)) &&
-        !(document.rejectedByUserIds || []).some((id: string) => String(id) === String(access.user._id)),
-      ).length;
-    }
-
-    // Pending completion reviews for Admin/Mod (and L2/L3 supervisors in legacy mode).
-    if (access.isAdmin) {
-      if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
-        for (const item of activeWorkItems) {
-          const document = docsById.get(String(item.documentId));
-          if (!document || document.status !== "approved") continue;
-          count += completionsOf(item).filter((row: any) => row.status === "pending_approval").length;
-        }
-      } else {
-        for (const task of personalTasks.filter((item: any) => item.active)) {
-          count += completionsOf(task).filter((row: any) => row.status === "pending_approval").length;
-        }
-      }
-    } else if (assignerMode === WORK_ASSIGNER_MODE_SUPERVISOR && (access.level === 2 || access.level === 3)) {
-      for (const task of personalTasks.filter((item: any) => item.active)) {
-        for (const row of completionsOf(task)) {
-          if (row.status !== "pending_approval") continue;
-          const target = catalogData.activeUsers.find(
-            (user: any) => String(user._id) === String(row.userId),
-          );
-          const targetLevel = target ? activePositionLevel(target, catalogData.positions) : 0;
-          if (
-            targetLevel > 0 &&
-            targetLevel < access.level &&
-            String(target?.departmentId || "") === String(access.user.departmentId || "")
-          ) {
-            count += 1;
-          }
-        }
-      }
+    for (const item of activeWorkItems) {
+      const document = docsById.get(String(item.documentId));
+      if (!document || !isWorkReleased(document)) continue;
+      if (!canReviewWorkCompletion({
+        actorUserId: String(access.user._id),
+        createdBy: String(document.createdBy),
+      })) continue;
+      count += completionsOf(item).filter((row: any) => row.status === "pending_approval").length;
     }
 
     if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
       for (const item of activeWorkItems) {
         const document = docsById.get(String(item.documentId));
-        if (!document || document.status !== "approved") continue;
+        if (!document || !isWorkReleased(document)) continue;
         const siblings = activeWorkItems.filter(
           (row: any) => String(row.documentId) === String(item.documentId),
         );

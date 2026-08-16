@@ -104,7 +104,7 @@ fun WorkScreen(
     var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
     var missingFocus by remember { mutableStateOf(false) }
     var consumedFocusId by remember { mutableStateOf<String?>(null) }
-    val canApproveDocuments = state.accessLevel >= 4
+    val canApproveDocuments = false
     val orderedApprovals = orderedWorkApprovals(state.approvals)
     val pendingApprovalCount = orderedApprovals.count { it.myDecision.isBlank() }
     val pendingCompletionCount = state.tasks.count { needsCompletion(it.status) }

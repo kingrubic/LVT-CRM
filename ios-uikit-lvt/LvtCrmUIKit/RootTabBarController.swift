@@ -346,13 +346,10 @@ private final class DashboardViewController: UIViewController {
                     secondaryTitle: "Đang diễn ra",
                     secondaryValue: String(dutiesSnapshot.duties.filter(\.isOngoing).count)
                 )
-                let pendingApproval = workSnapshot.isAdmin
-                    ? workSnapshot.approvals.filter { $0.status == "pending" }.count
-                    : workSnapshot.approvals.filter { $0.myDecision.isEmpty }.count
+                let pendingApproval = workSnapshot.completionReviews.count
                 let pendingExecution = workSnapshot.tasks.filter { WorkHelpers.needsCompletion($0.status) }.count
-                    + workSnapshot.completionReviews.count
                 workCard.setValues(
-                    primaryTitle: "Cần duyệt",
+                    primaryTitle: "Chờ duyệt nộp",
                     primaryValue: String(pendingApproval),
                     secondaryTitle: "Cần thực hiện",
                     secondaryValue: String(pendingExecution)

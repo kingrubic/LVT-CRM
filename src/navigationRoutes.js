@@ -23,6 +23,14 @@ const REPORT_PATHS = Object.freeze({
   boarding: '/bao-cao/ban-tru',
 });
 
+const HIDDEN_MENU_ALIASES = Object.freeze({
+  '/quan-ly-cong-tac': { menu: 'duties' },
+  '/quan-ly-cong-viec': { menu: 'work' },
+  '/quan-ly-ban-tru': { menu: 'reports', reportSection: 'duties' },
+  '/bao-cao/ban-tru': { menu: 'reports', reportSection: 'duties' },
+  '/thiet-lap-dia-diem': { menu: 'departments' },
+});
+
 /** @type {Map<string, { menu: string, reportSection?: string }>} */
 const PATH_ROUTES = new Map(
   Object.entries(MENU_PATHS).map(([menu, pathname]) => [pathname, { menu }]),
@@ -38,7 +46,10 @@ function normalizePathname(pathname) {
 }
 
 export function routeForPathname(pathname) {
-  const route = PATH_ROUTES.get(normalizePathname(pathname));
+  const normalized = normalizePathname(pathname);
+  const alias = HIDDEN_MENU_ALIASES[normalized];
+  if (alias) return { menu: alias.menu, reportSection: alias.reportSection };
+  const route = PATH_ROUTES.get(normalized);
   return route ? { menu: route.menu, reportSection: route.reportSection } : null;
 }
 
@@ -51,4 +62,4 @@ export function pathnameForReportSection(reportSection) {
   return REPORT_PATHS[reportSection] || REPORT_PATHS.duties;
 }
 
-export { MENU_PATHS, REPORT_PATHS };
+export { MENU_PATHS, REPORT_PATHS, HIDDEN_MENU_ALIASES };

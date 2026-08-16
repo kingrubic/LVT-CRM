@@ -15,7 +15,7 @@ export default function DisplaySettings() {
   const data = useQuery(anyApi.settings.displaySettings);
   const update = useMutation(anyApi.settings.updateDisplaySettings);
   const updateNotifications = useMutation(anyApi.settings.updateNotificationSettings);
-  const updateWorkAssigner = useMutation(anyApi.settings.updateWorkAssignerMode);
+  const updateWorkVisibility = useMutation(anyApi.settings.updateWorkVisibilityMode);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [assignerSaving, setAssignerSaving] = useState(false);
@@ -51,10 +51,10 @@ export default function DisplaySettings() {
   }
 
   const enabled = data.dutyAttendanceConfirmationEnabled !== false;
-  const workAssignerMode = data.workAssignerMode === 'supervisor' ? 'supervisor' : 'admin_mod';
+  const workVisibilityMode = data.workVisibilityMode === 'creator' ? 'creator' : 'school';
   const enabledSettingCount = [
     enabled,
-    workAssignerMode === 'admin_mod',
+    workVisibilityMode === 'school',
     notificationForm.dutiesEnabled,
     notificationForm.workEnabled,
   ].filter(Boolean).length;
@@ -71,15 +71,15 @@ export default function DisplaySettings() {
     }
   };
 
-  const setAssignerMode = async (mode) => {
-    if (mode === workAssignerMode) return;
+  const setVisibilityMode = async (mode) => {
+    if (mode === workVisibilityMode) return;
     setAssignerSaving(true);
     setAssignerFeedback('');
     try {
-      await updateWorkAssigner({ mode });
-      setAssignerFeedback(mode === 'admin_mod'
-        ? 'Đã chuyển sang chế độ Admin/Mod giao việc.'
-        : 'Đã chuyển sang chế độ Cấp trên giao việc.');
+      await updateWorkVisibility({ mode });
+      setAssignerFeedback(mode === 'school'
+        ? 'Người tạo, người nhận, cấp 4/5 sao, admin và mod đều nhìn thấy công việc.'
+        : 'Danh sách quản lý chỉ hiện việc mình tạo. Người được giao vẫn thấy việc của mình.');
     } catch (error) {
       setAssignerFeedback(feedbackMessage(error));
     } finally {
@@ -169,46 +169,46 @@ export default function DisplaySettings() {
       <div className="display-settings-card">
         <div className="display-settings-card-heading">
           <span className="display-settings-section-label">CÔNG VIỆC</span>
-          <h3>Người giao việc</h3>
+          <h3>Ai nhìn thấy công việc?</h3>
           <p>
-            Chọn ai được phép phân công công việc. Chỉ bật một chế độ tại một thời điểm để tránh
-            xung đột quy trình.
+            Người được giao luôn thấy việc của mình. Chọn thêm ai được xem việc người khác tạo.
+            Việc lưu trữ (người tạo hoặc người nhận inactive) chỉ hiện với admin/mod.
           </p>
         </div>
         <div className="notification-source-settings">
           <button
             type="button"
-            className={`display-toggle ${workAssignerMode === 'admin_mod' ? 'is-on' : 'is-off'}`}
-            onClick={() => void setAssignerMode('admin_mod')}
-            disabled={assignerSaving || workAssignerMode === 'admin_mod'}
-            aria-pressed={workAssignerMode === 'admin_mod'}
+            className={`display-toggle ${workVisibilityMode === 'creator' ? 'is-on' : 'is-off'}`}
+            onClick={() => void setVisibilityMode('creator')}
+            disabled={assignerSaving || workVisibilityMode === 'creator'}
+            aria-pressed={workVisibilityMode === 'creator'}
           >
             <span className="display-toggle-track"><span /></span>
             <span className="display-toggle-copy">
-              <strong>Admin / Mod</strong>
-              <small>Quản trị giao việc cho phòng ban hoặc cá nhân; mọi thành viên tự hoàn thành.</small>
+              <strong>Chỉ người tạo</strong>
+              <small>Danh sách quản lý chỉ hiện việc mình tạo. Người nhận vẫn thấy việc được giao.</small>
             </span>
           </button>
           <button
             type="button"
-            className={`display-toggle ${workAssignerMode === 'supervisor' ? 'is-on' : 'is-off'}`}
-            onClick={() => void setAssignerMode('supervisor')}
-            disabled={assignerSaving || workAssignerMode === 'supervisor'}
-            aria-pressed={workAssignerMode === 'supervisor'}
+            className={`display-toggle ${workVisibilityMode === 'school' ? 'is-on' : 'is-off'}`}
+            onClick={() => void setVisibilityMode('school')}
+            disabled={assignerSaving || workVisibilityMode === 'school'}
+            aria-pressed={workVisibilityMode === 'school'}
           >
             <span className="display-toggle-track"><span /></span>
             <span className="display-toggle-copy">
-              <strong>Cấp trên</strong>
-              <small>Cấp 2–3 sao giao việc cho cấp dưới và đốc thúc hoàn thành.</small>
+              <strong>Người tạo, người nhận, cấp 4/5 sao, admin và mod</strong>
+              <small>Đồng cấp không được giao và không thấy việc của nhau.</small>
             </span>
           </button>
         </div>
         <div className="display-settings-note">
           <span aria-hidden="true">✦</span>
           <p>
-            {workAssignerMode === 'admin_mod'
-              ? 'Đang dùng quy trình Lê Văn Tám: Admin/Mod phân công; báo cáo KPI theo cá nhân hoàn thành.'
-              : 'Đang dùng quy trình cấp trên giao việc: KPI cấp trên dựa trên việc đã giao và cấp dưới đã xong.'}
+            {workVisibilityMode === 'school'
+              ? 'Đang mở cho người tạo, người nhận, hiệu trưởng/hiệu phó (4/5 sao), admin và mod.'
+              : 'Đang thu hẹp: chỉ người tạo xem danh sách quản lý; người được giao vẫn làm việc của mình.'}
           </p>
         </div>
         {assignerFeedback ? <div className="display-settings-feedback" role="status">{assignerFeedback}</div> : null}

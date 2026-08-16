@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
+  assignmentCreatorOrThrow,
   activePositionLevel,
   currentUserOrThrow,
   DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
@@ -8,10 +9,10 @@ import {
   getBooleanSystemSetting,
   isOperationalManagerRole,
   isSameDepartmentSubordinate,
-  operationalManagerPermissionOrThrow,
   resolveUserMenuAccess,
   type MenuAccess,
 } from "./lib";
+import { canCreateAssignments, cleanDutyLocationText, dutyLocationLabel } from "./assignmentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -37,7 +38,7 @@ function cleanDutyInput(args: {
   endTime: string;
   allDay: boolean;
   content: string;
-  locationIds: string[];
+  locationText: string;
   departmentIds: string[];
   participantUserIds: string[];
 }) {
@@ -62,7 +63,8 @@ function cleanDutyInput(args: {
     endTime,
     allDay: Boolean(args.allDay),
     content,
-    locationIds: uniq(args.locationIds || []),
+    locationText: cleanDutyLocationText(args.locationText),
+    locationIds: [] as string[],
     departmentIds: uniq(args.departmentIds || []),
     participantUserIds: uniq(args.participantUserIds || []),
   };
@@ -71,17 +73,13 @@ function cleanDutyInput(args: {
 async function assertRefs(
   ctx: { db: any },
   input: {
-    locationIds: string[];
     departmentIds: string[];
     participantUserIds: string[];
   },
+  actor: { user: any; isOps: boolean; positions: any[] },
 ) {
-  if (input.locationIds.length) {
-    const locations = await ctx.db.query("locations").collect();
-    for (const id of input.locationIds) {
-      const row = locations.find((l: any) => l._id === id);
-      if (!row?.active) throw new Error("INVALID_LOCATION");
-    }
+  if (!actor.isOps && input.departmentIds.length) {
+    throw new Error("DUTY_DEPARTMENT_FORBIDDEN");
   }
   if (input.departmentIds.length) {
     const departments = await ctx.db.query("departments").collect();
@@ -94,8 +92,29 @@ async function assertRefs(
     for (const id of input.participantUserIds) {
       const user = await ctx.db.get(id);
       if (!user || user.status !== "active") throw new Error("INVALID_PARTICIPANT");
+      if (!actor.isOps && !isSameDepartmentSubordinate(actor.user, user, actor.positions)) {
+        throw new Error("NOT_A_SUBORDINATE");
+      }
     }
   }
+  if (!input.departmentIds.length && !input.participantUserIds.length) {
+    throw new Error("DUTY_PARTICIPANTS_REQUIRED");
+  }
+}
+
+async function requireDutyWrite(ctx: any) {
+  const actor = await assignmentCreatorOrThrow(ctx);
+  if (actor.isOps) return actor;
+  const menuAccess = await resolveUserMenuAccess(ctx, actor.user);
+  if ((menuAccess.duties || "hidden") === "hidden") {
+    throw new Error("FORBIDDEN: duties menu hidden");
+  }
+  return actor;
+}
+
+function canMutateDuty(actor: { user: any; isOps: boolean }, duty: { createdBy?: string }) {
+  if (actor.isOps) return true;
+  return String(duty.createdBy || "") === String(actor.user._id);
 }
 
 function userIsParticipant(
@@ -162,30 +181,35 @@ async function requireDutiesAccess(ctx: any, min: "view" | "edit" = "view") {
 export const formOptions = query({
   args: {},
   handler: async (ctx) => {
-    await operationalManagerPermissionOrThrow(ctx, "duties:write");
-    const [locations, departments, users] = await Promise.all([
-      ctx.db.query("locations").collect(),
+    const actor = await requireDutyWrite(ctx);
+    const [departments, users] = await Promise.all([
       ctx.db.query("departments").collect(),
       ctx.db.query("users").collect(),
     ]);
+    const assignableUsers = users
+      .filter((u) => {
+        if (u.status !== "active") return false;
+        if (actor.isOps) return true;
+        return isSameDepartmentSubordinate(actor.user, u, actor.positions);
+      })
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"))
+      .map((u) => ({
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        departmentId: u.departmentId,
+      }));
     return {
-      locations: locations
-        .filter((l) => l.active)
-        .sort((a, b) => a.name.localeCompare(b.name, "vi"))
-        .map((l) => ({ _id: l._id, name: l.name })),
-      departments: departments
-        .filter((d) => d.active)
-        .sort((a, b) => a.name.localeCompare(b.name, "vi"))
-        .map((d) => ({ _id: d._id, name: d.name, code: d.code })),
-      users: users
-        .filter((u) => u.status === "active")
-        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "vi"))
-        .map((u) => ({
-          _id: u._id,
-          name: u.name,
-          email: u.email,
-          departmentId: u.departmentId,
-        })),
+      canCreate: true,
+      isOps: actor.isOps,
+      locations: [],
+      departments: actor.isOps
+        ? departments
+            .filter((d) => d.active)
+            .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+            .map((d) => ({ _id: d._id, name: d.name, code: d.code }))
+        : [],
+      users: assignableUsers,
     };
   },
 });
@@ -193,7 +217,8 @@ export const formOptions = query({
 export const listAdmin = query({
   args: {},
   handler: async (ctx) => {
-    await operationalManagerPermissionOrThrow(ctx, "duties:write");
+    const actor = await requireDutyWrite(ctx);
+    if (!actor.isOps) throw new Error("FORBIDDEN: operational manager role required");
     const [duties, locations, departments, users, attendances, attendanceConfirmationEnabled] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
@@ -225,7 +250,7 @@ export const listAdmin = query({
         const attMap = new Map((attByDuty.get(duty._id) || []).map((a) => [a.userId, a.status]));
         return {
           ...duty,
-          locationNames: mapNames(duty.locationIds, locations),
+          locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
           departmentNames: mapNames(duty.departmentIds, departments),
           participantNames: participants.map((u) => u.name || u.email || u._id),
           timing: {
@@ -283,11 +308,14 @@ export const listMine = query({
     );
 
     const mine = duties.filter((d) => {
-      if (!d.active || isAdmin || canViewAll) return d.active;
+      if (!d.active) return false;
+      if (isAdmin || canViewAll) return true;
+      if (String(d.createdBy || "") === String(user._id)) return true;
       return [user, ...subordinateUsers].some((visibleUser) => userIsParticipant(visibleUser, d));
     });
     return {
       canEdit,
+      canCreate: canCreateAssignments(user.role, actorLevel),
       isAdmin,
       access,
       canViewAll,
@@ -335,8 +363,13 @@ export const listMine = query({
             endTime: duty.endTime,
             allDay: duty.allDay,
             createdAt: duty.createdAt,
+            createdBy: duty.createdBy,
             content: duty.content,
-            locationNames: mapNames(duty.locationIds, locations),
+            locationText: duty.locationText || dutyLocationLabel(duty, mapNames(duty.locationIds, locations)),
+            locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
+            departmentIds: duty.departmentIds,
+            participantUserIds: duty.participantUserIds,
+            canManage: isAdmin || String(duty.createdBy || "") === String(user._id),
             departmentNames: mapNames(duty.departmentIds, departments),
             departmentParticipants: duty.departmentIds.map((departmentId) => ({
               departmentName:
@@ -385,14 +418,14 @@ export const create = mutation({
     endTime: v.string(),
     allDay: v.boolean(),
     content: v.string(),
-    locationIds: v.array(v.string()),
+    locationText: v.string(),
     departmentIds: v.array(v.string()),
     participantUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "duties:write");
+    const actor = await requireDutyWrite(ctx);
     const input = cleanDutyInput(args);
-    await assertRefs(ctx, input);
+    await assertRefs(ctx, input, actor);
     const now = Date.now();
     const id = await ctx.db.insert("duties", {
       ...input,
@@ -421,16 +454,17 @@ export const update = mutation({
     endTime: v.string(),
     allDay: v.boolean(),
     content: v.string(),
-    locationIds: v.array(v.string()),
+    locationText: v.string(),
     departmentIds: v.array(v.string()),
     participantUserIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "duties:write");
+    const actor = await requireDutyWrite(ctx);
     const current = await ctx.db.get(args.id);
     if (!current || !current.active) throw new Error("DUTY_NOT_FOUND");
+    if (!canMutateDuty(actor, current)) throw new Error("DUTY_UPDATE_FORBIDDEN");
     const input = cleanDutyInput(args);
-    await assertRefs(ctx, input);
+    await assertRefs(ctx, input, actor);
     const now = Date.now();
     await ctx.db.patch(args.id, {
       ...input,
@@ -449,9 +483,10 @@ export const update = mutation({
 export const remove = mutation({
   args: { id: v.id("duties") },
   handler: async (ctx, args) => {
-    const actor = await operationalManagerPermissionOrThrow(ctx, "duties:write");
+    const actor = await requireDutyWrite(ctx);
     const current = await ctx.db.get(args.id);
     if (!current) throw new Error("DUTY_NOT_FOUND");
+    if (!canMutateDuty(actor, current)) throw new Error("DUTY_UPDATE_FORBIDDEN");
     const now = Date.now();
     await ctx.db.patch(args.id, { active: false, updatedAt: now, updatedBy: actor.user._id });
     await ctx.db.insert("auditLogs", {

@@ -12,6 +12,7 @@ import {
   resolveUserMenuAccess,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
+import { dutyLocationLabel } from "./assignmentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -217,7 +218,7 @@ export const dutyCalendar = query({
         startTime: duty.startTime,
         endTime: duty.endTime,
         allDay: duty.allDay,
-        locationNames: mapNames(duty.locationIds, locations),
+        locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
         departmentNames: mapNames(duty.departmentIds, departments),
         assignmentType: duty.participantUserIds.some(
           (id) => String(id) === selectedUserId,

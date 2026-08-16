@@ -25,8 +25,16 @@ test('đường dẫn con mở đúng menu và chuẩn hóa dấu gạch cuối'
   assert.equal(routeForPathname('/'), null);
 });
 
-test('các tab báo cáo có đường dẫn riêng và khôi phục đúng tab', () => {
-  for (const [reportSection, pathname] of Object.entries(REPORT_PATHS)) {
+test('đường dẫn menu đã ẩn được chuyển về menu đang dùng', () => {
+  assert.deepEqual(routeForPathname('/quan-ly-cong-tac'), { menu: 'duties', reportSection: undefined });
+  assert.deepEqual(routeForPathname('/quan-ly-cong-viec'), { menu: 'work', reportSection: undefined });
+  assert.deepEqual(routeForPathname('/bao-cao/ban-tru'), { menu: 'reports', reportSection: 'duties' });
+  assert.deepEqual(routeForPathname('/thiet-lap-dia-diem'), { menu: 'departments', reportSection: undefined });
+});
+
+test('các tab báo cáo đang dùng có đường dẫn riêng', () => {
+  for (const reportSection of ['duties', 'work']) {
+    const pathname = REPORT_PATHS[reportSection];
     assert.equal(pathnameForReportSection(reportSection), pathname);
     assert.deepEqual(routeForPathname(pathname), { menu: 'reports', reportSection });
   }

@@ -80,7 +80,7 @@ fun DashboardScreen(
                 title = "Công việc",
                 subtitle = "Tiến độ vận hành",
                 icon = Icons.Outlined.TaskAlt,
-                primaryTitle = "Cần duyệt",
+                primaryTitle = "Chờ duyệt nộp",
                 primaryValue = state.pendingApproval,
                 secondaryTitle = "Cần thực hiện",
                 secondaryValue = state.pendingExecution,

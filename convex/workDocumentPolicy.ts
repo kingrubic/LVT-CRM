@@ -1,12 +1,23 @@
 export type WorkDocumentDecisionState = {
   status: string;
+  active?: boolean;
   approvedByUserIds?: unknown[];
   rejectedByUserIds?: unknown[];
 };
 
-/** A document becomes permanently immutable after the first approval. */
-export function canMutateWorkDocument(document: WorkDocumentDecisionState) {
-  return document.status !== "approved" && (document.approvedByUserIds || []).length === 0;
+function hasBlockingSubmission(completions: Array<{ status?: string }> | null | undefined) {
+  return (completions || []).some(
+    (row) => row.status === "pending_approval" || row.status === "approved",
+  );
+}
+
+/** Creator may edit until an assignee has submitted (nộp) or been marked complete. */
+export function canMutateWorkDocument(
+  document: WorkDocumentDecisionState,
+  items: Array<{ completions?: Array<{ status?: string }> }> = [],
+) {
+  if (document.active === false || document.status === "rejected") return false;
+  return !items.some((item) => hasBlockingSubmission(item.completions));
 }
 
 /**

@@ -48,13 +48,8 @@ class DashboardViewModel(
                     val work = async { workRepository.listMine() }
                     val dutiesSnapshot = duties.await()
                     val workSnapshot = work.await()
-                    val pendingApproval = if (workSnapshot.isAdmin) {
-                        workSnapshot.approvals.count { it.status == "pending" }
-                    } else {
-                        workSnapshot.approvals.count { it.myDecision.isBlank() }
-                    }
-                    val pendingExecution = workSnapshot.tasks.count { needsCompletion(it.status) } +
-                        workSnapshot.completionReviews.size
+                    val pendingApproval = workSnapshot.completionReviews.size
+                    val pendingExecution = workSnapshot.tasks.count { needsCompletion(it.status) }
                     _uiState.update {
                         it.copy(
                             loading = false,

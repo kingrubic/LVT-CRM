@@ -31,7 +31,7 @@ final class WorkViewModel {
     var adminFilter: WorkAdminFilter = .all { didSet { if adminFilter != oldValue { notifyChange() } } }
     var onChange: (() -> Void)?
 
-    var canApprove: Bool { accessLevel >= 4 || isAdmin }
+    var canApprove: Bool { false }
 
     var visibleApprovals: [WorkApprovalItem] {
         if isAdmin {

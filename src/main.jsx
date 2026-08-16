@@ -7,9 +7,7 @@ import '@fontsource-variable/montserrat';
 import './styles.css';
 import DutyReportsView from './reports/DutyReportsView';
 import WorkReportsView from './reports/WorkReportsView';
-import BoardingManagement from './boarding/BoardingManagement';
-import BoardingReportsView from './boarding/BoardingReportsView';
-import { WorkManagement, WorkUserView } from './work/WorkViews';
+import { WorkUserView } from './work/WorkViews';
 import DisplaySettings from './settings/DisplaySettings';
 import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
@@ -40,15 +38,10 @@ const PRIMARY_MENUS = [
   ['homeroom', 'Lớp chủ nhiệm'],
   ['people-review', 'Đánh giá nhân sự'],
 ];
-const SYSTEM_MANAGEMENT_MENUS = [
-  ['duties-management', 'Quản lý công tác'],
-  ['boarding', 'Quản lý bán trú'],
-  ['work-management', 'Quản lý công việc'],
-];
+const SYSTEM_MANAGEMENT_MENUS = [];
 const SUPREME_SETTINGS = [
   ['users', 'Thiết lập người dùng'],
   ['departments', 'Thiết lập phòng ban'],
-  ['locations', 'Thiết lập địa điểm'],
   ['roles', 'Thiết lập nhóm quyền'],
   ['positions', 'Thiết lập chức vụ'],
   ['display-settings', 'Thiết lập hiển thị'],
@@ -130,11 +123,11 @@ function messageFor(error) {
     INVALID_TIME: 'Giờ không hợp lệ.',
     INVALID_CONTENT: 'Nội dung bắt buộc và tối đa 200 ký tự.',
     END_BEFORE_START: 'Thời gian kết thúc phải sau thời gian bắt đầu.',
-    INVALID_LOCATION: 'Địa điểm không hợp lệ hoặc đã ngưng.',
+    INVALID_LOCATION: 'Vui lòng nhập địa điểm (tối đa 200 ký tự).',
     INVALID_PARTICIPANT: 'Người tham gia không hợp lệ.',
     DUTY_NOT_FOUND: 'Không tìm thấy công tác.',
     NOT_A_PARTICIPANT: 'Bạn không nằm trong danh sách tham gia công tác này.',
-    NOT_A_SUBORDINATE: 'Bạn chỉ được cập nhật trạng thái của cấp dưới cùng phòng ban.',
+    NOT_A_SUBORDINATE: 'Chỉ được giao hoặc cập nhật cấp dưới trong cùng phòng ban.',
     ATTENDANCE_OUTSIDE_WINDOW: 'Chỉ xác nhận tham gia trong thời gian diễn ra công tác.',
     ATTENDANCE_CONFIRMATION_DISABLED: 'Xác nhận tham gia đang được tắt trong thiết lập hiển thị.',
     INVALID_WORK_FILE: 'Tệp công văn không đúng định dạng được hỗ trợ.',
@@ -158,7 +151,15 @@ function messageFor(error) {
     QUALITY_PERCENT_REQUIRED: 'Vui lòng nhập mức độ hoàn thành (%).',
     INVALID_QUALITY_PERCENT: 'Mức độ hoàn thành phải từ 0 đến 100%.',
     INVALID_REJECTION_REASON: 'Vui lòng nhập lý do chưa duyệt (tối đa 500 ký tự).',
-    WORK_COMPLETION_REVIEWER_REQUIRED: 'Bạn không có quyền duyệt hoàn thành task này.',
+    ASSIGNMENT_CREATE_FORBIDDEN: 'Bạn không có quyền tạo công tác hoặc công việc.',
+    DUTY_CREATE_FORBIDDEN: 'Bạn không có quyền tạo công tác.',
+    DUTY_UPDATE_FORBIDDEN: 'Bạn không thể sửa hoặc xóa công tác này.',
+    DUTY_DEPARTMENT_FORBIDDEN: 'Tổ trưởng/tổ phó chỉ được giao công tác cho cấp dưới, không chọn cả phòng ban.',
+    DUTY_PARTICIPANTS_REQUIRED: 'Vui lòng chọn ít nhất một người tham gia.',
+    INVALID_WORK_TITLE: 'Vui lòng nhập tên công việc (tối đa 200 ký tự).',
+    WORK_EVIDENCE_REQUIRED: 'Khi nộp việc phải đính kèm file bằng chứng hoàn thành.',
+    WORK_APPROVAL_DISABLED: 'Công việc không còn bước duyệt công văn.',
+    WORK_COMPLETION_REVIEWER_REQUIRED: 'Chỉ người tạo công việc mới được đánh dấu hoàn thành hoặc trả về.',
     WORK_COMPLETION_NOT_PENDING: 'Task không còn ở trạng thái chờ duyệt hoàn thành.',
     WORK_ASSIGNMENTS_REQUIRED: 'Vui lòng thêm ít nhất một phân công.',
     WORK_ADMIN_MOD_MODE_REQUIRED: 'Thao tác này chỉ dùng ở chế độ Admin/Mod giao việc.',
@@ -426,7 +427,7 @@ function AppShell({ session }) {
             ))
           )}
           <NavButton id="profile" label="Thông tin cá nhân" active={active} onClick={choose} />
-          {canManageOperations ? (
+          {canManageOperations && SYSTEM_MANAGEMENT_MENUS.length ? (
             <>
               <p className="nav-label admin-label">Quản trị hệ thống</p>
               {SYSTEM_MANAGEMENT_MENUS.map(([id, label]) => (
@@ -509,22 +510,16 @@ function AppShell({ session }) {
           <DisplaySettings />
         ) : active === 'notifications' ? (
           <NotificationsView data={notificationFeed} onOpenItem={openFromNotification} />
-        ) : active === 'duties-management' && canManageOperations ? (
-          <DutiesAdminView currentUserId={user._id} />
-        ) : active === 'boarding' && canManageOperations ? (
-          <BoardingManagement />
-        ) : active === 'work-management' && canManageOperations ? (
-          <WorkManagement />
         ) : active === 'duties' ? (
           canManageOperations
-            ? <DutiesAdminView currentUserId={user._id} allowManage={false} focusTarget={activeFocusTarget} />
+            ? <DutiesAdminView currentUserId={user._id} allowManage focusTarget={activeFocusTarget} />
             : <DutiesUserView access={menuAccess?.duties || 'view'} focusTarget={activeFocusTarget} />
         ) : active === 'work' ? (
           <WorkUserView focusTarget={activeFocusTarget} />
         ) : active === 'people-review' ? (
           <PeopleReviewView />
         ) : active === 'reports' ? (
-          reportSection === 'boarding' ? <BoardingReportsView /> : reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
+          reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
           <ProfileView session={session} />
         ) : (
@@ -639,9 +634,6 @@ function ReportSubmenu({ active, onChoose }) {
       <button type="button" className={active === 'work' ? 'active' : ''} onClick={() => onChoose('work')}>
         <span>✓</span> Công việc
       </button>
-      <button type="button" className={active === 'boarding' ? 'active' : ''} onClick={() => onChoose('boarding')}>
-        <span>⌂</span> Bán trú
-      </button>
     </div>
   );
 }
@@ -742,7 +734,7 @@ function emptyDutyForm() {
     endTime: '17:00',
     allDay: false,
     content: '',
-    locationIds: [],
+    locationText: '',
     departmentIds: [],
     participantUserIds: [],
   };
@@ -759,7 +751,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
-  const [editorOpen, setEditorOpen] = useState(allowManage);
+  const [editorOpen, setEditorOpen] = useState(false);
   const editorRef = useRef(null);
   const { pending, feedback, run } = useFeedback();
 
@@ -792,7 +784,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       endTime: item.endTime,
       allDay: Boolean(item.allDay),
       content: item.content || '',
-      locationIds: [...(item.locationIds || [])],
+      locationText: item.locationText || (item.locationNames || []).join(', '),
       departmentIds: [...(item.departmentIds || [])],
       participantUserIds: [...(item.participantUserIds || [])],
     });
@@ -807,7 +799,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       endTime: form.endTime,
       allDay: form.allDay,
       content: form.content,
-      locationIds: form.locationIds,
+      locationText: form.locationText,
       departmentIds: form.departmentIds,
       participantUserIds: form.participantUserIds,
     };
@@ -842,12 +834,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     <section className="work-management duty-workspace">
       <header className="work-hero duty-hero">
         <div>
-          <span className="work-kicker">{allowManage ? 'Thiết lập · Công tác' : 'Không gian · Công tác'}</span>
-          <h2>{allowManage ? 'Sổ công tác & lịch trình' : 'Công tác toàn hệ thống'}</h2>
+          <span className="work-kicker">{allowManage ? 'Không gian · Công tác' : 'Không gian · Công tác'}</span>
+          <h2>Sổ công tác & lịch trình</h2>
           <p>
             {allowManage
-              ? 'Lập lịch, phân công người tham gia và theo dõi trạng thái trong một không gian tập trung.'
-              : 'Theo dõi lịch trình và trạng thái tham gia; mọi thao tác quản trị được tách riêng, rõ ràng.'}
+              ? 'Tạo lịch công tác, phân công người tham gia và theo dõi trạng thái trong một không gian tập trung.'
+              : 'Theo dõi lịch trình và trạng thái tham gia.'}
           </p>
         </div>
         <div className="work-hero-stamp">
@@ -864,12 +856,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
 
       <div className="work-page-actions duty-page-actions">
         <div>
-          <span>{allowManage ? 'QUẢN LÝ CÔNG TÁC' : 'LỊCH TRÌNH'}</span>
+          <span>{allowManage ? 'CÔNG TÁC' : 'LỊCH TRÌNH'}</span>
           <h3>Kho công tác</h3>
         </div>
         {allowManage && !editorOpen ? (
           <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-            <span>+</span> Thêm công tác
+            <span>+</span> Tạo công tác
           </button>
         ) : null}
       </div>
@@ -878,7 +870,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         <div className="work-editor-title">
           <div>
             <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
-            <h3>{editing ? 'Sửa công tác' : 'Thêm công tác'}</h3>
+            <h3>{editing ? 'Sửa công tác' : 'Tạo công tác'}</h3>
           </div>
           <div className="duty-editor-heading-actions">
             {editing ? (
@@ -928,16 +920,16 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           <small>{form.content.length}/200</small>
         </label>
 
-        <div className="duty-field">
-          <span className="duty-field-label">Địa điểm</span>
-          <CollapsibleMultiCheckList
-            title="Chọn địa điểm"
-            options={options.locations}
-            values={form.locationIds}
-            onChange={(ids) => setField('locationIds', ids)}
-            emptyText="Chưa có địa điểm. Tạo trong Thiết lập địa điểm."
+        <label className="duty-content-field">
+          Địa điểm
+          <input
+            required
+            maxLength={200}
+            value={form.locationText}
+            onChange={(e) => setField('locationText', e.target.value)}
+            placeholder="Nhập địa điểm công tác"
           />
-        </div>
+        </label>
 
         <div className="duty-field">
           <span className="duty-field-label">Phòng ban tham gia</span>
@@ -978,7 +970,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           <div className="work-empty">
             <span>◷</span>
             <h3>Chưa có công tác nào</h3>
-            <p>{allowManage ? 'Bấm “Thêm công tác” để lập lịch đầu tiên.' : 'Công tác được tạo tại Quản trị hệ thống → Quản lý công tác.'}</p>
+            <p>{allowManage ? 'Bấm “Tạo công tác” để lập lịch đầu tiên.' : 'Chưa có công tác nào.'}</p>
           </div>
         ) : (
           list.map((item) => {
@@ -1164,14 +1156,79 @@ function ViewAllDutyParticipants({ participants, showAttendance = true }) {
 
 function DutiesUserView({ access, focusTarget = null }) {
   const data = useQuery(anyApi.duties.listMine);
+  const options = useQuery(anyApi.duties.formOptions, data?.canCreate ? {} : 'skip');
+  const create = useMutation(anyApi.duties.create);
+  const update = useMutation(anyApi.duties.update);
+  const remove = useMutation(anyApi.duties.remove);
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setSubordinateAttendance = useMutation(anyApi.duties.setAttendanceForUser);
   const { pending, feedback, run } = useFeedback();
   const canEdit = access === 'edit' || data?.canEdit;
+  const canCreate = Boolean(data?.canCreate);
+  const [form, setForm] = useState(emptyDutyForm);
+  const [editing, setEditing] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const editorRef = useRef(null);
 
   useNotificationFocus(focusTarget, { acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES });
 
-  if (data === undefined) return <LoadingView label="Đang tải danh sách công tác…" />;
+  const setField = (field, value) => {
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'allDay' && value) next.endDate = prev.startDate || prev.endDate;
+      if (field === 'startDate' && prev.allDay) next.endDate = value;
+      return next;
+    });
+  };
+
+  const startEdit = (item) => {
+    setEditing(item);
+    setEditorOpen(true);
+    setForm({
+      startDate: item.startDate,
+      endDate: item.endDate,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      allDay: Boolean(item.allDay),
+      content: item.content || '',
+      locationText: item.locationText || (item.locationNames || []).join(', '),
+      departmentIds: [...(item.departmentIds || [])],
+      participantUserIds: [...(item.participantUserIds || [])],
+    });
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const payload = {
+      startDate: form.startDate,
+      endDate: form.allDay ? form.startDate : form.endDate,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      allDay: form.allDay,
+      content: form.content,
+      locationText: form.locationText,
+      departmentIds: options?.isOps ? form.departmentIds : [],
+      participantUserIds: form.participantUserIds,
+    };
+    if (editing) {
+      const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
+      if (ok) {
+        setEditing(null);
+        setForm(emptyDutyForm());
+        setEditorOpen(false);
+      }
+    } else {
+      const ok = await run('save', () => create(payload), 'Đã tạo công tác.');
+      if (ok) {
+        setForm(emptyDutyForm());
+        setEditorOpen(false);
+      }
+    }
+  };
+
+  if (data === undefined || (canCreate && options === undefined)) {
+    return <LoadingView label="Đang tải danh sách công tác…" />;
+  }
   const assignedDuties = data.duties.filter((item) => item.isMine);
   const confirmedDuties = assignedDuties.filter((item) => item.myStatus !== 'pending');
   const isGlobalView = data.canViewAll || data.isAdmin;
@@ -1204,6 +1261,83 @@ function DutiesUserView({ access, focusTarget = null }) {
           <span>{isGlobalView || !attendanceEnabled ? 'CÔNG TÁC' : 'ĐÃ XÁC NHẬN'}</span>
         </div>
       </header>
+
+      {canCreate ? (
+        <div className="work-page-actions duty-page-actions">
+          <div>
+            <span>CÔNG TÁC</span>
+            <h3>Kho công tác</h3>
+          </div>
+          {!editorOpen ? (
+            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
+              <span>+</span> Tạo công tác
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {canCreate && editorOpen ? (
+        <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
+          <div className="work-editor-title">
+            <div>
+              <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
+              <h3>{editing ? 'Sửa công tác' : 'Tạo công tác'}</h3>
+            </div>
+            <button type="button" className="duty-editor-close" onClick={() => { setEditing(null); setForm(emptyDutyForm()); setEditorOpen(false); }} aria-label="Đóng biểu mẫu">
+              <span aria-hidden="true">×</span> Đóng
+            </button>
+          </div>
+          <fieldset className="duty-schedule-fieldset">
+            <legend>Thời gian</legend>
+            <div className="duty-schedule-grid">
+              <label>
+                Từ ngày
+                <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
+              </label>
+              <label className={form.allDay ? 'field-disabled' : undefined}>
+                Đến ngày
+                <input required type="date" value={form.allDay ? form.startDate : form.endDate} disabled={form.allDay} onChange={(e) => setField('endDate', e.target.value)} />
+              </label>
+              <label className={form.allDay ? 'field-disabled' : undefined}>
+                Từ giờ
+                <input required type="time" value={form.startTime} disabled={form.allDay} onChange={(e) => setField('startTime', e.target.value)} />
+              </label>
+              <label className={form.allDay ? 'field-disabled' : undefined}>
+                Đến giờ
+                <input required type="time" value={form.endTime} disabled={form.allDay} onChange={(e) => setField('endTime', e.target.value)} />
+              </label>
+            </div>
+            <label className="check-inline">
+              <input type="checkbox" checked={form.allDay} onChange={(e) => setField('allDay', e.target.checked)} />
+              <span>Cả ngày</span>
+            </label>
+          </fieldset>
+          <label className="duty-content-field">
+            Nội dung
+            <textarea required maxLength={200} rows={3} value={form.content} onChange={(e) => setField('content', e.target.value)} placeholder="Nội dung công tác (tối đa 200 ký tự)" />
+          </label>
+          <label className="duty-content-field">
+            Địa điểm
+            <input required maxLength={200} value={form.locationText} onChange={(e) => setField('locationText', e.target.value)} placeholder="Nhập địa điểm công tác" />
+          </label>
+          <div className="duty-field">
+            <span className="duty-field-label">Cấp dưới tham gia</span>
+            <CollapsibleMultiCheckList
+              title="Chọn cấp dưới"
+              options={options.users}
+              values={form.participantUserIds}
+              onChange={(ids) => setField('participantUserIds', ids)}
+              getLabel={(u) => `${u.name || '—'} · ${u.email || ''}`}
+              emptyText="Chưa có cấp dưới trong phòng ban."
+            />
+          </div>
+          <div className="work-editor-actions duty-editor-actions">
+            <button className="work-primary-button" disabled={Boolean(pending)}>
+              {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu công tác'}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       {feedback.text ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
@@ -1244,6 +1378,22 @@ function DutiesUserView({ access, focusTarget = null }) {
                   <div><span className="meta-label">Phòng ban tham gia</span><span>{item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span></div>
                   <div><span className="meta-label">Cá nhân tham gia</span><span>{item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span></div>
                 </div>
+                {item.canManage ? (
+                  <div className="row-actions duty-actions">
+                    <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
+                    <button
+                      type="button"
+                      className="work-reject-button"
+                      disabled={Boolean(pending)}
+                      onClick={() => {
+                        if (!window.confirm('Xóa công tác này?')) return;
+                        void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
+                      }}
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                ) : null}
                 {item.isMine && canEdit && data.attendanceConfirmationEnabled ? (
                   <div className="attendance-actions">
                     <span className={`attendance-pill ${item.myStatus}`}>{statusLabel(item.myStatus)}</span>

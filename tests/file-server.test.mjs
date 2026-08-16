@@ -40,11 +40,18 @@ test('file errors preserve truthful authentication, validation, and infrastructu
   assert.equal(classifyFileError(new Error('DRIVE_DOWNLOAD_QUEUE_FULL')).status, 503);
 });
 
-test('work documents lock permanently after the first approval', () => {
-  assert.equal(canMutateWorkDocument({ status: 'pending', approvedByUserIds: [] }), true);
-  assert.equal(canMutateWorkDocument({ status: 'rejected', approvedByUserIds: [] }), true);
-  assert.equal(canMutateWorkDocument({ status: 'pending', approvedByUserIds: ['vice-principal'] }), false);
-  assert.equal(canMutateWorkDocument({ status: 'approved', approvedByUserIds: ['principal'] }), false);
+test('work documents stay editable until an assignee submits', () => {
+  assert.equal(canMutateWorkDocument({ status: 'approved' }), true);
+  assert.equal(canMutateWorkDocument({ status: 'pending' }), true);
+  assert.equal(canMutateWorkDocument({ status: 'rejected' }), false);
+  assert.equal(
+    canMutateWorkDocument({ status: 'approved' }, [{ completions: [{ status: 'pending_approval' }] }]),
+    false,
+  );
+  assert.equal(
+    canMutateWorkDocument({ status: 'approved' }, [{ completions: [{ status: 'rejected' }] }]),
+    true,
+  );
 });
 
 test('reject is blocked after any approval so the document cannot get stuck immutable+rejected', () => {
