@@ -245,8 +245,83 @@
   margin-top: 1px;
 }
 
+.duty-list-section {
+  display: grid;
+  gap: 14px;
+}
+
+.duty-list-tabs {
+  display: flex;
+  gap: 6px;
+  width: min(420px, 100%);
+  padding: 4px;
+  border: 1px solid var(--duty-line);
+  border-radius: 12px;
+  background: #f3f7f6;
+}
+
+.duty-list-tabs button {
+  flex: 1;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  color: #5a7386;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.duty-list-tabs button.is-active {
+  color: var(--duty-navy);
+  background: #fff;
+  box-shadow: 0 5px 14px rgba(27, 61, 91, .08);
+}
+
+.duty-list-empty {
+  min-height: 280px;
+}
+
+.duty-empty-smile {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+}
+
+.duty-empty-smile svg {
+  width: 72px;
+  height: 72px;
+  fill: none;
+  stroke: #e3a14a;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.duty-empty-smile .duty-empty-blush {
+  fill: #ffd6c4;
+  stroke: none;
+}
+
+.duty-empty-smile .duty-empty-eye {
+  fill: #d8893a;
+  stroke: none;
+}
+
+.duty-empty-upcoming p {
+  margin-top: 10px;
+  color: #5d7384;
+  font-size: 13px;
+  font-weight: 750;
+}
+
 .duty-modern-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 13px;
 }
 
@@ -585,6 +660,10 @@
 }
 
 @media (max-width: 1050px) {
+  .duty-modern-list {
+    grid-template-columns: 1fr;
+  }
+
   .duty-card-body {
     grid-template-columns: 148px minmax(0, 1fr);
   }

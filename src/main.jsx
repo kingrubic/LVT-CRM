@@ -20,14 +20,18 @@ import { describeWebDevice } from './profile/deviceSession';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyEditorFields from './duties/DutyEditorFields';
+import { DutyListEmpty, DutyListTabs } from './duties/DutyListFilters';
 import DutyListSummary from './duties/DutyListSummary';
 import {
   applyDutyEndDateTime,
   applyDutyFormField,
   applyDutyStartDateTime,
+  DUTY_LIST_TAB_UPCOMING,
   dutyFormFromItem,
   dutyPayloadFromForm,
   emptyDutyForm,
+  filterDutiesByTab,
+  tabForDuty,
 } from './duties/dutyDisplay';
 import './profile/profile.css';
 import './profile/devices.css';
@@ -732,13 +736,21 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const editorRef = useRef(null);
   const { pending, feedback, run } = useFeedback();
+  const visibleList = useMemo(() => filterDutiesByTab(list, listTab), [list, listTab]);
 
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES,
     onMatch: (target) => setExpanded(String(target.sourceId)),
   });
+
+  useEffect(() => {
+    if (!focusTarget?.sourceId) return;
+    const focused = list.find((item) => String(item._id) === String(focusTarget.sourceId));
+    if (focused) setListTab(tabForDuty(focused));
+  }, [focusTarget?.sourceId, focusTarget?.token, list]);
 
   const setField = (field, value) => {
     setForm((prev) => applyDutyFormField(prev, field, value));
@@ -876,15 +888,13 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         </div>
       </form> : null}
 
-      <div className="duty-modern-list">
-        {list.length === 0 ? (
-          <div className="work-empty">
-            <span>◷</span>
-            <h3>Chưa có công tác nào</h3>
-            <p>{allowManage ? 'Bấm “Tạo công tác” để lập lịch đầu tiên.' : 'Chưa có công tác nào.'}</p>
-          </div>
+      <div className="duty-list-section">
+        <DutyListTabs tab={listTab} onChange={setListTab} />
+        {visibleList.length === 0 ? (
+          <DutyListEmpty tab={listTab} />
         ) : (
-          list.map((item) => {
+          <div className="duty-modern-list">
+          {visibleList.map((item) => {
             const open = String(expanded || '') === String(item._id);
             return (
               <article
@@ -976,7 +986,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
                 )}
               </article>
             );
-          })
+          })}
+          </div>
         )}
       </div>
     </section>
@@ -1062,9 +1073,18 @@ function DutiesUserView({ access, focusTarget = null }) {
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const editorRef = useRef(null);
+  const duties = data?.duties;
+  const visibleList = useMemo(() => filterDutiesByTab(duties || [], listTab), [duties, listTab]);
 
   useNotificationFocus(focusTarget, { acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES });
+
+  useEffect(() => {
+    if (!focusTarget?.sourceId || !duties?.length) return;
+    const focused = duties.find((item) => String(item._id) === String(focusTarget.sourceId));
+    if (focused) setListTab(tabForDuty(focused));
+  }, [focusTarget?.sourceId, focusTarget?.token, duties]);
 
   const setField = (field, value) => {
     setForm((prev) => applyDutyFormField(prev, field, value));
@@ -1188,15 +1208,13 @@ function DutiesUserView({ access, focusTarget = null }) {
         </div>
       ) : null}
 
-      <div className="work-user-list duty-modern-list">
-        {!data.duties?.length ? (
-          <div className="work-empty">
-            <span>✓</span>
-            <h3>Lịch công tác đang trống</h3>
-            <p>Không có công tác nào được gán cho bạn trong thời gian này.</p>
-          </div>
+      <div className="duty-list-section">
+        <DutyListTabs tab={listTab} onChange={setListTab} />
+        {visibleList.length === 0 ? (
+          <DutyListEmpty tab={listTab} />
         ) : (
-          data.duties.map((item) => (
+          <div className="work-user-list duty-modern-list">
+          {visibleList.map((item) => (
             <article
               className="work-user-card duty-modern-card user-duty-card"
               key={item._id}
@@ -1331,7 +1349,8 @@ function DutiesUserView({ access, focusTarget = null }) {
                   />
                 ) : null}
             </article>
-          ))
+          ))}
+          </div>
         )}
       </div>
     </section>

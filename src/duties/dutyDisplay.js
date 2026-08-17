@@ -98,3 +98,34 @@ export function applyDutyEndDateTime(prev, date, time) {
     endTime: time || prev.endTime,
   };
 }
+
+export const DUTY_LIST_TAB_UPCOMING = 'upcoming';
+export const DUTY_LIST_TAB_PAST = 'past';
+
+export function isDutyPast(item) {
+  return Boolean(item?.timing?.isOverdue);
+}
+
+export function tabForDuty(item) {
+  return isDutyPast(item) ? DUTY_LIST_TAB_PAST : DUTY_LIST_TAB_UPCOMING;
+}
+
+function dutyStartKey(item) {
+  return `${item?.startDate || ''}T${item?.startTime || ''}`;
+}
+
+function dutyEndKey(item) {
+  return `${item?.endDate || ''}T${item?.endTime || ''}`;
+}
+
+export function filterDutiesByTab(list, tab = DUTY_LIST_TAB_UPCOMING) {
+  const items = Array.isArray(list) ? list : [];
+  if (tab === DUTY_LIST_TAB_PAST) {
+    return items
+      .filter((item) => isDutyPast(item))
+      .sort((a, b) => dutyEndKey(b).localeCompare(dutyEndKey(a)));
+  }
+  return items
+    .filter((item) => !isDutyPast(item))
+    .sort((a, b) => dutyStartKey(a).localeCompare(dutyStartKey(b)));
+}
