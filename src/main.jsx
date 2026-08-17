@@ -930,7 +930,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
                 ) : null}
                 {open && (
                   <div className="duty-detail">
-                    <h4>Người tham gia & trạng thái</h4>
+                    <h4>Chi tiết người tham gia</h4>
                     {!item.participants?.length ? (
                       <p className="muted">Chưa có người tham gia (chọn phòng ban hoặc cá nhân khi tạo công tác).</p>
                     ) : (
