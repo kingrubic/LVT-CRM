@@ -75,7 +75,7 @@
 .duty-schedule-fieldset legend {
   padding: 0 7px;
   color: var(--duty-navy);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 850;
 }
 
@@ -138,7 +138,7 @@
   color: #2b465e;
   background: #fbfcfc;
   font: inherit;
-  font-size: 11px;
+  font-size: 14px;
   outline: 0;
 }
 
@@ -329,7 +329,7 @@
   color: #5a7386;
   background: transparent;
   font: inherit;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 850;
   cursor: pointer;
 }
@@ -480,7 +480,7 @@
   align-items: center;
   gap: 8px;
   color: #52697a;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -540,7 +540,7 @@
 
 .duty-workspace .meta-label {
   color: #8796a2;
-  font-size: 7px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
