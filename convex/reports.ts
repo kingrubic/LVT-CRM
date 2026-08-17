@@ -12,7 +12,7 @@ import {
   resolveUserMenuAccess,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
-import { dutyLocationLabel } from "./assignmentPolicy";
+import { dutyListTitle, dutyLocationLabel } from "./assignmentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -212,6 +212,7 @@ export const dutyCalendar = query({
       )
       .map((duty) => ({
         _id: duty._id,
+        title: dutyListTitle(duty),
         content: duty.content,
         startDate: duty.startDate,
         endDate: duty.endDate,

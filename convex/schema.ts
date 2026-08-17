@@ -186,6 +186,8 @@ export default defineSchema({
     startTime: v.string(), // HH:mm
     endTime: v.string(),
     allDay: v.boolean(),
+    /** Display title; list views prefer this over content. Older rows may omit it. */
+    title: v.optional(v.string()),
     content: v.string(),
     locationIds: v.array(v.string()),
     /** Free-text location; new duties write this instead of locationIds. */

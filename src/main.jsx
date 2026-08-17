@@ -19,6 +19,16 @@ import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import './management/managementTheme.css';
 import './duties/duties.css';
+import DutyEditorFields from './duties/DutyEditorFields';
+import DutyListSummary from './duties/DutyListSummary';
+import {
+  applyDutyEndDateTime,
+  applyDutyFormField,
+  applyDutyStartDateTime,
+  dutyFormFromItem,
+  dutyPayloadFromForm,
+  emptyDutyForm,
+} from './duties/dutyDisplay';
 import './profile/profile.css';
 import './profile/devices.css';
 import './settings/displaySettings.css';
@@ -122,6 +132,7 @@ function messageFor(error) {
     INVALID_DATE: 'Ngày không hợp lệ.',
     INVALID_TIME: 'Giờ không hợp lệ.',
     INVALID_CONTENT: 'Nội dung bắt buộc và tối đa 200 ký tự.',
+    INVALID_DUTY_TITLE: 'Tên công tác bắt buộc và tối đa 200 ký tự.',
     END_BEFORE_START: 'Thời gian kết thúc phải sau thời gian bắt đầu.',
     INVALID_LOCATION: 'Vui lòng nhập địa điểm (tối đa 200 ký tự).',
     INVALID_PARTICIPANT: 'Người tham gia không hợp lệ.',
@@ -648,27 +659,10 @@ function NavButton({ id, label, icon = '→', active, onClick, nested = false, b
   );
 }
 
-function formatViDate(isoDate) {
-  if (!isoDate) return '—';
-  const [y, m, d] = isoDate.split('-');
-  return `${d}/${m}/${y}`;
-}
-
 function statusLabel(status) {
   if (status === 'attended') return 'Đã tham gia';
   if (status === 'absent') return 'Chưa tham gia';
   return 'Chưa xác nhận';
-}
-
-function DutyTimingTags({ timing }) {
-  if (!timing) return null;
-  // Chỉ 1 trạng thái: quá hạn > đang diễn ra > gần đến hạn
-  let tag = null;
-  if (timing.isOverdue) tag = <span className="duty-tag overdue">Đã quá hạn</span>;
-  else if (timing.isOngoing) tag = <span className="duty-tag live">Đang diễn ra</span>;
-  else if (timing.nearDeadline) tag = <span className="duty-tag near">Gần đến hạn</span>;
-  if (!tag) return null;
-  return <span className="tag-row">{tag}</span>;
 }
 
 function MultiCheckList({ options, values, onChange, getLabel, emptyText = 'Không có lựa chọn' }) {
@@ -726,20 +720,6 @@ function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel 
   );
 }
 
-function emptyDutyForm() {
-  return {
-    startDate: '',
-    endDate: '',
-    startTime: '08:00',
-    endTime: '17:00',
-    allDay: false,
-    content: '',
-    locationText: '',
-    departmentIds: [],
-    participantUserIds: [],
-  };
-}
-
 function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null }) {
   const options = useQuery(anyApi.duties.formOptions, allowManage ? {} : 'skip');
   const listData = useQuery(anyApi.duties.listAdmin);
@@ -761,48 +741,19 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   });
 
   const setField = (field, value) => {
-    setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'allDay' && value) {
-        next.endDate = prev.startDate || prev.endDate;
-      }
-      if (field === 'startDate' && prev.allDay) {
-        next.endDate = value;
-      }
-      return next;
-    });
+    setForm((prev) => applyDutyFormField(prev, field, value));
   };
 
   const startEdit = (item) => {
     setEditing(item);
     setExpanded(item._id);
     setEditorOpen(true);
-    setForm({
-      startDate: item.startDate,
-      endDate: item.endDate,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      allDay: Boolean(item.allDay),
-      content: item.content || '',
-      locationText: item.locationText || (item.locationNames || []).join(', '),
-      departmentIds: [...(item.departmentIds || [])],
-      participantUserIds: [...(item.participantUserIds || [])],
-    });
+    setForm(dutyFormFromItem(item));
   };
 
   const submit = async (event) => {
     event.preventDefault();
-    const payload = {
-      startDate: form.startDate,
-      endDate: form.allDay ? form.startDate : form.endDate,
-      startTime: form.startTime,
-      endTime: form.endTime,
-      allDay: form.allDay,
-      content: form.content,
-      locationText: form.locationText,
-      departmentIds: form.departmentIds,
-      participantUserIds: form.participantUserIds,
-    };
+    const payload = dutyPayloadFromForm(form);
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
       if (ok) {
@@ -884,53 +835,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           </div>
         </div>
 
-        <fieldset className="duty-schedule-fieldset">
-          <legend>Thời gian</legend>
-          <div className="duty-schedule-heading">
-            <p>Chọn khoảng ngày và giờ diễn ra công tác.</p>
-            <label className="check-inline">
-              <input type="checkbox" checked={form.allDay} onChange={(e) => setField('allDay', e.target.checked)} />
-              <span>Cả ngày</span>
-            </label>
-          </div>
-          <div className="duty-schedule-grid">
-            <label>
-              Từ ngày
-              <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
-            </label>
-            <label className={form.allDay ? 'field-disabled' : undefined}>
-              Đến ngày
-              <input required type="date" value={form.allDay ? form.startDate : form.endDate} disabled={form.allDay} onChange={(e) => setField('endDate', e.target.value)} />
-            </label>
-            <label className={form.allDay ? 'field-disabled' : undefined}>
-              Từ giờ
-              <input required type="time" value={form.startTime} disabled={form.allDay} onChange={(e) => setField('startTime', e.target.value)} />
-            </label>
-            <label className={form.allDay ? 'field-disabled' : undefined}>
-              Đến giờ
-              <input required type="time" value={form.endTime} disabled={form.allDay} onChange={(e) => setField('endTime', e.target.value)} />
-            </label>
-          </div>
-          {form.allDay ? <small>Đã chọn Cả ngày — ngày kết thúc sẽ trùng ngày bắt đầu và không áp dụng giờ.</small> : null}
-        </fieldset>
-
-        <label className="duty-content-field">
-          Nội dung
-          <textarea required maxLength={200} rows={3} value={form.content} onChange={(e) => setField('content', e.target.value)} placeholder="Nội dung công tác (tối đa 200 ký tự)" />
-          <small>{form.content.length}/200</small>
-        </label>
-
-        <label className="duty-content-field">
-          Địa điểm
-          <input
-            required
-            maxLength={200}
-            value={form.locationText}
-            onChange={(e) => setField('locationText', e.target.value)}
-            placeholder="Nhập địa điểm công tác"
-          />
-        </label>
-
+        <DutyEditorFields
+          form={form}
+          onField={setField}
+          onStartDateTime={(date, time) => setForm((prev) => applyDutyStartDateTime(prev, date, time))}
+          onEndDateTime={(date, time) => setForm((prev) => applyDutyEndDateTime(prev, date, time))}
+        >
         <div className="duty-field">
           <span className="duty-field-label">Phòng ban tham gia</span>
           <CollapsibleMultiCheckList
@@ -954,6 +864,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
             emptyText="Chưa có người dùng."
           />
         </div>
+        </DutyEditorFields>
 
         <div className="work-editor-actions duty-editor-actions">
           <button type="button" className="work-ghost-button" onClick={() => setForm(emptyDutyForm())}>
@@ -982,24 +893,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
                 data-focus-id={item._id}
               >
                 <button type="button" className="duty-card-toggle" onClick={() => setExpanded(open ? null : item._id)}>
-                  <span className="duty-date-tile" aria-hidden="true">
-                    <strong>{item.startDate.slice(8, 10)}</strong>
-                    <small>THÁNG {Number(item.startDate.slice(5, 7))}</small>
-                  </span>
-                  <div className="duty-card-main">
-                    <strong>{item.content}</strong>
-                    <DutyTimingTags timing={item.timing} />
-                    <div className="duty-meta-grid">
-                      <span>Từ ngày: {formatViDate(item.startDate)}</span>
-                      <span>Đến ngày: {formatViDate(item.endDate)}</span>
-                      <span>Từ giờ: {item.startTime}</span>
-                      <span>Đến giờ: {item.endTime}</span>
-                      <span>Địa điểm: {item.locationNames?.length ? item.locationNames.join(', ') : '—'}</span>
-                      <span>Phòng ban: {item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span>
-                      <span>Cá nhân: {item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span>
-                      <span>Tham gia: {item.participants?.length || 0} người</span>
-                    </div>
-                  </div>
+                  <DutyListSummary item={item} />
                   <span className="duty-expand-hint">{open ? 'Thu gọn' : 'Chi tiết'}</span>
                 </button>
                 {allowManage ? (
@@ -1173,43 +1067,18 @@ function DutiesUserView({ access, focusTarget = null }) {
   useNotificationFocus(focusTarget, { acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES });
 
   const setField = (field, value) => {
-    setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'allDay' && value) next.endDate = prev.startDate || prev.endDate;
-      if (field === 'startDate' && prev.allDay) next.endDate = value;
-      return next;
-    });
+    setForm((prev) => applyDutyFormField(prev, field, value));
   };
 
   const startEdit = (item) => {
     setEditing(item);
     setEditorOpen(true);
-    setForm({
-      startDate: item.startDate,
-      endDate: item.endDate,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      allDay: Boolean(item.allDay),
-      content: item.content || '',
-      locationText: item.locationText || (item.locationNames || []).join(', '),
-      departmentIds: [...(item.departmentIds || [])],
-      participantUserIds: [...(item.participantUserIds || [])],
-    });
+    setForm(dutyFormFromItem(item));
   };
 
   const submit = async (event) => {
     event.preventDefault();
-    const payload = {
-      startDate: form.startDate,
-      endDate: form.allDay ? form.startDate : form.endDate,
-      startTime: form.startTime,
-      endTime: form.endTime,
-      allDay: form.allDay,
-      content: form.content,
-      locationText: form.locationText,
-      departmentIds: options?.isOps ? form.departmentIds : [],
-      participantUserIds: form.participantUserIds,
-    };
+    const payload = dutyPayloadFromForm(form, { includeDepartments: Boolean(options?.isOps) });
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
       if (ok) {
@@ -1287,50 +1156,24 @@ function DutiesUserView({ access, focusTarget = null }) {
               <span aria-hidden="true">×</span> Đóng
             </button>
           </div>
-          <fieldset className="duty-schedule-fieldset">
-            <legend>Thời gian</legend>
-            <div className="duty-schedule-grid">
-              <label>
-                Từ ngày
-                <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
-              </label>
-              <label className={form.allDay ? 'field-disabled' : undefined}>
-                Đến ngày
-                <input required type="date" value={form.allDay ? form.startDate : form.endDate} disabled={form.allDay} onChange={(e) => setField('endDate', e.target.value)} />
-              </label>
-              <label className={form.allDay ? 'field-disabled' : undefined}>
-                Từ giờ
-                <input required type="time" value={form.startTime} disabled={form.allDay} onChange={(e) => setField('startTime', e.target.value)} />
-              </label>
-              <label className={form.allDay ? 'field-disabled' : undefined}>
-                Đến giờ
-                <input required type="time" value={form.endTime} disabled={form.allDay} onChange={(e) => setField('endTime', e.target.value)} />
-              </label>
-            </div>
-            <label className="check-inline">
-              <input type="checkbox" checked={form.allDay} onChange={(e) => setField('allDay', e.target.checked)} />
-              <span>Cả ngày</span>
-            </label>
-          </fieldset>
-          <label className="duty-content-field">
-            Nội dung
-            <textarea required maxLength={200} rows={3} value={form.content} onChange={(e) => setField('content', e.target.value)} placeholder="Nội dung công tác (tối đa 200 ký tự)" />
-          </label>
-          <label className="duty-content-field">
-            Địa điểm
-            <input required maxLength={200} value={form.locationText} onChange={(e) => setField('locationText', e.target.value)} placeholder="Nhập địa điểm công tác" />
-          </label>
+          <DutyEditorFields
+            form={form}
+            onField={setField}
+            onStartDateTime={(date, time) => setForm((prev) => applyDutyStartDateTime(prev, date, time))}
+            onEndDateTime={(date, time) => setForm((prev) => applyDutyEndDateTime(prev, date, time))}
+          >
           <div className="duty-field">
-            <span className="duty-field-label">Cấp dưới tham gia</span>
+            <span className="duty-field-label">Người tham gia</span>
             <CollapsibleMultiCheckList
-              title="Chọn cấp dưới"
+              title="Chọn người tham gia"
               options={options.users}
               values={form.participantUserIds}
               onChange={(ids) => setField('participantUserIds', ids)}
               getLabel={(u) => `${u.name || '—'} · ${u.email || ''}`}
-              emptyText="Chưa có cấp dưới trong phòng ban."
+              emptyText="Chưa có người tham gia trong phòng ban."
             />
           </div>
+          </DutyEditorFields>
           <div className="work-editor-actions duty-editor-actions">
             <button className="work-primary-button" disabled={Boolean(pending)}>
               {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu công tác'}
@@ -1359,25 +1202,7 @@ function DutiesUserView({ access, focusTarget = null }) {
               key={item._id}
               data-focus-id={item._id}
             >
-              <div className="duty-card-main">
-                <div className="duty-title-row">
-                  <span className="duty-date-tile" aria-hidden="true">
-                    <strong>{item.startDate.slice(8, 10)}</strong>
-                    <small>THÁNG {Number(item.startDate.slice(5, 7))}</small>
-                  </span>
-                  <strong>{item.content}</strong>
-                  <DutyTimingTags timing={item.timing} />
-                </div>
-                <div className="duty-meta-grid view-only">
-                  <div><span className="meta-label">Từ ngày</span><span>{formatViDate(item.startDate)}</span></div>
-                  <div><span className="meta-label">Đến ngày</span><span>{formatViDate(item.endDate)}</span></div>
-                  <div><span className="meta-label">Từ giờ</span><span>{item.startTime}</span></div>
-                  <div><span className="meta-label">Đến giờ</span><span>{item.endTime}</span></div>
-                  <div><span className="meta-label">Nội dung</span><span>{item.content}</span></div>
-                  <div><span className="meta-label">Địa điểm</span><span>{item.locationNames?.length ? item.locationNames.join(', ') : '—'}</span></div>
-                  <div><span className="meta-label">Phòng ban tham gia</span><span>{item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span></div>
-                  <div><span className="meta-label">Cá nhân tham gia</span><span>{item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span></div>
-                </div>
+              <DutyListSummary item={item} />
                 {item.canManage ? (
                   <div className="row-actions duty-actions">
                     <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
@@ -1505,7 +1330,6 @@ function DutiesUserView({ access, focusTarget = null }) {
                     showAttendance={data.attendanceConfirmationEnabled}
                   />
                 ) : null}
-              </div>
             </article>
           ))
         )}

@@ -12,7 +12,13 @@ import {
   resolveUserMenuAccess,
   type MenuAccess,
 } from "./lib";
-import { canCreateAssignments, cleanDutyLocationText, dutyLocationLabel } from "./assignmentPolicy";
+import {
+  canCreateAssignments,
+  cleanDutyContent,
+  cleanDutyLocationText,
+  cleanDutyTitle,
+  dutyLocationLabel,
+} from "./assignmentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
@@ -37,6 +43,7 @@ function cleanDutyInput(args: {
   startTime: string;
   endTime: string;
   allDay: boolean;
+  title: string;
   content: string;
   locationText: string;
   departmentIds: string[];
@@ -46,10 +53,10 @@ function cleanDutyInput(args: {
   const endDate = args.endDate.trim();
   const startTime = args.startTime.trim();
   const endTime = args.endTime.trim();
-  const content = args.content.trim();
+  const title = cleanDutyTitle(args.title);
+  const content = cleanDutyContent(args.content);
   if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate)) throw new Error("INVALID_DATE");
   if (!TIME_RE.test(startTime) || !TIME_RE.test(endTime)) throw new Error("INVALID_TIME");
-  if (!content || content.length > 200) throw new Error("INVALID_CONTENT");
   const startMs = parseLocalMs(startDate, startTime);
   const endMs = parseLocalMs(endDate, endTime);
   if (Number.isNaN(startMs) || Number.isNaN(endMs)) throw new Error("INVALID_DATE");
@@ -62,6 +69,7 @@ function cleanDutyInput(args: {
     startTime,
     endTime,
     allDay: Boolean(args.allDay),
+    title,
     content,
     locationText: cleanDutyLocationText(args.locationText),
     locationIds: [] as string[],
@@ -364,6 +372,7 @@ export const listMine = query({
             allDay: duty.allDay,
             createdAt: duty.createdAt,
             createdBy: duty.createdBy,
+            title: duty.title,
             content: duty.content,
             locationText: duty.locationText || dutyLocationLabel(duty, mapNames(duty.locationIds, locations)),
             locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
@@ -417,6 +426,7 @@ export const create = mutation({
     startTime: v.string(),
     endTime: v.string(),
     allDay: v.boolean(),
+    title: v.string(),
     content: v.string(),
     locationText: v.string(),
     departmentIds: v.array(v.string()),
@@ -438,7 +448,7 @@ export const create = mutation({
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
       action: "duty.create",
-      details: JSON.stringify({ id, content: input.content }),
+      details: JSON.stringify({ id, title: input.title, content: input.content }),
       at: now,
     });
     return id;
@@ -453,6 +463,7 @@ export const update = mutation({
     startTime: v.string(),
     endTime: v.string(),
     allDay: v.boolean(),
+    title: v.string(),
     content: v.string(),
     locationText: v.string(),
     departmentIds: v.array(v.string()),
@@ -474,7 +485,7 @@ export const update = mutation({
     await ctx.db.insert("auditLogs", {
       actorUserId: actor.user._id,
       action: "duty.update",
-      details: JSON.stringify({ id: args.id, content: input.content }),
+      details: JSON.stringify({ id: args.id, title: input.title, content: input.content }),
       at: now,
     });
   },

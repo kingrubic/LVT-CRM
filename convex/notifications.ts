@@ -15,6 +15,7 @@ import {
   resolveUserMenuAccess,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
+import { dutyListTitle } from "./assignmentPolicy";
 
 const HOUR_MS = 60 * 60 * 1000;
 const VN_OFFSET_MS = 7 * HOUR_MS;
@@ -168,7 +169,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
           kind: "duty" as const,
           sourceType: "duty" as const,
           sourceId: String(duty._id),
-          title: duty.content,
+          title: dutyListTitle(duty),
           description: `${duty.startDate} · ${duty.startTime}–${duty.endTime}`,
           dueAt: dutyDueAt(duty),
         }))
@@ -376,7 +377,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
           kind: "duty" as const,
           sourceType: "duty_assigned" as const,
           sourceId: String(duty._id),
-          title: `Công tác mới: ${duty.content}`,
+          title: `Công tác mới: ${dutyListTitle(duty)}`,
           description: `${duty.startDate} · ${duty.startTime}–${duty.endTime}`,
           dueAt: dutyDueAt(duty),
           milestoneHours: 0,
