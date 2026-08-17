@@ -21,7 +21,7 @@ import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyCreatePreview from './duties/DutyCreatePreview';
 import DutyEditorFields from './duties/DutyEditorFields';
-import { DutyListEmpty, DutyListHeading, DutyListTabs } from './duties/DutyListFilters';
+import { DutyListEmpty, DutyListHeading, DutyListSearch, DutyListTabs } from './duties/DutyListFilters';
 import DutyListSummary from './duties/DutyListSummary';
 import {
   applyDutyEndDateTime,
@@ -31,6 +31,8 @@ import {
   dutyFormFromItem,
   dutyPayloadFromForm,
   emptyDutyForm,
+  emptyDutySearch,
+  filterDutiesBySearch,
   filterDutiesByTab,
   isDutyAssignedTo,
   isDutyCreatedBy,
@@ -742,6 +744,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [editorOpen, setEditorOpen] = useState(false);
   const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [mineSearch, setMineSearch] = useState(emptyDutySearch);
+  const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
   const { pending, feedback, run } = useFeedback();
@@ -751,6 +755,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   );
   const visibleMine = useMemo(() => filterDutiesByTab(mine, mineTab), [mine, mineTab]);
   const visibleCreated = useMemo(() => filterDutiesByTab(created, createdTab), [created, createdTab]);
+  const filteredMine = useMemo(() => filterDutiesBySearch(visibleMine, mineSearch), [visibleMine, mineSearch]);
+  const filteredCreated = useMemo(() => filterDutiesBySearch(visibleCreated, createdSearch), [visibleCreated, createdSearch]);
 
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES,
@@ -1001,7 +1007,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         <div className="duty-list-toolbar">
           <DutyListTabs tab={mineTab} onChange={setMineTab} />
         </div>
-        {visibleMine.length === 0 ? <DutyListEmpty tab={mineTab} /> : renderAdminDutyCards(visibleMine)}
+        <DutyListSearch value={mineSearch} onChange={setMineSearch} />
+        {visibleMine.length === 0 ? <DutyListEmpty tab={mineTab} /> : filteredMine.length === 0 ? <DutyListEmpty filtered /> : renderAdminDutyCards(filteredMine)}
       </div>
 
       <div className="duty-list-section">
@@ -1014,7 +1021,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
             </button>
           ) : null}
         </div>
-        {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : renderAdminDutyCards(visibleCreated)}
+        <DutyListSearch value={createdSearch} onChange={setCreatedSearch} />
+        {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : filteredCreated.length === 0 ? <DutyListEmpty filtered /> : renderAdminDutyCards(filteredCreated)}
       </div>
     </section>
   );
@@ -1101,6 +1109,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [mineSearch, setMineSearch] = useState(emptyDutySearch);
+  const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
   const duties = data?.duties;
@@ -1113,6 +1123,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   );
   const visibleMine = useMemo(() => filterDutiesByTab(mine, mineTab), [mine, mineTab]);
   const visibleCreated = useMemo(() => filterDutiesByTab(created, createdTab), [created, createdTab]);
+  const filteredMine = useMemo(() => filterDutiesBySearch(visibleMine, mineSearch), [visibleMine, mineSearch]);
+  const filteredCreated = useMemo(() => filterDutiesBySearch(visibleCreated, createdSearch), [visibleCreated, createdSearch]);
   const showCreatedSection = canCreate || created.length > 0;
 
   useNotificationFocus(focusTarget, { acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES });
@@ -1372,7 +1384,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
         <div className="duty-list-toolbar">
           <DutyListTabs tab={mineTab} onChange={setMineTab} />
         </div>
-        {visibleMine.length === 0 ? <DutyListEmpty tab={mineTab} /> : renderUserDutyCards(visibleMine)}
+        <DutyListSearch value={mineSearch} onChange={setMineSearch} />
+        {visibleMine.length === 0 ? <DutyListEmpty tab={mineTab} /> : filteredMine.length === 0 ? <DutyListEmpty filtered /> : renderUserDutyCards(filteredMine)}
       </div>
 
       {showCreatedSection ? (
@@ -1386,7 +1399,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
               </button>
             ) : null}
           </div>
-          {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : renderUserDutyCards(visibleCreated)}
+          <DutyListSearch value={createdSearch} onChange={setCreatedSearch} />
+          {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : filteredCreated.length === 0 ? <DutyListEmpty filtered /> : renderUserDutyCards(filteredCreated)}
         </div>
       ) : null}
     </section>
