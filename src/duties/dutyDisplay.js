@@ -129,3 +129,32 @@ export function filterDutiesByTab(list, tab = DUTY_LIST_TAB_UPCOMING) {
     .filter((item) => !isDutyPast(item))
     .sort((a, b) => dutyStartKey(a).localeCompare(dutyStartKey(b)));
 }
+
+function labelsForIds(ids, rows, getLabel) {
+  const wanted = new Set((ids || []).map((id) => String(id)));
+  return (rows || [])
+    .filter((row) => wanted.has(String(row._id)))
+    .map((row) => getLabel(row))
+    .filter(Boolean);
+}
+
+export function buildDutyCreatePreview(form, catalogs = {}) {
+  const includeDepartments = catalogs.includeDepartments !== false;
+  const payload = dutyPayloadFromForm(form, { includeDepartments });
+  const departments = labelsForIds(payload.departmentIds, catalogs.departments, (row) => row.name || row.code);
+  const participants = labelsForIds(
+    payload.participantUserIds,
+    catalogs.users,
+    (row) => row.name || row.email || '—',
+  );
+  return {
+    title: dutyDisplayTitle(payload),
+    content: String(payload.content || '').trim() || '—',
+    timeStart: formatDutyDateTimeLine(payload.startDate, payload.startTime, { allDay: payload.allDay }),
+    timeEnd: payload.allDay ? 'Cả ngày' : formatDutyDateTimeLine(payload.endDate, payload.endTime),
+    location: String(payload.locationText || '').trim() || '—',
+    showDepartments: includeDepartments,
+    departments: departments.length ? departments.join(', ') : '—',
+    participants: participants.length ? participants.join(', ') : '—',
+  };
+}

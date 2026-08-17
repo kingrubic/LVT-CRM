@@ -5,6 +5,7 @@ import {
   applyDutyEndDateTime,
   applyDutyFormField,
   applyDutyStartDateTime,
+  buildDutyCreatePreview,
   dutyDisplayTitle,
   dutyFormFromItem,
   dutyPayloadFromForm,
@@ -73,4 +74,54 @@ test('tab chưa diễn ra mặc định, sự kiện gần nhất lên đầu', 
   assert.deepEqual(upcoming.map((item) => item._id), ['a', 'b']);
   const finished = filterDutiesByTab([later, newerPast, olderPast, sooner], DUTY_LIST_TAB_PAST);
   assert.deepEqual(finished.map((item) => item._id), ['c', 'd']);
+});
+
+test('preview tạo công tác gom nhãn phòng ban và người tham gia', () => {
+  const preview = buildDutyCreatePreview(
+    {
+      title: 'Đi thực tế',
+      content: 'Làm việc với UBND',
+      startDate: '2026-08-18',
+      endDate: '2026-08-18',
+      startTime: '08:00',
+      endTime: '17:00',
+      allDay: false,
+      locationText: 'HCM',
+      departmentIds: ['d1'],
+      participantUserIds: ['u2'],
+    },
+    {
+      departments: [{ _id: 'd1', name: 'Phòng Tổ chức' }, { _id: 'd2', name: 'Khác' }],
+      users: [{ _id: 'u1', name: 'An' }, { _id: 'u2', name: 'Bình' }],
+    },
+  );
+  assert.equal(preview.title, 'Đi thực tế');
+  assert.equal(preview.content, 'Làm việc với UBND');
+  assert.equal(preview.timeStart, '18/08/2026 - 08:00');
+  assert.equal(preview.timeEnd, '18/08/2026 - 17:00');
+  assert.equal(preview.location, 'HCM');
+  assert.equal(preview.showDepartments, true);
+  assert.equal(preview.departments, 'Phòng Tổ chức');
+  assert.equal(preview.participants, 'Bình');
+
+  const userPreview = buildDutyCreatePreview(
+    {
+      title: 'Họp khối',
+      content: '',
+      startDate: '2026-08-18',
+      endDate: '2026-08-19',
+      startTime: '08:00',
+      endTime: '17:00',
+      allDay: true,
+      locationText: '',
+      departmentIds: ['d1'],
+      participantUserIds: [],
+    },
+    { includeDepartments: false, departments: [{ _id: 'd1', name: 'Phòng Tổ chức' }], users: [] },
+  );
+  assert.equal(userPreview.timeEnd, 'Cả ngày');
+  assert.equal(userPreview.location, '—');
+  assert.equal(userPreview.showDepartments, false);
+  assert.equal(userPreview.departments, '—');
+  assert.equal(userPreview.participants, '—');
 });
