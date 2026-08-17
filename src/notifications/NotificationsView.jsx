@@ -136,18 +136,6 @@ export default function NotificationsView({ data, onOpenItem }) {
 
   return (
     <section className="notifications-view">
-      <header className="notifications-hero">
-        <div>
-          <span className="notifications-kicker">Chức năng chính · Thông báo</span>
-          <h2>Nhịp việc sắp tới</h2>
-          <p>Các công tác và công việc gần đến hạn, được nhắc đúng theo mốc thời gian đã thiết lập. Bấm vào thông báo để mở đúng mục cần xử lý.</p>
-        </div>
-        <div className="notifications-mark">
-          <strong>{data.unreadCount}</strong>
-          <span>CHƯA ĐỌC</span>
-        </div>
-      </header>
-
       <div className="notifications-toolbar">
         <p>
           Mốc đang dùng: {data.settings.milestonesHours.map((hours) => hours === 0 ? 'Đến hạn' : `${hours} giờ`).join(' · ')}

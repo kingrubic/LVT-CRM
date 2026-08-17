@@ -789,24 +789,6 @@ export default function PeopleReviewView() {
 
   return (
     <section className="pr-view">
-      <header className="pr-hero">
-        <div>
-          <span className="pr-kicker">Chức năng chính · Đánh giá nhân sự</span>
-          <h2>Đánh giá nhân sự</h2>
-          <p>
-            {isSelfMode
-              ? 'Theo dõi ghi nhận lỗi, mức hoàn thành công việc và hồ sơ đánh giá của bạn.'
-              : overview.mode === 'team'
-                ? 'Quản lý đánh giá và ghi nhận lỗi cho nhân viên cấp dưới cùng phòng ban.'
-                : 'Toàn trường theo phòng ban — upload file tự đánh giá và ghi nhận xét BGH.'}
-          </p>
-        </div>
-        <div className="pr-hero-stamp">
-          <strong>{isSelfMode ? 1 : overview.people.length}</strong>
-          <span>{isSelfMode ? 'CÁ NHÂN' : 'NHÂN SỰ'}</span>
-        </div>
-      </header>
-
       {isSelfMode ? (
         <PersonDashboard
           userId={overview.self._id}

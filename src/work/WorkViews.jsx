@@ -877,29 +877,13 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
 
   return (
     <section className="work-management">
-      <header className="work-hero">
-        <div>
-          <span className="work-kicker">Không gian · Công việc</span>
-          <h2>Sổ công việc &amp; tiến độ</h2>
-          <p>Tạo công việc, giao cho người nhận; việc hiện ngay không cần duyệt công văn.</p>
-        </div>
-        <div className="work-hero-stamp">
-          <strong>{documents.length}</strong>
-          <span>CÔNG VIỆC</span>
-        </div>
-      </header>
-
-      <div className="work-page-actions">
-        <div>
-          <span>CÔNG VIỆC</span>
-          <h3>Việc đã tạo</h3>
-        </div>
-        {allowCreate ? (
+      {allowCreate ? (
+        <div className="work-page-actions work-page-actions-only">
           <button type="button" className="work-primary-button" onClick={() => setOpen((value) => !value)}>
             <span>{open ? '×' : '+'}</span> {open ? 'Đóng biểu mẫu' : 'Tạo công việc'}
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {allowCreate && open ? (
         <form id="work-document-editor" className="work-editor" onSubmit={submit}>
@@ -1222,15 +1206,6 @@ export function WorkUserView({ focusTarget = null }) {
     acceptSourceTypes: ['approval', 'department_work', 'personal_task', 'completion_rejected'],
   });
 
-  const stats = useMemo(() => {
-    if (!data) return { total: 0, done: 0 };
-    const tasks = data.myTasks || [];
-    return {
-      total: tasks.length,
-      done: tasks.filter((item) => item.status === 'completed' || item.status === 'completed_late').length,
-    };
-  }, [data]);
-
   if (data === undefined) return <div className="work-loading">Đang tải công việc của bạn…</div>;
 
   const handleAssign = async ({ title, deadline, assigneeUserIds }) => {
@@ -1348,25 +1323,10 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
-  const title = 'Công việc cần làm';
-  const subtitle = 'Nộp công việc kèm file bằng chứng. Người tạo việc sẽ đánh dấu hoàn thành hoặc trả về.';
-
   return (
     <>
       {data.canCreate ? <WorkManagement allowCreate focusTarget={focusTarget} /> : null}
     <section className="work-user-view">
-      <header className="work-hero">
-        <div>
-          <span className="work-kicker">Không gian · Công việc</span>
-          <h2>{title}</h2>
-          <p>{subtitle}</p>
-        </div>
-        <div className="work-hero-stamp">
-          <strong>{stats.done}<small>/{stats.total}</small></strong>
-          <span>ĐÃ XONG</span>
-        </div>
-      </header>
-
       {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
 
       {pendingCompletionReviews.length ? (

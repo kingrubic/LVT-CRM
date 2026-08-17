@@ -67,9 +67,10 @@ test('payload và title hiển thị ưu tiên tên công tác', () => {
 test('tab chưa diễn ra mặc định, sự kiện gần nhất lên đầu', () => {
   const later = { _id: 'b', startDate: '2026-08-20', startTime: '08:00', endDate: '2026-08-20', endTime: '17:00', timing: { isUpcoming: true, isOverdue: false } };
   const sooner = { _id: 'a', startDate: '2026-08-18', startTime: '09:00', endDate: '2026-08-18', endTime: '11:00', timing: { isUpcoming: true, isOverdue: false } };
-  const past = { _id: 'c', startDate: '2026-08-01', startTime: '08:00', endDate: '2026-08-02', endTime: '17:00', timing: { isOverdue: true } };
-  const upcoming = filterDutiesByTab([later, past, sooner], DUTY_LIST_TAB_UPCOMING);
+  const olderPast = { _id: 'c', startDate: '2026-07-26', startTime: '08:00', endDate: '2026-07-26', endTime: '17:00', timing: { isOverdue: true } };
+  const newerPast = { _id: 'd', startDate: '2026-07-31', startTime: '08:00', endDate: '2026-08-06', endTime: '17:00', timing: { isOverdue: true } };
+  const upcoming = filterDutiesByTab([later, newerPast, olderPast, sooner], DUTY_LIST_TAB_UPCOMING);
   assert.deepEqual(upcoming.map((item) => item._id), ['a', 'b']);
-  const finished = filterDutiesByTab([later, past, sooner], DUTY_LIST_TAB_PAST);
-  assert.deepEqual(finished.map((item) => item._id), ['c']);
+  const finished = filterDutiesByTab([later, newerPast, olderPast, sooner], DUTY_LIST_TAB_PAST);
+  assert.deepEqual(finished.map((item) => item._id), ['c', 'd']);
 });

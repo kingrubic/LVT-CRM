@@ -123,7 +123,7 @@ export function filterDutiesByTab(list, tab = DUTY_LIST_TAB_UPCOMING) {
   if (tab === DUTY_LIST_TAB_PAST) {
     return items
       .filter((item) => isDutyPast(item))
-      .sort((a, b) => dutyEndKey(b).localeCompare(dutyEndKey(a)));
+      .sort((a, b) => dutyEndKey(a).localeCompare(dutyEndKey(b)) || dutyStartKey(a).localeCompare(dutyStartKey(b)));
   }
   return items
     .filter((item) => !isDutyPast(item))

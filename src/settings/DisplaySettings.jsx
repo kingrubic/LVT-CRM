@@ -52,12 +52,6 @@ export default function DisplaySettings() {
 
   const enabled = data.dutyAttendanceConfirmationEnabled !== false;
   const workVisibilityMode = data.workVisibilityMode === 'creator' ? 'creator' : 'school';
-  const enabledSettingCount = [
-    enabled,
-    workVisibilityMode === 'school',
-    notificationForm.dutiesEnabled,
-    notificationForm.workEnabled,
-  ].filter(Boolean).length;
   const toggle = async () => {
     setSaving(true);
     setFeedback('');
@@ -120,18 +114,6 @@ export default function DisplaySettings() {
 
   return (
     <section className="display-settings-view">
-      <header className="display-settings-hero">
-        <div>
-          <span className="display-settings-kicker">Thiết lập tối cao · Hiển thị</span>
-          <h2>Thiết lập hiển thị</h2>
-          <p>Điều chỉnh xác nhận tham gia công tác, người giao việc và thông báo gần đến hạn.</p>
-        </div>
-        <div className={`display-settings-mark ${enabledSettingCount > 0 ? 'is-on' : 'is-off'}`}>
-          <strong>{enabledSettingCount}</strong>
-          <span>ĐANG BẬT</span>
-        </div>
-      </header>
-
       <div className="display-settings-card">
         <div className="display-settings-card-heading">
           <span className="display-settings-section-label">CÔNG TÁC</span>

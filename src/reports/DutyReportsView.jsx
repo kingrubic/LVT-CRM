@@ -345,18 +345,6 @@ export default function DutyReportsView() {
 
   return (
     <section className="duty-reports-view">
-      <header className="report-hero">
-        <div>
-          <span className="report-kicker">Báo cáo · Công tác</span>
-          <h2>Lịch công tác trực quan</h2>
-          <p>Theo dõi nhịp công tác của cá nhân và cấp dưới trên một dòng thời gian rõ ràng, linh hoạt.</p>
-        </div>
-        <div className="report-hero-mark" aria-hidden="true">
-          <span>{anchor.getDate()}</span>
-          <small>THÁNG {anchor.getMonth() + 1}</small>
-        </div>
-      </header>
-
       {data === undefined ? (
         <div className="report-loading">
           <span />

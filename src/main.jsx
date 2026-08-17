@@ -795,39 +795,11 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
 
   return (
     <section className="work-management duty-workspace">
-      <header className="work-hero duty-hero">
-        <div>
-          <span className="work-kicker">{allowManage ? 'Không gian · Công tác' : 'Không gian · Công tác'}</span>
-          <h2>Sổ công tác & lịch trình</h2>
-          <p>
-            {allowManage
-              ? 'Tạo lịch công tác, phân công người tham gia và theo dõi trạng thái trong một không gian tập trung.'
-              : 'Theo dõi lịch trình và trạng thái tham gia.'}
-          </p>
-        </div>
-        <div className="work-hero-stamp">
-          <strong>{list.length}</strong>
-          <span>CÔNG TÁC</span>
-        </div>
-      </header>
-
       {feedback.text ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
           {feedback.text}
         </div>
       ) : null}
-
-      <div className="work-page-actions duty-page-actions">
-        <div>
-          <span>{allowManage ? 'CÔNG TÁC' : 'LỊCH TRÌNH'}</span>
-          <h3>Kho công tác</h3>
-        </div>
-        {allowManage && !editorOpen ? (
-          <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-            <span>+</span> Tạo công tác
-          </button>
-        ) : null}
-      </div>
 
       {allowManage && editorOpen ? <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
         <div className="work-editor-title">
@@ -889,7 +861,14 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       </form> : null}
 
       <div className="duty-list-section">
-        <DutyListTabs tab={listTab} onChange={setListTab} />
+        <div className="duty-list-toolbar">
+          <DutyListTabs tab={listTab} onChange={setListTab} />
+          {allowManage && !editorOpen ? (
+            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
+              <span>+</span> Tạo công tác
+            </button>
+          ) : null}
+        </div>
         {visibleList.length === 0 ? (
           <DutyListEmpty tab={listTab} />
         ) : (
@@ -1118,52 +1097,8 @@ function DutiesUserView({ access, focusTarget = null }) {
   if (data === undefined || (canCreate && options === undefined)) {
     return <LoadingView label="Đang tải danh sách công tác…" />;
   }
-  const assignedDuties = data.duties.filter((item) => item.isMine);
-  const confirmedDuties = assignedDuties.filter((item) => item.myStatus !== 'pending');
-  const isGlobalView = data.canViewAll || data.isAdmin;
-  const attendanceEnabled = data.attendanceConfirmationEnabled !== false;
-
   return (
     <section className="work-user-view duty-workspace">
-      <header className="work-hero duty-hero">
-        <div>
-          <span className="work-kicker">Không gian · Công tác</span>
-          <h2>{isGlobalView ? 'Công tác toàn hệ thống' : 'Lịch công tác của tôi'}</h2>
-          <p>
-            {data.isAdmin
-              ? 'Theo dõi toàn bộ lịch trình và trạng thái tham gia trên một dòng thời gian rõ ràng.'
-              : data.canViewAll
-              ? 'Bạn đang dùng quyền Xem tối cao: có thể xem công tác và trạng thái tham gia của mọi user, được nhóm theo phòng ban.'
-              : 'Danh sách sắp theo thời hạn gần nhất. Lịch cá nhân và lịch của cấp dưới cùng phòng ban (theo cấp Chức vụ) đều hiển thị tại đây.'}
-            {!data.canViewAll && canEdit && data.attendanceConfirmationEnabled
-              ? ' Bạn có quyền xác nhận tham gia trong thời gian diễn ra sự kiện.'
-              : data.attendanceConfirmationEnabled
-                ? ' Đây là chế độ chỉ xem — không thể thay đổi dữ liệu.'
-                : ' Xác nhận tham gia đang tắt; công tác được phân công mặc định là đã tham gia.'}
-          </p>
-        </div>
-        <div className="work-hero-stamp">
-          <strong>
-            {isGlobalView ? data.duties.length : attendanceEnabled ? confirmedDuties.length : assignedDuties.length}
-            {!isGlobalView && attendanceEnabled ? <small>/{assignedDuties.length}</small> : null}
-          </strong>
-          <span>{isGlobalView || !attendanceEnabled ? 'CÔNG TÁC' : 'ĐÃ XÁC NHẬN'}</span>
-        </div>
-      </header>
-
-      {canCreate ? (
-        <div className="work-page-actions duty-page-actions">
-          <div>
-            <span>CÔNG TÁC</span>
-            <h3>Kho công tác</h3>
-          </div>
-          {!editorOpen ? (
-            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-              <span>+</span> Tạo công tác
-            </button>
-          ) : null}
-        </div>
-      ) : null}
 
       {canCreate && editorOpen ? (
         <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
@@ -1209,7 +1144,14 @@ function DutiesUserView({ access, focusTarget = null }) {
       ) : null}
 
       <div className="duty-list-section">
-        <DutyListTabs tab={listTab} onChange={setListTab} />
+        <div className="duty-list-toolbar">
+          <DutyListTabs tab={listTab} onChange={setListTab} />
+          {canCreate && !editorOpen ? (
+            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
+              <span>+</span> Tạo công tác
+            </button>
+          ) : null}
+        </div>
         {visibleList.length === 0 ? (
           <DutyListEmpty tab={listTab} />
         ) : (
@@ -2496,18 +2438,6 @@ function ProfileView({ session }) {
 
   return (
     <section className="work-user-view profile-workspace">
-      <header className="work-hero profile-hero">
-        <div>
-          <span className="work-kicker">Không gian · Cá nhân</span>
-          <h2>Hồ sơ của {displayName}</h2>
-          <p>Thông tin định danh, vai trò và bảo mật tài khoản trong một không gian riêng tư, rõ ràng.</p>
-        </div>
-        <div className="work-hero-stamp profile-hero-stamp">
-          <strong>{initials || 'LV'}</strong>
-          <span>{roleLabel}</span>
-        </div>
-      </header>
-
       <div className="profile-modern-grid">
         <article className="profile-paper profile-overview">
           <header className="profile-identity">
