@@ -29,8 +29,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -54,7 +52,6 @@ import lvt.crm.ui.components.StatePanel
 import lvt.crm.ui.components.StatusPill
 import lvt.crm.ui.components.StatusTone
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DutiesScreen(
     viewModel: DutiesViewModel,
@@ -88,9 +85,14 @@ fun DutiesScreen(
     LaunchedEffect(focusId, state.duties) {
         if (!focusId.isNullOrBlank()) {
             val match = state.duties.firstOrNull { it.id == focusId }
-            if (match != null) selectedDutyId = match.id
-            val index = state.visibleDuties.indexOfFirst { it.id == focusId }
-            if (index >= 0) listState.animateScrollToItem(index)
+            if (match != null) {
+                selectedDutyId = match.id
+                val tab = tabForDuty(match)
+                if (isDutyAssignedTo(match)) viewModel.setMineTab(tab)
+                if (isDutyCreatedBy(match, state.currentUserId) || !isDutyAssignedTo(match)) {
+                    viewModel.setCreatedTab(tab)
+                }
+            }
         }
     }
     LaunchedEffect(tabOpenToken) {
@@ -135,53 +137,7 @@ fun DutiesScreen(
                     },
                 )
             }
-            state.duties.isEmpty() -> {
-                StatePanel(
-                    icon = Icons.Outlined.EventBusy,
-                    title = "Lịch đang trống",
-                    message = "Bạn chưa có công tác nào được phân công.",
-                )
-            }
             else -> {
-                FlowRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    DutyFilter.entries.forEach { filter ->
-                        FilterChip(
-                            selected = state.filter == filter,
-                            onClick = { viewModel.setFilter(filter) },
-                            label = { Text(filter.title) },
-                        )
-                    }
-                }
-                if (state.visibleDuties.isEmpty()) {
-                    StatePanel(
-                        icon = Icons.Outlined.EventBusy,
-                        title = "Không có công tác",
-                        message = "Không có công tác thuộc bộ lọc đang chọn.",
-                    )
-                } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    StatusPill(
-                        label = "${state.visibleDuties.size} công tác",
-                        tone = StatusTone.Primary,
-                    )
-                    val ongoing = state.visibleDuties.count { it.isOngoing }
-                    if (ongoing > 0) {
-                        StatusPill(
-                            label = "$ongoing đang diễn ra",
-                            tone = StatusTone.Positive,
-                        )
-                    }
-                }
                 state.actionError?.let {
                     Card(
                         colors = CardDefaults.cardColors(
@@ -205,18 +161,57 @@ fun DutiesScreen(
                     contentPadding = PaddingValues(bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(state.visibleDuties, key = { it.id }) { duty ->
-                        DutyCard(
-                            duty = duty,
-                            focused = duty.id == focusId,
-                            confirmationEnabled = state.attendanceConfirmationEnabled,
-                            busy = state.busyDutyId != null,
-                            onOpen = { selectedDutyId = duty.id },
-                            onAttend = { viewModel.setAttendance(duty.id, "attended") },
-                            onAbsent = { viewModel.setAttendance(duty.id, "absent") },
+                    item(key = "mine-heading") {
+                        DutyListSectionHeader(
+                            title = "Công tác của tôi",
+                            tab = state.mineTab,
+                            onTab = viewModel::setMineTab,
                         )
                     }
-                }
+                    if (state.visibleMine.isEmpty()) {
+                        item(key = "mine-empty") {
+                            DutyListEmpty(tab = state.mineTab, created = false)
+                        }
+                    } else {
+                        items(state.visibleMine, key = { "mine-${it.id}" }) { duty ->
+                            DutyCard(
+                                duty = duty,
+                                focused = duty.id == focusId,
+                                confirmationEnabled = state.attendanceConfirmationEnabled,
+                                busy = state.busyDutyId != null,
+                                onOpen = { selectedDutyId = duty.id },
+                                onAttend = { viewModel.setAttendance(duty.id, "attended") },
+                                onAbsent = { viewModel.setAttendance(duty.id, "absent") },
+                            )
+                        }
+                    }
+                    if (state.showCreatedSection) {
+                        item(key = "created-heading") {
+                            Spacer(modifier = Modifier.height(36.dp))
+                            DutyListSectionHeader(
+                                title = "Công tác tôi tạo",
+                                tab = state.createdTab,
+                                onTab = viewModel::setCreatedTab,
+                            )
+                        }
+                        if (state.visibleCreated.isEmpty()) {
+                            item(key = "created-empty") {
+                                DutyListEmpty(tab = state.createdTab, created = true)
+                            }
+                        } else {
+                            items(state.visibleCreated, key = { "created-${it.id}" }) { duty ->
+                                DutyCard(
+                                    duty = duty,
+                                    focused = duty.id == focusId,
+                                    confirmationEnabled = state.attendanceConfirmationEnabled,
+                                    busy = state.busyDutyId != null,
+                                    onOpen = { selectedDutyId = duty.id },
+                                    onAttend = { viewModel.setAttendance(duty.id, "attended") },
+                                    onAbsent = { viewModel.setAttendance(duty.id, "absent") },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -226,6 +221,40 @@ fun DutiesScreen(
 
 internal fun currentDuty(duties: List<DutyItem>, selectedDutyId: String?): DutyItem? =
     duties.firstOrNull { it.id == selectedDutyId }
+
+@Composable
+private fun DutyListSectionHeader(
+    title: String,
+    tab: DutyListTab,
+    onTab: (DutyListTab) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DutyListTab.entries.forEach { value ->
+                FilterChip(
+                    selected = tab == value,
+                    onClick = { onTab(value) },
+                    label = { Text(value.title) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DutyListEmpty(tab: DutyListTab, created: Boolean) {
+    val message = if (tab == DutyListTab.Past) {
+        if (created) "Chưa có công tác bạn tạo đã diễn ra." else "Chưa có sự kiện đã diễn ra."
+    } else {
+        if (created) "Bạn chưa tạo công tác nào" else "Bạn chưa có sự kiện nào cần tham gia"
+    }
+    StatePanel(
+        icon = Icons.Outlined.EventBusy,
+        title = if (created) "Công tác tôi tạo" else "Công tác của tôi",
+        message = message,
+    )
+}
 
 @Composable
 private fun DutyCard(
@@ -271,7 +300,7 @@ private fun DutyCard(
                 verticalAlignment = Alignment.Top,
             ) {
                 Text(
-                    duty.content.truncateCharacters(50).ifBlank { "Công tác" },
+                    dutyDisplayTitle(duty).truncateCharacters(50),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
@@ -369,7 +398,7 @@ private fun DutyDetailScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
-                Text(duty.content.ifBlank { "Công tác" }, style = MaterialTheme.typography.headlineSmall)
+                Text(dutyDisplayTitle(duty), style = MaterialTheme.typography.headlineSmall)
                 Spacer(modifier = Modifier.height(18.dp))
                 DetailLine(Icons.Outlined.CalendarMonth, "Ngày giờ công tác: ${scheduleLabel(duty)}")
                 DetailLine(

@@ -17,29 +17,6 @@ import lvt.crm.data.duties.DutiesRepository
 import lvt.crm.data.duties.DutiesOperations
 import lvt.crm.data.duties.DutyItem
 
-enum class DutyFilter {
-    All,
-    Ongoing,
-    Upcoming,
-    Ended,
-    ;
-
-    val title: String
-        get() = when (this) {
-            All -> "Tất cả"
-            Ongoing -> "Đang diễn ra"
-            Upcoming -> "Sắp tới"
-            Ended -> "Đã kết thúc"
-        }
-
-    fun includes(duty: DutyItem): Boolean = when (this) {
-        All -> true
-        Ongoing -> duty.isOngoing
-        Upcoming -> duty.isUpcoming
-        Ended -> duty.isOverdue
-    }
-}
-
 data class DutiesUiState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
@@ -48,18 +25,35 @@ data class DutiesUiState(
     val attendanceConfirmationEnabled: Boolean = false,
     val duties: List<DutyItem> = emptyList(),
     val busyDutyId: String? = null,
-    val filter: DutyFilter = DutyFilter.All,
+    val currentUserId: String = "",
+    val canCreate: Boolean = false,
+    val isAdmin: Boolean = false,
+    val canViewAll: Boolean = false,
+    val mineTab: DutyListTab = DutyListTab.Upcoming,
+    val createdTab: DutyListTab = DutyListTab.Upcoming,
 ) {
-    val visibleDuties: List<DutyItem>
-        get() = duties.filter(filter::includes)
+    val lists: SplitDutyLists
+        get() = splitDutyLists(
+            duties,
+            currentUserId,
+            includeManagedOthers = isAdmin || canViewAll,
+            leftoverInMine = !isAdmin,
+        )
+    val visibleMine: List<DutyItem>
+        get() = filterDutiesByTab(lists.mine, mineTab)
+    val visibleCreated: List<DutyItem>
+        get() = filterDutiesByTab(lists.created, createdTab)
+    val showCreatedSection: Boolean
+        get() = canCreate || lists.created.isNotEmpty()
 }
 
 class DutiesViewModel(
     private val repository: DutiesOperations,
+    private val currentUserId: String = "",
 ) : ViewModel() {
     private val operationMutex = Mutex()
     private val refreshPending = AtomicBoolean(false)
-    private val _uiState = MutableStateFlow(DutiesUiState())
+    private val _uiState = MutableStateFlow(DutiesUiState(currentUserId = currentUserId))
     val uiState: StateFlow<DutiesUiState> = _uiState.asStateFlow()
 
     init {
@@ -88,6 +82,9 @@ class DutiesViewModel(
                         refreshing = false,
                         attendanceConfirmationEnabled = snap.attendanceConfirmationEnabled,
                         duties = snap.duties,
+                        canCreate = snap.canCreate,
+                        isAdmin = snap.isAdmin,
+                        canViewAll = snap.canViewAll,
                     )
                 }
             } catch (e: Exception) {
@@ -105,8 +102,12 @@ class DutiesViewModel(
         }
     }
 
-    fun setFilter(filter: DutyFilter) {
-        _uiState.update { it.copy(filter = filter) }
+    fun setMineTab(tab: DutyListTab) {
+        _uiState.update { it.copy(mineTab = tab) }
+    }
+
+    fun setCreatedTab(tab: DutyListTab) {
+        _uiState.update { it.copy(createdTab = tab) }
     }
 
     fun setAttendance(dutyId: String, status: String) {
@@ -132,6 +133,9 @@ class DutiesViewModel(
                             it.copy(
                                 attendanceConfirmationEnabled = snap.attendanceConfirmationEnabled,
                                 duties = snap.duties,
+                                canCreate = snap.canCreate,
+                                isAdmin = snap.isAdmin,
+                                canViewAll = snap.canViewAll,
                             )
                         }
                     } catch (_: Exception) {
@@ -168,11 +172,14 @@ class DutiesViewModel(
     }
 
     companion object {
-        fun factory(repository: DutiesRepository): ViewModelProvider.Factory =
+        fun factory(
+            repository: DutiesRepository,
+            currentUserId: String,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return DutiesViewModel(repository) as T
+                    return DutiesViewModel(repository, currentUserId) as T
                 }
             }
     }

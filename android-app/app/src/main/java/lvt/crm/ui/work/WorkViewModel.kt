@@ -34,7 +34,14 @@ data class WorkUiState(
     val qualityPromptTask: WorkTaskItem? = null,
     val qualityInput: String = "100",
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
-)
+    val mineTab: WorkListTab = WorkListTab.Upcoming,
+    val createdTab: WorkListTab = WorkListTab.Upcoming,
+) {
+    val visibleMine: List<WorkTaskItem>
+        get() = filterTasksByTab(tasks, mineTab)
+    val visibleCreated: List<WorkApprovalItem>
+        get() = filterDocumentsByTab(approvals, createdTab)
+}
 
 class WorkViewModel(
     private val repository: WorkOperations,
@@ -83,6 +90,14 @@ class WorkViewModel(
                 releaseOperation()
             }
         }
+    }
+
+    fun setMineTab(tab: WorkListTab) {
+        _uiState.update { it.copy(mineTab = tab) }
+    }
+
+    fun setCreatedTab(tab: WorkListTab) {
+        _uiState.update { it.copy(createdTab = tab) }
     }
 
     fun requestComplete(task: WorkTaskItem) {
