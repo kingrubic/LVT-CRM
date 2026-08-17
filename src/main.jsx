@@ -19,6 +19,7 @@ import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import './management/managementTheme.css';
 import './duties/duties.css';
+import DutyCreatePreview from './duties/DutyCreatePreview';
 import DutyEditorFields from './duties/DutyEditorFields';
 import { DutyListEmpty, DutyListTabs } from './duties/DutyListFilters';
 import DutyListSummary from './duties/DutyListSummary';
@@ -737,6 +738,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [expanded, setExpanded] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
   const { pending, feedback, run } = useFeedback();
   const visibleList = useMemo(() => filterDutiesByTab(list, listTab), [list, listTab]);
@@ -760,11 +762,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     setEditing(item);
     setExpanded(item._id);
     setEditorOpen(true);
+    setPreviewOpen(false);
     setForm(dutyFormFromItem(item));
   };
 
-  const submit = async (event) => {
-    event.preventDefault();
+  const persistDuty = async () => {
+    if (pending === 'save') return;
     const payload = dutyPayloadFromForm(form);
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
@@ -772,14 +775,27 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         setEditing(null);
         setForm(emptyDutyForm());
       }
-    } else {
-      const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
-      if (ok) setForm(emptyDutyForm());
+      return;
     }
+    const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
+    if (ok) {
+      setPreviewOpen(false);
+      setForm(emptyDutyForm());
+    }
+  };
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (editing) {
+      void persistDuty();
+      return;
+    }
+    setPreviewOpen(true);
   };
 
   const closeEditor = () => {
     setEditing(null);
+    setPreviewOpen(false);
     setForm(emptyDutyForm());
     setEditorOpen(false);
   };
@@ -855,10 +871,20 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
             Xóa biểu mẫu
           </button>
           <button className="work-primary-button" disabled={Boolean(pending)}>
-            {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu công tác'}
+            {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
           </button>
         </div>
       </form> : null}
+
+      {previewOpen ? (
+        <DutyCreatePreview
+          form={form}
+          catalogs={options}
+          pending={pending === 'save'}
+          onCancel={() => setPreviewOpen(false)}
+          onConfirm={() => void persistDuty()}
+        />
+      ) : null}
 
       <div className="duty-list-section">
         <div className="duty-list-toolbar">
@@ -904,7 +930,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
                 ) : null}
                 {open && (
                   <div className="duty-detail">
-                    <h4>Người tham gia & trạng thái</h4>
+                    <h4>Chi tiết người tham gia</h4>
                     {!item.participants?.length ? (
                       <p className="muted">Chưa có người tham gia (chọn phòng ban hoặc cá nhân khi tạo công tác).</p>
                     ) : (
@@ -1053,6 +1079,7 @@ function DutiesUserView({ access, focusTarget = null }) {
   const [editing, setEditing] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
   const duties = data?.duties;
   const visibleList = useMemo(() => filterDutiesByTab(duties || [], listTab), [duties, listTab]);
@@ -1072,26 +1099,38 @@ function DutiesUserView({ access, focusTarget = null }) {
   const startEdit = (item) => {
     setEditing(item);
     setEditorOpen(true);
+    setPreviewOpen(false);
     setForm(dutyFormFromItem(item));
   };
 
-  const submit = async (event) => {
-    event.preventDefault();
+  const persistDuty = async () => {
+    if (pending === 'save') return;
     const payload = dutyPayloadFromForm(form, { includeDepartments: Boolean(options?.isOps) });
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
       if (ok) {
         setEditing(null);
+        setPreviewOpen(false);
         setForm(emptyDutyForm());
         setEditorOpen(false);
       }
-    } else {
-      const ok = await run('save', () => create(payload), 'Đã tạo công tác.');
-      if (ok) {
-        setForm(emptyDutyForm());
-        setEditorOpen(false);
-      }
+      return;
     }
+    const ok = await run('save', () => create(payload), 'Đã tạo công tác.');
+    if (ok) {
+      setPreviewOpen(false);
+      setForm(emptyDutyForm());
+      setEditorOpen(false);
+    }
+  };
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (editing) {
+      void persistDuty();
+      return;
+    }
+    setPreviewOpen(true);
   };
 
   if (data === undefined || (canCreate && options === undefined)) {
@@ -1107,7 +1146,7 @@ function DutiesUserView({ access, focusTarget = null }) {
               <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
               <h3>{editing ? 'Sửa công tác' : 'Tạo công tác'}</h3>
             </div>
-            <button type="button" className="duty-editor-close" onClick={() => { setEditing(null); setForm(emptyDutyForm()); setEditorOpen(false); }} aria-label="Đóng biểu mẫu">
+            <button type="button" className="duty-editor-close" onClick={() => { setEditing(null); setPreviewOpen(false); setForm(emptyDutyForm()); setEditorOpen(false); }} aria-label="Đóng biểu mẫu">
               <span aria-hidden="true">×</span> Đóng
             </button>
           </div>
@@ -1131,10 +1170,20 @@ function DutiesUserView({ access, focusTarget = null }) {
           </DutyEditorFields>
           <div className="work-editor-actions duty-editor-actions">
             <button className="work-primary-button" disabled={Boolean(pending)}>
-              {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu công tác'}
+              {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
             </button>
           </div>
         </form>
+      ) : null}
+
+      {previewOpen ? (
+        <DutyCreatePreview
+          form={form}
+          catalogs={{ ...options, includeDepartments: Boolean(options?.isOps) }}
+          pending={pending === 'save'}
+          onCancel={() => setPreviewOpen(false)}
+          onConfirm={() => void persistDuty()}
+        />
       ) : null}
 
       {feedback.text ? (

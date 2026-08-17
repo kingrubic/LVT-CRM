@@ -36,7 +36,7 @@ function DutyIcon({ kind }) {
 function DutyTimingTags({ timing }) {
   if (!timing) return null;
   let tag = null;
-  if (timing.isOverdue) tag = <span className="duty-tag overdue">Đã quá hạn</span>;
+  if (timing.isOverdue) tag = <span className="duty-tag overdue">Kết thúc</span>;
   else if (timing.isOngoing) tag = <span className="duty-tag live">Đang diễn ra</span>;
   else if (timing.nearDeadline) tag = <span className="duty-tag near">Gần đến hạn</span>;
   if (!tag) return null;
