@@ -34,6 +34,7 @@
 .duty-modern-editor > .duty-schedule-fieldset,
 .duty-modern-editor > .duty-content-field,
 .duty-modern-editor > .duty-field,
+.duty-modern-editor > .work-department-assignments,
 .duty-modern-editor > .duty-editor-actions {
   grid-column: 1 / -1;
 }
