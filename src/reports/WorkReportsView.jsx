@@ -219,14 +219,6 @@ export default function WorkReportsView() {
   }, [data?.people]);
 
   return <section className="duty-reports-view work-reports-view">
-    <header className="report-hero">
-      <div>
-        <span className="report-kicker">Báo cáo · Công việc</span>
-        <h2>Lịch công việc trực quan</h2>
-        <p>Theo dõi công văn, việc phòng ban và đầu mục cá nhân trên cùng một lịch linh hoạt.</p>
-      </div>
-      <div className="report-hero-mark" aria-hidden="true"><span>{anchor.getDate()}</span><small>THÁNG {anchor.getMonth() + 1}</small></div>
-    </header>
     {data === undefined ? <div className="report-loading"><span /><p>Đang dựng lịch công việc…</p></div> : <div className={`report-workspace ${peopleCollapsed ? 'people-collapsed' : ''}`}>
       <aside className="report-people-panel">
         <div className="report-panel-heading"><span>Nhân sự</span><strong>{data.people.length}</strong></div>

@@ -30,20 +30,6 @@ export default function BoardingReportsView() {
 
   return (
     <section className="boarding-report">
-      <header className="boarding-report-hero">
-        <div>
-          <span>Báo cáo · Bán trú</span>
-          <h2>Báo cáo theo kỳ bán trú</h2>
-          <p>
-            Chọn một kỳ để xem số giáo viên tham gia, được nhóm rõ ràng theo phòng ban.
-          </p>
-        </div>
-        <div className="boarding-report-score">
-          <strong>{data.totalParticipants}</strong>
-          <span>GIÁO VIÊN THAM GIA</span>
-        </div>
-      </header>
-
       <section className="boarding-period-picker">
         <div>
           <span className="boarding-report-kicker">CHỌN KỲ CẦN XEM</span>

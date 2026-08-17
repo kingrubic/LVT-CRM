@@ -19,6 +19,20 @@ import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import './management/managementTheme.css';
 import './duties/duties.css';
+import DutyEditorFields from './duties/DutyEditorFields';
+import { DutyListEmpty, DutyListTabs } from './duties/DutyListFilters';
+import DutyListSummary from './duties/DutyListSummary';
+import {
+  applyDutyEndDateTime,
+  applyDutyFormField,
+  applyDutyStartDateTime,
+  DUTY_LIST_TAB_UPCOMING,
+  dutyFormFromItem,
+  dutyPayloadFromForm,
+  emptyDutyForm,
+  filterDutiesByTab,
+  tabForDuty,
+} from './duties/dutyDisplay';
 import './profile/profile.css';
 import './profile/devices.css';
 import './settings/displaySettings.css';
@@ -122,6 +136,7 @@ function messageFor(error) {
     INVALID_DATE: 'Ngày không hợp lệ.',
     INVALID_TIME: 'Giờ không hợp lệ.',
     INVALID_CONTENT: 'Nội dung bắt buộc và tối đa 200 ký tự.',
+    INVALID_DUTY_TITLE: 'Tên công tác bắt buộc và tối đa 200 ký tự.',
     END_BEFORE_START: 'Thời gian kết thúc phải sau thời gian bắt đầu.',
     INVALID_LOCATION: 'Vui lòng nhập địa điểm (tối đa 200 ký tự).',
     INVALID_PARTICIPANT: 'Người tham gia không hợp lệ.',
@@ -648,27 +663,10 @@ function NavButton({ id, label, icon = '→', active, onClick, nested = false, b
   );
 }
 
-function formatViDate(isoDate) {
-  if (!isoDate) return '—';
-  const [y, m, d] = isoDate.split('-');
-  return `${d}/${m}/${y}`;
-}
-
 function statusLabel(status) {
   if (status === 'attended') return 'Đã tham gia';
   if (status === 'absent') return 'Chưa tham gia';
   return 'Chưa xác nhận';
-}
-
-function DutyTimingTags({ timing }) {
-  if (!timing) return null;
-  // Chỉ 1 trạng thái: quá hạn > đang diễn ra > gần đến hạn
-  let tag = null;
-  if (timing.isOverdue) tag = <span className="duty-tag overdue">Đã quá hạn</span>;
-  else if (timing.isOngoing) tag = <span className="duty-tag live">Đang diễn ra</span>;
-  else if (timing.nearDeadline) tag = <span className="duty-tag near">Gần đến hạn</span>;
-  if (!tag) return null;
-  return <span className="tag-row">{tag}</span>;
 }
 
 function MultiCheckList({ options, values, onChange, getLabel, emptyText = 'Không có lựa chọn' }) {
@@ -726,20 +724,6 @@ function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel 
   );
 }
 
-function emptyDutyForm() {
-  return {
-    startDate: '',
-    endDate: '',
-    startTime: '08:00',
-    endTime: '17:00',
-    allDay: false,
-    content: '',
-    locationText: '',
-    departmentIds: [],
-    participantUserIds: [],
-  };
-}
-
 function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null }) {
   const options = useQuery(anyApi.duties.formOptions, allowManage ? {} : 'skip');
   const listData = useQuery(anyApi.duties.listAdmin);
@@ -752,57 +736,36 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const editorRef = useRef(null);
   const { pending, feedback, run } = useFeedback();
+  const visibleList = useMemo(() => filterDutiesByTab(list, listTab), [list, listTab]);
 
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES,
     onMatch: (target) => setExpanded(String(target.sourceId)),
   });
 
+  useEffect(() => {
+    if (!focusTarget?.sourceId) return;
+    const focused = list.find((item) => String(item._id) === String(focusTarget.sourceId));
+    if (focused) setListTab(tabForDuty(focused));
+  }, [focusTarget?.sourceId, focusTarget?.token, list]);
+
   const setField = (field, value) => {
-    setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'allDay' && value) {
-        next.endDate = prev.startDate || prev.endDate;
-      }
-      if (field === 'startDate' && prev.allDay) {
-        next.endDate = value;
-      }
-      return next;
-    });
+    setForm((prev) => applyDutyFormField(prev, field, value));
   };
 
   const startEdit = (item) => {
     setEditing(item);
     setExpanded(item._id);
     setEditorOpen(true);
-    setForm({
-      startDate: item.startDate,
-      endDate: item.endDate,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      allDay: Boolean(item.allDay),
-      content: item.content || '',
-      locationText: item.locationText || (item.locationNames || []).join(', '),
-      departmentIds: [...(item.departmentIds || [])],
-      participantUserIds: [...(item.participantUserIds || [])],
-    });
+    setForm(dutyFormFromItem(item));
   };
 
   const submit = async (event) => {
     event.preventDefault();
-    const payload = {
-      startDate: form.startDate,
-      endDate: form.allDay ? form.startDate : form.endDate,
-      startTime: form.startTime,
-      endTime: form.endTime,
-      allDay: form.allDay,
-      content: form.content,
-      locationText: form.locationText,
-      departmentIds: form.departmentIds,
-      participantUserIds: form.participantUserIds,
-    };
+    const payload = dutyPayloadFromForm(form);
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
       if (ok) {
@@ -832,39 +795,11 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
 
   return (
     <section className="work-management duty-workspace">
-      <header className="work-hero duty-hero">
-        <div>
-          <span className="work-kicker">{allowManage ? 'Không gian · Công tác' : 'Không gian · Công tác'}</span>
-          <h2>Sổ công tác & lịch trình</h2>
-          <p>
-            {allowManage
-              ? 'Tạo lịch công tác, phân công người tham gia và theo dõi trạng thái trong một không gian tập trung.'
-              : 'Theo dõi lịch trình và trạng thái tham gia.'}
-          </p>
-        </div>
-        <div className="work-hero-stamp">
-          <strong>{list.length}</strong>
-          <span>CÔNG TÁC</span>
-        </div>
-      </header>
-
       {feedback.text ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
           {feedback.text}
         </div>
       ) : null}
-
-      <div className="work-page-actions duty-page-actions">
-        <div>
-          <span>{allowManage ? 'CÔNG TÁC' : 'LỊCH TRÌNH'}</span>
-          <h3>Kho công tác</h3>
-        </div>
-        {allowManage && !editorOpen ? (
-          <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-            <span>+</span> Tạo công tác
-          </button>
-        ) : null}
-      </div>
 
       {allowManage && editorOpen ? <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
         <div className="work-editor-title">
@@ -884,53 +819,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           </div>
         </div>
 
-        <fieldset className="duty-schedule-fieldset">
-          <legend>Thời gian</legend>
-          <div className="duty-schedule-heading">
-            <p>Chọn khoảng ngày và giờ diễn ra công tác.</p>
-            <label className="check-inline">
-              <input type="checkbox" checked={form.allDay} onChange={(e) => setField('allDay', e.target.checked)} />
-              <span>Cả ngày</span>
-            </label>
-          </div>
-          <div className="duty-schedule-grid">
-            <label>
-              Từ ngày
-              <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
-            </label>
-            <label className={form.allDay ? 'field-disabled' : undefined}>
-              Đến ngày
-              <input required type="date" value={form.allDay ? form.startDate : form.endDate} disabled={form.allDay} onChange={(e) => setField('endDate', e.target.value)} />
-            </label>
-            <label className={form.allDay ? 'field-disabled' : undefined}>
-              Từ giờ
-              <input required type="time" value={form.startTime} disabled={form.allDay} onChange={(e) => setField('startTime', e.target.value)} />
-            </label>
-            <label className={form.allDay ? 'field-disabled' : undefined}>
-              Đến giờ
-              <input required type="time" value={form.endTime} disabled={form.allDay} onChange={(e) => setField('endTime', e.target.value)} />
-            </label>
-          </div>
-          {form.allDay ? <small>Đã chọn Cả ngày — ngày kết thúc sẽ trùng ngày bắt đầu và không áp dụng giờ.</small> : null}
-        </fieldset>
-
-        <label className="duty-content-field">
-          Nội dung
-          <textarea required maxLength={200} rows={3} value={form.content} onChange={(e) => setField('content', e.target.value)} placeholder="Nội dung công tác (tối đa 200 ký tự)" />
-          <small>{form.content.length}/200</small>
-        </label>
-
-        <label className="duty-content-field">
-          Địa điểm
-          <input
-            required
-            maxLength={200}
-            value={form.locationText}
-            onChange={(e) => setField('locationText', e.target.value)}
-            placeholder="Nhập địa điểm công tác"
-          />
-        </label>
-
+        <DutyEditorFields
+          form={form}
+          onField={setField}
+          onStartDateTime={(date, time) => setForm((prev) => applyDutyStartDateTime(prev, date, time))}
+          onEndDateTime={(date, time) => setForm((prev) => applyDutyEndDateTime(prev, date, time))}
+        >
         <div className="duty-field">
           <span className="duty-field-label">Phòng ban tham gia</span>
           <CollapsibleMultiCheckList
@@ -954,6 +848,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
             emptyText="Chưa có người dùng."
           />
         </div>
+        </DutyEditorFields>
 
         <div className="work-editor-actions duty-editor-actions">
           <button type="button" className="work-ghost-button" onClick={() => setForm(emptyDutyForm())}>
@@ -965,15 +860,20 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         </div>
       </form> : null}
 
-      <div className="duty-modern-list">
-        {list.length === 0 ? (
-          <div className="work-empty">
-            <span>◷</span>
-            <h3>Chưa có công tác nào</h3>
-            <p>{allowManage ? 'Bấm “Tạo công tác” để lập lịch đầu tiên.' : 'Chưa có công tác nào.'}</p>
-          </div>
+      <div className="duty-list-section">
+        <div className="duty-list-toolbar">
+          <DutyListTabs tab={listTab} onChange={setListTab} />
+          {allowManage && !editorOpen ? (
+            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
+              <span>+</span> Tạo công tác
+            </button>
+          ) : null}
+        </div>
+        {visibleList.length === 0 ? (
+          <DutyListEmpty tab={listTab} />
         ) : (
-          list.map((item) => {
+          <div className="duty-modern-list">
+          {visibleList.map((item) => {
             const open = String(expanded || '') === String(item._id);
             return (
               <article
@@ -982,24 +882,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
                 data-focus-id={item._id}
               >
                 <button type="button" className="duty-card-toggle" onClick={() => setExpanded(open ? null : item._id)}>
-                  <span className="duty-date-tile" aria-hidden="true">
-                    <strong>{item.startDate.slice(8, 10)}</strong>
-                    <small>THÁNG {Number(item.startDate.slice(5, 7))}</small>
-                  </span>
-                  <div className="duty-card-main">
-                    <strong>{item.content}</strong>
-                    <DutyTimingTags timing={item.timing} />
-                    <div className="duty-meta-grid">
-                      <span>Từ ngày: {formatViDate(item.startDate)}</span>
-                      <span>Đến ngày: {formatViDate(item.endDate)}</span>
-                      <span>Từ giờ: {item.startTime}</span>
-                      <span>Đến giờ: {item.endTime}</span>
-                      <span>Địa điểm: {item.locationNames?.length ? item.locationNames.join(', ') : '—'}</span>
-                      <span>Phòng ban: {item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span>
-                      <span>Cá nhân: {item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span>
-                      <span>Tham gia: {item.participants?.length || 0} người</span>
-                    </div>
-                  </div>
+                  <DutyListSummary item={item} />
                   <span className="duty-expand-hint">{open ? 'Thu gọn' : 'Chi tiết'}</span>
                 </button>
                 {allowManage ? (
@@ -1082,7 +965,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
                 )}
               </article>
             );
-          })
+          })}
+          </div>
         )}
       </div>
     </section>
@@ -1168,48 +1052,32 @@ function DutiesUserView({ access, focusTarget = null }) {
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const editorRef = useRef(null);
+  const duties = data?.duties;
+  const visibleList = useMemo(() => filterDutiesByTab(duties || [], listTab), [duties, listTab]);
 
   useNotificationFocus(focusTarget, { acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES });
 
+  useEffect(() => {
+    if (!focusTarget?.sourceId || !duties?.length) return;
+    const focused = duties.find((item) => String(item._id) === String(focusTarget.sourceId));
+    if (focused) setListTab(tabForDuty(focused));
+  }, [focusTarget?.sourceId, focusTarget?.token, duties]);
+
   const setField = (field, value) => {
-    setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'allDay' && value) next.endDate = prev.startDate || prev.endDate;
-      if (field === 'startDate' && prev.allDay) next.endDate = value;
-      return next;
-    });
+    setForm((prev) => applyDutyFormField(prev, field, value));
   };
 
   const startEdit = (item) => {
     setEditing(item);
     setEditorOpen(true);
-    setForm({
-      startDate: item.startDate,
-      endDate: item.endDate,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      allDay: Boolean(item.allDay),
-      content: item.content || '',
-      locationText: item.locationText || (item.locationNames || []).join(', '),
-      departmentIds: [...(item.departmentIds || [])],
-      participantUserIds: [...(item.participantUserIds || [])],
-    });
+    setForm(dutyFormFromItem(item));
   };
 
   const submit = async (event) => {
     event.preventDefault();
-    const payload = {
-      startDate: form.startDate,
-      endDate: form.allDay ? form.startDate : form.endDate,
-      startTime: form.startTime,
-      endTime: form.endTime,
-      allDay: form.allDay,
-      content: form.content,
-      locationText: form.locationText,
-      departmentIds: options?.isOps ? form.departmentIds : [],
-      participantUserIds: form.participantUserIds,
-    };
+    const payload = dutyPayloadFromForm(form, { includeDepartments: Boolean(options?.isOps) });
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
       if (ok) {
@@ -1229,52 +1097,8 @@ function DutiesUserView({ access, focusTarget = null }) {
   if (data === undefined || (canCreate && options === undefined)) {
     return <LoadingView label="Đang tải danh sách công tác…" />;
   }
-  const assignedDuties = data.duties.filter((item) => item.isMine);
-  const confirmedDuties = assignedDuties.filter((item) => item.myStatus !== 'pending');
-  const isGlobalView = data.canViewAll || data.isAdmin;
-  const attendanceEnabled = data.attendanceConfirmationEnabled !== false;
-
   return (
     <section className="work-user-view duty-workspace">
-      <header className="work-hero duty-hero">
-        <div>
-          <span className="work-kicker">Không gian · Công tác</span>
-          <h2>{isGlobalView ? 'Công tác toàn hệ thống' : 'Lịch công tác của tôi'}</h2>
-          <p>
-            {data.isAdmin
-              ? 'Theo dõi toàn bộ lịch trình và trạng thái tham gia trên một dòng thời gian rõ ràng.'
-              : data.canViewAll
-              ? 'Bạn đang dùng quyền Xem tối cao: có thể xem công tác và trạng thái tham gia của mọi user, được nhóm theo phòng ban.'
-              : 'Danh sách sắp theo thời hạn gần nhất. Lịch cá nhân và lịch của cấp dưới cùng phòng ban (theo cấp Chức vụ) đều hiển thị tại đây.'}
-            {!data.canViewAll && canEdit && data.attendanceConfirmationEnabled
-              ? ' Bạn có quyền xác nhận tham gia trong thời gian diễn ra sự kiện.'
-              : data.attendanceConfirmationEnabled
-                ? ' Đây là chế độ chỉ xem — không thể thay đổi dữ liệu.'
-                : ' Xác nhận tham gia đang tắt; công tác được phân công mặc định là đã tham gia.'}
-          </p>
-        </div>
-        <div className="work-hero-stamp">
-          <strong>
-            {isGlobalView ? data.duties.length : attendanceEnabled ? confirmedDuties.length : assignedDuties.length}
-            {!isGlobalView && attendanceEnabled ? <small>/{assignedDuties.length}</small> : null}
-          </strong>
-          <span>{isGlobalView || !attendanceEnabled ? 'CÔNG TÁC' : 'ĐÃ XÁC NHẬN'}</span>
-        </div>
-      </header>
-
-      {canCreate ? (
-        <div className="work-page-actions duty-page-actions">
-          <div>
-            <span>CÔNG TÁC</span>
-            <h3>Kho công tác</h3>
-          </div>
-          {!editorOpen ? (
-            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-              <span>+</span> Tạo công tác
-            </button>
-          ) : null}
-        </div>
-      ) : null}
 
       {canCreate && editorOpen ? (
         <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
@@ -1287,50 +1111,24 @@ function DutiesUserView({ access, focusTarget = null }) {
               <span aria-hidden="true">×</span> Đóng
             </button>
           </div>
-          <fieldset className="duty-schedule-fieldset">
-            <legend>Thời gian</legend>
-            <div className="duty-schedule-grid">
-              <label>
-                Từ ngày
-                <input required type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} />
-              </label>
-              <label className={form.allDay ? 'field-disabled' : undefined}>
-                Đến ngày
-                <input required type="date" value={form.allDay ? form.startDate : form.endDate} disabled={form.allDay} onChange={(e) => setField('endDate', e.target.value)} />
-              </label>
-              <label className={form.allDay ? 'field-disabled' : undefined}>
-                Từ giờ
-                <input required type="time" value={form.startTime} disabled={form.allDay} onChange={(e) => setField('startTime', e.target.value)} />
-              </label>
-              <label className={form.allDay ? 'field-disabled' : undefined}>
-                Đến giờ
-                <input required type="time" value={form.endTime} disabled={form.allDay} onChange={(e) => setField('endTime', e.target.value)} />
-              </label>
-            </div>
-            <label className="check-inline">
-              <input type="checkbox" checked={form.allDay} onChange={(e) => setField('allDay', e.target.checked)} />
-              <span>Cả ngày</span>
-            </label>
-          </fieldset>
-          <label className="duty-content-field">
-            Nội dung
-            <textarea required maxLength={200} rows={3} value={form.content} onChange={(e) => setField('content', e.target.value)} placeholder="Nội dung công tác (tối đa 200 ký tự)" />
-          </label>
-          <label className="duty-content-field">
-            Địa điểm
-            <input required maxLength={200} value={form.locationText} onChange={(e) => setField('locationText', e.target.value)} placeholder="Nhập địa điểm công tác" />
-          </label>
+          <DutyEditorFields
+            form={form}
+            onField={setField}
+            onStartDateTime={(date, time) => setForm((prev) => applyDutyStartDateTime(prev, date, time))}
+            onEndDateTime={(date, time) => setForm((prev) => applyDutyEndDateTime(prev, date, time))}
+          >
           <div className="duty-field">
-            <span className="duty-field-label">Cấp dưới tham gia</span>
+            <span className="duty-field-label">Người tham gia</span>
             <CollapsibleMultiCheckList
-              title="Chọn cấp dưới"
+              title="Chọn người tham gia"
               options={options.users}
               values={form.participantUserIds}
               onChange={(ids) => setField('participantUserIds', ids)}
               getLabel={(u) => `${u.name || '—'} · ${u.email || ''}`}
-              emptyText="Chưa có cấp dưới trong phòng ban."
+              emptyText="Chưa có người tham gia trong phòng ban."
             />
           </div>
+          </DutyEditorFields>
           <div className="work-editor-actions duty-editor-actions">
             <button className="work-primary-button" disabled={Boolean(pending)}>
               {pending === 'save' ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu công tác'}
@@ -1345,39 +1143,26 @@ function DutiesUserView({ access, focusTarget = null }) {
         </div>
       ) : null}
 
-      <div className="work-user-list duty-modern-list">
-        {!data.duties?.length ? (
-          <div className="work-empty">
-            <span>✓</span>
-            <h3>Lịch công tác đang trống</h3>
-            <p>Không có công tác nào được gán cho bạn trong thời gian này.</p>
-          </div>
+      <div className="duty-list-section">
+        <div className="duty-list-toolbar">
+          <DutyListTabs tab={listTab} onChange={setListTab} />
+          {canCreate && !editorOpen ? (
+            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
+              <span>+</span> Tạo công tác
+            </button>
+          ) : null}
+        </div>
+        {visibleList.length === 0 ? (
+          <DutyListEmpty tab={listTab} />
         ) : (
-          data.duties.map((item) => (
+          <div className="work-user-list duty-modern-list">
+          {visibleList.map((item) => (
             <article
               className="work-user-card duty-modern-card user-duty-card"
               key={item._id}
               data-focus-id={item._id}
             >
-              <div className="duty-card-main">
-                <div className="duty-title-row">
-                  <span className="duty-date-tile" aria-hidden="true">
-                    <strong>{item.startDate.slice(8, 10)}</strong>
-                    <small>THÁNG {Number(item.startDate.slice(5, 7))}</small>
-                  </span>
-                  <strong>{item.content}</strong>
-                  <DutyTimingTags timing={item.timing} />
-                </div>
-                <div className="duty-meta-grid view-only">
-                  <div><span className="meta-label">Từ ngày</span><span>{formatViDate(item.startDate)}</span></div>
-                  <div><span className="meta-label">Đến ngày</span><span>{formatViDate(item.endDate)}</span></div>
-                  <div><span className="meta-label">Từ giờ</span><span>{item.startTime}</span></div>
-                  <div><span className="meta-label">Đến giờ</span><span>{item.endTime}</span></div>
-                  <div><span className="meta-label">Nội dung</span><span>{item.content}</span></div>
-                  <div><span className="meta-label">Địa điểm</span><span>{item.locationNames?.length ? item.locationNames.join(', ') : '—'}</span></div>
-                  <div><span className="meta-label">Phòng ban tham gia</span><span>{item.departmentNames?.length ? item.departmentNames.join(', ') : '—'}</span></div>
-                  <div><span className="meta-label">Cá nhân tham gia</span><span>{item.participantNames?.length ? item.participantNames.join(', ') : '—'}</span></div>
-                </div>
+              <DutyListSummary item={item} />
                 {item.canManage ? (
                   <div className="row-actions duty-actions">
                     <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
@@ -1505,9 +1290,9 @@ function DutiesUserView({ access, focusTarget = null }) {
                     showAttendance={data.attendanceConfirmationEnabled}
                   />
                 ) : null}
-              </div>
             </article>
-          ))
+          ))}
+          </div>
         )}
       </div>
     </section>
@@ -2653,18 +2438,6 @@ function ProfileView({ session }) {
 
   return (
     <section className="work-user-view profile-workspace">
-      <header className="work-hero profile-hero">
-        <div>
-          <span className="work-kicker">Không gian · Cá nhân</span>
-          <h2>Hồ sơ của {displayName}</h2>
-          <p>Thông tin định danh, vai trò và bảo mật tài khoản trong một không gian riêng tư, rõ ràng.</p>
-        </div>
-        <div className="work-hero-stamp profile-hero-stamp">
-          <strong>{initials || 'LV'}</strong>
-          <span>{roleLabel}</span>
-        </div>
-      </header>
-
       <div className="profile-modern-grid">
         <article className="profile-paper profile-overview">
           <header className="profile-identity">

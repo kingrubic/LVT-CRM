@@ -10,6 +10,8 @@ export type WorkVisibilityMode =
   | typeof WORK_VISIBILITY_SCHOOL;
 
 export const DUTY_LOCATION_MAX_LENGTH = 200;
+export const DUTY_TITLE_MAX_LENGTH = 200;
+export const DUTY_CONTENT_MAX_LENGTH = 200;
 export const WORK_TITLE_MAX_LENGTH = 200;
 
 export function isTeamLeadLevel(level: number) {
@@ -28,6 +30,24 @@ export function canCreateAssignments(role: string, level: number) {
 
 export function normalizeWorkVisibilityMode(value: string | null | undefined): WorkVisibilityMode {
   return value === WORK_VISIBILITY_CREATOR ? WORK_VISIBILITY_CREATOR : WORK_VISIBILITY_SCHOOL;
+}
+
+export function cleanDutyTitle(value: string) {
+  const title = String(value || "").trim();
+  if (!title || title.length > DUTY_TITLE_MAX_LENGTH) throw new Error("INVALID_DUTY_TITLE");
+  return title;
+}
+
+export function dutyListTitle(duty: { title?: string; content?: string }) {
+  const title = String(duty.title || "").trim();
+  if (title) return title;
+  return String(duty.content || "").trim() || "Công tác";
+}
+
+export function cleanDutyContent(value: string) {
+  const content = String(value || "").trim();
+  if (!content || content.length > DUTY_CONTENT_MAX_LENGTH) throw new Error("INVALID_CONTENT");
+  return content;
 }
 
 export function cleanDutyLocationText(value: string) {

@@ -7,8 +7,11 @@ import {
   canReviewWorkCompletion,
   canSeeArchivedWork,
   canSeeLiveWork,
+  cleanDutyContent,
   cleanDutyLocationText,
+  cleanDutyTitle,
   cleanWorkTitle,
+  dutyListTitle,
   dutyLocationLabel,
   isDocumentArchived,
   isWorkItemArchived,
@@ -24,6 +27,17 @@ test('chỉ admin/mod và tổ trưởng/tổ phó (2/3 sao) được tạo côn
   assert.equal(canCreateAssignments('user', 1), false);
   assert.equal(canCreateAssignments('user', 4), false);
   assert.equal(canCreateAssignments('user', 5), false);
+});
+
+test('tên công tác bắt buộc, list ưu tiên title rồi mới content', () => {
+  assert.equal(cleanDutyTitle('  Họp chuyên môn  '), 'Họp chuyên môn');
+  assert.throws(() => cleanDutyTitle(''), /INVALID_DUTY_TITLE/);
+  assert.throws(() => cleanDutyTitle('x'.repeat(201)), /INVALID_DUTY_TITLE/);
+  assert.equal(cleanDutyContent(' Báo cáo tuần '), 'Báo cáo tuần');
+  assert.throws(() => cleanDutyContent(''), /INVALID_CONTENT/);
+  assert.equal(dutyListTitle({ title: 'Đi thực tế', content: 'Nội dung cũ' }), 'Đi thực tế');
+  assert.equal(dutyListTitle({ content: 'Nội dung cũ' }), 'Nội dung cũ');
+  assert.equal(dutyListTitle({}), 'Công tác');
 });
 
 test('địa điểm công tác là text tự do đã trim', () => {

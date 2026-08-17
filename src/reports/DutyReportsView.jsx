@@ -125,10 +125,10 @@ function CalendarEvent({ event, compact = false, onSelect }) {
       type="button"
       className={`report-event ${compact ? 'compact' : ''} status-${event.attendanceStatus}`}
       onClick={() => onSelect(event)}
-      title={`${event.content} · ${eventTime(event)}`}
+      title={`${event.title || event.content} · ${eventTime(event)}`}
     >
       <span className="report-event-time">{eventTime(event)}</span>
-      <strong>{event.content}</strong>
+      <strong>{event.title || event.content}</strong>
       {!compact && event.locationNames?.length ? (
         <span className="report-event-location">⌖ {event.locationNames.join(', ')}</span>
       ) : null}
@@ -227,7 +227,7 @@ function MiniMonth({ date, events, onSelect }) {
               key={isoDate}
               disabled={!dailyEvents.length}
               onClick={() => dailyEvents.length && onSelect(dailyEvents[0])}
-              title={dailyEvents.map((event) => event.content).join(', ')}
+              title={dailyEvents.map((event) => event.title || event.content).join(', ')}
             >
               {cell.getDate()}
               {dailyEvents.length ? <i>{dailyEvents.length}</i> : null}
@@ -278,7 +278,7 @@ function EventDetail({ event, personName, onClose, showAttendance = true }) {
           {statusLabel(event.attendanceStatus)}
         </span>
       ) : null}
-      <h3>{event.content}</h3>
+      <h3>{event.title || event.content}</h3>
       <dl>
         <div><dt>Nhân sự</dt><dd>{personName}</dd></div>
         <div><dt>Thời gian</dt><dd>{eventTime(event)}</dd></div>
@@ -345,18 +345,6 @@ export default function DutyReportsView() {
 
   return (
     <section className="duty-reports-view">
-      <header className="report-hero">
-        <div>
-          <span className="report-kicker">Báo cáo · Công tác</span>
-          <h2>Lịch công tác trực quan</h2>
-          <p>Theo dõi nhịp công tác của cá nhân và cấp dưới trên một dòng thời gian rõ ràng, linh hoạt.</p>
-        </div>
-        <div className="report-hero-mark" aria-hidden="true">
-          <span>{anchor.getDate()}</span>
-          <small>THÁNG {anchor.getMonth() + 1}</small>
-        </div>
-      </header>
-
       {data === undefined ? (
         <div className="report-loading">
           <span />

@@ -127,6 +127,11 @@
   padding: 0 5px;
 }
 
+.work-page-actions-only {
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
 .work-page-actions > div > span,
 .work-editor-title span,
 .work-card-eyebrow {

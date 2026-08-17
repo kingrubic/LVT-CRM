@@ -182,12 +182,7 @@ export default function BoardingManagement() {
 
   return (
     <section className="boarding-management">
-      <header className="boarding-admin-hero">
-        <div>
-          <span>Thiết lập · Bán trú</span>
-          <h2>Quản lý kỳ bán trú</h2>
-          <p>Tổ chức giáo viên tham gia theo từng học kỳ và năm học.</p>
-        </div>
+      <div className="work-page-actions work-page-actions-only">
         <button
           type="button"
           className="boarding-add-button"
@@ -202,7 +197,7 @@ export default function BoardingManagement() {
         >
           <span>＋</span> Thêm kỳ bán trú
         </button>
-      </header>
+      </div>
 
       {feedback.text ? <div className={`boarding-feedback ${feedback.type}`}>{feedback.text}</div> : null}
 
