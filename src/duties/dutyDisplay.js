@@ -157,6 +157,81 @@ export function filterDutiesByTab(list, tab = DUTY_LIST_TAB_UPCOMING) {
     .sort((a, b) => dutyStartKey(a).localeCompare(dutyStartKey(b)));
 }
 
+export function emptyDutySearch() {
+  return {
+    query: '',
+    department: '',
+    person: '',
+    location: '',
+    dateFrom: '',
+    dateTo: '',
+  };
+}
+
+function normalizeDutySearchText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLocaleLowerCase('vi')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function includesDutySearch(haystack, needle) {
+  if (!needle) return true;
+  return normalizeDutySearchText(haystack).includes(needle);
+}
+
+function dutyPersonSearchText(item) {
+  const names = [...(item?.participantNames || [])];
+  for (const person of item?.participants || []) {
+    names.push(person?.name, person?.email);
+  }
+  return names.filter(Boolean).join(' ');
+}
+
+function dutyLocationSearchText(item) {
+  return [...(item?.locationNames || []), item?.locationText].filter(Boolean).join(' ');
+}
+
+function dutyOverlapsDateRange(item, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return true;
+  const start = String(item?.startDate || '');
+  const end = String(item?.endDate || item?.startDate || '');
+  if (!start) return false;
+  if (dateFrom && end < dateFrom) return false;
+  if (dateTo && start > dateTo) return false;
+  return true;
+}
+
+export function countDutyAdvancedFilters(search = {}) {
+  return ['department', 'person', 'location', 'dateFrom', 'dateTo']
+    .filter((field) => String(search?.[field] || '').trim())
+    .length;
+}
+
+export function filterDutiesBySearch(list, search = {}) {
+  const items = Array.isArray(list) ? list : [];
+  const query = normalizeDutySearchText(search.query);
+  const department = normalizeDutySearchText(search.department);
+  const person = normalizeDutySearchText(search.person);
+  const location = normalizeDutySearchText(search.location);
+  const dateFrom = String(search.dateFrom || '').trim();
+  const dateTo = String(search.dateTo || '').trim();
+  if (!query && !department && !person && !location && !dateFrom && !dateTo) return items;
+  return items.filter((item) => {
+    if (query && !includesDutySearch(item?.title, query) && !includesDutySearch(item?.content, query)) {
+      return false;
+    }
+    if (!includesDutySearch((item?.departmentNames || []).join(' '), department)) return false;
+    if (!includesDutySearch(dutyPersonSearchText(item), person)) return false;
+    if (!includesDutySearch(dutyLocationSearchText(item), location)) return false;
+    return dutyOverlapsDateRange(item, dateFrom, dateTo);
+  });
+}
+
 function labelsForIds(ids, rows, getLabel) {
   const wanted = new Set((ids || []).map((id) => String(id)));
   return (rows || [])

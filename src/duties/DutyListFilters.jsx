@@ -1,4 +1,10 @@
-import { DUTY_LIST_TAB_PAST, DUTY_LIST_TAB_UPCOMING } from './dutyDisplay';
+import { useState } from 'react';
+import {
+  countDutyAdvancedFilters,
+  DUTY_LIST_TAB_PAST,
+  DUTY_LIST_TAB_UPCOMING,
+  emptyDutySearch,
+} from './dutyDisplay';
 
 export function DutyListHeading({ children }) {
   return <h3 className="duty-list-heading">{children}</h3>;
@@ -29,7 +35,111 @@ export function DutyListTabs({ tab, onChange }) {
   );
 }
 
-export function DutyListEmpty({ tab, tone = 'mine' }) {
+export function DutyListSearch({ value, onChange }) {
+  const search = value || emptyDutySearch();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedCount = countDutyAdvancedFilters(search);
+  const setField = (field, nextValue) => onChange({ ...search, [field]: nextValue });
+  const clearAdvanced = () => onChange({
+    ...search,
+    department: '',
+    person: '',
+    location: '',
+    dateFrom: '',
+    dateTo: '',
+  });
+
+  return (
+    <div className="duty-list-search">
+      <div className="duty-list-search-row">
+        <label className="duty-list-search-field">
+          <span className="sr-only">Tìm theo tên hoặc nội dung công tác</span>
+          <input
+            type="search"
+            value={search.query}
+            onChange={(event) => setField('query', event.target.value)}
+            placeholder="Tìm theo tên hoặc nội dung công tác"
+            autoComplete="off"
+          />
+        </label>
+        <button
+          type="button"
+          className={`duty-list-search-advanced-toggle${advancedOpen || advancedCount ? ' is-active' : ''}`}
+          aria-expanded={advancedOpen}
+          onClick={() => setAdvancedOpen((open) => !open)}
+        >
+          Tìm kiếm nâng cao
+          {advancedCount ? <span className="duty-list-search-badge">{advancedCount}</span> : null}
+        </button>
+      </div>
+      {advancedOpen ? (
+        <div className="duty-list-search-advanced">
+          <label>
+            Phòng ban
+            <input
+              type="search"
+              value={search.department}
+              onChange={(event) => setField('department', event.target.value)}
+              placeholder="Tên phòng ban"
+              autoComplete="off"
+            />
+          </label>
+          <label>
+            Cá nhân
+            <input
+              type="search"
+              value={search.person}
+              onChange={(event) => setField('person', event.target.value)}
+              placeholder="Tên người tham gia"
+              autoComplete="off"
+            />
+          </label>
+          <label>
+            Thời gian từ
+            <input
+              type="date"
+              value={search.dateFrom}
+              onChange={(event) => setField('dateFrom', event.target.value)}
+            />
+          </label>
+          <label>
+            Thời gian đến
+            <input
+              type="date"
+              value={search.dateTo}
+              onChange={(event) => setField('dateTo', event.target.value)}
+            />
+          </label>
+          <label className="duty-list-search-location">
+            Địa điểm
+            <input
+              type="search"
+              value={search.location}
+              onChange={(event) => setField('location', event.target.value)}
+              placeholder="Địa điểm công tác"
+              autoComplete="off"
+            />
+          </label>
+          {advancedCount ? (
+            <button type="button" className="duty-list-search-clear" onClick={clearAdvanced}>
+              Xóa bộ lọc
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function DutyListEmpty({ tab = DUTY_LIST_TAB_UPCOMING, tone = 'mine', filtered = false }) {
+  if (filtered) {
+    return (
+      <div className="work-empty duty-list-empty">
+        <span aria-hidden="true">⌕</span>
+        <p>Không tìm thấy công tác phù hợp.</p>
+      </div>
+    );
+  }
   if (tab === DUTY_LIST_TAB_PAST) {
     return (
       <div className="work-empty duty-list-empty">

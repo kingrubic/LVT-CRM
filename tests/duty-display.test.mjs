@@ -12,7 +12,10 @@ import {
   DUTY_LIST_TAB_PAST,
   DUTY_LIST_TAB_UPCOMING,
   emptyDutyForm,
+  emptyDutySearch,
+  filterDutiesBySearch,
   filterDutiesByTab,
+  countDutyAdvancedFilters,
   formatDutyDateTimeLine,
   formatViDate,
   fromDateTimeLocalValue,
@@ -152,4 +155,61 @@ test('tách danh sách công tác: việc của tôi và việc tôi tạo', () 
   });
   assert.deepEqual(leadSplit.mine.map((item) => item._id), ['a', 'd']);
   assert.deepEqual(leadSplit.created.map((item) => item._id), []);
+});
+
+test('tìm kiếm realtime theo tên hoặc nội dung công tác, không dấu', () => {
+  const trip = {
+    _id: 'a',
+    title: 'Họp khối chuyên môn',
+    content: 'Làm việc với UBND',
+    departmentNames: ['Phòng Giáo viên'],
+    participantNames: ['Trần Anh Vũ'],
+    locationText: 'Phòng họp A',
+    startDate: '2026-08-18',
+    endDate: '2026-08-18',
+  };
+  const other = {
+    _id: 'b',
+    title: 'Đi thực tế',
+    content: 'Tham quan trường bạn',
+    departmentNames: ['Phòng Tổ chức'],
+    participantNames: ['Admin'],
+    locationNames: ['Sân trường'],
+    startDate: '2026-08-20',
+    endDate: '2026-08-21',
+  };
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...emptyDutySearch(), query: 'hop khoi' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...emptyDutySearch(), query: 'UBND' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...emptyDutySearch(), query: 'thực tế' }).map((item) => item._id), ['b']);
+});
+
+test('tìm kiếm nâng cao theo phòng ban, cá nhân, địa điểm và khoảng thời gian', () => {
+  const trip = {
+    _id: 'a',
+    title: 'Họp khối',
+    content: 'Nội dung họp',
+    departmentNames: ['Phòng Giáo viên'],
+    participantNames: ['Trần Anh Vũ'],
+    participants: [{ _id: 'u1', name: 'Trần Anh Vũ', email: 'vu@lvt.edu.vn' }],
+    locationText: 'Phòng họp A',
+    startDate: '2026-08-18',
+    endDate: '2026-08-18',
+  };
+  const other = {
+    _id: 'b',
+    title: 'Đi thực tế',
+    content: 'Tham quan',
+    departmentNames: ['Phòng Tổ chức'],
+    participantNames: ['Admin'],
+    locationNames: ['Sân trường'],
+    startDate: '2026-08-20',
+    endDate: '2026-08-21',
+  };
+  const base = emptyDutySearch();
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, department: 'giao vien' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, person: 'anh vu' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, location: 'san truong' }).map((item) => item._id), ['b']);
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, dateFrom: '2026-08-20', dateTo: '2026-08-20' }).map((item) => item._id), ['b']);
+  assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, query: 'hop', department: 'to chuc' }).map((item) => item._id), []);
+  assert.equal(countDutyAdvancedFilters({ ...base, department: 'A', dateFrom: '2026-08-18' }), 2);
 });
