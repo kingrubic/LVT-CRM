@@ -206,10 +206,11 @@ function dutyOverlapsDateRange(item, dateFrom, dateTo) {
   return true;
 }
 
-export function countDutyAdvancedFilters(search = {}) {
-  return ['department', 'person', 'location', 'dateFrom', 'dateTo']
-    .filter((field) => String(search?.[field] || '').trim())
-    .length;
+export function countDutyAdvancedFilters(search = {}, { includeLocation = true } = {}) {
+  const fields = includeLocation
+    ? ['department', 'person', 'location', 'dateFrom', 'dateTo']
+    : ['department', 'person', 'dateFrom', 'dateTo'];
+  return fields.filter((field) => String(search?.[field] || '').trim()).length;
 }
 
 export function filterDutiesBySearch(list, search = {}) {

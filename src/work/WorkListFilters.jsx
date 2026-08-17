@@ -1,4 +1,5 @@
 import { WORK_LIST_TAB_PAST, WORK_LIST_TAB_UPCOMING } from './workDisplay';
+import { DutyListSearch } from '../duties/DutyListFilters';
 
 export function WorkListTabs({ tab, onChange }) {
   return (
@@ -25,7 +26,27 @@ export function WorkListTabs({ tab, onChange }) {
   );
 }
 
-export function WorkListEmpty({ tab, tone = 'mine' }) {
+export function WorkListSearch({ value, onChange }) {
+  return (
+    <DutyListSearch
+      value={value}
+      onChange={onChange}
+      queryPlaceholder="Tìm theo tên hoặc nội dung công việc"
+      personPlaceholder="Tên người được giao"
+      showLocation={false}
+    />
+  );
+}
+
+export function WorkListEmpty({ tab = WORK_LIST_TAB_UPCOMING, tone = 'mine', filtered = false }) {
+  if (filtered) {
+    return (
+      <div className="work-empty duty-list-empty">
+        <span aria-hidden="true">⌕</span>
+        <p>Không tìm thấy công việc phù hợp.</p>
+      </div>
+    );
+  }
   if (tab === WORK_LIST_TAB_PAST) {
     return (
       <div className="work-empty duty-list-empty">

@@ -35,16 +35,22 @@ export function DutyListTabs({ tab, onChange }) {
   );
 }
 
-export function DutyListSearch({ value, onChange }) {
+export function DutyListSearch({
+  value,
+  onChange,
+  queryPlaceholder = 'Tìm theo tên hoặc nội dung công tác',
+  personPlaceholder = 'Tên người tham gia',
+  showLocation = true,
+}) {
   const search = value || emptyDutySearch();
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const advancedCount = countDutyAdvancedFilters(search);
+  const advancedCount = countDutyAdvancedFilters(search, { includeLocation: showLocation });
   const setField = (field, nextValue) => onChange({ ...search, [field]: nextValue });
   const clearAdvanced = () => onChange({
     ...search,
     department: '',
     person: '',
-    location: '',
+    location: showLocation ? '' : search.location,
     dateFrom: '',
     dateTo: '',
   });
@@ -53,12 +59,12 @@ export function DutyListSearch({ value, onChange }) {
     <div className="duty-list-search">
       <div className="duty-list-search-row">
         <label className="duty-list-search-field">
-          <span className="sr-only">Tìm theo tên hoặc nội dung công tác</span>
+          <span className="sr-only">{queryPlaceholder}</span>
           <input
             type="search"
             value={search.query}
             onChange={(event) => setField('query', event.target.value)}
-            placeholder="Tìm theo tên hoặc nội dung công tác"
+            placeholder={queryPlaceholder}
             autoComplete="off"
           />
         </label>
@@ -90,7 +96,7 @@ export function DutyListSearch({ value, onChange }) {
               type="search"
               value={search.person}
               onChange={(event) => setField('person', event.target.value)}
-              placeholder="Tên người tham gia"
+              placeholder={personPlaceholder}
               autoComplete="off"
             />
           </label>
@@ -110,16 +116,18 @@ export function DutyListSearch({ value, onChange }) {
               onChange={(event) => setField('dateTo', event.target.value)}
             />
           </label>
-          <label className="duty-list-search-location">
-            Địa điểm
-            <input
-              type="search"
-              value={search.location}
-              onChange={(event) => setField('location', event.target.value)}
-              placeholder="Địa điểm công tác"
-              autoComplete="off"
-            />
-          </label>
+          {showLocation ? (
+            <label className="duty-list-search-location">
+              Địa điểm
+              <input
+                type="search"
+                value={search.location || ''}
+                onChange={(event) => setField('location', event.target.value)}
+                placeholder="Địa điểm công tác"
+                autoComplete="off"
+              />
+            </label>
+          ) : null}
           {advancedCount ? (
             <button type="button" className="duty-list-search-clear" onClick={clearAdvanced}>
               Xóa bộ lọc
