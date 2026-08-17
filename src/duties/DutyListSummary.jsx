@@ -47,37 +47,46 @@ function joinNames(names) {
   return names?.length ? names.join(', ') : '—';
 }
 
+function DutyEllipsisText({ text, strong = false }) {
+  const value = text || '—';
+  const props = { className: 'duty-ellipsis', title: value === '—' ? undefined : value };
+  return strong ? <strong {...props}>{value}</strong> : <span {...props}>{value}</span>;
+}
+
 export default function DutyListSummary({ item }) {
   const allDay = Boolean(item.allDay);
+  const startLine = formatDutyDateTimeLine(item.startDate, item.startTime, { allDay });
+  const endLine = allDay ? 'Cả ngày' : formatDutyDateTimeLine(item.endDate, item.endTime);
+  const location = item.locationNames?.length ? item.locationNames.join(', ') : (item.locationText || '—');
   return (
     <div className="duty-card-body">
       <div className="duty-time-cell">
         <span className="meta-label">Thời gian</span>
-        <strong>{formatDutyDateTimeLine(item.startDate, item.startTime, { allDay })}</strong>
-        <span>{allDay ? 'Cả ngày' : formatDutyDateTimeLine(item.endDate, item.endTime)}</span>
+        <DutyEllipsisText strong text={startLine} />
+        <DutyEllipsisText text={endLine} />
       </div>
       <div className="duty-card-main">
         <div className="duty-title-row">
-          <strong>{dutyDisplayTitle(item)}</strong>
+          <DutyEllipsisText strong text={dutyDisplayTitle(item)} />
           <DutyTimingTags timing={item.timing} />
         </div>
         <div className="duty-detail-cell">
           <span className="meta-label">Chi tiết</span>
           <div className="duty-detail-row">
             <DutyIcon kind="content" />
-            <span>{item.content || '—'}</span>
+            <DutyEllipsisText text={item.content || '—'} />
           </div>
           <div className="duty-detail-row">
             <DutyIcon kind="location" />
-            <span>{item.locationNames?.length ? item.locationNames.join(', ') : (item.locationText || '—')}</span>
+            <DutyEllipsisText text={location} />
           </div>
           <div className="duty-detail-row">
             <DutyIcon kind="department" />
-            <span>{joinNames(item.departmentNames)}</span>
+            <DutyEllipsisText text={joinNames(item.departmentNames)} />
           </div>
           <div className="duty-detail-row">
             <DutyIcon kind="people" />
-            <span>{joinNames(item.participantNames)}</span>
+            <DutyEllipsisText text={joinNames(item.participantNames)} />
           </div>
         </div>
       </div>

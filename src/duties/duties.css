@@ -389,16 +389,23 @@
 }
 
 .duty-time-cell strong,
-.duty-time-cell > span:last-child {
+.duty-time-cell > .duty-ellipsis:last-child {
   color: var(--duty-navy);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.45;
 }
 
-.duty-time-cell > span:last-child {
+.duty-time-cell > .duty-ellipsis:last-child {
   color: #4d6578;
   font-weight: 700;
+}
+
+.duty-ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .duty-detail-cell {
@@ -410,7 +417,7 @@
 .duty-detail-row {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
-  align-items: start;
+  align-items: center;
   gap: 8px;
   color: #52697a;
   font-size: 11px;
@@ -420,7 +427,7 @@
 .duty-detail-row svg {
   width: 16px;
   height: 16px;
-  margin-top: 1px;
+  margin-top: 0;
   fill: none;
   stroke: #7a8d9c;
   stroke-width: 1.6;
