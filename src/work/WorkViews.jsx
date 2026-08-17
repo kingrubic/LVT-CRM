@@ -7,10 +7,12 @@ import { useNotificationFocus } from '../notifications/useNotificationFocus';
 import WorkAssignmentRows from './WorkAssignmentRows';
 import WorkCreatePreview from './WorkCreatePreview';
 import { DutyListHeading } from '../duties/DutyListFilters';
-import { WorkListEmpty, WorkListTabs } from './WorkListFilters';
+import { WorkListEmpty, WorkListSearch, WorkListTabs } from './WorkListFilters';
 import WorkListSummary from './WorkListSummary';
 import {
   assignmentsFromDocument,
+  emptyWorkSearch,
+  filterWorksBySearch,
   filterWorksByTab,
   formatWorkDate,
   WORK_LIST_TAB_UPCOMING,
@@ -509,6 +511,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const [assignments, setAssignments] = useState([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [listTab, setListTab] = useState(WORK_LIST_TAB_UPCOMING);
+  const [listSearch, setListSearch] = useState(emptyWorkSearch);
   const [expanded, setExpanded] = useState(null);
   const [approverIds, setApproverIds] = useState([]);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
@@ -524,6 +527,10 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const documents = listData?.documents || [];
   const pendingCompletionReviews = listData?.pendingCompletionReviews || [];
   const visibleDocuments = useMemo(() => filterWorksByTab(documents, listTab), [documents, listTab]);
+  const filteredDocuments = useMemo(
+    () => filterWorksBySearch(visibleDocuments, listSearch),
+    [visibleDocuments, listSearch],
+  );
 
   const reset = () => {
     setEditingDocument(null);
@@ -862,11 +869,14 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
             </button>
           ) : null}
         </div>
+        <WorkListSearch value={listSearch} onChange={setListSearch} />
         {visibleDocuments.length === 0 ? (
           <WorkListEmpty tab={listTab} tone="created" />
+        ) : filteredDocuments.length === 0 ? (
+          <WorkListEmpty filtered />
         ) : (
           <div className="duty-modern-list">
-            {visibleDocuments.map((document) => {
+            {filteredDocuments.map((document) => {
               const cardOpen = String(expanded || '') === String(document._id);
               return (
                 <article
@@ -1007,6 +1017,7 @@ export function WorkUserView({ focusTarget = null }) {
   const [decidingId, setDecidingId] = useState(null);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
   const [listTab, setListTab] = useState(WORK_LIST_TAB_UPCOMING);
+  const [listSearch, setListSearch] = useState(emptyWorkSearch);
   const [expanded, setExpanded] = useState(null);
   const isApprover = (data?.level || 0) >= 4;
   const isAssigner = data?.level === 2 || data?.level === 3;
@@ -1025,6 +1036,18 @@ export function WorkUserView({ focusTarget = null }) {
   const visiblePersonalTasks = useMemo(
     () => filterWorksByTab(data?.personalTasks || [], listTab),
     [data?.personalTasks, listTab],
+  );
+  const filteredMyTasks = useMemo(
+    () => filterWorksBySearch(visibleMyTasks, listSearch),
+    [visibleMyTasks, listSearch],
+  );
+  const filteredDepartmentWorks = useMemo(
+    () => filterWorksBySearch(visibleDepartmentWorks, listSearch),
+    [visibleDepartmentWorks, listSearch],
+  );
+  const filteredPersonalTasks = useMemo(
+    () => filterWorksBySearch(visiblePersonalTasks, listSearch),
+    [visiblePersonalTasks, listSearch],
   );
 
   if (data === undefined) return <div className="work-loading">Đang tải công việc của bạn…</div>;
@@ -1244,10 +1267,11 @@ export function WorkUserView({ focusTarget = null }) {
           <div className="duty-list-toolbar">
             <WorkListTabs tab={listTab} onChange={setListTab} />
           </div>
+          <WorkListSearch value={listSearch} onChange={setListSearch} />
           {isAdminMod ? (
-            visibleMyTasks.length === 0 ? <WorkListEmpty tab={listTab} /> : (
+            visibleMyTasks.length === 0 ? <WorkListEmpty tab={listTab} /> : filteredMyTasks.length === 0 ? <WorkListEmpty filtered /> : (
               <div className="duty-modern-list">
-                {visibleMyTasks.map((task) => {
+                {filteredMyTasks.map((task) => {
                   const cardOpen = String(expanded || '') === String(task._id);
                   return (
                     <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id}>
@@ -1328,9 +1352,9 @@ export function WorkUserView({ focusTarget = null }) {
           ) : null}
 
           {!isAdminMod && isAssigner ? (
-            visibleDepartmentWorks.length === 0 ? <WorkListEmpty tab={listTab} /> : (
+            visibleDepartmentWorks.length === 0 ? <WorkListEmpty tab={listTab} /> : filteredDepartmentWorks.length === 0 ? <WorkListEmpty filtered /> : (
               <div className="duty-modern-list">
-                {visibleDepartmentWorks.map((work) => {
+                {filteredDepartmentWorks.map((work) => {
                   const cardOpen = String(expanded || '') === String(work._id);
                   return (
                     <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={work._id} data-focus-id={work._id}>
@@ -1371,9 +1395,9 @@ export function WorkUserView({ focusTarget = null }) {
           ) : null}
 
           {!isAdminMod && !isApprover && !isAssigner ? (
-            visiblePersonalTasks.length === 0 ? <WorkListEmpty tab={listTab} /> : (
+            visiblePersonalTasks.length === 0 ? <WorkListEmpty tab={listTab} /> : filteredPersonalTasks.length === 0 ? <WorkListEmpty filtered /> : (
               <div className="duty-modern-list">
-                {visiblePersonalTasks.map((task) => {
+                {filteredPersonalTasks.map((task) => {
                   const cardOpen = String(expanded || '') === String(task._id);
                   return (
                     <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id}>

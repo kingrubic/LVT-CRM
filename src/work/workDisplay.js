@@ -87,6 +87,95 @@ export function filterWorksByTab(list, tab = WORK_LIST_TAB_UPCOMING, today = vie
   return items.filter((item) => !isWorkPast(item, today)).sort(compare);
 }
 
+export function emptyWorkSearch() {
+  return {
+    query: '',
+    department: '',
+    person: '',
+    dateFrom: '',
+    dateTo: '',
+  };
+}
+
+function normalizeWorkSearchText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLocaleLowerCase('vi')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function includesWorkSearch(haystack, needle) {
+  if (!needle) return true;
+  return normalizeWorkSearchText(haystack).includes(needle);
+}
+
+function workDepartmentSearchText(item) {
+  const names = [item?.departmentName, item?.document?.departmentName];
+  for (const assignment of item?.assignments || []) {
+    names.push(assignment?.departmentName);
+  }
+  return names.filter(Boolean).join(' ');
+}
+
+function workPersonSearchText(item) {
+  const names = [...(item?.userNames || [])];
+  for (const assignment of item?.assignments || []) {
+    names.push(...(assignment?.userNames || []));
+    for (const member of assignment?.members || []) names.push(member?.name, member?.email);
+  }
+  for (const member of item?.members || []) names.push(member?.name, member?.email);
+  for (const member of item?.pendingMembers || []) names.push(member?.name, member?.email);
+  for (const task of item?.tasks || []) {
+    for (const person of task?.assignees || []) names.push(person?.name, person?.email);
+  }
+  return names.filter(Boolean).join(' ');
+}
+
+function workQueryTitleText(item) {
+  return [item?.title, item?.documentTitle, item?.document?.title, item?.fileName, workListTitle(item)]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function workQueryContentText(item) {
+  const parts = [item?.content, item?.documentContent, workContentSummary(item)];
+  for (const assignment of item?.assignments || []) parts.push(assignment?.content);
+  return parts.filter(Boolean).join(' ');
+}
+
+function workOverlapsDateRange(item, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return true;
+  const deadlines = workDeadlines(item);
+  if (!deadlines.length) return false;
+  return deadlines.some((deadline) => {
+    if (dateFrom && deadline < dateFrom) return false;
+    if (dateTo && deadline > dateTo) return false;
+    return true;
+  });
+}
+
+export function filterWorksBySearch(list, search = {}) {
+  const items = Array.isArray(list) ? list : [];
+  const query = normalizeWorkSearchText(search.query);
+  const department = normalizeWorkSearchText(search.department);
+  const person = normalizeWorkSearchText(search.person);
+  const dateFrom = String(search.dateFrom || '').trim();
+  const dateTo = String(search.dateTo || '').trim();
+  if (!query && !department && !person && !dateFrom && !dateTo) return items;
+  return items.filter((item) => {
+    if (query && !includesWorkSearch(workQueryTitleText(item), query) && !includesWorkSearch(workQueryContentText(item), query)) {
+      return false;
+    }
+    if (!includesWorkSearch(workDepartmentSearchText(item), department)) return false;
+    if (!includesWorkSearch(workPersonSearchText(item), person)) return false;
+    return workOverlapsDateRange(item, dateFrom, dateTo);
+  });
+}
+
 export function assignmentRecipientLabel(assignment, catalogs = {}) {
   if (assignment?.type === 'individual') {
     const id = String(assignment.userIds?.[0] || '');

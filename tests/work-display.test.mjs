@@ -6,6 +6,8 @@ import {
   assignmentsFromDocument,
   buildWorkCreatePreview,
   emptyWorkAssignment,
+  emptyWorkSearch,
+  filterWorksBySearch,
   filterWorksByTab,
   formatWorkDate,
   isWorkPast,
@@ -97,4 +99,61 @@ test('preview tạo công việc gom nhãn đối tượng', () => {
   assert.equal(assignmentRecipientLabel({ type: 'individual', userIds: [] }), 'Chưa chọn người');
   assert.equal(workListTitle({ fileName: 'a.pdf' }), 'a.pdf');
   assert.equal(workContentSummary({ assignments: [{ content: 'Một' }, { content: 'Hai' }] }), 'Một (+1)');
+});
+
+test('tìm kiếm realtime theo tên hoặc nội dung công việc, không dấu', () => {
+  const mine = {
+    _id: 'a',
+    documentTitle: 'Họp tổ chuyên môn',
+    content: 'Soạn báo cáo tuần',
+    departmentName: 'Tổ Toán',
+    deadline: '2026-08-20',
+    members: [{ name: 'Trần Anh Vũ' }],
+  };
+  const created = {
+    _id: 'b',
+    title: 'Đi thực tế',
+    content: 'Chuẩn bị hồ sơ',
+    assignments: [
+      {
+        type: 'department',
+        departmentName: 'Phòng Tổ chức',
+        content: 'Chuẩn bị hồ sơ',
+        deadline: '2026-08-22',
+        members: [{ name: 'Admin' }],
+      },
+    ],
+  };
+  assert.deepEqual(filterWorksBySearch([mine, created], { ...emptyWorkSearch(), query: 'hop to' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterWorksBySearch([mine, created], { ...emptyWorkSearch(), query: 'bao cao' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterWorksBySearch([mine, created], { ...emptyWorkSearch(), query: 'thực tế' }).map((item) => item._id), ['b']);
+});
+
+test('tìm kiếm nâng cao công việc theo phòng ban, cá nhân và hạn chót', () => {
+  const mine = {
+    _id: 'a',
+    documentTitle: 'Họp tổ',
+    content: 'Soạn báo cáo',
+    departmentName: 'Tổ Toán',
+    deadline: '2026-08-20',
+    members: [{ name: 'Trần Anh Vũ' }],
+  };
+  const created = {
+    _id: 'b',
+    title: 'Đi thực tế',
+    assignments: [
+      {
+        type: 'department',
+        departmentName: 'Phòng Tổ chức',
+        content: 'Chuẩn bị',
+        deadline: '2026-08-22',
+        members: [{ name: 'Admin' }],
+      },
+    ],
+  };
+  const base = emptyWorkSearch();
+  assert.deepEqual(filterWorksBySearch([mine, created], { ...base, department: 'to toan' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterWorksBySearch([mine, created], { ...base, person: 'anh vu' }).map((item) => item._id), ['a']);
+  assert.deepEqual(filterWorksBySearch([mine, created], { ...base, dateFrom: '2026-08-22', dateTo: '2026-08-22' }).map((item) => item._id), ['b']);
+  assert.deepEqual(filterWorksBySearch([mine, created], { ...base, query: 'hop', department: 'to chuc' }).map((item) => item._id), []);
 });
