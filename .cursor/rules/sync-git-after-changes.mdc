@@ -1,14 +1,22 @@
 ---
-description: Always commit and push after completing code changes
+description: Commit on a feature branch and open a PR; never merge to main
 alwaysApply: true
 ---
 
 # Đồng bộ Git sau thay đổi
 
-Sau khi hoàn thành thay đổi code/docs theo yêu cầu của Bob:
+Sau khi hoàn thành thay đổi code/docs theo yêu cầu:
 
-1. **Commit** các file liên quan (không commit secrets / `.env`).
-2. **Push** lên remote tracking branch (`git push -u origin HEAD` nếu chưa có upstream).
-3. Không cần hỏi lại trước khi commit/push cho các thay đổi vừa làm trong session — trừ khi Bob nói rõ là chưa commit, hoặc đang ở nhánh nhạy cảm cần confirm.
+1. **Không làm việc trực tiếp trên `main`/`master`.** Nếu đang ở `main`, tạo nhánh feature mới trước khi commit.
+2. **Commit** các file liên quan (không commit secrets / `.env`).
+3. **Push** lên remote tracking branch (`git push -u origin HEAD` nếu chưa có upstream).
+4. **Mở Pull Request** vào `main` để reviewer kiểm tra. Không tự merge PR, không merge local vào `main`.
+5. Không cần hỏi lại trước khi commit/push/mở PR cho các thay đổi vừa làm trong session — trừ khi owner nói rõ là chưa commit, hoặc đang ở nhánh nhạy cảm cần confirm.
 
-Tuân thủ Git Safety Protocol hiện có: không `--force` lên main/master, không amend commit đã push, không skip hooks, không đổi git config.
+## Cấm
+
+- Merge vào `main`/`master` (local merge, `gh pr merge`, squash/merge trên GitHub).
+- Push commit trực tiếp lên `main`/`master`.
+- `--force` lên `main`/`master`, amend commit đã push, skip hooks, đổi git config.
+
+Reviewer sẽ merge PR khi mọi thứ ổn.
