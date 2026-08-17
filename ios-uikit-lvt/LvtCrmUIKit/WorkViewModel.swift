@@ -1,15 +1,59 @@
 import Foundation
 
-enum WorkAdminFilter: CaseIterable, Equatable {
-    case all, pending, approved, pendingCompletion
+enum WorkListTab: Int, CaseIterable, Equatable {
+    case upcoming
+    case past
 
     var title: String {
         switch self {
-        case .all: return "Tất cả"
-        case .pending: return "Chờ duyệt"
-        case .approved: return "Đã duyệt"
-        case .pendingCompletion: return "Chờ xác nhận"
+        case .upcoming: return "Chưa diễn ra"
+        case .past: return "Đã diễn ra"
         }
+    }
+}
+
+enum WorkListRules {
+    private static let completed: Set<String> = ["completed", "completed_late"]
+
+    static func vietnamToday(_ now: Date = Date()) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 7 * 3600) ?? .current
+        let parts = calendar.dateComponents([.year, .month, .day], from: now)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    static func isTaskPast(_ task: WorkTaskItem, today: String = vietnamToday()) -> Bool {
+        if completed.contains(task.status) { return true }
+        guard !task.deadline.isEmpty else { return false }
+        return task.deadline < today
+    }
+
+    static func isDocumentPast(_ document: WorkApprovalItem, today: String = vietnamToday()) -> Bool {
+        if completed.contains(document.status) { return true }
+        var deadlines = document.assignments.map(\.deadline).filter { !$0.isEmpty }
+        if deadlines.isEmpty, !document.deadline.isEmpty { deadlines = [document.deadline] }
+        guard !deadlines.isEmpty else { return false }
+        return deadlines.allSatisfy { $0 < today }
+    }
+
+    static func filterTasks(_ list: [WorkTaskItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkTaskItem] {
+        let filtered = tab == .past ? list.filter { isTaskPast($0, today: today) } : list.filter { !isTaskPast($0, today: today) }
+        return filtered.sorted { $0.deadline < $1.deadline }
+    }
+
+    static func filterDocuments(_ list: [WorkApprovalItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkApprovalItem] {
+        let filtered = tab == .past ? list.filter { isDocumentPast($0, today: today) } : list.filter { !isDocumentPast($0, today: today) }
+        return filtered.sorted {
+            deadlineKey($0) < deadlineKey($1)
+        }
+    }
+
+    static func tab(for task: WorkTaskItem) -> WorkListTab {
+        isTaskPast(task) ? .past : .upcoming
+    }
+
+    private static func deadlineKey(_ document: WorkApprovalItem) -> String {
+        document.assignments.map(\.deadline).filter { !$0.isEmpty }.min() ?? document.deadline
     }
 }
 
@@ -27,32 +71,22 @@ final class WorkViewModel {
     private(set) var busyTaskId: String?
     private(set) var busyApprovalId: String?
     private(set) var busyReviewId: String?
-    var pendingOnly = false { didSet { if pendingOnly != oldValue { notifyChange() } } }
-    var adminFilter: WorkAdminFilter = .all { didSet { if adminFilter != oldValue { notifyChange() } } }
+    var mineTab: WorkListTab = .upcoming { didSet { if mineTab != oldValue { notifyChange() } } }
+    var createdTab: WorkListTab = .upcoming { didSet { if createdTab != oldValue { notifyChange() } } }
     var onChange: (() -> Void)?
 
     var canApprove: Bool { false }
 
-    var visibleApprovals: [WorkApprovalItem] {
-        if isAdmin {
-            switch adminFilter {
-            case .all, .pendingCompletion: return approvals
-            case .pending: return approvals.filter { $0.status == "pending" }
-            case .approved: return approvals.filter { $0.status == "approved" }
-            }
-        }
-        let sorted = approvals.sorted {
-            let lhsOpen = $0.myDecision.isEmpty
-            let rhsOpen = $1.myDecision.isEmpty
-            if lhsOpen != rhsOpen { return lhsOpen && !rhsOpen }
-            return $0.deadline < $1.deadline
-        }
-        return pendingOnly ? sorted.filter(\.myDecision.isEmpty) : sorted
+    var visibleMine: [WorkTaskItem] {
+        WorkListRules.filterTasks(tasks, tab: mineTab)
     }
 
-    var visibleTasks: [WorkTaskItem] {
-        pendingOnly ? tasks.filter { WorkHelpers.needsCompletion($0.status) } : tasks
+    var visibleCreated: [WorkApprovalItem] {
+        WorkListRules.filterDocuments(approvals, tab: createdTab)
     }
+
+    var visibleApprovals: [WorkApprovalItem] { visibleCreated }
+    var visibleTasks: [WorkTaskItem] { visibleMine }
 
     private let repository: WorkRepository
     private var operationBusy = false

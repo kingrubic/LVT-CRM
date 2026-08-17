@@ -1,26 +1,56 @@
 import Foundation
 
-enum DutyFilter: CaseIterable, Equatable {
-    case all
-    case ongoing
+enum DutyListTab: Int, CaseIterable, Equatable {
     case upcoming
-    case ended
+    case past
 
     var title: String {
         switch self {
-        case .all: return "Tất cả"
-        case .ongoing: return "Đang diễn ra"
-        case .upcoming: return "Sắp tới"
-        case .ended: return "Đã kết thúc"
+        case .upcoming: return "Chưa diễn ra"
+        case .past: return "Đã diễn ra"
         }
     }
+}
 
-    func includes(_ duty: DutyItem) -> Bool {
-        switch self {
-        case .all: return true
-        case .ongoing: return duty.isOngoing
-        case .upcoming: return duty.isUpcoming
-        case .ended: return duty.isOverdue
+enum DutyListRules {
+    static func displayTitle(_ duty: DutyItem) -> String {
+        let title = duty.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        let content = duty.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return content.isEmpty ? "Công tác" : content
+    }
+
+    static func isCreatedBy(_ duty: DutyItem, userId: String) -> Bool {
+        !userId.isEmpty && duty.createdBy == userId
+    }
+
+    static func isAssigned(_ duty: DutyItem) -> Bool { duty.isMine }
+
+    static func split(_ list: [DutyItem], userId: String, includeManagedOthers: Bool, leftoverInMine: Bool) -> (mine: [DutyItem], created: [DutyItem]) {
+        let mine = list.filter(isAssigned)
+        let created = list.filter { isCreatedBy($0, userId: userId) }
+        guard includeManagedOthers else { return (mine, created) }
+        let leftovers = list.filter { !isAssigned($0) && !isCreatedBy($0, userId: userId) }
+        return leftoverInMine ? (mine + leftovers, created) : (mine, created + leftovers)
+    }
+
+    static func isPast(_ duty: DutyItem) -> Bool { duty.isOverdue }
+
+    static func tab(for duty: DutyItem) -> DutyListTab {
+        isPast(duty) ? .past : .upcoming
+    }
+
+    static func filter(_ list: [DutyItem], tab: DutyListTab) -> [DutyItem] {
+        if tab == .past {
+            return list.filter(isPast).sorted {
+                let lhs = "\($0.endDate)T\($0.endTime)"
+                let rhs = "\($1.endDate)T\($1.endTime)"
+                if lhs != rhs { return lhs < rhs }
+                return "\($0.startDate)T\($0.startTime)" < "\($1.startDate)T\($1.startTime)"
+            }
+        }
+        return list.filter { !isPast($0) }.sorted {
+            "\($0.startDate)T\($0.startTime)" < "\($1.startDate)T\($1.startTime)"
         }
     }
 }
@@ -34,22 +64,39 @@ final class DutiesViewModel {
     private(set) var attendanceConfirmationEnabled = false
     private(set) var duties: [DutyItem] = []
     private(set) var busyDutyId: String?
-    var filter: DutyFilter = .all {
-        didSet { if filter != oldValue { notifyChange() } }
+    private(set) var canCreate = false
+    private(set) var isAdmin = false
+    private(set) var canViewAll = false
+    var mineTab: DutyListTab = .upcoming {
+        didSet { if mineTab != oldValue { notifyChange() } }
+    }
+    var createdTab: DutyListTab = .upcoming {
+        didSet { if createdTab != oldValue { notifyChange() } }
     }
     var onChange: (() -> Void)?
 
-    var visibleDuties: [DutyItem] {
-        duties.filter(filter.includes)
+    var lists: (mine: [DutyItem], created: [DutyItem]) {
+        DutyListRules.split(
+            duties,
+            userId: currentUserId,
+            includeManagedOthers: isAdmin || canViewAll,
+            leftoverInMine: !isAdmin
+        )
     }
 
+    var visibleMine: [DutyItem] { DutyListRules.filter(lists.mine, tab: mineTab) }
+    var visibleCreated: [DutyItem] { DutyListRules.filter(lists.created, tab: createdTab) }
+    var showCreatedSection: Bool { canCreate || !lists.created.isEmpty }
+
     private let repository: DutiesRepository
+    private let currentUserId: String
     private var operationBusy = false
     private var refreshPending = false
     private var task: Task<Void, Never>?
 
-    init(repository: DutiesRepository) {
+    init(repository: DutiesRepository, currentUserId: String) {
         self.repository = repository
+        self.currentUserId = currentUserId
     }
 
     deinit { task?.cancel() }
@@ -134,6 +181,9 @@ final class DutiesViewModel {
         let snapshot = try await repository.listMine()
         attendanceConfirmationEnabled = snapshot.attendanceConfirmationEnabled
         duties = snapshot.duties
+        canCreate = snapshot.canCreate
+        isAdmin = snapshot.isAdmin
+        canViewAll = snapshot.canViewAll
         loading = false
         refreshing = false
         notifyChange()

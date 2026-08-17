@@ -58,7 +58,7 @@ final class RootTabBarController: UITabBarController {
             viewController: notificationsViewController
         )
         let dutiesViewController = DutiesViewController(
-            viewModel: DutiesViewModel(repository: dutiesRepository)
+            viewModel: DutiesViewModel(repository: dutiesRepository, currentUserId: session.userId)
         )
         let duties = navigationController(
             title: "Công tác",

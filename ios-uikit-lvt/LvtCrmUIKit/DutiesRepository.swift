@@ -23,11 +23,16 @@ struct DutyItem: Identifiable, Equatable, Sendable {
     let isOverdue: Bool
     let isUpcoming: Bool
     var canMarkAttendance: Bool
+    let title: String
+    let createdBy: String
 }
 
 struct DutiesSnapshot: Equatable, Sendable {
     let attendanceConfirmationEnabled: Bool
     let duties: [DutyItem]
+    let canCreate: Bool
+    let isAdmin: Bool
+    let canViewAll: Bool
 }
 
 final class DutiesRepository: Sendable {
@@ -42,7 +47,10 @@ final class DutiesRepository: Sendable {
         let duties = (result["duties"] as? [[String: Any]] ?? []).compactMap(Self.decodeDuty)
         return DutiesSnapshot(
             attendanceConfirmationEnabled: (result["attendanceConfirmationEnabled"] as? Bool) ?? false,
-            duties: duties
+            duties: duties,
+            canCreate: (result["canCreate"] as? Bool) ?? false,
+            isAdmin: (result["isAdmin"] as? Bool) ?? false,
+            canViewAll: (result["canViewAll"] as? Bool) ?? false
         )
     }
 
@@ -84,7 +92,9 @@ final class DutiesRepository: Sendable {
             isOngoing: (timing["isOngoing"] as? Bool) ?? false,
             isOverdue: (timing["isOverdue"] as? Bool) ?? false,
             isUpcoming: (timing["isUpcoming"] as? Bool) ?? false,
-            canMarkAttendance: (timing["canMarkAttendance"] as? Bool) ?? false
+            canMarkAttendance: (timing["canMarkAttendance"] as? Bool) ?? false,
+            title: (value["title"] as? String) ?? "",
+            createdBy: (value["createdBy"] as? String) ?? ""
         )
     }
 }

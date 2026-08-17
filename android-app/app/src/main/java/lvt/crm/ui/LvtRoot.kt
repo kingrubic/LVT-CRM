@@ -98,10 +98,11 @@ fun LvtRoot(
                 onDone = {},
             )
         }
-        is AuthState.SignedIn -> {
+            is AuthState.SignedIn -> {
             NotificationPermissionAndSync(container)
             MainShell(
                 container = container,
+                sessionUserId = state.session.userId,
                 sessionName = state.session.name,
                 sessionEmail = state.session.email,
                 role = state.session.role,
@@ -121,6 +122,7 @@ fun LvtRoot(
 @Composable
 private fun MainShell(
     container: AppContainer,
+    sessionUserId: String,
     sessionName: String,
     sessionEmail: String,
     role: String,
@@ -296,7 +298,7 @@ private fun MainShell(
             }
             composable(Routes.Duties) {
                 val vm: DutiesViewModel = viewModel(
-                    factory = DutiesViewModel.factory(container.dutiesRepository),
+                    factory = DutiesViewModel.factory(container.dutiesRepository, sessionUserId),
                 )
                 DutiesScreen(
                     viewModel = vm,

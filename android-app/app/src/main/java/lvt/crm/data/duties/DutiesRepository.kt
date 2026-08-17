@@ -26,11 +26,16 @@ data class DutyItem(
     val isOverdue: Boolean,
     val isUpcoming: Boolean,
     val canMarkAttendance: Boolean,
+    val title: String = "",
+    val createdBy: String = "",
 )
 
 data class DutiesSnapshot(
     val attendanceConfirmationEnabled: Boolean,
     val duties: List<DutyItem>,
+    val canCreate: Boolean = false,
+    val isAdmin: Boolean = false,
+    val canViewAll: Boolean = false,
 )
 
 interface DutiesOperations {
@@ -69,6 +74,8 @@ class DutiesRepository(
                             isOverdue = timing.optBoolean("isOverdue", false),
                             isUpcoming = timing.optBoolean("isUpcoming", false),
                             canMarkAttendance = timing.optBoolean("canMarkAttendance", false),
+                            title = d.optString("title"),
+                            createdBy = d.optString("createdBy"),
                         ),
                     )
                 }
@@ -77,6 +84,9 @@ class DutiesRepository(
         return DutiesSnapshot(
             attendanceConfirmationEnabled = result.optBoolean("attendanceConfirmationEnabled", false),
             duties = duties,
+            canCreate = result.optBoolean("canCreate", false),
+            isAdmin = result.optBoolean("isAdmin", false),
+            canViewAll = result.optBoolean("canViewAll", false),
         )
     }
 

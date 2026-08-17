@@ -58,12 +58,65 @@ final class WorkViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        if case .reviews = sectionKinds[section] { return "Duyệt hoàn thành" }
+        return nil
+    }
+
+    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         switch sectionKinds[section] {
-        case .approvals: return viewModel.isAdmin ? "Công văn" : "Chờ duyệt"
-        case .tasks: return "Nhiệm vụ"
-        case .reviews: return "Chờ xác nhận hoàn thành"
-        default: return nil
+        case .tasks:
+            return workSectionHeader(
+                title: "Việc của tôi",
+                tab: viewModel.mineTab,
+                onChange: { [weak self] tab in self?.viewModel.mineTab = tab }
+            )
+        case .approvals:
+            return workSectionHeader(
+                title: "Việc tôi tạo",
+                tab: viewModel.createdTab,
+                onChange: { [weak self] tab in self?.viewModel.createdTab = tab }
+            )
+        default:
+            return nil
         }
+    }
+
+    override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        switch sectionKinds[section] {
+        case .tasks, .approvals: return 88
+        default: return UITableView.automaticDimension
+        }
+    }
+
+    override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        if case .tasks = sectionKinds[section], viewModel.isAdmin { return 36 }
+        return 8
+    }
+
+    private func workSectionHeader(title: String, tab: WorkListTab, onChange: @escaping (WorkListTab) -> Void) -> UIView {
+        let container = UIView()
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .preferredFont(forTextStyle: .title3)
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.textColor = UIColor(red: 20 / 255, green: 53 / 255, blue: 95 / 255, alpha: 1)
+        let control = UISegmentedControl(items: WorkListTab.allCases.map(\.title))
+        control.selectedSegmentIndex = tab.rawValue
+        control.addAction(UIAction { _ in
+            onChange(WorkListTab(rawValue: control.selectedSegmentIndex) ?? .upcoming)
+        }, for: .valueChanged)
+        let stack = UIStackView(arrangedSubviews: [titleLabel, control])
+        stack.axis = .vertical
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.layoutMarginsGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.layoutMarginsGuide.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
+        ])
+        return container
     }
 
     override func tableView(
@@ -101,7 +154,7 @@ final class WorkViewController: UITableViewController {
             return cell
         case .approvals(let items):
             guard !items.isEmpty else {
-                return emptyCell(indexPath, "Không có công văn", "Danh sách phê duyệt trống.")
+                return emptyCell(indexPath, "Việc tôi tạo", "Bạn chưa tạo công việc nào")
             }
             let item = items[indexPath.row]
             let cell = workCell(at: indexPath)
@@ -118,7 +171,7 @@ final class WorkViewController: UITableViewController {
             return cell
         case .tasks(let items):
             guard !items.isEmpty else {
-                return emptyCell(indexPath, "Không có nhiệm vụ", "Bạn chưa được giao việc.")
+                return emptyCell(indexPath, "Việc của tôi", "Bạn chưa có công việc nào cần xử lý")
             }
             let item = items[indexPath.row]
             let cell = workCell(at: indexPath)
@@ -147,7 +200,7 @@ final class WorkViewController: UITableViewController {
         case .error:
             viewModel.refresh(initial: true)
         case .reviewBanner:
-            viewModel.adminFilter = .pendingCompletion
+            break
         case .approvals(let items) where !items.isEmpty:
             showDocument(items[indexPath.row])
         case .tasks(let items) where !items.isEmpty:
@@ -162,13 +215,10 @@ final class WorkViewController: UITableViewController {
     func focus(itemId: String) {
         loadViewIfNeeded()
         pendingFocusId = itemId
-        if viewModel.isAdmin, viewModel.adminFilter != .all {
-            viewModel.adminFilter = .all
-        } else if viewModel.pendingOnly {
-            viewModel.pendingOnly = false
-        } else {
-            render()
+        if let task = viewModel.tasks.first(where: { $0.id == itemId }) {
+            viewModel.mineTab = WorkListRules.tab(for: task)
         }
+        render()
     }
 
     private var sectionKinds: [SectionKind] {
@@ -176,70 +226,37 @@ final class WorkViewController: UITableViewController {
         if let actionError = viewModel.actionError { sections.append(.feedback(actionError)) }
         if let error = viewModel.error { return sections + [.error(error)] }
         if viewModel.loading { return sections + [.loading] }
-        if viewModel.isAdmin, !viewModel.completionReviews.isEmpty,
-           viewModel.adminFilter != .pendingCompletion {
-            sections.append(.reviewBanner(viewModel.completionReviews.count))
-        }
-        if viewModel.isAdmin, viewModel.adminFilter == .pendingCompletion {
+        if viewModel.isAdmin, !viewModel.completionReviews.isEmpty {
             sections.append(.reviews(viewModel.completionReviews))
-            return sections
         }
-        if viewModel.canApprove { sections.append(.approvals(viewModel.visibleApprovals)) }
-        sections.append(.tasks(viewModel.visibleTasks))
+        sections.append(.tasks(viewModel.visibleMine))
+        if viewModel.isAdmin {
+            sections.append(.approvals(viewModel.visibleCreated))
+        }
         return sections
     }
 
     private func render() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: filterTitle,
-            image: UIImage(systemName: "line.3.horizontal.decrease.circle"),
-            primaryAction: nil,
-            menu: filterMenu()
-        )
-        navigationItem.rightBarButtonItem?.accessibilityLabel = "Lọc công việc. \(filterTitle)"
+        navigationItem.rightBarButtonItem = nil
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
         tableView.reloadData()
         processPendingFocusIfPossible()
     }
 
-    private var filterTitle: String {
-        viewModel.isAdmin ? viewModel.adminFilter.title : (viewModel.pendingOnly ? "Chờ xử lý" : "Tất cả")
-    }
-
-    private func filterMenu() -> UIMenu {
-        if viewModel.isAdmin {
-            return UIMenu(children: WorkAdminFilter.allCases.map { filter in
-                UIAction(title: filter.title, state: viewModel.adminFilter == filter ? .on : .off) { [weak self] _ in
-                    self?.pendingFocusId = nil
-                    self?.viewModel.adminFilter = filter
-                }
-            })
-        }
-        return UIMenu(children: [
-            UIAction(title: "Tất cả", state: viewModel.pendingOnly ? .off : .on) { [weak self] _ in
-                self?.pendingFocusId = nil
-                self?.viewModel.pendingOnly = false
-            },
-            UIAction(title: "Chỉ việc chờ xử lý", state: viewModel.pendingOnly ? .on : .off) { [weak self] _ in
-                self?.pendingFocusId = nil
-                self?.viewModel.pendingOnly = true
-            },
-        ])
-    }
-
     private func processPendingFocusIfPossible() {
         guard let focusId = pendingFocusId, !viewModel.loading, viewModel.error == nil else { return }
         if let item = viewModel.approval(focusId: focusId) {
+            viewModel.createdTab = WorkListRules.isDocumentPast(item) ? .past : .upcoming
             scrollToApproval(item)
             pendingFocusId = nil
             DispatchQueue.main.async { [weak self] in self?.showDocument(item) }
         } else if let item = viewModel.task(id: focusId) {
+            viewModel.mineTab = WorkListRules.tab(for: item)
             scrollToTask(item)
             pendingFocusId = nil
             DispatchQueue.main.async { [weak self] in self?.showTask(item) }
         } else if let item = viewModel.review(focusId: focusId) {
             pendingFocusId = nil
-            viewModel.adminFilter = .pendingCompletion
             DispatchQueue.main.async { [weak self] in self?.showReview(item) }
         } else {
             pendingFocusId = nil

@@ -6,8 +6,8 @@ final class DutiesViewController: UITableViewController {
         case feedback(String)
         case loading
         case error(String)
-        case empty
-        case duties([DutyItem])
+        case mine([DutyItem])
+        case created([DutyItem])
     }
 
     private let viewModel: DutiesViewModel
@@ -47,14 +47,44 @@ final class DutiesViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch sectionKinds[section] {
-        case .duties(let duties): return duties.count
+        case .mine(let duties), .created(let duties): return max(duties.count, 1)
         default: return 1
         }
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        guard case .duties = sectionKinds[section] else { return nil }
-        return "Lịch công tác của bạn"
+        nil
+    }
+
+    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        switch sectionKinds[section] {
+        case .mine:
+            return sectionHeader(
+                title: "Công tác của tôi",
+                tab: viewModel.mineTab,
+                onChange: { [weak self] tab in self?.viewModel.mineTab = tab }
+            )
+        case .created:
+            return sectionHeader(
+                title: "Công tác tôi tạo",
+                tab: viewModel.createdTab,
+                onChange: { [weak self] tab in self?.viewModel.createdTab = tab }
+            )
+        default:
+            return nil
+        }
+    }
+
+    override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        switch sectionKinds[section] {
+        case .mine, .created: return 88
+        default: return UITableView.automaticDimension
+        }
+    }
+
+    override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        if case .mine = sectionKinds[section], viewModel.showCreatedSection { return 36 }
+        return 8
     }
 
     override func tableView(
@@ -62,7 +92,14 @@ final class DutiesViewController: UITableViewController {
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
         switch sectionKinds[indexPath.section] {
-        case .duties(let duties):
+        case .mine(let duties), .created(let duties):
+            let created = {
+                if case .created = sectionKinds[indexPath.section] { return true }
+                return false
+            }()
+            guard !duties.isEmpty else {
+                return emptyListCell(at: indexPath, created: created, tab: created ? viewModel.createdTab : viewModel.mineTab)
+            }
             let duty = duties[indexPath.row]
             let cell = tableView.dequeueReusableCell(
                 withIdentifier: DutyTableViewCell.reuseIdentifier,
@@ -112,21 +149,6 @@ final class DutiesViewController: UITableViewController {
             cell.accessibilityHint = "Tải lại danh sách công tác"
             cell.accessibilityTraits = .button
             return cell
-        case .empty:
-            let title = viewModel.duties.isEmpty ? "Chưa có công tác" : "Không có công tác phù hợp"
-            let detail = viewModel.duties.isEmpty
-                ? "Khi được phân công, công tác sẽ xuất hiện tại đây."
-                : "Hãy chọn một bộ lọc khác."
-            let cell = stateCell(
-                at: indexPath,
-                title: title,
-                detail: detail,
-                image: viewModel.duties.isEmpty ? "briefcase" : "line.3.horizontal.decrease.circle",
-                color: .secondaryLabel
-            )
-            cell.accessibilityLabel = "\(title). \(detail)"
-            cell.accessibilityTraits = .staticText
-            return cell
         }
     }
 
@@ -135,7 +157,8 @@ final class DutiesViewController: UITableViewController {
         switch sectionKinds[indexPath.section] {
         case .error:
             viewModel.refresh(initial: true)
-        case .duties(let duties):
+        case .mine(let duties), .created(let duties):
+            guard !duties.isEmpty else { return }
             showDetail(for: duties[indexPath.row])
         default:
             break
@@ -146,8 +169,17 @@ final class DutiesViewController: UITableViewController {
         _ tableView: UITableView,
         trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
     ) -> UISwipeActionsConfiguration? {
-        guard case .duties(let duties) = sectionKinds[indexPath.section] else { return nil }
-        let duty = duties[indexPath.row]
+        switch sectionKinds[indexPath.section] {
+        case .mine(let duties) where !duties.isEmpty:
+            return swipeActions(for: duties[indexPath.row])
+        case .created(let duties) where !duties.isEmpty:
+            return swipeActions(for: duties[indexPath.row])
+        default:
+            return nil
+        }
+    }
+
+    private func swipeActions(for duty: DutyItem) -> UISwipeActionsConfiguration? {
         guard viewModel.canMark(duty), viewModel.busyDutyId == nil else { return nil }
         let absent = UIContextualAction(style: .destructive, title: "Vắng") { [weak self] _, _, done in
             self?.viewModel.setAttendance(dutyId: duty.id, status: "absent")
@@ -168,11 +200,12 @@ final class DutiesViewController: UITableViewController {
     func focus(dutyId: String) {
         loadViewIfNeeded()
         pendingFocusId = dutyId
-        if viewModel.filter != .all {
-            viewModel.filter = .all
-        } else {
-            render()
+        if let duty = viewModel.duty(id: dutyId) {
+            let tab = DutyListRules.tab(for: duty)
+            if viewModel.lists.mine.contains(where: { $0.id == duty.id }) { viewModel.mineTab = tab }
+            if viewModel.lists.created.contains(where: { $0.id == duty.id }) { viewModel.createdTab = tab }
         }
+        render()
     }
 
     private var sectionKinds: [SectionKind] {
@@ -184,49 +217,53 @@ final class DutiesViewController: UITableViewController {
             sections.append(.error(error))
         } else if viewModel.loading {
             sections.append(.loading)
-        } else if viewModel.visibleDuties.isEmpty {
-            sections.append(.empty)
         } else {
-            sections.append(.duties(viewModel.visibleDuties))
+            sections.append(.mine(viewModel.visibleMine))
+            if viewModel.showCreatedSection {
+                sections.append(.created(viewModel.visibleCreated))
+            }
         }
         return sections
     }
 
     private func render() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "Lọc: \(viewModel.filter.title)",
-            image: UIImage(systemName: "line.3.horizontal.decrease.circle"),
-            primaryAction: nil,
-            menu: filterMenu()
-        )
-        navigationItem.rightBarButtonItem?.accessibilityLabel = "Lọc công tác. \(viewModel.filter.title)"
+        navigationItem.rightBarButtonItem = nil
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
         tableView.reloadData()
         updateVisibleDetail()
         processPendingFocusIfPossible()
     }
 
-    private func filterMenu() -> UIMenu {
-        UIMenu(children: DutyFilter.allCases.map { filter in
-            UIAction(
-                title: filter.title,
-                state: viewModel.filter == filter ? .on : .off
-            ) { [weak self] _ in
-                self?.pendingFocusId = nil
-                self?.viewModel.filter = filter
-            }
-        })
-    }
-
     private func processPendingFocusIfPossible() {
         guard let dutyId = pendingFocusId, !viewModel.loading, viewModel.error == nil else { return }
         pendingFocusId = nil
-        guard let duty = viewModel.duty(id: dutyId),
-              let section = sectionKinds.firstIndex(where: {
-                  if case .duties = $0 { return true }
-                  return false
-              }),
-              let row = viewModel.visibleDuties.firstIndex(where: { $0.id == dutyId }) else {
+        guard let duty = viewModel.duty(id: dutyId) else {
+            presentMissingDutyAlert()
+            return
+        }
+        let tab = DutyListRules.tab(for: duty)
+        if DutyListRules.isAssigned(duty) { viewModel.mineTab = tab }
+        if !DutyListRules.isAssigned(duty) { viewModel.createdTab = tab }
+        guard let section = sectionKinds.firstIndex(where: {
+            switch $0 {
+            case .mine(let duties), .created(let duties):
+                return duties.contains(where: { $0.id == dutyId })
+            default:
+                return false
+            }
+        }) else {
+            presentMissingDutyAlert()
+            return
+        }
+        let row: Int
+        switch sectionKinds[section] {
+        case .mine(let duties), .created(let duties):
+            guard let index = duties.firstIndex(where: { $0.id == dutyId }) else {
+                presentMissingDutyAlert()
+                return
+            }
+            row = index
+        default:
             presentMissingDutyAlert()
             return
         }
@@ -286,6 +323,51 @@ final class DutiesViewController: UITableViewController {
                 return true
             },
         ]
+    }
+
+    private func emptyListCell(at indexPath: IndexPath, created: Bool, tab: DutyListTab) -> UITableViewCell {
+        let detail: String
+        if tab == .past {
+            detail = created ? "Chưa có công tác bạn tạo đã diễn ra." : "Chưa có sự kiện đã diễn ra."
+        } else {
+            detail = created ? "Bạn chưa tạo công tác nào" : "Bạn chưa có sự kiện nào cần tham gia"
+        }
+        let cell = stateCell(
+            at: indexPath,
+            title: created ? "Công tác tôi tạo" : "Công tác của tôi",
+            detail: detail,
+            image: "briefcase",
+            color: .secondaryLabel
+        )
+        cell.accessibilityLabel = "\(created ? "Công tác tôi tạo" : "Công tác của tôi"). \(detail)"
+        cell.accessibilityTraits = .staticText
+        return cell
+    }
+
+    private func sectionHeader(title: String, tab: DutyListTab, onChange: @escaping (DutyListTab) -> Void) -> UIView {
+        let container = UIView()
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .preferredFont(forTextStyle: .title3)
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.textColor = UIColor(red: 20 / 255, green: 53 / 255, blue: 95 / 255, alpha: 1)
+        let control = UISegmentedControl(items: DutyListTab.allCases.map(\.title))
+        control.selectedSegmentIndex = tab.rawValue
+        control.addAction(UIAction { _ in
+            onChange(DutyListTab(rawValue: control.selectedSegmentIndex) ?? .upcoming)
+        }, for: .valueChanged)
+        let stack = UIStackView(arrangedSubviews: [titleLabel, control])
+        stack.axis = .vertical
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.layoutMarginsGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.layoutMarginsGuide.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
+        ])
+        return container
     }
 
     private func stateCell(
@@ -368,7 +450,7 @@ private final class DutyTableViewCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func configure(duty: DutyItem, canMark: Bool, busy: Bool, focused: Bool) {
-        titleLabel.text = duty.content
+        titleLabel.text = DutyListRules.displayTitle(duty)
         scheduleLabel.text = DutyPresentation.schedule(duty)
         timingLabel.text = DutyPresentation.timing(duty)
         timingLabel.textColor = DutyPresentation.timingColor(duty)
@@ -384,7 +466,7 @@ private final class DutyTableViewCell: UITableViewCell {
         accessibilityLabel = [
             DutyPresentation.timing(duty),
             DutyPresentation.status(duty.myStatus),
-            duty.content,
+            DutyListRules.displayTitle(duty),
             DutyPresentation.schedule(duty),
         ].joined(separator: ". ")
         accessibilityHint = canMark

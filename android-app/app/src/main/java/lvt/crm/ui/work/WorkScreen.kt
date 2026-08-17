@@ -93,6 +93,9 @@ fun WorkScreen(
             onRefresh = viewModel::refresh,
             onReview = viewModel::reviewCompletion,
             onOpenDocument = onOpenDocument,
+            onMineTab = viewModel::setMineTab,
+            onCreatedTab = viewModel::setCreatedTab,
+            onCompleteTask = { task -> viewModel.requestComplete(task) },
         )
         return
     }
@@ -221,39 +224,7 @@ fun WorkScreen(
                     },
                 )
             }
-            state.tasks.isEmpty() && state.approvals.isEmpty() -> {
-                StatePanel(
-                    icon = Icons.Outlined.TaskAlt,
-                    title = "Bạn đã hoàn tất",
-                    message = "Hiện không có công việc nào cần xử lý.",
-                )
-            }
             else -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    WorkFilterChip(
-                        label = if (canApproveDocuments) {
-                            "$pendingApprovalCount công việc chờ duyệt"
-                        } else {
-                            "$pendingCompletionCount công việc chờ hoàn thành"
-                        },
-                        selected = pendingFilterOnly,
-                        onClick = { pendingFilterOnly = !pendingFilterOnly },
-                    )
-                    val urgent = state.tasks.count {
-                        it.status in setOf("overdue", "rejected", "rejected_completion")
-                    }
-                    if (urgent > 0) {
-                        StatusPill(
-                            label = "$urgent cần chú ý",
-                            tone = StatusTone.Warning,
-                        )
-                    }
-                }
                 state.actionError?.let {
                     Card(
                         colors = CardDefaults.cardColors(
@@ -277,59 +248,33 @@ fun WorkScreen(
                     contentPadding = PaddingValues(bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (visibleApprovals.isNotEmpty()) {
-                        item {
-                            Text(
-                                "Công văn cần duyệt",
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                        items(visibleApprovals, key = { "approval-${it.id}" }) { approval ->
-                            ApprovalCard(
-                                approval = approval,
-                                focused = approval.id == focusId,
-                                busy = state.busyApprovalId != null || state.busyTaskId != null,
-                                onDecision = { approve ->
-                                    pendingApprovalAction = ApprovalAction(approval, approve)
-                                },
-                                onOpenDocument = { onOpenDocument(approval) },
-                                onOpenDetail = { selectedApprovalId = approval.id },
-                            )
-                        }
-                    }
-                    if (canApproveDocuments && pendingFilterOnly && visibleApprovals.isEmpty()) {
-                        item {
-                            StatePanel(
-                                icon = Icons.Outlined.CheckCircle,
-                                title = "Không còn việc chờ duyệt",
-                                message = "Bạn đã xử lý tất cả công việc cần duyệt.",
-                            )
-                        }
-                    }
-                    if (!canApproveDocuments && pendingFilterOnly && visibleTasks.isEmpty()) {
-                        item {
-                            StatePanel(
-                                icon = Icons.Outlined.CheckCircle,
-                                title = "Không còn việc chờ hoàn thành",
-                                message = "Bạn đã hoàn tất tất cả công việc cần xử lý.",
-                            )
-                        }
-                    }
-                    items(visibleTasks, key = { "${it.kind}-${it.id}" }) { task ->
-                        WorkCard(
-                            task = task,
-                            focused = task.id == focusId,
-                            busy = state.busyTaskId != null || state.busyApprovalId != null,
-                            onOpen = { selectedTaskId = task.id },
-                            onComplete = {
-                                if (task.isAdmin) {
-                                    viewModel.requestComplete(task)
-                                } else {
-                                    pendingCompletionTask = task
-                                }
-                            },
+                    item(key = "mine-heading") {
+                        WorkListSectionHeader(
+                            title = "Việc của tôi",
+                            tab = state.mineTab,
+                            onTab = viewModel::setMineTab,
                         )
+                    }
+                    if (state.visibleMine.isEmpty()) {
+                        item(key = "mine-empty") {
+                            WorkListEmpty(tab = state.mineTab, created = false)
+                        }
+                    } else {
+                        items(state.visibleMine, key = { "${it.kind}-${it.id}" }) { task ->
+                            WorkCard(
+                                task = task,
+                                focused = task.id == focusId,
+                                busy = state.busyTaskId != null || state.busyApprovalId != null,
+                                onOpen = { selectedTaskId = task.id },
+                                onComplete = {
+                                    if (task.isAdmin) {
+                                        viewModel.requestComplete(task)
+                                    } else {
+                                        pendingCompletionTask = task
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -450,21 +395,23 @@ private fun AdminWorkScreen(
     onRefresh: () -> Unit,
     onReview: (WorkCompletionReviewItem, Boolean, Int?, String?) -> Unit,
     onOpenDocument: (WorkApprovalItem) -> Unit,
+    onMineTab: (WorkListTab) -> Unit,
+    onCreatedTab: (WorkListTab) -> Unit,
+    onCompleteTask: (WorkTaskItem) -> Unit,
 ) {
-    var filter by rememberSaveable { mutableStateOf(AdminDocumentFilter.All) }
     var selectedDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedDocument = currentAdminDocument(state.approvals, selectedDocumentId)
+    var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedTask = state.tasks.firstOrNull { it.id == selectedTaskId }
     var selectedReview by remember { mutableStateOf<WorkCompletionReviewItem?>(null) }
     var qualityPercent by rememberSaveable { mutableStateOf("100") }
     var rejectionReason by rememberSaveable { mutableStateOf("") }
     val pendingReviews = state.completionReviews.associateBy { it.workItemId + it.userId }
-    val documents = visibleAdminDocuments(state.approvals, state.completionReviews, filter)
-    val allCount = state.approvals.size
-    val pendingCount = state.approvals.count { it.status == "pending" }
-    val approvedCount = state.approvals.count { it.status == "approved" }
+    val documents = state.visibleCreated
 
-    BackHandler(enabled = selectedDocumentId != null && selectedReview == null) {
+    BackHandler(enabled = (selectedDocumentId != null || selectedTaskId != null) && selectedReview == null) {
         selectedDocumentId = null
+        selectedTaskId = null
     }
     LaunchedEffect(focusId, state.approvals, state.completionReviews, state.loading) {
         if (focusId.isNullOrBlank() || state.loading) return@LaunchedEffect
@@ -483,12 +430,19 @@ private fun AdminWorkScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         LvtScreen(
-            title = if (selectedDocument == null) "Công việc" else "Chi tiết công văn",
+            title = when {
+                selectedDocument != null -> "Chi tiết công văn"
+                selectedTask != null -> "Chi tiết công việc"
+                else -> "Công việc"
+            },
             refreshing = state.refreshing,
             onRefresh = onRefresh,
-            navigationIcon = if (selectedDocument != null) {
+            navigationIcon = if (selectedDocument != null || selectedTask != null) {
                 {
-                    IconButton(onClick = { selectedDocumentId = null }) {
+                    IconButton(onClick = {
+                        selectedDocumentId = null
+                        selectedTaskId = null
+                    }) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại")
                     }
                 }
@@ -504,64 +458,75 @@ private fun AdminWorkScreen(
         when {
             state.loading -> LoadingWorkPanel()
             state.error != null -> WorkLoadError(state.error.orEmpty(), onRefresh)
-            selectedDocument == null -> {
-                AdminDocumentTabs(
-                    selected = filter,
-                    allCount = allCount,
-                    pendingCount = pendingCount,
-                    approvedCount = approvedCount,
-                    onSelect = { filter = it },
+            selectedTask != null -> {
+                WorkTaskDetailScreen(
+                    task = selectedTask,
+                    busy = state.busyTaskId != null,
+                    onBack = { selectedTaskId = null },
+                    onComplete = { onCompleteTask(selectedTask) },
                 )
-                if (state.completionReviews.isNotEmpty()) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp)
-                            .clickable { filter = AdminDocumentFilter.PendingCompletion },
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = .62f),
-                        ),
-                        shape = MaterialTheme.shapes.medium,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Icon(
-                                Icons.Outlined.AssignmentLate,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "${state.completionReviews.size} task chờ duyệt hoàn thành",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                )
-                                Text(
-                                    "Chạm để lọc đúng công văn cần xử lý",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = .76f),
-                                )
+            }
+            selectedDocument == null -> {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (state.completionReviews.isNotEmpty()) {
+                        item(key = "reviews-heading") {
+                            Text("Duyệt hoàn thành", style = MaterialTheme.typography.titleLarge)
+                        }
+                        items(state.completionReviews, key = { "review-${it.workItemId}-${it.userId}" }) { review ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedReview = review },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = .62f),
+                                ),
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(review.content, style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "${review.userName} · hạn ${review.deadline}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
                             }
-                            Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
                         }
                     }
-                }
-                if (documents.isEmpty()) {
-                    StatePanel(
-                        icon = Icons.Outlined.Description,
-                        title = "Chưa có công văn",
-                        message = "Không có công văn thuộc nhóm đang chọn.",
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(bottom = 28.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(documents, key = { it.id }) { document ->
+                    item(key = "mine-heading") {
+                        WorkListSectionHeader(
+                            title = "Việc của tôi",
+                            tab = state.mineTab,
+                            onTab = onMineTab,
+                        )
+                    }
+                    if (state.visibleMine.isEmpty()) {
+                        item(key = "mine-empty") { WorkListEmpty(tab = state.mineTab, created = false) }
+                    } else {
+                        items(state.visibleMine, key = { "mine-${it.kind}-${it.id}" }) { task ->
+                            WorkCard(
+                                task = task,
+                                focused = task.id == focusId,
+                                busy = state.busyTaskId != null,
+                                onOpen = { selectedTaskId = task.id },
+                                onComplete = { onCompleteTask(task) },
+                            )
+                        }
+                    }
+                    item(key = "created-heading") {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        WorkListSectionHeader(
+                            title = "Việc tôi tạo",
+                            tab = state.createdTab,
+                            onTab = onCreatedTab,
+                        )
+                    }
+                    if (documents.isEmpty()) {
+                        item(key = "created-empty") { WorkListEmpty(tab = state.createdTab, created = true) }
+                    } else {
+                        items(documents, key = { "created-${it.id}" }) { document ->
                             AdminDocumentCard(document = document, onOpen = { selectedDocumentId = document.id })
                         }
                     }
@@ -747,6 +712,40 @@ private fun AdminDocumentCard(document: WorkApprovalItem, onOpen: () -> Unit) {
             Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.outline)
         }
     }
+}
+
+@Composable
+private fun WorkListSectionHeader(
+    title: String,
+    tab: WorkListTab,
+    onTab: (WorkListTab) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WorkListTab.entries.forEach { value ->
+                FilterChip(
+                    selected = tab == value,
+                    onClick = { onTab(value) },
+                    label = { Text(value.title) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkListEmpty(tab: WorkListTab, created: Boolean) {
+    val message = if (tab == WorkListTab.Past) {
+        if (created) "Chưa có công việc bạn tạo đã diễn ra." else "Chưa có công việc đã diễn ra."
+    } else {
+        if (created) "Bạn chưa tạo công việc nào" else "Bạn chưa có công việc nào cần xử lý"
+    }
+    StatePanel(
+        icon = Icons.Outlined.TaskAlt,
+        title = if (created) "Việc tôi tạo" else "Việc của tôi",
+        message = message,
+    )
 }
 
 @Composable
