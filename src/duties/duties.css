@@ -251,6 +251,10 @@
   gap: 14px;
 }
 
+.duty-list-section + .duty-list-section {
+  margin-top: 90px;
+}
+
 .duty-list-heading {
   margin: 0;
   color: var(--duty-navy, #14355f);

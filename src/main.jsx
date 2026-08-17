@@ -997,7 +997,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       ) : null}
 
       <div className="duty-list-section">
-        <DutyListHeading>Việc của tôi</DutyListHeading>
+        <DutyListHeading>Công tác của tôi</DutyListHeading>
         <div className="duty-list-toolbar">
           <DutyListTabs tab={mineTab} onChange={setMineTab} />
         </div>
@@ -1005,7 +1005,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       </div>
 
       <div className="duty-list-section">
-        <DutyListHeading>Việc tôi tạo</DutyListHeading>
+        <DutyListHeading>Công tác tôi tạo</DutyListHeading>
         <div className="duty-list-toolbar">
           <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
           {allowManage && !editorOpen ? (
@@ -1368,7 +1368,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
       ) : null}
 
       <div className="duty-list-section">
-        <DutyListHeading>Việc của tôi</DutyListHeading>
+        <DutyListHeading>Công tác của tôi</DutyListHeading>
         <div className="duty-list-toolbar">
           <DutyListTabs tab={mineTab} onChange={setMineTab} />
         </div>
@@ -1377,7 +1377,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
 
       {showCreatedSection ? (
         <div className="duty-list-section">
-          <DutyListHeading>Việc tôi tạo</DutyListHeading>
+          <DutyListHeading>Công tác tôi tạo</DutyListHeading>
           <div className="duty-list-toolbar">
             <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
             {canCreate && !editorOpen ? (
