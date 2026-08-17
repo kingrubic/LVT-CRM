@@ -16,6 +16,9 @@ import {
   formatDutyDateTimeLine,
   formatViDate,
   fromDateTimeLocalValue,
+  isDutyAssignedTo,
+  isDutyCreatedBy,
+  splitDutyLists,
   toDateTimeLocalValue,
 } from '../src/duties/dutyDisplay.js';
 
@@ -124,4 +127,29 @@ test('preview tạo công tác gom nhãn phòng ban và người tham gia', () =
   assert.equal(userPreview.showDepartments, false);
   assert.equal(userPreview.departments, '—');
   assert.equal(userPreview.participants, '—');
+});
+
+test('tách danh sách công tác: việc của tôi và việc tôi tạo', () => {
+  const mineOnly = { _id: 'a', createdBy: 'boss', isMine: true, participantUserIds: ['me'] };
+  const createdOnly = { _id: 'b', createdBy: 'me', participants: [{ _id: 'other' }] };
+  const both = { _id: 'c', createdBy: 'me', isMine: true };
+  const leftover = { _id: 'd', createdBy: 'other', participantUserIds: ['x'] };
+
+  assert.equal(isDutyAssignedTo(mineOnly, 'me'), true);
+  assert.equal(isDutyCreatedBy(createdOnly, 'me'), true);
+  assert.equal(isDutyAssignedTo(createdOnly, 'me'), false);
+
+  const userSplit = splitDutyLists([mineOnly, createdOnly, both, leftover], 'me');
+  assert.deepEqual(userSplit.mine.map((item) => item._id), ['a', 'c']);
+  assert.deepEqual(userSplit.created.map((item) => item._id), ['b', 'c']);
+
+  const adminSplit = splitDutyLists([mineOnly, createdOnly, both, leftover], 'me', { includeManagedOthers: true });
+  assert.deepEqual(adminSplit.created.map((item) => item._id), ['b', 'c', 'd']);
+
+  const leadSplit = splitDutyLists([mineOnly, leftover], 'me', {
+    includeManagedOthers: true,
+    leftoverBucket: 'mine',
+  });
+  assert.deepEqual(leadSplit.mine.map((item) => item._id), ['a', 'd']);
+  assert.deepEqual(leadSplit.created.map((item) => item._id), []);
 });

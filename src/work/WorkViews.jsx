@@ -6,6 +6,7 @@ import { useConvexAuth } from '@convex-dev/auth/react';
 import { useNotificationFocus } from '../notifications/useNotificationFocus';
 import WorkAssignmentRows from './WorkAssignmentRows';
 import WorkCreatePreview from './WorkCreatePreview';
+import { DutyListHeading } from '../duties/DutyListFilters';
 import { WorkListEmpty, WorkListTabs } from './WorkListFilters';
 import WorkListSummary from './WorkListSummary';
 import {
@@ -492,7 +493,7 @@ function CompletionReviewModal({ item, onClose, onSubmit, saving }) {
   );
 }
 
-export function WorkManagement({ allowCreate = true, focusTarget = null }) {
+export function WorkManagement({ allowCreate = true, hideCompletionQueue = false, focusTarget = null }) {
   const options = useQuery(anyApi.work.formOptions, allowCreate ? {} : 'skip');
   const listData = useQuery(anyApi.work.listAdmin);
   const createDocument = useMutation(anyApi.work.createDocument);
@@ -819,7 +820,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
         />
       ) : null}
 
-      {pendingCompletionReviews.length ? (
+      {!hideCompletionQueue && pendingCompletionReviews.length ? (
         <section className="work-completion-queue">
           <header>
             <div>
@@ -852,6 +853,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
       ) : null}
 
       <div className="duty-list-section">
+        <DutyListHeading>Việc tôi tạo</DutyListHeading>
         <div className="duty-list-toolbar">
           <WorkListTabs tab={listTab} onChange={setListTab} />
           {allowCreate && !open ? (
@@ -861,7 +863,7 @@ export function WorkManagement({ allowCreate = true, focusTarget = null }) {
           ) : null}
         </div>
         {visibleDocuments.length === 0 ? (
-          <WorkListEmpty tab={listTab} />
+          <WorkListEmpty tab={listTab} tone="created" />
         ) : (
           <div className="duty-modern-list">
             {visibleDocuments.map((document) => {
@@ -1144,7 +1146,6 @@ export function WorkUserView({ focusTarget = null }) {
 
   return (
     <>
-      {data.canCreate ? <WorkManagement allowCreate focusTarget={focusTarget} /> : null}
     <section className="work-user-view duty-workspace">
       {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
 
@@ -1239,6 +1240,7 @@ export function WorkUserView({ focusTarget = null }) {
 
       {isAdminMod || isAssigner || (!isAdminMod && !isApprover && !isAssigner) ? (
         <div className="duty-list-section">
+          <DutyListHeading>Việc của tôi</DutyListHeading>
           <div className="duty-list-toolbar">
             <WorkListTabs tab={listTab} onChange={setListTab} />
           </div>
@@ -1436,6 +1438,7 @@ export function WorkUserView({ focusTarget = null }) {
         />
       ) : null}
     </section>
+      {data.canCreate ? <WorkManagement allowCreate hideCompletionQueue focusTarget={focusTarget} /> : null}
     </>
   );
 }

@@ -25,12 +25,12 @@ export function WorkListTabs({ tab, onChange }) {
   );
 }
 
-export function WorkListEmpty({ tab }) {
+export function WorkListEmpty({ tab, tone = 'mine' }) {
   if (tab === WORK_LIST_TAB_PAST) {
     return (
       <div className="work-empty duty-list-empty">
         <span aria-hidden="true">✓</span>
-        <p>Chưa có công việc đã diễn ra.</p>
+        <p>{tone === 'created' ? 'Chưa có công việc bạn tạo đã diễn ra.' : 'Chưa có công việc đã diễn ra.'}</p>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function WorkListEmpty({ tab }) {
           <path d="M25 44c3.4 6 18.6 6 22 0" />
         </svg>
       </span>
-      <p>Bạn chưa có công việc nào cần xử lý</p>
+      <p>{tone === 'created' ? 'Bạn chưa tạo công việc nào' : 'Bạn chưa có công việc nào cần xử lý'}</p>
     </div>
   );
 }

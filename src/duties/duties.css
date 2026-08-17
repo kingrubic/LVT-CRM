@@ -251,6 +251,14 @@
   gap: 14px;
 }
 
+.duty-list-heading {
+  margin: 0;
+  color: var(--duty-navy, #14355f);
+  font-size: 18px;
+  font-weight: 850;
+  letter-spacing: -.02em;
+}
+
 .duty-list-toolbar {
   display: flex;
   align-items: center;
