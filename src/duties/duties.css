@@ -56,7 +56,7 @@
   color: #496275;
   background: #fff;
   font: inherit;
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 800;
 }
 
@@ -87,7 +87,7 @@
   margin-bottom: 13px;
 }
 
-.duty-schedule-heading p { margin: 0; color: #7a8d9c; font-size: 10px; line-height: 1.5; }
+.duty-schedule-heading p { margin: 0; color: #7a8d9c; font-size: 15px; line-height: 1.5; }
 
 .duty-schedule-grid {
   display: grid;
@@ -101,11 +101,11 @@
   gap: 7px;
   min-width: 0;
   color: #526b80;
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 850;
 }
 
-.duty-schedule-fieldset > small { display: block; margin-top: 10px; color: #7f909c; font-size: 9px; font-weight: 650; }
+.duty-schedule-fieldset > small { display: block; margin-top: 10px; color: #7f909c; font-size: 13px; font-weight: 650; }
 
 .duty-modern-editor > label,
 .duty-modern-editor .duty-field {
@@ -114,13 +114,13 @@
   gap: 7px;
   min-width: 0;
   color: #526b80;
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 850;
 }
 
 .duty-modern-editor > label > small {
   color: #9aa8b2;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
   text-align: right;
 }
@@ -171,7 +171,7 @@
   border-radius: 9px;
   color: #526b80;
   background: #f7faf9;
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .duty-modern-editor .check-inline input {
@@ -196,7 +196,7 @@
   padding: 0 12px;
   color: #496275;
   background: #fbfcfc;
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .duty-modern-editor .multi-check-toggle:hover,
@@ -207,7 +207,7 @@
 
 .duty-modern-editor .multi-check-summary {
   color: #8797a3;
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .duty-modern-editor .multi-check-chevron {
@@ -229,7 +229,7 @@
 .duty-modern-editor .multi-check-item {
   min-width: 0;
   color: #52697a;
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .duty-modern-editor .multi-check-item:hover {
@@ -287,7 +287,7 @@
 
 .duty-preview-list dt {
   color: #8796a2;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -517,7 +517,7 @@
   min-height: 23px;
   align-items: center;
   padding: 3px 8px;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -555,7 +555,7 @@
   border-radius: 8px;
   color: #557082;
   background: #f8faf9;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -587,7 +587,7 @@
 .duty-workspace .subordinate-heading {
   margin: 0 0 10px;
   color: #526b80;
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 850;
 }
 
@@ -604,7 +604,7 @@
   border-radius: 9px;
   color: #52697a;
   background: #fbfcfc;
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .duty-workspace .member-list li > span:first-child {
@@ -621,20 +621,20 @@
 
 .duty-workspace .member-list li strong {
   color: #38556c;
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .duty-workspace .member-list li small {
   margin-top: 2px;
   color: #8b9aa5;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .duty-workspace .attendance-pill {
   min-height: 23px;
   align-items: center;
   padding: 3px 8px;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: .03em;
   text-transform: uppercase;
@@ -653,7 +653,7 @@
   color: #126e66;
   background: #edf8f5;
   font-family: inherit;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 850;
 }
 
@@ -673,7 +673,7 @@
 
 .duty-workspace .subordinate-heading span {
   color: #8b9aa5;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .duty-workspace .view-all-participants {
@@ -684,16 +684,16 @@
   border-color: #dce6e9;
   color: var(--duty-navy);
   background: linear-gradient(110deg, #edf7f4, #f8faf9);
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .duty-workspace .view-all-participants-toggle strong {
-  font-size: 10px;
+  font-size: 15px;
 }
 
 .duty-workspace .view-all-participants-toggle small {
   color: #8797a3;
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .duty-workspace .view-all-department {
@@ -704,7 +704,7 @@
 .duty-workspace .view-all-department > header {
   color: #385a6e;
   background: #edf3f3;
-  font-size: 9px;
+  font-size: 13px;
 }
 
 .duty-workspace .duty-title-row {
