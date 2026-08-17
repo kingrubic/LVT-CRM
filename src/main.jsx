@@ -21,7 +21,7 @@ import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyCreatePreview from './duties/DutyCreatePreview';
 import DutyEditorFields from './duties/DutyEditorFields';
-import { DutyListEmpty, DutyListTabs } from './duties/DutyListFilters';
+import { DutyListEmpty, DutyListHeading, DutyListTabs } from './duties/DutyListFilters';
 import DutyListSummary from './duties/DutyListSummary';
 import {
   applyDutyEndDateTime,
@@ -32,6 +32,9 @@ import {
   dutyPayloadFromForm,
   emptyDutyForm,
   filterDutiesByTab,
+  isDutyAssignedTo,
+  isDutyCreatedBy,
+  splitDutyLists,
   tabForDuty,
 } from './duties/dutyDisplay';
 import './profile/profile.css';
@@ -529,7 +532,7 @@ function AppShell({ session }) {
         ) : active === 'duties' ? (
           canManageOperations
             ? <DutiesAdminView currentUserId={user._id} allowManage focusTarget={activeFocusTarget} />
-            : <DutiesUserView access={menuAccess?.duties || 'view'} focusTarget={activeFocusTarget} />
+            : <DutiesUserView access={menuAccess?.duties || 'view'} currentUserId={user._id} focusTarget={activeFocusTarget} />
         ) : active === 'work' ? (
           <WorkUserView focusTarget={activeFocusTarget} />
         ) : active === 'people-review' ? (
@@ -737,11 +740,17 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
   const { pending, feedback, run } = useFeedback();
-  const visibleList = useMemo(() => filterDutiesByTab(list, listTab), [list, listTab]);
+  const { mine, created } = useMemo(
+    () => splitDutyLists(list, currentUserId, { includeManagedOthers: true }),
+    [list, currentUserId],
+  );
+  const visibleMine = useMemo(() => filterDutiesByTab(mine, mineTab), [mine, mineTab]);
+  const visibleCreated = useMemo(() => filterDutiesByTab(created, createdTab), [created, createdTab]);
 
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES,
@@ -751,8 +760,11 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   useEffect(() => {
     if (!focusTarget?.sourceId) return;
     const focused = list.find((item) => String(item._id) === String(focusTarget.sourceId));
-    if (focused) setListTab(tabForDuty(focused));
-  }, [focusTarget?.sourceId, focusTarget?.token, list]);
+    if (!focused) return;
+    const tab = tabForDuty(focused);
+    if (isDutyAssignedTo(focused, currentUserId)) setMineTab(tab);
+    if (isDutyCreatedBy(focused, currentUserId) || !isDutyAssignedTo(focused, currentUserId)) setCreatedTab(tab);
+  }, [focusTarget?.sourceId, focusTarget?.token, list, currentUserId]);
 
   const setField = (field, value) => {
     setForm((prev) => applyDutyFormField(prev, field, value));
@@ -806,6 +818,104 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [editorOpen]);
+
+  const renderAdminDutyCards = (items) => (
+    <div className="duty-modern-list">
+      {items.map((item) => {
+        const open = String(expanded || '') === String(item._id);
+        return (
+          <article
+            className={`duty-modern-card ${open ? 'is-open' : ''}`}
+            key={item._id}
+            data-focus-id={item._id}
+          >
+            <button type="button" className="duty-card-toggle" onClick={() => setExpanded(open ? null : item._id)}>
+              <DutyListSummary item={item} />
+              <span className="duty-expand-hint">{open ? 'Thu gọn' : 'Chi tiết'}</span>
+            </button>
+            {allowManage ? (
+              <div className="row-actions duty-actions">
+                <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
+                <button
+                  type="button"
+                  className="work-reject-button"
+                  disabled={Boolean(pending)}
+                  onClick={() => {
+                    if (window.confirm('Xóa công tác này?')) {
+                      void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
+                    }
+                  }}
+                >
+                  Xóa
+                </button>
+              </div>
+            ) : null}
+            {open && (
+              <div className="duty-detail">
+                <h4>Chi tiết người tham gia</h4>
+                {!item.participants?.length ? (
+                  <p className="muted">Chưa có người tham gia (chọn phòng ban hoặc cá nhân khi tạo công tác).</p>
+                ) : (
+                  <ul className="member-list">
+                    {item.participants.map((p) => {
+                      const isCurrentUser = String(p._id) === String(currentUserId);
+                      return (
+                        <li key={p._id} className={isCurrentUser ? 'admin-self-row' : undefined}>
+                          <span>
+                            <strong>{p.name || '—'} {isCurrentUser ? <em className="current-user-tag">Bạn</em> : null}</strong>
+                            <small>{p.email || ''}</small>
+                          </span>
+                          {isCurrentUser ? (
+                            listData?.attendanceConfirmationEnabled !== false ? <span className="subordinate-actions admin-self-attendance">
+                              <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
+                              <button
+                                type="button"
+                                className={`attend-btn ${p.status === 'attended' ? 'active' : ''}`}
+                                disabled={Boolean(pending) || !item.timing.isOngoing}
+                                title={!item.timing.isOngoing ? 'Chỉ xác nhận trong thời gian diễn ra công tác' : 'Xác nhận đã tham gia'}
+                                onClick={() =>
+                                  void run(
+                                    `admin-att-${item._id}-yes`,
+                                    () => setOwnAttendance({ dutyId: item._id, status: 'attended' }),
+                                    'Đã ghi nhận trạng thái của bạn: Đã tham gia.',
+                                  )
+                                }
+                              >
+                                Đã tham gia
+                              </button>
+                              <button
+                                type="button"
+                                className={`attend-btn absent ${p.status === 'absent' ? 'active' : ''}`}
+                                disabled={Boolean(pending) || !item.timing.isOngoing}
+                                title={!item.timing.isOngoing ? 'Chỉ xác nhận trong thời gian diễn ra công tác' : 'Xác nhận chưa tham gia'}
+                                onClick={() =>
+                                  void run(
+                                    `admin-att-${item._id}-no`,
+                                    () => setOwnAttendance({ dutyId: item._id, status: 'absent' }),
+                                    'Đã ghi nhận trạng thái của bạn: Chưa tham gia.',
+                                  )
+                                }
+                              >
+                                Chưa tham gia
+                              </button>
+                              </span> : null
+                          ) : (
+                            listData?.attendanceConfirmationEnabled !== false
+                              ? <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
+                              : null
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
 
   if ((allowManage && options === undefined) || listData === undefined) return <LoadingView label="Đang tải công tác…" />;
 
@@ -887,113 +997,24 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       ) : null}
 
       <div className="duty-list-section">
+        <DutyListHeading>Công tác của tôi</DutyListHeading>
         <div className="duty-list-toolbar">
-          <DutyListTabs tab={listTab} onChange={setListTab} />
+          <DutyListTabs tab={mineTab} onChange={setMineTab} />
+        </div>
+        {visibleMine.length === 0 ? <DutyListEmpty tab={mineTab} /> : renderAdminDutyCards(visibleMine)}
+      </div>
+
+      <div className="duty-list-section">
+        <DutyListHeading>Công tác tôi tạo</DutyListHeading>
+        <div className="duty-list-toolbar">
+          <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
           {allowManage && !editorOpen ? (
             <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
               <span>+</span> Tạo công tác
             </button>
           ) : null}
         </div>
-        {visibleList.length === 0 ? (
-          <DutyListEmpty tab={listTab} />
-        ) : (
-          <div className="duty-modern-list">
-          {visibleList.map((item) => {
-            const open = String(expanded || '') === String(item._id);
-            return (
-              <article
-                className={`duty-modern-card ${open ? 'is-open' : ''}`}
-                key={item._id}
-                data-focus-id={item._id}
-              >
-                <button type="button" className="duty-card-toggle" onClick={() => setExpanded(open ? null : item._id)}>
-                  <DutyListSummary item={item} />
-                  <span className="duty-expand-hint">{open ? 'Thu gọn' : 'Chi tiết'}</span>
-                </button>
-                {allowManage ? (
-                  <div className="row-actions duty-actions">
-                    <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
-                    <button
-                      type="button"
-                      className="work-reject-button"
-                      disabled={Boolean(pending)}
-                      onClick={() => {
-                        if (window.confirm('Xóa công tác này?')) {
-                          void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
-                        }
-                      }}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                ) : null}
-                {open && (
-                  <div className="duty-detail">
-                    <h4>Chi tiết người tham gia</h4>
-                    {!item.participants?.length ? (
-                      <p className="muted">Chưa có người tham gia (chọn phòng ban hoặc cá nhân khi tạo công tác).</p>
-                    ) : (
-                      <ul className="member-list">
-                        {item.participants.map((p) => {
-                          const isCurrentUser = String(p._id) === String(currentUserId);
-                          return (
-                            <li key={p._id} className={isCurrentUser ? 'admin-self-row' : undefined}>
-                              <span>
-                                <strong>{p.name || '—'} {isCurrentUser ? <em className="current-user-tag">Bạn</em> : null}</strong>
-                                <small>{p.email || ''}</small>
-                              </span>
-                              {isCurrentUser ? (
-                                listData?.attendanceConfirmationEnabled !== false ? <span className="subordinate-actions admin-self-attendance">
-                                  <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
-                                  <button
-                                    type="button"
-                                    className={`attend-btn ${p.status === 'attended' ? 'active' : ''}`}
-                                    disabled={Boolean(pending) || !item.timing.isOngoing}
-                                    title={!item.timing.isOngoing ? 'Chỉ xác nhận trong thời gian diễn ra công tác' : 'Xác nhận đã tham gia'}
-                                    onClick={() =>
-                                      void run(
-                                        `admin-att-${item._id}-yes`,
-                                        () => setOwnAttendance({ dutyId: item._id, status: 'attended' }),
-                                        'Đã ghi nhận trạng thái của bạn: Đã tham gia.',
-                                      )
-                                    }
-                                  >
-                                    Đã tham gia
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={`attend-btn absent ${p.status === 'absent' ? 'active' : ''}`}
-                                    disabled={Boolean(pending) || !item.timing.isOngoing}
-                                    title={!item.timing.isOngoing ? 'Chỉ xác nhận trong thời gian diễn ra công tác' : 'Xác nhận chưa tham gia'}
-                                    onClick={() =>
-                                      void run(
-                                        `admin-att-${item._id}-no`,
-                                        () => setOwnAttendance({ dutyId: item._id, status: 'absent' }),
-                                        'Đã ghi nhận trạng thái của bạn: Chưa tham gia.',
-                                      )
-                                    }
-                                  >
-                                    Chưa tham gia
-                                  </button>
-                                  </span> : null
-                              ) : (
-                                listData?.attendanceConfirmationEnabled !== false
-                                  ? <span className={`attendance-pill ${p.status}`}>{statusLabel(p.status)}</span>
-                                  : null
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </article>
-            );
-          })}
-          </div>
-        )}
+        {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : renderAdminDutyCards(visibleCreated)}
       </div>
     </section>
   );
@@ -1064,7 +1085,7 @@ function ViewAllDutyParticipants({ participants, showAttendance = true }) {
   );
 }
 
-function DutiesUserView({ access, focusTarget = null }) {
+function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const data = useQuery(anyApi.duties.listMine);
   const options = useQuery(anyApi.duties.formOptions, data?.canCreate ? {} : 'skip');
   const create = useMutation(anyApi.duties.create);
@@ -1078,19 +1099,32 @@ function DutiesUserView({ access, focusTarget = null }) {
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
   const duties = data?.duties;
-  const visibleList = useMemo(() => filterDutiesByTab(duties || [], listTab), [duties, listTab]);
+  const { mine, created } = useMemo(
+    () => splitDutyLists(duties || [], currentUserId, {
+      includeManagedOthers: true,
+      leftoverBucket: 'mine',
+    }),
+    [duties, currentUserId],
+  );
+  const visibleMine = useMemo(() => filterDutiesByTab(mine, mineTab), [mine, mineTab]);
+  const visibleCreated = useMemo(() => filterDutiesByTab(created, createdTab), [created, createdTab]);
+  const showCreatedSection = canCreate || created.length > 0;
 
   useNotificationFocus(focusTarget, { acceptSourceTypes: DUTY_NOTIFICATION_FOCUS_TYPES });
 
   useEffect(() => {
     if (!focusTarget?.sourceId || !duties?.length) return;
     const focused = duties.find((item) => String(item._id) === String(focusTarget.sourceId));
-    if (focused) setListTab(tabForDuty(focused));
-  }, [focusTarget?.sourceId, focusTarget?.token, duties]);
+    if (!focused) return;
+    const tab = tabForDuty(focused);
+    if (isDutyAssignedTo(focused, currentUserId)) setMineTab(tab);
+    if (isDutyCreatedBy(focused, currentUserId)) setCreatedTab(tab);
+  }, [focusTarget?.sourceId, focusTarget?.token, duties, currentUserId]);
 
   const setField = (field, value) => {
     setForm((prev) => applyDutyFormField(prev, field, value));
@@ -1132,6 +1166,147 @@ function DutiesUserView({ access, focusTarget = null }) {
     }
     setPreviewOpen(true);
   };
+
+  const renderUserDutyCards = (items) => (
+    <div className="work-user-list duty-modern-list">
+      {items.map((item) => (
+        <article
+          className="work-user-card duty-modern-card user-duty-card"
+          key={item._id}
+          data-focus-id={item._id}
+        >
+          <DutyListSummary item={item} />
+          {item.canManage ? (
+            <div className="row-actions duty-actions">
+              <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
+              <button
+                type="button"
+                className="work-reject-button"
+                disabled={Boolean(pending)}
+                onClick={() => {
+                  if (!window.confirm('Xóa công tác này?')) return;
+                  void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
+                }}
+              >
+                Xóa
+              </button>
+            </div>
+          ) : null}
+          {item.isMine && canEdit && data.attendanceConfirmationEnabled ? (
+            <div className="attendance-actions">
+              <span className={`attendance-pill ${item.myStatus}`}>{statusLabel(item.myStatus)}</span>
+              <button
+                type="button"
+                className={`attend-btn ${item.myStatus === 'attended' ? 'active' : ''}`}
+                disabled={Boolean(pending) || !item.timing.canMarkAttendance}
+                title={!item.timing.canMarkAttendance ? 'Chỉ bấm được khi công tác đang diễn ra' : 'Xác nhận đã tham gia'}
+                onClick={() =>
+                  run(`att-${item._id}-yes`, () => setAttendance({ dutyId: item._id, status: 'attended' }), 'Đã ghi nhận: Đã tham gia.')
+                }
+              >
+                Đã tham gia
+              </button>
+              <button
+                type="button"
+                className={`attend-btn absent ${item.myStatus === 'absent' ? 'active' : ''}`}
+                disabled={Boolean(pending) || !item.timing.canMarkAttendance}
+                title={!item.timing.canMarkAttendance ? 'Chỉ bấm được khi công tác đang diễn ra' : 'Xác nhận chưa tham gia'}
+                onClick={() =>
+                  run(`att-${item._id}-no`, () => setAttendance({ dutyId: item._id, status: 'absent' }), 'Đã ghi nhận: Chưa tham gia.')
+                }
+              >
+                Chưa tham gia
+              </button>
+              {!item.timing.canMarkAttendance ? (
+                <small className="muted">
+                  {item.timing.isUpcoming
+                    ? 'Chưa đến giờ diễn ra — chưa thể xác nhận tham gia.'
+                    : item.timing.isOverdue
+                      ? 'Đã kết thúc — không thể đổi trạng thái tham gia.'
+                      : ''}
+                </small>
+              ) : null}
+            </div>
+          ) : null}
+          {data.attendanceConfirmationEnabled && item.subordinateParticipants?.length ? (
+            <div className="subordinate-attendance">
+              <div className="subordinate-heading">
+                <strong>Cấp dưới cùng phòng ban</strong>
+                <span>{item.subordinateParticipants.length} người</span>
+              </div>
+              <ul className="member-list">
+                {item.subordinateParticipants.map((participant) => {
+                  const canMark = Boolean(
+                    data.canManageSubordinates &&
+                    item.timing.canMarkAttendance,
+                  );
+                  return (
+                    <li key={participant._id} className="subordinate-row">
+                      <span>
+                        <strong>{participant.name || '—'}</strong>
+                        <small>
+                          {participant.email || ''}
+                          {participant.positionName ? ` · ${participant.positionName}` : ''}
+                        </small>
+                      </span>
+                      <span className="subordinate-actions">
+                        <span className={`attendance-pill ${participant.status}`}>{statusLabel(participant.status)}</span>
+                        <button
+                          type="button"
+                          className={`attend-btn ${participant.status === 'attended' ? 'active' : ''}`}
+                          disabled={Boolean(pending) || !canMark}
+                          title={!canMark ? 'Chỉ cấp trên cùng phòng ban mới được cập nhật trong thời gian diễn ra' : 'Xác nhận đã tham gia'}
+                          onClick={() =>
+                            run(
+                              `sub-att-${item._id}-${participant._id}-yes`,
+                              () => setSubordinateAttendance({ dutyId: item._id, userId: participant._id, status: 'attended' }),
+                              `Đã ghi nhận ${participant.name || 'người tham gia'}: Đã tham gia.`,
+                            )
+                          }
+                        >
+                          Đã tham gia
+                        </button>
+                        <button
+                          type="button"
+                          className={`attend-btn absent ${participant.status === 'absent' ? 'active' : ''}`}
+                          disabled={Boolean(pending) || !canMark}
+                          title={!canMark ? 'Chỉ cấp trên cùng phòng ban mới được cập nhật trong thời gian diễn ra' : 'Xác nhận chưa tham gia'}
+                          onClick={() =>
+                            run(
+                              `sub-att-${item._id}-${participant._id}-no`,
+                              () => setSubordinateAttendance({ dutyId: item._id, userId: participant._id, status: 'absent' }),
+                              `Đã ghi nhận ${participant.name || 'người tham gia'}: Chưa tham gia.`,
+                            )
+                          }
+                        >
+                          Chưa tham gia
+                        </button>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {!data.canManageSubordinates ? (
+                <small className="muted">Bạn đang ở chế độ chỉ xem hoặc chưa được gán cấp chức vụ cao hơn.</small>
+              ) : !item.timing.canMarkAttendance ? (
+                <small className="muted">
+                  {item.timing.isUpcoming
+                    ? 'Chưa đến giờ diễn ra — chưa thể cập nhật cấp dưới.'
+                    : 'Đã kết thúc — không thể cập nhật cấp dưới.'}
+                </small>
+              ) : null}
+            </div>
+          ) : null}
+          {data.canViewAll ? (
+            <ViewAllDutyParticipants
+              participants={item.visibleParticipants}
+              showAttendance={data.attendanceConfirmationEnabled}
+            />
+          ) : null}
+        </article>
+      ))}
+    </div>
+  );
 
   if (data === undefined || (canCreate && options === undefined)) {
     return <LoadingView label="Đang tải danh sách công tác…" />;
@@ -1193,157 +1368,27 @@ function DutiesUserView({ access, focusTarget = null }) {
       ) : null}
 
       <div className="duty-list-section">
+        <DutyListHeading>Công tác của tôi</DutyListHeading>
         <div className="duty-list-toolbar">
-          <DutyListTabs tab={listTab} onChange={setListTab} />
-          {canCreate && !editorOpen ? (
-            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-              <span>+</span> Tạo công tác
-            </button>
-          ) : null}
+          <DutyListTabs tab={mineTab} onChange={setMineTab} />
         </div>
-        {visibleList.length === 0 ? (
-          <DutyListEmpty tab={listTab} />
-        ) : (
-          <div className="work-user-list duty-modern-list">
-          {visibleList.map((item) => (
-            <article
-              className="work-user-card duty-modern-card user-duty-card"
-              key={item._id}
-              data-focus-id={item._id}
-            >
-              <DutyListSummary item={item} />
-                {item.canManage ? (
-                  <div className="row-actions duty-actions">
-                    <button type="button" className="work-outline-button" onClick={() => startEdit(item)} disabled={Boolean(pending)}>Sửa</button>
-                    <button
-                      type="button"
-                      className="work-reject-button"
-                      disabled={Boolean(pending)}
-                      onClick={() => {
-                        if (!window.confirm('Xóa công tác này?')) return;
-                        void run(`del-${item._id}`, () => remove({ id: item._id }), 'Đã xóa công tác.');
-                      }}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                ) : null}
-                {item.isMine && canEdit && data.attendanceConfirmationEnabled ? (
-                  <div className="attendance-actions">
-                    <span className={`attendance-pill ${item.myStatus}`}>{statusLabel(item.myStatus)}</span>
-                    <button
-                      type="button"
-                      className={`attend-btn ${item.myStatus === 'attended' ? 'active' : ''}`}
-                      disabled={Boolean(pending) || !item.timing.canMarkAttendance}
-                      title={!item.timing.canMarkAttendance ? 'Chỉ bấm được khi công tác đang diễn ra' : 'Xác nhận đã tham gia'}
-                      onClick={() =>
-                        run(`att-${item._id}-yes`, () => setAttendance({ dutyId: item._id, status: 'attended' }), 'Đã ghi nhận: Đã tham gia.')
-                      }
-                    >
-                      Đã tham gia
-                    </button>
-                    <button
-                      type="button"
-                      className={`attend-btn absent ${item.myStatus === 'absent' ? 'active' : ''}`}
-                      disabled={Boolean(pending) || !item.timing.canMarkAttendance}
-                      title={!item.timing.canMarkAttendance ? 'Chỉ bấm được khi công tác đang diễn ra' : 'Xác nhận chưa tham gia'}
-                      onClick={() =>
-                        run(`att-${item._id}-no`, () => setAttendance({ dutyId: item._id, status: 'absent' }), 'Đã ghi nhận: Chưa tham gia.')
-                      }
-                    >
-                      Chưa tham gia
-                    </button>
-                    {!item.timing.canMarkAttendance ? (
-                      <small className="muted">
-                        {item.timing.isUpcoming
-                          ? 'Chưa đến giờ diễn ra — chưa thể xác nhận tham gia.'
-                          : item.timing.isOverdue
-                            ? 'Đã kết thúc — không thể đổi trạng thái tham gia.'
-                            : ''}
-                      </small>
-                    ) : null}
-                  </div>
-                ) : null}
-                {data.attendanceConfirmationEnabled && item.subordinateParticipants?.length ? (
-                  <div className="subordinate-attendance">
-                    <div className="subordinate-heading">
-                      <strong>Cấp dưới cùng phòng ban</strong>
-                      <span>{item.subordinateParticipants.length} người</span>
-                    </div>
-                    <ul className="member-list">
-                      {item.subordinateParticipants.map((participant) => {
-                        const canMark = Boolean(
-                          data.canManageSubordinates &&
-                          item.timing.canMarkAttendance,
-                        );
-                        return (
-                          <li key={participant._id} className="subordinate-row">
-                            <span>
-                              <strong>{participant.name || '—'}</strong>
-                              <small>
-                                {participant.email || ''}
-                                {participant.positionName ? ` · ${participant.positionName}` : ''}
-                              </small>
-                            </span>
-                            <span className="subordinate-actions">
-                              <span className={`attendance-pill ${participant.status}`}>{statusLabel(participant.status)}</span>
-                              <button
-                                type="button"
-                                className={`attend-btn ${participant.status === 'attended' ? 'active' : ''}`}
-                                disabled={Boolean(pending) || !canMark}
-                                title={!canMark ? 'Chỉ cấp trên cùng phòng ban mới được cập nhật trong thời gian diễn ra' : 'Xác nhận đã tham gia'}
-                                onClick={() =>
-                                  run(
-                                    `sub-att-${item._id}-${participant._id}-yes`,
-                                    () => setSubordinateAttendance({ dutyId: item._id, userId: participant._id, status: 'attended' }),
-                                    `Đã ghi nhận ${participant.name || 'người tham gia'}: Đã tham gia.`,
-                                  )
-                                }
-                              >
-                                Đã tham gia
-                              </button>
-                              <button
-                                type="button"
-                                className={`attend-btn absent ${participant.status === 'absent' ? 'active' : ''}`}
-                                disabled={Boolean(pending) || !canMark}
-                                title={!canMark ? 'Chỉ cấp trên cùng phòng ban mới được cập nhật trong thời gian diễn ra' : 'Xác nhận chưa tham gia'}
-                                onClick={() =>
-                                  run(
-                                    `sub-att-${item._id}-${participant._id}-no`,
-                                    () => setSubordinateAttendance({ dutyId: item._id, userId: participant._id, status: 'absent' }),
-                                    `Đã ghi nhận ${participant.name || 'người tham gia'}: Chưa tham gia.`,
-                                  )
-                                }
-                              >
-                                Chưa tham gia
-                              </button>
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {!data.canManageSubordinates ? (
-                      <small className="muted">Bạn đang ở chế độ chỉ xem hoặc chưa được gán cấp chức vụ cao hơn.</small>
-                    ) : !item.timing.canMarkAttendance ? (
-                      <small className="muted">
-                        {item.timing.isUpcoming
-                          ? 'Chưa đến giờ diễn ra — chưa thể cập nhật cấp dưới.'
-                          : 'Đã kết thúc — không thể cập nhật cấp dưới.'}
-                      </small>
-                    ) : null}
-                  </div>
-                ) : null}
-                {data.canViewAll ? (
-                  <ViewAllDutyParticipants
-                    participants={item.visibleParticipants}
-                    showAttendance={data.attendanceConfirmationEnabled}
-                  />
-                ) : null}
-            </article>
-          ))}
-          </div>
-        )}
+        {visibleMine.length === 0 ? <DutyListEmpty tab={mineTab} /> : renderUserDutyCards(visibleMine)}
       </div>
+
+      {showCreatedSection ? (
+        <div className="duty-list-section">
+          <DutyListHeading>Công tác tôi tạo</DutyListHeading>
+          <div className="duty-list-toolbar">
+            <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
+            {canCreate && !editorOpen ? (
+              <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
+                <span>+</span> Tạo công tác
+              </button>
+            ) : null}
+          </div>
+          {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : renderUserDutyCards(visibleCreated)}
+        </div>
+      ) : null}
     </section>
   );
 }

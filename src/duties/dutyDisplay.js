@@ -118,6 +118,33 @@ function dutyEndKey(item) {
   return `${item?.endDate || ''}T${item?.endTime || ''}`;
 }
 
+export function isDutyCreatedBy(item, userId) {
+  return Boolean(userId) && String(item?.createdBy || '') === String(userId);
+}
+
+export function isDutyAssignedTo(item, userId) {
+  if (item?.isMine === true) return true;
+  const id = String(userId || '');
+  if (!id) return false;
+  if ((item?.participantUserIds || []).some((value) => String(value) === id)) return true;
+  if ((item?.participants || []).some((person) => String(person._id) === id)) return true;
+  return false;
+}
+
+export function splitDutyLists(list, userId, { includeManagedOthers = false, leftoverBucket = 'created' } = {}) {
+  const items = Array.isArray(list) ? list : [];
+  const mine = items.filter((item) => isDutyAssignedTo(item, userId));
+  const created = items.filter((item) => isDutyCreatedBy(item, userId));
+  if (!includeManagedOthers) {
+    return { mine, created };
+  }
+  const leftovers = items.filter((item) => !isDutyAssignedTo(item, userId) && !isDutyCreatedBy(item, userId));
+  if (leftoverBucket === 'mine') {
+    return { mine: [...mine, ...leftovers], created };
+  }
+  return { mine, created: [...created, ...leftovers] };
+}
+
 export function filterDutiesByTab(list, tab = DUTY_LIST_TAB_UPCOMING) {
   const items = Array.isArray(list) ? list : [];
   if (tab === DUTY_LIST_TAB_PAST) {

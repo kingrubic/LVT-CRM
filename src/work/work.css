@@ -501,6 +501,96 @@
   font-size: 13px;
 }
 
+.work-inline-assignments {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.work-inline-row {
+  display: grid;
+  grid-template-columns: minmax(180px, .8fr) minmax(0, 1.6fr) 150px 36px;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid #e1e8eb;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.work-inline-row label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: #526b80;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.work-inline-row select,
+.work-inline-row textarea,
+.work-inline-row input[type="date"] {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid #d9e3e8;
+  border-radius: 9px;
+  color: #2b465e;
+  background: #fbfcfc;
+  font: inherit;
+  font-size: 14px;
+}
+
+.work-inline-row textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.work-inline-content small {
+  color: #9aa8b2;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.work-inline-remove {
+  align-self: start;
+  margin-top: 22px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #efc7bf;
+  border-radius: 9px;
+  color: #9b4539;
+  background: #ffebe7;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.duty-workspace .work-department-assignments {
+  margin-top: 0;
+}
+
+.duty-workspace .work-department-assignments > header span {
+  font-size: 11px;
+}
+
+.duty-workspace .work-department-assignments > header h4 {
+  font-size: 15px;
+}
+
+.duty-workspace .work-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .work-assignment-table {
   overflow-x: auto;
 }
@@ -1494,6 +1584,8 @@
   .work-editor-grid { grid-template-columns: 1fr; }
   .work-hero { padding: 24px 21px; }
   .work-hero-stamp { display: none; }
+  .work-inline-row { grid-template-columns: 1fr; }
+  .work-inline-remove { margin-top: 0; width: 100%; }
 }
 
 @media (max-width: 560px) {
