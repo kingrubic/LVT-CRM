@@ -18,6 +18,7 @@ import {
   isWorkItemArchived,
   isWorkNotificationAssignee,
   isWorkReleased,
+  workAssignmentPushUserIds,
   workListTitle,
 } from '../convex/assignmentPolicy.ts';
 
@@ -159,4 +160,31 @@ test('thông báo công việc mới: admin nhận khi được giao cá nhân, 
   assert.equal(isWorkNotificationAssignee({ user: teacher, item: individual }), false);
   assert.equal(isWorkNotificationAssignee({ user: admin, item: department }), false);
   assert.equal(isWorkNotificationAssignee({ user: teacher, item: department }), true);
+});
+
+test('người tạo vẫn nhận thông báo khi tự giao việc cho mình', () => {
+  const creator = { _id: 'lead-1', role: 'user', departmentId: 'dept-a' };
+  const other = { _id: 'user-1', role: 'user', departmentId: 'dept-a' };
+  const admin = { _id: 'admin-1', role: 'admin', departmentId: 'dept-a' };
+  const selfAssigned = workAssignmentPushUserIds({
+    assignments: [{ type: 'individual', userIds: ['lead-1'] }],
+    users: [creator, other, admin],
+  });
+  assert.equal(selfAssigned.includes('lead-1'), true);
+  assert.equal(selfAssigned.includes('user-1'), false);
+
+  const assignedToOther = workAssignmentPushUserIds({
+    assignments: [{ type: 'individual', userIds: ['user-1'] }],
+    users: [creator, other, admin],
+  });
+  assert.equal(assignedToOther.includes('lead-1'), false);
+  assert.equal(assignedToOther.includes('user-1'), true);
+
+  const department = workAssignmentPushUserIds({
+    assignments: [{ type: 'department', departmentId: 'dept-a' }],
+    users: [creator, other, admin],
+  });
+  assert.equal(department.includes('lead-1'), true);
+  assert.equal(department.includes('user-1'), true);
+  assert.equal(department.includes('admin-1'), false);
 });

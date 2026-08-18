@@ -185,3 +185,37 @@ export function isWorkNotificationAssignee(args: {
   if (excluded.has(userId)) return false;
   return String(args.user.departmentId || "") === String(args.item.departmentId || "");
 }
+
+/** Push recipients for a create/update: assignees, including the creator when they assigned themselves. */
+export function workAssignmentPushUserIds(args: {
+  assignments: Array<{
+    type?: string;
+    userIds?: string[];
+    departmentId?: string;
+  }>;
+  users: Array<{ _id: string; role?: string; departmentId?: string }>;
+}): string[] {
+  const recipients = new Set<string>();
+  for (const assignment of args.assignments) {
+    if (assignment.type === "individual") {
+      for (const id of assignment.userIds || []) {
+        if (id) recipients.add(String(id));
+      }
+      continue;
+    }
+    for (const user of args.users) {
+      if (
+        isWorkNotificationAssignee({
+          user,
+          item: {
+            assignmentType: "department",
+            departmentId: assignment.departmentId,
+          },
+        })
+      ) {
+        recipients.add(String(user._id));
+      }
+    }
+  }
+  return [...recipients];
+}
