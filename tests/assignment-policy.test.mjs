@@ -11,6 +11,7 @@ import {
   cleanDutyLocationText,
   cleanDutyTitle,
   cleanWorkTitle,
+  normalizeDutyClock,
   dutyListTitle,
   dutyLocationLabel,
   isDocumentArchived,
@@ -27,6 +28,13 @@ test('chỉ admin/mod và tổ trưởng/tổ phó (2/3 sao) được tạo côn
   assert.equal(canCreateAssignments('user', 1), false);
   assert.equal(canCreateAssignments('user', 4), false);
   assert.equal(canCreateAssignments('user', 5), false);
+});
+
+test('giờ công tác chuẩn hóa HH:mm từ datetime-local', () => {
+  assert.equal(normalizeDutyClock('08:08'), '08:08');
+  assert.equal(normalizeDutyClock('8:08'), '08:08');
+  assert.equal(normalizeDutyClock('08:08:00'), '08:08');
+  assert.equal(normalizeDutyClock(' 17:00:30 '), '17:00');
 });
 
 test('tên công tác bắt buộc, list ưu tiên title rồi mới content', () => {

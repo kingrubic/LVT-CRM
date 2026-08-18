@@ -12,7 +12,11 @@ export function toDateTimeLocalValue(date, time) {
 
 export function fromDateTimeLocalValue(value) {
   const [date = '', clock = ''] = String(value || '').split('T');
-  return { date, time: clock.slice(0, 5) };
+  const timeMatch = clock.match(/^(\d{1,2}):(\d{2})/);
+  return {
+    date: date.slice(0, 10),
+    time: timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}` : clock.slice(0, 5),
+  };
 }
 
 export function formatDutyDateTimeLine(date, time, { allDay = false } = {}) {
@@ -69,6 +73,11 @@ export function dutyPayloadFromForm(form, { includeDepartments = true } = {}) {
     departmentIds: includeDepartments ? form.departmentIds : [],
     participantUserIds: form.participantUserIds,
   };
+}
+
+export function dutyFormHasParticipants(form, options) {
+  const payload = dutyPayloadFromForm(form, options);
+  return payload.departmentIds.length > 0 || payload.participantUserIds.length > 0;
 }
 
 export function applyDutyFormField(prev, field, value) {

@@ -8,6 +8,7 @@ import {
   buildDutyCreatePreview,
   dutyDisplayTitle,
   dutyFormFromItem,
+  dutyFormHasParticipants,
   dutyPayloadFromForm,
   DUTY_LIST_TAB_PAST,
   DUTY_LIST_TAB_UPCOMING,
@@ -35,6 +36,7 @@ test('format datetime công tác thành 2 hàng ngày-giờ', () => {
 test('datetime-local gộp ngày và giờ trên một ô', () => {
   assert.equal(toDateTimeLocalValue('2024-08-15', '08:00'), '2024-08-15T08:00');
   assert.deepEqual(fromDateTimeLocalValue('2026-08-17T17:00'), { date: '2026-08-17', time: '17:00' });
+  assert.deepEqual(fromDateTimeLocalValue('2026-08-19T08:08:00'), { date: '2026-08-19', time: '08:08' });
   assert.equal(toDateTimeLocalValue('', '08:00'), '');
 });
 
@@ -80,6 +82,21 @@ test('tab chưa diễn ra mặc định, sự kiện gần nhất lên đầu', 
   assert.deepEqual(upcoming.map((item) => item._id), ['a', 'b']);
   const finished = filterDutiesByTab([later, newerPast, olderPast, sooner], DUTY_LIST_TAB_PAST);
   assert.deepEqual(finished.map((item) => item._id), ['c', 'd']);
+});
+
+test('tạo công tác cần ít nhất một phòng ban hoặc người tham gia', () => {
+  const form = {
+    ...emptyDutyForm(),
+    title: 'Họp khối',
+    content: 'Nội dung họp',
+    startDate: '2026-08-18',
+    endDate: '2026-08-18',
+    locationText: 'Phòng họp A',
+  };
+  assert.equal(dutyFormHasParticipants(form), false);
+  assert.equal(dutyFormHasParticipants({ ...form, participantUserIds: ['u1'] }), true);
+  assert.equal(dutyFormHasParticipants({ ...form, departmentIds: ['d1'] }), true);
+  assert.equal(dutyFormHasParticipants({ ...form, departmentIds: ['d1'] }, { includeDepartments: false }), false);
 });
 
 test('preview tạo công tác gom nhãn phòng ban và người tham gia', () => {

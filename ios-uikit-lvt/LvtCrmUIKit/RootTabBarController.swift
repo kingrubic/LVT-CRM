@@ -310,6 +310,10 @@ private final class DashboardViewController: UIViewController {
 
     private func applyAppearance() {
         view.backgroundColor = DashboardPalette.canvas
+        refreshControl.tintColor = DashboardPalette.primaryText
+        dutiesCard.applyColors()
+        workCard.applyColors()
+        synchronizationView.applyColors()
         guard let navigationBar = navigationController?.navigationBar else { return }
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
@@ -452,6 +456,9 @@ private final class DashboardCard: UIControl {
         configure(title: title, subtitle: subtitle)
         setLoading()
         applyColors()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (card: DashboardCard, _) in
+            card.applyColors()
+        }
     }
 
     @available(*, unavailable)
@@ -575,7 +582,12 @@ private final class DashboardCard: UIControl {
         ])
     }
 
-    private func applyColors() {
+    fileprivate func applyColors() {
+        backgroundView.applyColors()
+        accentView.applyColors()
+        iconTile.applyColors()
+        primaryMetric.applyColors()
+        secondaryMetric.applyColors()
         backgroundView.layer.borderWidth = 1
         backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traitCollection).cgColor
         titleLabel.textColor = DashboardPalette.primaryText
@@ -599,6 +611,9 @@ private final class DashboardMetricView: UIView {
         isAccessibilityElement = false
         configure()
         applyColors()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (metric: DashboardMetricView, _) in
+            metric.applyColors()
+        }
     }
 
     @available(*, unavailable)
@@ -680,7 +695,7 @@ private final class DashboardMetricView: UIView {
         ])
     }
 
-    private func applyColors() {
+    fileprivate func applyColors() {
         circleView.backgroundColor = tint.withAlphaComponent(
             traitCollection.userInterfaceStyle == .dark ? 0.11 : 0.09
         )
@@ -726,6 +741,9 @@ private final class DashboardIconTile: UIView {
             iconView.heightAnchor.constraint(equalToConstant: 27),
         ])
         applyColors()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (tile: DashboardIconTile, _) in
+            tile.applyColors()
+        }
     }
 
     @available(*, unavailable)
@@ -736,11 +754,14 @@ private final class DashboardIconTile: UIView {
         gradientLayer.frame = bounds
     }
 
-    private func applyColors() {
+    fileprivate func applyColors() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         gradientLayer.colors = [
             tint.resolvedColor(with: traitCollection).cgColor,
             tint.withAlphaComponent(0.55).resolvedColor(with: traitCollection).cgColor,
         ]
+        CATransaction.commit()
         layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.18
     }
 }
@@ -760,6 +781,9 @@ private final class DashboardSynchronizationView: UIView {
         super.init(frame: frame)
         configure()
         applyColors()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: DashboardSynchronizationView, _) in
+            view.applyColors()
+        }
     }
 
     @available(*, unavailable)
@@ -860,7 +884,8 @@ private final class DashboardSynchronizationView: UIView {
         ])
     }
 
-    private func applyColors() {
+    fileprivate func applyColors() {
+        backgroundView.applyColors()
         backgroundView.layer.borderWidth = 1
         backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traitCollection).cgColor
         symbolContainer.backgroundColor = DashboardPalette.dutiesAccent.withAlphaComponent(0.12)
@@ -884,6 +909,9 @@ private final class DashboardGradientView: UIView {
         gradientLayer.endPoint = endPoint
         layer.insertSublayer(gradientLayer, at: 0)
         applyColors()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: DashboardGradientView, _) in
+            view.applyColors()
+        }
     }
 
     @available(*, unavailable)
@@ -894,8 +922,11 @@ private final class DashboardGradientView: UIView {
         gradientLayer.frame = bounds
     }
 
-    private func applyColors() {
+    fileprivate func applyColors() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         gradientLayer.colors = colors(traitCollection).map(\.cgColor)
+        CATransaction.commit()
     }
 }
 

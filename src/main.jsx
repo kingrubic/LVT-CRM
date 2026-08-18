@@ -17,6 +17,7 @@ import { pathnameForMenu, pathnameForReportSection, routeForPathname } from './n
 import PeopleReviewView from './peopleReview/PeopleReviewView';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
+import { convexErrorText, messageFor } from './lib/appErrorMessage';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyCreatePreview from './duties/DutyCreatePreview';
@@ -29,6 +30,7 @@ import {
   applyDutyStartDateTime,
   DUTY_LIST_TAB_UPCOMING,
   dutyFormFromItem,
+  dutyFormHasParticipants,
   dutyPayloadFromForm,
   emptyDutyForm,
   emptyDutySearch,
@@ -69,159 +71,8 @@ const SUPREME_SETTINGS = [
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
 const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', edit: 'Sửa' };
 
-function messageFor(error) {
-  // Convex often wraps codes: "[Request ID] Server Error\nCODE", "Uncaught Error: CODE", etc.
-  const raw = String(error?.data ?? error?.message ?? error ?? 'UNKNOWN_ERROR');
-  if (/ArgumentValidationError|extraneous field|extra field `code`/i.test(raw)) {
-    return 'Máy chủ chưa nhận đủ cấu hình mã nhóm quyền. Vui lòng tải lại trang sau khi hệ thống cập nhật, rồi thử lại.';
-  }
-  if (/does not match the schema/i.test(raw)) {
-    return 'Dữ liệu không khớp schema máy chủ. Vui lòng liên hệ quản trị viên để triển khai lại Convex.';
-  }
-  const messages = {
-    USER_NOT_ACTIVE: 'Tài khoản không còn hoạt động. Vui lòng liên hệ quản trị viên.',
-    ACCOUNT_LOCKED:
-      'Tài khoản đã bị khóa do đăng nhập sai quá số lần cho phép. Vui lòng liên hệ quản trị viên để được mở khóa.',
-    INVALID_LOGIN_MAX_FAILED_ATTEMPTS: 'Số lần đăng nhập sai phải từ 1 đến 50.',
-    INVALID_LOGIN_ATTEMPT_WINDOW: 'Khung thời gian phải từ 1 đến 1440 phút.',
-    CANNOT_REVOKE_CURRENT_SESSION: 'Không thể thu hồi phiên đang dùng trên thiết bị này.',
-    SESSION_NOT_FOUND: 'Phiên đăng nhập không còn tồn tại.',
-    EMAIL_TAKEN: 'Email này đã được sử dụng. Vui lòng chọn email khác.',
-    TEMP_PASSWORD_TOO_SHORT: 'Mật khẩu tạm thời phải có ít nhất 8 ký tự.',
-    PASSWORD_TOO_SHORT: 'Mật khẩu mới phải có ít nhất 8 ký tự.',
-    CURRENT_PASSWORD_REQUIRED: 'Vui lòng nhập mật khẩu hiện tại.',
-    CURRENT_PASSWORD_INVALID: 'Mật khẩu hiện tại không đúng.',
-    CANNOT_DISABLE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể khóa chính tài khoản đang đăng nhập.',
-    CANNOT_DELETE_OWN_ACTIVE_ACCOUNT: 'Bạn không thể xóa chính tài khoản đang đăng nhập.',
-    LAST_ACTIVE_ADMIN: 'Không thể khóa, xóa hoặc hạ quyền Administrator cuối cùng đang hoạt động.',
-    USER_REMOVE_FAILED: 'Không thể xóa tài khoản. Vui lòng liên hệ kỹ thuật.',
-    USER_CREATE_FAILED: 'Không thể tạo tài khoản. Vui lòng thử lại.',
-    USER_UPDATE_FAILED: 'Không thể cập nhật tài khoản. Vui lòng thử lại.',
-    PASSWORD_CHANGED_SYNC_PENDING: 'Mật khẩu đã đổi nhưng hệ thống chưa cập nhật xong. Vui lòng liên hệ quản trị viên.',
-    PASSWORD_RESET_FAILED: 'Không thể đặt lại mật khẩu. Vui lòng thử lại.',
-    PASSWORD_RESET_EMAIL_FAILED:
-      'Không gửi được email khôi phục mật khẩu. Tài khoản chưa đổi mật khẩu. Vui lòng thử lại.',
-    MAIL_NOT_CONFIGURED: 'Hệ thống chưa cấu hình gửi email. Vui lòng liên hệ quản trị viên.',
-    MAIL_AUTH_FAILED: 'Không xác thực được tài khoản gửi email. Vui lòng liên hệ quản trị viên.',
-    PASSWORD_CHANGE_FAILED: 'Không thể đổi mật khẩu. Vui lòng thử lại.',
-    EMAIL_CHANGE_UNSUPPORTED: 'Hiện chưa hỗ trợ đổi email đăng nhập. Vui lòng tạo tài khoản mới nếu cần.',
-    PUBLIC_SIGNUP_DISABLED: 'Hệ thống không cho phép tự đăng ký.',
-    INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
-    'Invalid credentials': 'Email hoặc mật khẩu không đúng.',
-    INVALID_EMAIL: 'Email không hợp lệ.',
-    INVALID_ROLE: 'Vai trò chỉ được chọn Administrator, Moderator hoặc User.',
-    INVALID_DEPARTMENT: 'Phòng ban không hợp lệ hoặc đã ngưng sử dụng.',
-    INVALID_PERMISSION_GROUP: 'Nhóm quyền không hợp lệ hoặc đã ngưng sử dụng.',
-    INVALID_POSITION: 'Chức vụ không hợp lệ hoặc đã ngưng sử dụng.',
-    INVALID_POSITION_LEVEL: 'Cấp bậc chức vụ phải từ 1 đến 5 sao.',
-    INVALID_CODE: 'Mã không hợp lệ. Tối đa 20 ký tự; chỉ dùng chữ, số, gạch ngang hoặc gạch dưới.',
-    INVALID_NAME: 'Tên không hợp lệ. Vui lòng nhập lại.',
-    INVALID_MENU: 'Cấu hình quyền menu không hợp lệ.',
-    CODE_TAKEN: 'Mã này đã được sử dụng. Vui lòng chọn mã khác.',
-    HAS_ASSIGNED_USERS: 'Không thể xóa vì vẫn còn người dùng đang được gán. Hãy gỡ hết user trước.',
-    IMPORT_FILE_TOO_LARGE: 'File import vượt quá giới hạn 2 MB.',
-    INVALID_IMPORT_FILE: 'Chỉ chấp nhận file Excel (.xlsx).',
-    INVALID_IMPORT_HEADERS: 'File không đúng mẫu. Vui lòng dùng file nhập liệu mẫu của hệ thống.',
-    IMPORT_FILE_EMPTY: 'File import trống.',
-    IMPORT_UPLOAD_NOT_FOUND: 'Không tìm thấy file import đã tải lên.',
-    IMPORT_UPLOAD_EXPIRED: 'File import đã hết hạn (giữ tối đa 1 giờ). Vui lòng tải lại.',
-    IMPORT_UPLOAD_ALREADY_COMMITTED: 'File import này đã được nhập. Vui lòng tải file mới nếu cần nhập tiếp.',
-    IMPORT_UPLOAD_IN_PROGRESS: 'File import đang được nhập. Vui lòng đợi hoàn tất.',
-    IMPORT_VALIDATION_FAILED: 'Dữ liệu import không hợp lệ. Vui lòng kiểm tra lại file.',
-    USER_IMPORT_FAILED: 'Import người dùng thất bại. Các tài khoản đã tạo trong lô này đã được vô hiệu hóa.',
-    DEPARTMENT_NAME_TAKEN: 'Đã có phòng ban trùng tên, vui lòng đặt tên khác.',
-    LOCATION_NAME_TAKEN: 'Đã có địa điểm trùng tên, vui lòng đặt tên khác.',
-    PERMISSION_GROUP_NAME_TAKEN: 'Đã có nhóm quyền trùng tên, vui lòng đặt tên khác.',
-    POSITION_NAME_TAKEN: 'Đã có chức vụ trùng tên, vui lòng đặt tên khác.',
-    DEPARTMENT_NOT_FOUND: 'Không tìm thấy phòng ban.',
-    LOCATION_NOT_FOUND: 'Không tìm thấy địa điểm.',
-    PERMISSION_GROUP_NOT_FOUND: 'Không tìm thấy nhóm quyền.',
-    POSITION_NOT_FOUND: 'Không tìm thấy chức vụ.',
-    USER_NOT_FOUND: 'Không tìm thấy người dùng.',
-    INVALID_DESCRIPTION: 'Mô tả quá dài hoặc không hợp lệ.',
-    INVALID_DATE: 'Ngày không hợp lệ.',
-    INVALID_TIME: 'Giờ không hợp lệ.',
-    INVALID_CONTENT: 'Nội dung bắt buộc và tối đa 200 ký tự.',
-    INVALID_DUTY_TITLE: 'Tên công tác bắt buộc và tối đa 200 ký tự.',
-    END_BEFORE_START: 'Thời gian kết thúc phải sau thời gian bắt đầu.',
-    INVALID_LOCATION: 'Vui lòng nhập địa điểm (tối đa 200 ký tự).',
-    INVALID_PARTICIPANT: 'Người tham gia không hợp lệ.',
-    DUTY_NOT_FOUND: 'Không tìm thấy công tác.',
-    NOT_A_PARTICIPANT: 'Bạn không nằm trong danh sách tham gia công tác này.',
-    NOT_A_SUBORDINATE: 'Chỉ được giao hoặc cập nhật cấp dưới trong cùng phòng ban.',
-    ATTENDANCE_OUTSIDE_WINDOW: 'Chỉ xác nhận tham gia trong thời gian diễn ra công tác.',
-    ATTENDANCE_CONFIRMATION_DISABLED: 'Xác nhận tham gia đang được tắt trong thiết lập hiển thị.',
-    INVALID_WORK_FILE: 'Tệp công văn không đúng định dạng được hỗ trợ.',
-    WORK_FILE_TOO_LARGE: 'Tệp công văn không được vượt quá 20MB.',
-    WORK_UPLOAD_FAILED: 'Không thể tải tệp công văn lên.',
-    INVALID_WORK_DEADLINE: 'Hạn chót công việc không hợp lệ.',
-    INVALID_WORK_CONTENT: 'Nội dung công việc bắt buộc và tối đa 2.000 ký tự.',
-    WORK_DEPARTMENTS_REQUIRED: 'Vui lòng thêm ít nhất một phòng ban nhận việc.',
-    WORK_DEPARTMENT_DUPLICATE: 'Mỗi phòng ban chỉ được nhận một đầu việc trong cùng công văn.',
-    WORK_APPROVERS_REQUIRED: 'Vui lòng chọn ít nhất một người duyệt.',
-    INVALID_WORK_APPROVER: 'Người duyệt phải là user đang hoạt động cấp 4 hoặc 5 sao, không phải Administrator/Moderator.',
-    WORK_APPROVER_REQUIRED: 'Chỉ user cấp 4 hoặc 5 sao mới được duyệt công văn.',
-    WORK_APPROVER_FORBIDDEN: 'Bạn không nằm trong danh sách duyệt công văn này.',
-    WORK_NOT_APPROVED: 'Công văn chưa được duyệt đủ.',
-    INVALID_PERSONAL_WORK_TITLE: 'Tên công việc cá nhân bắt buộc và tối đa 200 ký tự.',
-    WORK_ASSIGNEES_REQUIRED: 'Vui lòng chọn người thực hiện.',
-    INVALID_WORK_ASSIGNEE: 'Người thực hiện phải cùng phòng ban và có cấp sao thấp hơn bạn.',
-    WORK_ASSIGNER_REQUIRED: 'Chỉ user cấp 2 hoặc 3 mới được chỉ định công việc.',
-    WORK_EXECUTOR_REQUIRED: 'Chỉ người được giao mới được hoàn thành task.',
-    PERSONAL_WORK_OVERDUE: 'Đầu mục đã quá hạn và không thể xác nhận.',
-    QUALITY_PERCENT_REQUIRED: 'Vui lòng nhập mức độ hoàn thành (%).',
-    INVALID_QUALITY_PERCENT: 'Mức độ hoàn thành phải từ 0 đến 100%.',
-    INVALID_REJECTION_REASON: 'Vui lòng nhập lý do chưa duyệt (tối đa 500 ký tự).',
-    ASSIGNMENT_CREATE_FORBIDDEN: 'Bạn không có quyền tạo công tác hoặc công việc.',
-    DUTY_CREATE_FORBIDDEN: 'Bạn không có quyền tạo công tác.',
-    DUTY_UPDATE_FORBIDDEN: 'Bạn không thể sửa hoặc xóa công tác này.',
-    DUTY_DEPARTMENT_FORBIDDEN: 'Tổ trưởng/tổ phó chỉ được giao công tác cho cấp dưới, không chọn cả phòng ban.',
-    DUTY_PARTICIPANTS_REQUIRED: 'Vui lòng chọn ít nhất một người tham gia.',
-    INVALID_WORK_TITLE: 'Vui lòng nhập tên công việc (tối đa 200 ký tự).',
-    WORK_EVIDENCE_REQUIRED: 'Khi nộp việc phải đính kèm file bằng chứng hoàn thành.',
-    WORK_APPROVAL_DISABLED: 'Công việc không còn bước duyệt công văn.',
-    WORK_COMPLETION_REVIEWER_REQUIRED: 'Chỉ người tạo công việc mới được đánh dấu hoàn thành hoặc trả về.',
-    WORK_COMPLETION_NOT_PENDING: 'Task không còn ở trạng thái chờ duyệt hoàn thành.',
-    WORK_ASSIGNMENTS_REQUIRED: 'Vui lòng thêm ít nhất một phân công.',
-    WORK_ADMIN_MOD_MODE_REQUIRED: 'Thao tác này chỉ dùng ở chế độ Admin/Mod giao việc.',
-    WORK_SUPERVISOR_MODE_REQUIRED: 'Thao tác này chỉ dùng ở chế độ Cấp trên giao việc.',
-    PEOPLE_REVIEW_FAULT_FORBIDDEN: 'Bạn không có quyền ghi nhận lỗi cho người này.',
-    PEOPLE_REVIEW_UPLOAD_FORBIDDEN: 'Bạn không có quyền upload file đánh giá cho người này.',
-    PEOPLE_REVIEW_TEXT_FORBIDDEN: 'Bạn không có quyền ghi BGH đánh giá cho người này.',
-    PEOPLE_REVIEW_FORBIDDEN: 'Bạn không có quyền xem hồ sơ đánh giá này.',
-    EVALUATION_FILE_LOCKED: 'File kỳ này đã có BGH đánh giá — không thể upload lại.',
-    EVALUATION_FILE_REQUIRED: 'Cần có file upload trước khi ghi BGH đánh giá.',
-    EVALUATION_TEXT_ALREADY_SUBMITTED: 'Bạn đã ghi BGH đánh giá cho kỳ này rồi.',
-    BOARDING_NOT_PARTICIPATING: 'Giáo viên không tham gia bán trú kỳ này.',
-    INVALID_EVALUATION_FILE: 'File đánh giá phải là PDF/PNG/JPG tối đa 20MB.',
-    INVALID_FAULT_REASON: 'Lý do ghi nhận lỗi bắt buộc và tối đa 2.000 ký tự.',
-    INVALID_EVALUATION_TEXT: 'Nội dung đánh giá bắt buộc và tối đa 5.000 ký tự.',
-    INVALID_EVALUATION_PERIOD: 'Kỳ đánh giá không hợp lệ.',
-  };
-
-  // Prefer longest known code match inside the raw error text (handles Convex wrappers).
-  const knownCodes = Object.keys(messages).sort((a, b) => b.length - a.length);
-  for (const key of knownCodes) {
-    if (raw.includes(key)) return messages[key];
-  }
-
-  const stripped = raw
-    .replace(/^Uncaught Error:\s*/i, '')
-    .replace(/^Error:\s*/i, '')
-    .replace(/^\[Request ID:[^\]]+\]\s*/i, '')
-    .replace(/^Server Error\s*/i, '')
-    .trim()
-    .split(/[\n\r]/)[0]
-    .trim();
-  if (messages[stripped]) return messages[stripped];
-
-  if (/invalid credentials|invalidsecret/i.test(raw)) return messages['Invalid credentials'];
-  if (/FORBIDDEN/i.test(raw)) return 'Bạn không có quyền thực hiện thao tác này.';
-  return 'Không thể hoàn tất thao tác. Vui lòng thử lại hoặc liên hệ quản trị viên.';
-}
-
 function signInMessageFor(error) {
-  const raw = String(error?.data ?? error?.message ?? error ?? '');
+  const raw = convexErrorText(error);
   if (/^\[Request ID:[^\]]+\]\s*Server Error\s*$/i.test(raw.trim()) || /^Server Error\s*$/i.test(raw.trim())) {
     return 'Không thể đăng nhập. Hãy kiểm tra email, mật khẩu rồi thử lại.';
   }
@@ -748,7 +599,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
-  const { pending, feedback, run } = useFeedback();
+  const { pending, feedback, setFeedback, run } = useFeedback();
   const { mine, created } = useMemo(
     () => splitDutyLists(list, currentUserId, { includeManagedOthers: true }),
     [list, currentUserId],
@@ -784,6 +635,13 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     setForm(dutyFormFromItem(item));
   };
 
+  const closeEditor = () => {
+    setEditing(null);
+    setPreviewOpen(false);
+    setForm(emptyDutyForm());
+    setEditorOpen(false);
+  };
+
   const persistDuty = async () => {
     if (pending === 'save') return;
     const payload = dutyPayloadFromForm(form);
@@ -795,11 +653,13 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       }
       return;
     }
-    const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
-    if (ok) {
-      setPreviewOpen(false);
-      setForm(emptyDutyForm());
+    setPreviewOpen(false);
+    if (!dutyFormHasParticipants(form)) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      return;
     }
+    const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
+    if (ok) closeEditor();
   };
 
   const submit = (event) => {
@@ -808,14 +668,11 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       void persistDuty();
       return;
     }
+    if (!dutyFormHasParticipants(form)) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      return;
+    }
     setPreviewOpen(true);
-  };
-
-  const closeEditor = () => {
-    setEditing(null);
-    setPreviewOpen(false);
-    setForm(emptyDutyForm());
-    setEditorOpen(false);
   };
 
   useEffect(() => {
@@ -927,7 +784,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
 
   return (
     <section className="work-management duty-workspace">
-      {feedback.text ? (
+      {feedback.text && !editorOpen ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
           {feedback.text}
         </div>
@@ -982,6 +839,11 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         </div>
         </DutyEditorFields>
 
+        {feedback.text ? (
+          <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
+            {feedback.text}
+          </div>
+        ) : null}
         <div className="work-editor-actions duty-editor-actions">
           <button type="button" className="work-ghost-button" onClick={() => setForm(emptyDutyForm())}>
             Xóa biểu mẫu
@@ -1101,7 +963,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const remove = useMutation(anyApi.duties.remove);
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setSubordinateAttendance = useMutation(anyApi.duties.setAttendanceForUser);
-  const { pending, feedback, run } = useFeedback();
+  const { pending, feedback, setFeedback, run } = useFeedback();
   const canEdit = access === 'edit' || data?.canEdit;
   const canCreate = Boolean(data?.canCreate);
   const [form, setForm] = useState(emptyDutyForm);
@@ -1151,7 +1013,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
 
   const persistDuty = async () => {
     if (pending === 'save') return;
-    const payload = dutyPayloadFromForm(form, { includeDepartments: Boolean(options?.isOps) });
+    const includeDepartments = Boolean(options?.isOps);
+    const payload = dutyPayloadFromForm(form, { includeDepartments });
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
       if (ok) {
@@ -1162,9 +1025,14 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
       }
       return;
     }
+    setPreviewOpen(false);
+    if (!dutyFormHasParticipants(form, { includeDepartments })) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      return;
+    }
     const ok = await run('save', () => create(payload), 'Đã tạo công tác.');
     if (ok) {
-      setPreviewOpen(false);
+      setEditing(null);
       setForm(emptyDutyForm());
       setEditorOpen(false);
     }
@@ -1174,6 +1042,10 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     event.preventDefault();
     if (editing) {
       void persistDuty();
+      return;
+    }
+    if (!dutyFormHasParticipants(form, { includeDepartments: Boolean(options?.isOps) })) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
       return;
     }
     setPreviewOpen(true);
@@ -1355,6 +1227,11 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
             />
           </div>
           </DutyEditorFields>
+          {feedback.text ? (
+            <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
+              {feedback.text}
+            </div>
+          ) : null}
           <div className="work-editor-actions duty-editor-actions">
             <button className="work-primary-button" disabled={Boolean(pending)}>
               {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
@@ -1373,7 +1250,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
         />
       ) : null}
 
-      {feedback.text ? (
+      {feedback.text && !editorOpen ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
           {feedback.text}
         </div>
@@ -1418,6 +1295,7 @@ function useFeedback() {
       setFeedback({ type: 'success', text: success });
       return true;
     } catch (error) {
+      console.error('CRM operation failed', name, error);
       setFeedback({ type: 'error', text: messageFor(error) });
       return false;
     } finally {

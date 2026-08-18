@@ -18,6 +18,7 @@ import {
   cleanDutyLocationText,
   cleanDutyTitle,
   dutyLocationLabel,
+  normalizeDutyClock,
 } from "./assignmentPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -51,8 +52,8 @@ function cleanDutyInput(args: {
 }) {
   const startDate = args.startDate.trim();
   const endDate = args.endDate.trim();
-  const startTime = args.startTime.trim();
-  const endTime = args.endTime.trim();
+  const startTime = normalizeDutyClock(args.startTime);
+  const endTime = normalizeDutyClock(args.endTime);
   const title = cleanDutyTitle(args.title);
   const content = cleanDutyContent(args.content);
   if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate)) throw new Error("INVALID_DATE");
@@ -92,13 +93,14 @@ async function assertRefs(
   if (input.departmentIds.length) {
     const departments = await ctx.db.query("departments").collect();
     for (const id of input.departmentIds) {
-      const row = departments.find((d: any) => d._id === id);
+      const row = departments.find((d: any) => String(d._id) === String(id));
       if (!row?.active) throw new Error("INVALID_DEPARTMENT");
     }
   }
   if (input.participantUserIds.length) {
+    const users = await ctx.db.query("users").collect();
     for (const id of input.participantUserIds) {
-      const user = await ctx.db.get(id);
+      const user = users.find((row: any) => String(row._id) === String(id));
       if (!user || user.status !== "active") throw new Error("INVALID_PARTICIPANT");
       if (!actor.isOps && !isSameDepartmentSubordinate(actor.user, user, actor.positions)) {
         throw new Error("NOT_A_SUBORDINATE");
