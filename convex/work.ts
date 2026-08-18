@@ -20,6 +20,7 @@ import {
   cleanWorkTitle,
   isWorkItemArchived,
   isWorkReleased,
+  shouldBypassWorkCompletionReview,
   workAssignmentPushUserIds,
   workListTitle,
 } from "./assignmentPolicy";
@@ -1417,10 +1418,12 @@ export const completePersonalTask = mutation({
 
     const late = task.deadline < todayInVietnam();
     const now = Date.now();
-    const bypassReview = access.isAdmin;
+    const bypassReview = shouldBypassWorkCompletionReview(access.isAdmin, args.qualityPercent);
+    if (access.isAdmin && args.qualityPercent === undefined) {
+      throw new Error("QUALITY_PERCENT_REQUIRED");
+    }
     if (bypassReview) {
-      if (args.qualityPercent === undefined) throw new Error("QUALITY_PERCENT_REQUIRED");
-      const qualityPercent = assertQualityPercent(args.qualityPercent);
+      const qualityPercent = assertQualityPercent(args.qualityPercent as number);
       const completions = upsertCompletion(task, {
         userId: String(access.user._id),
         status: "approved",
@@ -1457,6 +1460,7 @@ export const completePersonalTask = mutation({
 export const completeWorkItem = mutation({
   args: {
     workItemId: v.id("workItems"),
+    qualityPercent: v.optional(v.number()),
     driveFileId: v.optional(v.string()),
     driveChecksum: v.optional(v.string()),
     cleanupToken: v.optional(v.string()),
@@ -1520,6 +1524,28 @@ export const completeWorkItem = mutation({
 
     const late = item.deadline < todayInVietnam();
     const now = Date.now();
+    if (shouldBypassWorkCompletionReview(access.isAdmin, args.qualityPercent)) {
+      const qualityPercent = assertQualityPercent(args.qualityPercent as number);
+      const completions = upsertCompletion(item, {
+        userId: String(access.user._id),
+        status: "approved",
+        submittedAt: now,
+        submittedLate: late,
+        qualityPercent,
+        reviewedAt: now,
+        reviewedBy: String(access.user._id),
+        ...evidence,
+      });
+      const synced = syncApprovedArrays(completions);
+      await ctx.db.patch(args.workItemId, {
+        completions,
+        ...synced,
+        updatedBy: access.user._id,
+        updatedAt: now,
+      });
+      return;
+    }
+
     const completions = upsertCompletion(item, {
       userId: String(access.user._id),
       status: "pending_approval",

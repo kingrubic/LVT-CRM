@@ -200,6 +200,18 @@ export function canReviewWorkCompletion(args: {
   return String(args.actorUserId) === String(args.createdBy);
 }
 
+/**
+ * Admin/mod completing their own assignment with a quality score
+ * skip the creator review queue (they already self-score in the app).
+ * Web submit-with-file still omits qualityPercent and stays pending.
+ */
+export function shouldBypassWorkCompletionReview(
+  isOperationalManager: boolean,
+  qualityPercent: number | undefined,
+) {
+  return Boolean(isOperationalManager && qualityPercent !== undefined);
+}
+
 /** Who should get a work-assignment notification for this work item. */
 export function isWorkNotificationAssignee(args: {
   user: { _id: string; role?: string; departmentId?: string };
