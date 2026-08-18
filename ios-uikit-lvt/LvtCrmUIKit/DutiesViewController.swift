@@ -123,6 +123,7 @@ final class DutiesViewController: UITableViewController {
             ) as! DutyTableViewCell
             cell.configure(
                 duty: duty,
+                showAttendanceStatus: viewModel.attendanceConfirmationEnabled,
                 canMark: viewModel.canMark(duty),
                 busy: viewModel.busyDutyId == duty.id,
                 focused: duty.id == pendingFocusId
@@ -508,13 +509,26 @@ private final class DutyTableViewCell: UITableViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(duty: DutyItem, canMark: Bool, busy: Bool, focused: Bool) {
+    func configure(
+        duty: DutyItem,
+        showAttendanceStatus: Bool,
+        canMark: Bool,
+        busy: Bool,
+        focused: Bool
+    ) {
         titleLabel.text = DutyListRules.displayTitle(duty)
         scheduleLabel.text = DutyPresentation.schedule(duty)
         timingLabel.text = DutyPresentation.timing(duty)
         timingLabel.textColor = DutyPresentation.timingColor(duty)
-        statusLabel.text = DutyPresentation.status(duty.myStatus)
-        statusLabel.textColor = DutyPresentation.statusColor(duty.myStatus)
+        // When attendance confirmation is off, backend defaults myStatus to "attended".
+        // Do not surface that synthetic label — LVT does not use attendance in Công tác.
+        statusLabel.isHidden = !showAttendanceStatus
+        if showAttendanceStatus {
+            statusLabel.text = DutyPresentation.status(duty.myStatus)
+            statusLabel.textColor = DutyPresentation.statusColor(duty.myStatus)
+        } else {
+            statusLabel.text = nil
+        }
         backgroundColor = focused ? UIColor.systemIndigo.withAlphaComponent(0.12) : .secondarySystemGroupedBackground
         accessoryView = busy ? activityIndicator : nil
         accessoryType = busy ? .none : .disclosureIndicator
@@ -522,12 +536,15 @@ private final class DutyTableViewCell: UITableViewCell {
         isUserInteractionEnabled = !busy
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityLabel = [
+        var accessibilityParts = [
             DutyPresentation.timing(duty),
-            DutyPresentation.status(duty.myStatus),
             DutyListRules.displayTitle(duty),
             DutyPresentation.schedule(duty),
-        ].joined(separator: ". ")
+        ]
+        if showAttendanceStatus {
+            accessibilityParts.insert(DutyPresentation.status(duty.myStatus), at: 1)
+        }
+        accessibilityLabel = accessibilityParts.joined(separator: ". ")
         accessibilityHint = canMark
             ? "Mở chi tiết. Có các thao tác xác nhận tham dự."
             : "Mở chi tiết công tác."
@@ -669,7 +686,7 @@ private final class DutyDetailViewController: UITableViewController {
         self.busy = busy
         self.actionError = actionError
         tableView.reloadData()
-        if !busy, actionError == nil {
+        if !busy, actionError == nil, attendanceEnabled {
             UIAccessibility.post(
                 notification: .announcement,
                 argument: "Trạng thái công tác: \(DutyPresentation.status(duty.myStatus))"
@@ -691,8 +708,10 @@ private final class DutyDetailViewController: UITableViewController {
     private var informationRows: [(String, String)] {
         var rows: [(String, String)] = [
             ("Thời gian", DutyPresentation.schedule(duty)),
-            ("Trạng thái", DutyPresentation.status(duty.myStatus)),
         ]
+        if attendanceEnabled {
+            rows.append(("Trạng thái", DutyPresentation.status(duty.myStatus)))
+        }
         if !duty.locationNames.isEmpty {
             rows.append(("Địa điểm", duty.locationNames.joined(separator: ", ")))
         }
