@@ -22,7 +22,7 @@ class SessionsRepository(
         return try {
             val args = JSONObject()
                 .put("deviceName", Build.MODEL?.takeIf { it.isNotBlank() } ?: "Android")
-                .put("platformLabel", "LVT CRM Android")
+                .put("platformLabel", "CRM Lê Văn Tám Android")
                 .put("clientKind", "android")
                 .put("appVersion", Build.VERSION.RELEASE ?: "")
             if (!pushToken.isNullOrBlank()) args.put("pushToken", pushToken)
@@ -78,7 +78,7 @@ class SessionsRepository(
             sessionId = id,
             isCurrent = optBoolean("isCurrent", false),
             deviceName = optString("deviceName", "Android"),
-            platformLabel = optString("platformLabel", "LVT CRM Android"),
+            platformLabel = optString("platformLabel", "CRM Lê Văn Tám Android"),
             clientKind = optString("clientKind", "android"),
             lastActiveAt = optLong("lastActiveAt", 0L),
         )

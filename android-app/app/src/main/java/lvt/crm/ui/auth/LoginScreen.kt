@@ -1,5 +1,7 @@
 package lvt.crm.ui.auth
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -61,6 +64,7 @@ fun LoginScreen(
     val state by viewModel.uiState.collectAsState()
     var passwordVisible by remember { mutableStateOf(false) }
     val isForgot = state.mode == LoginMode.ForgotPassword
+    val context = LocalContext.current
 
     Box(
         modifier = Modifier
@@ -275,6 +279,14 @@ fun LoginScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 18.dp),
             )
+            TextButton(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(context.getString(R.string.privacy_policy_url)))
+                    runCatching { context.startActivity(intent) }
+                },
+            ) {
+                Text(stringResource(R.string.privacy_policy))
+            }
         }
     }
 }

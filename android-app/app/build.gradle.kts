@@ -13,11 +13,24 @@ android {
         applicationId = "lvt.crm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
+        versionCode = 17
         // x.y.z — x new menu, y new feature (no new menu), z bug fix
-        versionName = "0.6.0"
+        versionName = "0.6.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+    }
+
+    signingConfigs {
+        create("release") {
+            val storePath = (project.findProperty("lvt.release.storeFile") as String?)?.trim().orEmpty()
+            if (storePath.isNotEmpty()) {
+                storeFile = rootProject.file(storePath)
+                storePassword = project.findProperty("lvt.release.storePassword") as String?
+                keyAlias = (project.findProperty("lvt.release.keyAlias") as String?) ?: "lvt-release"
+                keyPassword = (project.findProperty("lvt.release.keyPassword") as String?)
+                    ?: storePassword
+            }
+        }
     }
 
     buildTypes {
@@ -37,6 +50,10 @@ android {
             )
         }
         release {
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

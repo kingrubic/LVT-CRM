@@ -17,7 +17,7 @@ export function describeWebDevice(userAgent = typeof navigator !== 'undefined' ?
 
   return {
     deviceName,
-    platformLabel: `LVT CRM Web · ${browser}`,
+    platformLabel: `CRM Lê Văn Tám Web · ${browser}`,
     clientKind: 'web',
     appVersion: undefined,
     userAgent: ua.slice(0, 300),

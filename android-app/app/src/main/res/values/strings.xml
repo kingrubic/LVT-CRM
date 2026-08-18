@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">LVT CRM</string>
+    <string name="app_name">CRM Lê Văn Tám</string>
     <string name="login_title">Đăng nhập</string>
     <string name="email">Email</string>
     <string name="password">Mật khẩu</string>
@@ -20,4 +20,6 @@
     <string name="change_password">Đổi mật khẩu</string>
     <string name="devices">Thiết bị</string>
     <string name="sign_out">Đăng xuất</string>
+    <string name="privacy_policy">Chính sách bảo mật</string>
+    <string name="privacy_policy_url">https://lvt.vscgroup.io.vn/privacy</string>
 </resources>

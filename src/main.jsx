@@ -14,6 +14,8 @@ import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
 import { pathnameForMenu, pathnameForReportSection, routeForPathname } from './navigationRoutes';
+import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
+import { isPublicPrivacyPath } from './privacy/privacyPolicy';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
@@ -229,7 +231,7 @@ function AppShell({ session }) {
   const title = useMemo(() => {
     if (active === 'profile' || active === 'settings') return 'Thông tin cá nhân';
     const all = [...PRIMARY_MENUS, ...SYSTEM_MANAGEMENT_MENUS, ...SUPREME_SETTINGS];
-    return all.find(([id]) => id === active)?.[1] || 'Lê Văn Tám CRM';
+    return all.find(([id]) => id === active)?.[1] || 'CRM Lê Văn Tám';
   }, [active]);
 
   const choose = (id, { replace = false } = {}) => {
@@ -351,7 +353,7 @@ function AppShell({ session }) {
             ☰
           </button>
           <div>
-            <p className="eyebrow">Lê Văn Tám CRM</p>
+            <p className="eyebrow">CRM Lê Văn Tám</p>
             <h1>{title}</h1>
           </div>
           <div className="header-user">
@@ -2606,7 +2608,7 @@ function AccessDeniedView({ message }) {
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <p className="eyebrow">CRM Lê Văn Tám</p>
         <h1>Chưa thể truy cập</h1>
         <p>{message}</p>
         <button type="button" className="text-button" onClick={() => void signOut()}>
@@ -2670,7 +2672,7 @@ function SignedOutView() {
     <main className="auth-page">
       <div className="auth-card">
         <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
-        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <p className="eyebrow">CRM Lê Văn Tám</p>
         {mode === 'signIn' ? (
           <>
             <h1>Đăng nhập không gian nội bộ</h1>
@@ -2708,6 +2710,9 @@ function SignedOutView() {
               <button type="button" className="text-button auth-forgot-link" disabled={pending} onClick={() => switchMode('forgot')}>
                 Quên mật khẩu?
               </button>
+              <a className="text-button auth-forgot-link" href="/privacy">
+                Chính sách bảo mật / Privacy policy
+              </a>
             </form>
           </>
         ) : (
@@ -2741,7 +2746,7 @@ function MissingKeyView() {
     <main className="auth-page">
       <div className="auth-card setup-card">
         <img src="/assets/logo-thcs-le-van-tam.png" alt="Logo Trường THCS Lê Văn Tám" />
-        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <p className="eyebrow">CRM Lê Văn Tám</p>
         <h1>Cần cấu hình hệ thống</h1>
         <p>Hệ thống chưa được cấu hình để xác thực người dùng. Vui lòng liên hệ quản trị viên để được hỗ trợ.</p>
       </div>
@@ -2750,6 +2755,9 @@ function MissingKeyView() {
 }
 
 function Root() {
+  if (isPublicPrivacyPath(window.location.pathname)) {
+    return <PrivacyPolicyPage />;
+  }
   if (!convex) return <MissingKeyView />;
   return (
     <ConvexAuthProvider client={convex}>
@@ -2770,7 +2778,7 @@ function LoadingView({ label }) {
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <p className="eyebrow">Lê Văn Tám CRM</p>
+        <p className="eyebrow">CRM Lê Văn Tám</p>
         <h1>{label}</h1>
       </div>
     </main>

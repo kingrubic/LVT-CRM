@@ -24,7 +24,7 @@ actor SessionsRepository {
         }
         var args: [String: Any] = [
             "deviceName": deviceName,
-            "platformLabel": "LVT CRM iOS",
+            "platformLabel": "CRM Lê Văn Tám iOS",
             "clientKind": "ios",
             "appVersion": appVersion,
         ]
@@ -43,7 +43,7 @@ actor SessionsRepository {
                 sessionId: sessionId,
                 isCurrent: (row["isCurrent"] as? Bool) ?? false,
                 deviceName: (row["deviceName"] as? String) ?? "iPhone",
-                platformLabel: (row["platformLabel"] as? String) ?? "LVT CRM iOS",
+                platformLabel: (row["platformLabel"] as? String) ?? "CRM Lê Văn Tám iOS",
                 clientKind: (row["clientKind"] as? String) ?? "ios",
                 lastActiveAt: (row["lastActiveAt"] as? Double) ?? 0
             )

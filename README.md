@@ -3,6 +3,8 @@
 CRM nội bộ cho Trường THCS Lê Văn Tám. Stack: **Vite + React 19**, backend **Convex self-hosted** (local Docker) với **Convex Auth (Password provider)** — đăng nhập email + mật khẩu, hồ sơ do admin cấp.
 
 **URL production:** https://lvt.vscgroup.io.vn
+**Chính sách bảo mật (công khai, Việt + Anh):** https://lvt.vscgroup.io.vn/privacy
+**Ứng dụng:** CRM Lê Văn Tám — Android `lvt.crm`, iOS `vn.lvt.crm.uikit`
 Frontend production chạy static server qua LaunchAgent; Convex self-hosted chạy Docker với persistent volume, chỉ bind localhost. Public backend/auth proxy: `https://lvt-convex.vscgroup.io.vn` và `https://lvt-convex-site.vscgroup.io.vn`; hai hostname này đi qua Cloudflare Tunnel.
 
 Vận hành production:

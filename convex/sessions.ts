@@ -27,10 +27,10 @@ function defaultDeviceName(kind: string) {
 }
 
 function defaultPlatformLabel(kind: string) {
-  if (kind === "android") return "LVT CRM Android";
-  if (kind === "ios") return "LVT CRM iOS";
-  if (kind === "web") return "LVT CRM Web";
-  return "LVT CRM";
+  if (kind === "android") return "CRM Lê Văn Tám Android";
+  if (kind === "ios") return "CRM Lê Văn Tám iOS";
+  if (kind === "web") return "CRM Lê Văn Tám Web";
+  return "CRM Lê Văn Tám";
 }
 
 function mapSessionRow(
