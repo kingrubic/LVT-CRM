@@ -27,9 +27,9 @@ android {
         applicationId = "lvt.crm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
+        versionCode = 20
         // x.y.z — x new menu, y new feature (no new menu), z bug fix
-        versionName = "0.7.1"
+        versionName = "0.7.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     }

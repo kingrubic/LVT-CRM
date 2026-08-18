@@ -34,6 +34,7 @@ data class WorkUiState(
     val busyReviewId: String? = null,
     val qualityPromptTask: WorkTaskItem? = null,
     val qualityInput: String = "100",
+    val evidencePromptTask: WorkTaskItem? = null,
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
     val mineTab: WorkListTab = WorkListTab.Upcoming,
     val createdTab: WorkListTab = WorkListTab.Upcoming,
@@ -141,8 +142,27 @@ class WorkViewModel(
                 it.copy(qualityPromptTask = task, qualityInput = "100", actionError = null)
             }
         } else {
-            complete(task, qualityPercent = null)
+            _uiState.update {
+                it.copy(evidencePromptTask = task, actionError = null)
+            }
         }
+    }
+
+    fun dismissEvidencePrompt() {
+        _uiState.update { it.copy(evidencePromptTask = null) }
+    }
+
+    fun setActionError(error: String) {
+        _uiState.update { it.copy(actionError = error) }
+    }
+
+    fun completeWithEvidence(
+        task: WorkTaskItem,
+        fileBytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+    ) {
+        complete(task, qualityPercent = null, fileBytes = fileBytes, fileName = fileName, mimeType = mimeType)
     }
 
     fun decideApproval(approval: WorkApprovalItem, approve: Boolean) {
@@ -236,12 +256,21 @@ class WorkViewModel(
         _uiState.update { it.copy(qualityPromptTask = null) }
     }
 
-    private fun complete(task: WorkTaskItem, qualityPercent: Int?) {
-        _uiState.update { it.copy(busyTaskId = task.id, actionError = null) }
+    private fun complete(
+        task: WorkTaskItem,
+        qualityPercent: Int?,
+        fileBytes: ByteArray? = null,
+        fileName: String? = null,
+        mimeType: String? = null,
+    ) {
+        _uiState.update { it.copy(busyTaskId = task.id, actionError = null, evidencePromptTask = null) }
         viewModelScope.launch {
             operationMutex.withLock {
                 try {
-                    repository.complete(task, qualityPercent)
+                    val evidence = if (fileBytes != null && fileName != null && mimeType != null) {
+                        repository.uploadEvidence(fileBytes, fileName, mimeType)
+                    } else null
+                    repository.complete(task, qualityPercent, evidence)
                     _uiState.update { state ->
                         state.copy(
                             tasks = state.tasks.map { item ->

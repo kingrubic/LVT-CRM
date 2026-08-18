@@ -1,5 +1,11 @@
 package lvt.crm.ui.work
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,6 +39,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.PendingActions
 import androidx.compose.material.icons.outlined.Search
@@ -67,6 +74,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import lvt.crm.data.work.WorkTaskItem
@@ -91,6 +99,30 @@ fun WorkScreen(
     onOpenDocument: (WorkApprovalItem) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        val task = state.evidencePromptTask
+        if (uri != null && task != null) {
+            handleSelectedUri(context, uri, task, viewModel)
+        } else {
+            viewModel.dismissEvidencePrompt()
+        }
+    }
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        val task = state.evidencePromptTask
+        if (uri != null && task != null) {
+            handleSelectedUri(context, uri, task, viewModel)
+        } else {
+            viewModel.dismissEvidencePrompt()
+        }
+    }
+
     LaunchedEffect(openFilterToken) {
         if (openFilterToken == 0) return@LaunchedEffect
         if (openFilter == null) {
@@ -99,6 +131,7 @@ fun WorkScreen(
             viewModel.applyDashboardFilter(openFilter)
         }
     }
+
     if (state.isAdmin) {
         AdminWorkScreen(
             state = state,
@@ -111,201 +144,222 @@ fun WorkScreen(
             onSearchChange = viewModel::updateSearch,
             onCompleteTask = { task -> viewModel.requestComplete(task) },
         )
-        return
-    }
-    val listState = rememberLazyListState()
-    var pendingApprovalAction by remember { mutableStateOf<ApprovalAction?>(null) }
-    var pendingCompletionTask by remember { mutableStateOf<WorkTaskItem?>(null) }
-    var pendingFilterOnly by rememberSaveable { mutableStateOf(false) }
-    var selectedApprovalId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
-    var missingFocus by remember { mutableStateOf(false) }
-    var consumedFocusId by remember { mutableStateOf<String?>(null) }
-    val canApproveDocuments = false
-    val orderedApprovals = orderedWorkApprovals(state.approvals)
-    val pendingApprovalCount = orderedApprovals.count { it.myDecision.isBlank() }
-    val pendingCompletionCount = state.tasks.count { needsCompletion(it.status) }
-    val visibleApprovals = if (canApproveDocuments) {
-        visibleWorkApprovals(orderedApprovals, pendingFilterOnly && focusId == null)
     } else {
-        emptyList()
-    }
-    val visibleTasks = when {
-        canApproveDocuments && pendingFilterOnly && focusId == null -> emptyList()
-        !canApproveDocuments && pendingFilterOnly && focusId == null -> state.tasks.filter { needsCompletion(it.status) }
-        else -> state.tasks
-    }
-    val selectedApproval = state.approvals.firstOrNull { it.id == selectedApprovalId }
-    val selectedTask = state.tasks.firstOrNull { it.id == selectedTaskId }
-
-    BackHandler(enabled = selectedApprovalId != null || selectedTaskId != null) {
-        selectedApprovalId = null
-        selectedTaskId = null
-    }
-    LaunchedEffect(focusId, state.loading, state.approvals, state.tasks) {
-        if (focusId.isNullOrBlank() || state.loading || consumedFocusId == focusId) return@LaunchedEffect
-        consumedFocusId = focusId
-        val approval = state.approvals.firstOrNull { it.id == focusId }
-        val task = state.tasks.firstOrNull { it.id == focusId }
-        when {
-            approval != null -> selectedApprovalId = approval.id
-            task != null -> selectedTaskId = task.id
-            else -> missingFocus = true
+        val listState = rememberLazyListState()
+        var pendingApprovalAction by remember { mutableStateOf<ApprovalAction?>(null) }
+        var pendingFilterOnly by rememberSaveable { mutableStateOf(false) }
+        var selectedApprovalId by rememberSaveable { mutableStateOf<String?>(null) }
+        var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
+        var missingFocus by remember { mutableStateOf(false) }
+        var consumedFocusId by remember { mutableStateOf<String?>(null) }
+        val canApproveDocuments = false
+        val orderedApprovals = orderedWorkApprovals(state.approvals)
+        val pendingApprovalCount = orderedApprovals.count { it.myDecision.isBlank() }
+        val pendingCompletionCount = state.tasks.count { needsCompletion(it.status) }
+        val visibleApprovals = if (canApproveDocuments) {
+            visibleWorkApprovals(orderedApprovals, pendingFilterOnly && focusId == null)
+        } else {
+            emptyList()
         }
-    }
-
-    LaunchedEffect(focusId, visibleApprovals, visibleTasks) {
-        val approvalIndex = visibleApprovals.indexOfFirst { it.id == focusId }
-        if (approvalIndex >= 0) {
-            listState.animateScrollToItem(approvalIndex + 1)
-            return@LaunchedEffect
+        val visibleTasks = when {
+            canApproveDocuments && pendingFilterOnly && focusId == null -> emptyList()
+            !canApproveDocuments && pendingFilterOnly && focusId == null -> state.tasks.filter { needsCompletion(it.status) }
+            else -> state.tasks
         }
-        val taskIndex = visibleTasks.indexOfFirst { it.id == focusId }
-        if (taskIndex >= 0) {
-            val approvalOffset = if (visibleApprovals.isEmpty()) 0 else visibleApprovals.size + 1
-            listState.animateScrollToItem(approvalOffset + taskIndex)
+        val selectedApproval = state.approvals.firstOrNull { it.id == selectedApprovalId }
+        val selectedTask = state.tasks.firstOrNull { it.id == selectedTaskId }
+
+        BackHandler(enabled = selectedApprovalId != null || selectedTaskId != null) {
+            selectedApprovalId = null
+            selectedTaskId = null
         }
-    }
-    LaunchedEffect(tabOpenToken) {
-        if (visibleApprovals.isNotEmpty() || visibleTasks.isNotEmpty()) listState.scrollToItem(0)
-    }
+        LaunchedEffect(focusId, state.loading, state.approvals, state.tasks) {
+            if (focusId.isNullOrBlank() || state.loading || consumedFocusId == focusId) return@LaunchedEffect
+            consumedFocusId = focusId
+            val approval = state.approvals.firstOrNull { it.id == focusId }
+            val task = state.tasks.firstOrNull { it.id == focusId }
+            when {
+                approval != null -> selectedApprovalId = approval.id
+                task != null -> selectedTaskId = task.id
+                else -> missingFocus = true
+            }
+        }
 
-    if (missingFocus) {
-        AlertDialog(
-            onDismissRequest = { missingFocus = false },
-            title = { Text("Không tìm thấy công việc") },
-            text = { Text("Mục này không còn tồn tại hoặc bạn không có quyền xem.") },
-            confirmButton = {
-                TextButton(onClick = { missingFocus = false }) { Text("Đóng") }
-            },
-        )
-    }
+        LaunchedEffect(focusId, visibleApprovals, visibleTasks) {
+            val approvalIndex = visibleApprovals.indexOfFirst { it.id == focusId }
+            if (approvalIndex >= 0) {
+                listState.animateScrollToItem(approvalIndex + 1)
+                return@LaunchedEffect
+            }
+            val taskIndex = visibleTasks.indexOfFirst { it.id == focusId }
+            if (taskIndex >= 0) {
+                val approvalOffset = if (visibleApprovals.isEmpty()) 0 else visibleApprovals.size + 1
+                listState.animateScrollToItem(approvalOffset + taskIndex)
+            }
+        }
+        LaunchedEffect(tabOpenToken) {
+            if (visibleApprovals.isNotEmpty() || visibleTasks.isNotEmpty()) listState.scrollToItem(0)
+        }
 
-    selectedApproval?.let { document ->
-        WorkDocumentDetailScreen(
-            document = document,
-            onBack = { selectedApprovalId = null },
-            onOpenFile = { onOpenDocument(document) },
-        )
-    } ?: selectedTask?.let { task ->
-        WorkTaskDetailScreen(
-            task = task,
-            busy = state.busyTaskId != null,
-            onBack = { selectedTaskId = null },
-            onComplete = {
-                if (task.isAdmin) {
-                    viewModel.requestComplete(task)
-                } else {
-                    pendingCompletionTask = task
-                }
-            },
-        )
-    } ?: LvtScreen(
-        title = "Công việc",
-        refreshing = state.refreshing,
-        onRefresh = { viewModel.refresh() },
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
+        if (missingFocus) {
+            AlertDialog(
+                onDismissRequest = { missingFocus = false },
+                title = { Text("Không tìm thấy công việc") },
+                text = { Text("Mục này không còn tồn tại hoặc bạn không có quyền xem.") },
+                confirmButton = {
+                    TextButton(onClick = { missingFocus = false }) { Text("Đóng") }
+                },
+            )
+        }
+
+        selectedApproval?.let { document ->
+            WorkDocumentDetailScreen(
+                document = document,
+                onBack = { selectedApprovalId = null },
+                onOpenFile = { onOpenDocument(document) },
+            )
+        } ?: selectedTask?.let { task ->
+            WorkTaskDetailScreen(
+                task = task,
+                busy = state.busyTaskId != null,
+                onBack = { selectedTaskId = null },
+                onComplete = { viewModel.requestComplete(task) },
+            )
+        } ?: LvtScreen(
+            title = "Công việc",
+            refreshing = state.refreshing,
+            onRefresh = { viewModel.refresh() },
         ) {
-        when {
-            state.loading -> {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    CircularProgressIndicator()
-                    Text(
-                        "Đang tải công việc…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 14.dp),
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+            ) {
+            when {
+                state.loading -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        CircularProgressIndicator()
+                        Text(
+                            "Đang tải công việc…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 14.dp),
+                        )
+                    }
+                }
+                state.error != null -> {
+                    StatePanel(
+                        icon = Icons.Outlined.WarningAmber,
+                        title = "Chưa tải được công việc",
+                        message = state.error.orEmpty(),
+                        action = {
+                            Button(onClick = { viewModel.refresh(initial = true) }) {
+                                Text("Thử lại")
+                            }
+                        },
                     )
                 }
-            }
-            state.error != null -> {
-                StatePanel(
-                    icon = Icons.Outlined.WarningAmber,
-                    title = "Chưa tải được công việc",
-                    message = state.error.orEmpty(),
-                    action = {
-                        Button(onClick = { viewModel.refresh(initial = true) }) {
-                            Text("Thử lại")
+                else -> {
+                    state.actionError?.let {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                        ) {
+                            Text(
+                                it,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(12.dp),
+                            )
                         }
-                    },
-                )
-            }
-            else -> {
-                state.actionError?.let {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp),
+                    }
+                    ListSearchBar(
+                        value = state.search,
+                        onChange = viewModel::updateSearch,
+                        queryPlaceholder = "Tìm theo tên hoặc nội dung công việc",
+                        personPlaceholder = "Tên người được giao",
+                        showLocation = false,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        state = listState,
+                        contentPadding = PaddingValues(bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(
-                            it,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(12.dp),
-                        )
-                    }
-                }
-                ListSearchBar(
-                    value = state.search,
-                    onChange = viewModel::updateSearch,
-                    queryPlaceholder = "Tìm theo tên hoặc nội dung công việc",
-                    personPlaceholder = "Tên người được giao",
-                    showLocation = false,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    state = listState,
-                    contentPadding = PaddingValues(bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    item(key = "mine-heading") {
-                        WorkListSectionHeader(
-                            title = "Việc của tôi",
-                            tab = state.mineTab,
-                            onTab = viewModel::setMineTab,
-                        )
-                    }
-                    if (state.visibleMine.isEmpty()) {
-                        item(key = "mine-empty") {
-                            WorkListEmpty(
+                        item(key = "mine-heading") {
+                            WorkListSectionHeader(
+                                title = "Việc của tôi",
                                 tab = state.mineTab,
-                                created = false,
-                                needsExecutionOnly = state.needsExecutionOnly,
-                                filtered = state.mineSearchEmpty,
+                                onTab = viewModel::setMineTab,
                             )
                         }
-                    } else {
-                        items(state.visibleMine, key = { "${it.kind}-${it.id}" }) { task ->
-                            WorkCard(
-                                task = task,
-                                focused = task.id == focusId,
-                                busy = state.busyTaskId != null || state.busyApprovalId != null,
-                                onOpen = { selectedTaskId = task.id },
-                                onComplete = {
-                                    if (task.isAdmin) {
-                                        viewModel.requestComplete(task)
-                                    } else {
-                                        pendingCompletionTask = task
-                                    }
-                                },
-                            )
+                        if (state.visibleMine.isEmpty()) {
+                            item(key = "mine-empty") {
+                                WorkListEmpty(
+                                    tab = state.mineTab,
+                                    created = false,
+                                    needsExecutionOnly = state.needsExecutionOnly,
+                                    filtered = state.mineSearchEmpty,
+                                )
+                            }
+                        } else {
+                            items(state.visibleMine, key = { "${it.kind}-${it.id}" }) { task ->
+                                WorkCard(
+                                    task = task,
+                                    focused = task.id == focusId,
+                                    busy = state.busyTaskId != null || state.busyApprovalId != null,
+                                    onOpen = { selectedTaskId = task.id },
+                                    onComplete = { viewModel.requestComplete(task) },
+                                )
+                            }
                         }
                     }
                 }
+            }
             }
         }
+
+        val approvalAction = pendingApprovalAction
+        if (approvalAction != null) {
+            AlertDialog(
+                onDismissRequest = { pendingApprovalAction = null },
+                title = {
+                    Text(if (approvalAction.approve) "Xác nhận duyệt" else "Xác nhận không duyệt")
+                },
+                text = {
+                    Text(
+                        if (approvalAction.approve) {
+                            "Bạn có chắc chắn duyệt công văn này không? Quyết định sẽ không thể thay đổi."
+                        } else {
+                            "Bạn có chắc chắn không duyệt công văn này không? Quyết định sẽ không thể thay đổi."
+                        },
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            pendingApprovalAction = null
+                            viewModel.decideApproval(approvalAction.approval, approvalAction.approve)
+                        },
+                    ) {
+                        Text("Tôi chắc chắn")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingApprovalAction = null }) {
+                        Text("Hủy")
+                    }
+                },
+            )
         }
     }
 
@@ -350,66 +404,106 @@ fun WorkScreen(
         )
     }
 
-    val approvalAction = pendingApprovalAction
-    if (approvalAction != null) {
+    state.evidencePromptTask?.let { task ->
         AlertDialog(
-            onDismissRequest = { pendingApprovalAction = null },
-            title = {
-                Text(if (approvalAction.approve) "Xác nhận duyệt" else "Xác nhận không duyệt")
-            },
-            text = {
-                Text(
-                    if (approvalAction.approve) {
-                        "Bạn có chắc chắn duyệt công văn này không? Quyết định sẽ không thể thay đổi."
-                    } else {
-                        "Bạn có chắc chắn không duyệt công văn này không? Quyết định sẽ không thể thay đổi."
-                    },
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        pendingApprovalAction = null
-                        viewModel.decideApproval(approvalAction.approval, approvalAction.approve)
-                    },
-                ) {
-                    Text("Tôi chắc chắn")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingApprovalAction = null }) {
-                    Text("Hủy")
-                }
-            },
-        )
-    }
-
-    val completionTask = pendingCompletionTask
-    if (completionTask != null) {
-        AlertDialog(
-            onDismissRequest = { pendingCompletionTask = null },
+            onDismissRequest = viewModel::dismissEvidencePrompt,
             title = { Text("Nộp bằng chứng hoàn thành") },
             text = {
-                Text(
-                    "Bạn có chắc chắn nộp báo cáo hoàn thành công việc “${completionTask.title}” để người tạo/cấp trên duyệt không?",
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        pendingCompletionTask = null
-                        viewModel.requestComplete(completionTask)
-                    },
-                ) {
-                    Text("Nộp hoàn thành")
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Chọn tài liệu hoặc hình ảnh bằng chứng hoàn thành công việc “${task.title}” (tối đa 20MB):",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Outlined.Image, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Chọn từ Thư viện ảnh")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            documentPickerLauncher.launch(
+                                arrayOf(
+                                    "application/pdf",
+                                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    "application/vnd.ms-excel",
+                                    "image/*",
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Outlined.Description, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Chọn từ Tệp (PDF, Word, Excel)")
+                    }
                 }
             },
+            confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { pendingCompletionTask = null }) {
+                TextButton(onClick = viewModel::dismissEvidencePrompt) {
                     Text("Hủy")
                 }
             },
+            shape = MaterialTheme.shapes.large,
         )
+    }
+}
+
+private val ALLOWED_EXTENSIONS = setOf("pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg")
+private const val MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
+
+private fun handleSelectedUri(
+    context: Context,
+    uri: Uri,
+    task: WorkTaskItem,
+    viewModel: WorkViewModel,
+) {
+    try {
+        var fileName = "bang_chung"
+        var fileSize = -1L
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (cursor.moveToFirst()) {
+                if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { fileName = it }
+                if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
+            }
+        }
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        if (ext !in ALLOWED_EXTENSIONS) {
+            viewModel.setActionError("Chỉ chấp nhận tệp PDF, DOCX, Excel, PNG hoặc JPG.")
+            return
+        }
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        if (bytes == null || bytes.isEmpty()) {
+            viewModel.setActionError("Tệp rỗng hoặc không đọc được. Vui lòng thử lại.")
+            return
+        }
+        if (bytes.size > MAX_FILE_SIZE) {
+            viewModel.setActionError("Dung lượng tệp tối đa là 20MB.")
+            return
+        }
+        val mimeType = context.contentResolver.getType(uri)?.takeIf { it.isNotBlank() }
+            ?: when (ext) {
+                "pdf" -> "application/pdf"
+                "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                "xls" -> "application/vnd.ms-excel"
+                "png" -> "image/png"
+                "jpg", "jpeg" -> "image/jpeg"
+                else -> "application/octet-stream"
+            }
+        viewModel.completeWithEvidence(task, bytes, fileName, mimeType)
+    } catch (e: Exception) {
+        viewModel.setActionError("Không thể đọc tệp đã chọn. Vui lòng thử lại.")
     }
 }
 
