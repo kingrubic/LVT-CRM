@@ -71,6 +71,11 @@ export function dutyPayloadFromForm(form, { includeDepartments = true } = {}) {
   };
 }
 
+export function dutyFormHasParticipants(form, options) {
+  const payload = dutyPayloadFromForm(form, options);
+  return payload.departmentIds.length > 0 || payload.participantUserIds.length > 0;
+}
+
 export function applyDutyFormField(prev, field, value) {
   const next = { ...prev, [field]: value };
   if (field === 'allDay' && value) {

@@ -29,6 +29,7 @@ import {
   applyDutyStartDateTime,
   DUTY_LIST_TAB_UPCOMING,
   dutyFormFromItem,
+  dutyFormHasParticipants,
   dutyPayloadFromForm,
   emptyDutyForm,
   emptyDutySearch,
@@ -748,7 +749,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
   const editorRef = useRef(null);
-  const { pending, feedback, run } = useFeedback();
+  const { pending, feedback, setFeedback, run } = useFeedback();
   const { mine, created } = useMemo(
     () => splitDutyLists(list, currentUserId, { includeManagedOthers: true }),
     [list, currentUserId],
@@ -784,6 +785,13 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     setForm(dutyFormFromItem(item));
   };
 
+  const closeEditor = () => {
+    setEditing(null);
+    setPreviewOpen(false);
+    setForm(emptyDutyForm());
+    setEditorOpen(false);
+  };
+
   const persistDuty = async () => {
     if (pending === 'save') return;
     const payload = dutyPayloadFromForm(form);
@@ -795,11 +803,13 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       }
       return;
     }
-    const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
-    if (ok) {
-      setPreviewOpen(false);
-      setForm(emptyDutyForm());
+    setPreviewOpen(false);
+    if (!dutyFormHasParticipants(form)) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      return;
     }
+    const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
+    if (ok) closeEditor();
   };
 
   const submit = (event) => {
@@ -808,14 +818,11 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
       void persistDuty();
       return;
     }
+    if (!dutyFormHasParticipants(form)) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      return;
+    }
     setPreviewOpen(true);
-  };
-
-  const closeEditor = () => {
-    setEditing(null);
-    setPreviewOpen(false);
-    setForm(emptyDutyForm());
-    setEditorOpen(false);
   };
 
   useEffect(() => {
@@ -927,7 +934,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
 
   return (
     <section className="work-management duty-workspace">
-      {feedback.text ? (
+      {feedback.text && !editorOpen ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
           {feedback.text}
         </div>
@@ -982,6 +989,11 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         </div>
         </DutyEditorFields>
 
+        {feedback.text ? (
+          <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
+            {feedback.text}
+          </div>
+        ) : null}
         <div className="work-editor-actions duty-editor-actions">
           <button type="button" className="work-ghost-button" onClick={() => setForm(emptyDutyForm())}>
             Xóa biểu mẫu
@@ -1101,7 +1113,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const remove = useMutation(anyApi.duties.remove);
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setSubordinateAttendance = useMutation(anyApi.duties.setAttendanceForUser);
-  const { pending, feedback, run } = useFeedback();
+  const { pending, feedback, setFeedback, run } = useFeedback();
   const canEdit = access === 'edit' || data?.canEdit;
   const canCreate = Boolean(data?.canCreate);
   const [form, setForm] = useState(emptyDutyForm);
@@ -1151,7 +1163,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
 
   const persistDuty = async () => {
     if (pending === 'save') return;
-    const payload = dutyPayloadFromForm(form, { includeDepartments: Boolean(options?.isOps) });
+    const includeDepartments = Boolean(options?.isOps);
+    const payload = dutyPayloadFromForm(form, { includeDepartments });
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
       if (ok) {
@@ -1162,9 +1175,14 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
       }
       return;
     }
+    setPreviewOpen(false);
+    if (!dutyFormHasParticipants(form, { includeDepartments })) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      return;
+    }
     const ok = await run('save', () => create(payload), 'Đã tạo công tác.');
     if (ok) {
-      setPreviewOpen(false);
+      setEditing(null);
       setForm(emptyDutyForm());
       setEditorOpen(false);
     }
@@ -1174,6 +1192,10 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     event.preventDefault();
     if (editing) {
       void persistDuty();
+      return;
+    }
+    if (!dutyFormHasParticipants(form, { includeDepartments: Boolean(options?.isOps) })) {
+      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
       return;
     }
     setPreviewOpen(true);
@@ -1355,6 +1377,11 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
             />
           </div>
           </DutyEditorFields>
+          {feedback.text ? (
+            <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
+              {feedback.text}
+            </div>
+          ) : null}
           <div className="work-editor-actions duty-editor-actions">
             <button className="work-primary-button" disabled={Boolean(pending)}>
               {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
@@ -1373,7 +1400,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
         />
       ) : null}
 
-      {feedback.text ? (
+      {feedback.text && !editorOpen ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
           {feedback.text}
         </div>
