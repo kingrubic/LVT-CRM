@@ -15,6 +15,7 @@ final class WorkViewController: UITableViewController {
 
     private let viewModel: WorkViewModel
     private let downloadDocument: (WorkApprovalItem) async throws -> URL
+    private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
 
     init(
@@ -41,6 +42,16 @@ final class WorkViewController: UITableViewController {
         refreshControl = UIRefreshControl()
         refreshControl?.accessibilityLabel = "Tải lại danh sách công việc"
         refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
+        tableView.keyboardDismissMode = .onDrag
+        searchHeader.onChange = { [weak self] values in self?.viewModel.search = values }
+        searchHeader.onNeedsLayout = { [weak self] in self?.sizeSearchHeader() }
+        searchHeader.configure(
+            values: viewModel.search,
+            queryPlaceholder: "Tìm theo tên hoặc nội dung công việc",
+            personPlaceholder: "Tên người được giao",
+            includeLocation: false
+        )
+        tableView.tableHeaderView = searchHeader
         viewModel.onChange = { [weak self] in self?.render() }
         render()
         viewModel.refresh(initial: true)
@@ -157,7 +168,10 @@ final class WorkViewController: UITableViewController {
             return cell
         case .approvals(let items):
             guard !items.isEmpty else {
-                return emptyCell(indexPath, "Việc tôi tạo", "Bạn chưa tạo công việc nào")
+                let detail = viewModel.createdSearchEmpty
+                    ? "Không tìm thấy công việc phù hợp."
+                    : "Bạn chưa tạo công việc nào"
+                return emptyCell(indexPath, "Việc tôi tạo", detail)
             }
             let item = items[indexPath.row]
             let cell = workCell(at: indexPath)
@@ -174,9 +188,14 @@ final class WorkViewController: UITableViewController {
             return cell
         case .tasks(let items):
             guard !items.isEmpty else {
-                let detail = viewModel.showNeedsCompletionOnly
-                    ? "Chưa có công việc cần thực hiện."
-                    : "Bạn chưa có công việc nào cần xử lý"
+                let detail: String
+                if viewModel.mineSearchEmpty {
+                    detail = "Không tìm thấy công việc phù hợp."
+                } else if viewModel.showNeedsCompletionOnly {
+                    detail = "Chưa có công việc cần thực hiện."
+                } else {
+                    detail = "Bạn chưa có công việc nào cần xử lý"
+                }
                 return emptyCell(indexPath, "Việc của tôi", detail)
             }
             let item = items[indexPath.row]
@@ -268,8 +287,37 @@ final class WorkViewController: UITableViewController {
     private func render() {
         navigationItem.rightBarButtonItem = nil
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
+        searchHeader.configure(
+            values: viewModel.search,
+            queryPlaceholder: "Tìm theo tên hoặc nội dung công việc",
+            personPlaceholder: "Tên người được giao",
+            includeLocation: false
+        )
+        sizeSearchHeader()
         tableView.reloadData()
         processPendingFocusIfPossible()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        sizeSearchHeader()
+    }
+
+    private func sizeSearchHeader() {
+        let width = tableView.bounds.width
+        guard width > 0 else { return }
+        searchHeader.frame.size.width = width
+        searchHeader.setNeedsLayout()
+        searchHeader.layoutIfNeeded()
+        let height = searchHeader.systemLayoutSizeFitting(
+            CGSize(width: width, height: 0),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        ).height
+        if abs(searchHeader.frame.height - height) > 0.5 {
+            searchHeader.frame.size = CGSize(width: width, height: height)
+            tableView.tableHeaderView = searchHeader
+        }
     }
 
     private func processPendingFocusIfPossible() {

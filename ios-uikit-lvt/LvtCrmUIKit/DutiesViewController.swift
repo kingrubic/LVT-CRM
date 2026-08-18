@@ -11,6 +11,7 @@ final class DutiesViewController: UITableViewController {
     }
 
     private let viewModel: DutiesViewModel
+    private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
     private weak var detailViewController: DutyDetailViewController?
 
@@ -35,6 +36,16 @@ final class DutiesViewController: UITableViewController {
         refreshControl = UIRefreshControl()
         refreshControl?.accessibilityLabel = "Tải lại danh sách công tác"
         refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
+        tableView.keyboardDismissMode = .onDrag
+        searchHeader.onChange = { [weak self] values in self?.viewModel.search = values }
+        searchHeader.onNeedsLayout = { [weak self] in self?.sizeSearchHeader() }
+        searchHeader.configure(
+            values: viewModel.search,
+            queryPlaceholder: "Tìm theo tên hoặc nội dung công tác",
+            personPlaceholder: "Tên người tham gia",
+            includeLocation: true
+        )
+        tableView.tableHeaderView = searchHeader
 
         viewModel.onChange = { [weak self] in self?.render() }
         render()
@@ -98,7 +109,12 @@ final class DutiesViewController: UITableViewController {
                 return false
             }()
             guard !duties.isEmpty else {
-                return emptyListCell(at: indexPath, created: created, tab: created ? viewModel.createdTab : viewModel.mineTab)
+                return emptyListCell(
+                    at: indexPath,
+                    created: created,
+                    tab: created ? viewModel.createdTab : viewModel.mineTab,
+                    filtered: created ? viewModel.createdSearchEmpty : viewModel.mineSearchEmpty
+                )
             }
             let duty = duties[indexPath.row]
             let cell = tableView.dequeueReusableCell(
@@ -236,9 +252,38 @@ final class DutiesViewController: UITableViewController {
     private func render() {
         navigationItem.rightBarButtonItem = nil
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
+        searchHeader.configure(
+            values: viewModel.search,
+            queryPlaceholder: "Tìm theo tên hoặc nội dung công tác",
+            personPlaceholder: "Tên người tham gia",
+            includeLocation: true
+        )
+        sizeSearchHeader()
         tableView.reloadData()
         updateVisibleDetail()
         processPendingFocusIfPossible()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        sizeSearchHeader()
+    }
+
+    private func sizeSearchHeader() {
+        let width = tableView.bounds.width
+        guard width > 0 else { return }
+        searchHeader.frame.size.width = width
+        searchHeader.setNeedsLayout()
+        searchHeader.layoutIfNeeded()
+        let height = searchHeader.systemLayoutSizeFitting(
+            CGSize(width: width, height: 0),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        ).height
+        if abs(searchHeader.frame.height - height) > 0.5 {
+            searchHeader.frame.size = CGSize(width: width, height: height)
+            tableView.tableHeaderView = searchHeader
+        }
     }
 
     private func processPendingFocusIfPossible() {
@@ -332,15 +377,19 @@ final class DutiesViewController: UITableViewController {
         ]
     }
 
-    private func emptyListCell(at indexPath: IndexPath, created: Bool, tab: DutyListTab) -> UITableViewCell {
+    private func emptyListCell(at indexPath: IndexPath, created: Bool, tab: DutyListTab, filtered: Bool = false) -> UITableViewCell {
         let detail: String
-        switch tab {
-        case .past:
-            detail = created ? "Chưa có công tác bạn tạo đã diễn ra." : "Chưa có sự kiện đã diễn ra."
-        case .ongoing:
-            detail = created ? "Chưa có công tác bạn tạo đang diễn ra." : "Chưa có sự kiện đang diễn ra."
-        case .upcoming:
-            detail = created ? "Chưa có công tác bạn tạo sắp diễn ra." : "Chưa có sự kiện sắp diễn ra."
+        if filtered {
+            detail = "Không tìm thấy công tác phù hợp."
+        } else {
+            switch tab {
+            case .past:
+                detail = created ? "Chưa có công tác bạn tạo đã diễn ra." : "Chưa có sự kiện đã diễn ra."
+            case .ongoing:
+                detail = created ? "Chưa có công tác bạn tạo đang diễn ra." : "Chưa có sự kiện đang diễn ra."
+            case .upcoming:
+                detail = created ? "Chưa có công tác bạn tạo sắp diễn ra." : "Chưa có sự kiện sắp diễn ra."
+            }
         }
         let cell = stateCell(
             at: indexPath,

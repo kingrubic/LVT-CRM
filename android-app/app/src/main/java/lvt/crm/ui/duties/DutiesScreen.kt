@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.PeopleOutline
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -49,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import lvt.crm.data.duties.DutyItem
+import lvt.crm.ui.components.ListSearchBar
 import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatePanel
 import lvt.crm.ui.components.StatusPill
@@ -165,6 +167,14 @@ fun DutiesScreen(
                         )
                     }
                 }
+                ListSearchBar(
+                    value = state.search,
+                    onChange = viewModel::updateSearch,
+                    queryPlaceholder = "Tìm theo tên hoặc nội dung công tác",
+                    personPlaceholder = "Tên người tham gia",
+                    showLocation = true,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     state = listState,
@@ -180,7 +190,11 @@ fun DutiesScreen(
                     }
                     if (state.visibleMine.isEmpty()) {
                         item(key = "mine-empty") {
-                            DutyListEmpty(tab = state.mineTab, created = false)
+                            DutyListEmpty(
+                                tab = state.mineTab,
+                                created = false,
+                                filtered = state.mineSearchEmpty,
+                            )
                         }
                     } else {
                         items(state.visibleMine, key = { "mine-${it.id}" }) { duty ->
@@ -206,7 +220,11 @@ fun DutiesScreen(
                         }
                         if (state.visibleCreated.isEmpty()) {
                             item(key = "created-empty") {
-                                DutyListEmpty(tab = state.createdTab, created = true)
+                                DutyListEmpty(
+                                    tab = state.createdTab,
+                                    created = true,
+                                    filtered = state.createdSearchEmpty,
+                                )
                             }
                         } else {
                             items(state.visibleCreated, key = { "created-${it.id}" }) { duty ->
@@ -256,14 +274,15 @@ private fun DutyListSectionHeader(
 }
 
 @Composable
-private fun DutyListEmpty(tab: DutyListTab, created: Boolean) {
-    val message = when (tab) {
-        DutyListTab.Past -> if (created) "Chưa có công tác bạn tạo đã diễn ra." else "Chưa có sự kiện đã diễn ra."
-        DutyListTab.Ongoing -> if (created) "Chưa có công tác bạn tạo đang diễn ra." else "Chưa có sự kiện đang diễn ra."
-        DutyListTab.Upcoming -> if (created) "Chưa có công tác bạn tạo sắp diễn ra." else "Chưa có sự kiện sắp diễn ra."
+private fun DutyListEmpty(tab: DutyListTab, created: Boolean, filtered: Boolean = false) {
+    val message = when {
+        filtered -> "Không tìm thấy công tác phù hợp."
+        tab == DutyListTab.Past -> if (created) "Chưa có công tác bạn tạo đã diễn ra." else "Chưa có sự kiện đã diễn ra."
+        tab == DutyListTab.Ongoing -> if (created) "Chưa có công tác bạn tạo đang diễn ra." else "Chưa có sự kiện đang diễn ra."
+        else -> if (created) "Chưa có công tác bạn tạo sắp diễn ra." else "Chưa có sự kiện sắp diễn ra."
     }
     StatePanel(
-        icon = Icons.Outlined.EventBusy,
+        icon = if (filtered) Icons.Outlined.Search else Icons.Outlined.EventBusy,
         title = if (created) "Công tác tôi tạo" else "Công tác của tôi",
         message = message,
     )
