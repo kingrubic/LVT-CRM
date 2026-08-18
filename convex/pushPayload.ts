@@ -27,3 +27,31 @@ export function buildFcmMessage(args: {
     },
   };
 }
+
+export function apnsHosts(production: boolean) {
+  const productionHost = "api.push.apple.com";
+  const sandboxHost = "api.sandbox.push.apple.com";
+  return production ? [productionHost, sandboxHost] : [sandboxHost, productionHost];
+}
+
+/** Lock-screen / banner payload. iOS ignores data-only FCM for APNs device tokens. */
+export function buildApnsPayload(args: {
+  title: string;
+  body: string;
+  kind: string;
+  sourceType: string;
+  sourceId: string;
+}) {
+  return {
+    aps: {
+      alert: {
+        title: args.title,
+        body: args.body,
+      },
+      sound: "default",
+    },
+    kind: args.kind,
+    sourceType: args.sourceType,
+    sourceId: args.sourceId,
+  };
+}

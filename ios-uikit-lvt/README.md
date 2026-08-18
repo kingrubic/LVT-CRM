@@ -20,7 +20,7 @@ The shared `LvtCrmUIKit` scheme builds an iPhone app with:
 - UIKit Work with the real Convex contracts and notification focus routing
 - notification authorization, APNs token registration/sync, foreground presentation, background refresh, and cold/warm notification routing
 
-The simulator build validates compilation and configuration only. APNs token issuance and remote delivery require a correctly provisioned physical device and backend push credentials.
+The simulator build validates compilation and configuration only. APNs token issuance and remote lock-screen delivery require a physical device, the Push Notification entitlement, and Convex env `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID` (optional `APNS_BUNDLE_ID`, `APNS_PRODUCTION`).
 
 CLI validation:
 

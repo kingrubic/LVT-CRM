@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { openNotification } from '../src/notifications/openNotification.js';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, WORK_NOTIFICATION_FOCUS_TYPES } from '../src/notifications/useNotificationFocus.js';
-import { buildFcmMessage, isApnsDeviceToken } from '../convex/pushPayload.ts';
+import { buildFcmMessage, buildApnsPayload, apnsHosts, isApnsDeviceToken } from '../convex/pushPayload.ts';
 
 test('an unread notification opens exactly once even when mark-read fails', async () => {
   const opened = [];
@@ -43,4 +43,19 @@ test('FCM work alerts stay data-only so Android can show the local feed banner',
   assert.equal(message.data.title, 'Công việc mới');
   assert.equal(isApnsDeviceToken('a'.repeat(64)), true);
   assert.equal(isApnsDeviceToken('fcm-registration-token'), false);
+});
+
+test('iOS lock-screen alerts use an APNs alert payload, not data-only FCM', () => {
+  const payload = buildApnsPayload({
+    title: 'Công việc mới',
+    body: 'Soạn báo cáo',
+    kind: 'work',
+    sourceType: 'department_work',
+    sourceId: 'doc-1',
+  });
+  assert.equal(payload.aps.alert.title, 'Công việc mới');
+  assert.equal(payload.aps.alert.body, 'Soạn báo cáo');
+  assert.equal(payload.aps.sound, 'default');
+  assert.deepEqual(apnsHosts(false), ['api.sandbox.push.apple.com', 'api.push.apple.com']);
+  assert.deepEqual(apnsHosts(true)[0], 'api.push.apple.com');
 });
