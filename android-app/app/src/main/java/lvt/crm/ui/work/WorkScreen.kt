@@ -388,10 +388,10 @@ fun WorkScreen(
     if (completionTask != null) {
         AlertDialog(
             onDismissRequest = { pendingCompletionTask = null },
-            title = { Text("Xác nhận hoàn thành") },
+            title = { Text("Nộp bằng chứng hoàn thành") },
             text = {
                 Text(
-                    "Bạn có chắc chắn báo đã hoàn thành công việc “${completionTask.title}” không?",
+                    "Bạn có chắc chắn nộp báo cáo hoàn thành công việc “${completionTask.title}” để người tạo/cấp trên duyệt không?",
                 )
             },
             confirmButton = {
@@ -401,7 +401,7 @@ fun WorkScreen(
                         viewModel.requestComplete(completionTask)
                     },
                 ) {
-                    Text("Tôi chắc chắn")
+                    Text("Nộp hoàn thành")
                 }
             },
             dismissButton = {
@@ -1474,7 +1474,7 @@ private fun WorkCard(
                         ) {
                             Icon(Icons.Outlined.CheckCircle, contentDescription = null)
                             Text(
-                                if (task.isAdmin) "Hoàn thành và chấm %" else "Báo hoàn thành",
+                                if (task.isAdmin) "Hoàn thành và chấm %" else "Nộp bằng chứng hoàn thành",
                                 modifier = Modifier.padding(start = 7.dp),
                             )
                         }

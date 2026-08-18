@@ -1291,8 +1291,8 @@ export function WorkUserView({ focusTarget = null }) {
                             onClick={() => setCompleting({ ...task, mode: 'work_item' })}
                           >
                             {task.status === 'overdue' || task.status === 'rejected_completion'
-                              ? 'Gửi hoàn thành lại'
-                              : 'Đã hoàn thành'}
+                              ? 'Nộp lại bằng chứng hoàn thành'
+                              : 'Nộp bằng chứng hoàn thành'}
                           </button>
                         </div>
                       ) : null}
@@ -1416,7 +1416,9 @@ export function WorkUserView({ focusTarget = null }) {
                             className="work-primary-button"
                             onClick={() => setCompleting({ ...task, mode: 'personal_task', content: task.title })}
                           >
-                            {task.status === 'rejected_completion' ? 'Nộp lại' : 'Nộp'}
+                            {task.status === 'overdue' || task.status === 'rejected_completion'
+                              ? 'Nộp lại bằng chứng hoàn thành'
+                              : 'Nộp bằng chứng hoàn thành'}
                           </button>
                         </div>
                       ) : null}

@@ -381,9 +381,13 @@ final class WorkViewController: UITableViewController {
             presentQualityPrompt(item)
             return
         }
-        let alert = UIAlertController(title: "Hoàn thành công việc?", message: nil, preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: "Nộp bằng chứng hoàn thành?",
+            message: "Gửi báo cáo hoàn thành công việc để người tạo/cấp trên duyệt.",
+            preferredStyle: .alert
+        )
         alert.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Hoàn thành", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Nộp", style: .default) { [weak self] _ in
             self?.viewModel.complete(item, qualityPercent: nil)
         })
         presentFromVisibleController(alert)
@@ -597,7 +601,8 @@ private final class WorkItemCell: UITableViewCell {
         backgroundColor = focused ? UIColor.systemIndigo.withAlphaComponent(0.12) : .secondarySystemGroupedBackground
         if WorkHelpers.needsCompletion(item.status) {
             actionButton.configuration = .borderedProminent()
-            setButton("Hoàn thành", busy: busy, action: complete)
+            let title = item.isAdmin ? "Hoàn thành và chấm %" : "Nộp bằng chứng hoàn thành"
+            setButton(title, busy: busy, action: complete)
         } else {
             actionButton.isHidden = true
         }
@@ -682,7 +687,8 @@ private final class WorkTaskDetailViewController: UIViewController {
         if WorkHelpers.needsCompletion(task.status) {
             let button = UIButton(type: .system)
             button.configuration = .filled()
-            button.configuration?.title = busy ? "Đang xử lý…" : "Hoàn thành"
+            let defaultTitle = task.isAdmin ? "Hoàn thành và chấm %" : "Nộp bằng chứng hoàn thành"
+            button.configuration?.title = busy ? "Đang xử lý…" : defaultTitle
             button.isEnabled = !busy
             button.addAction(UIAction { [weak self] _ in self?.onComplete() }, for: .touchUpInside)
             stack.addArrangedSubview(button)
