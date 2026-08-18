@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.gms.google-services")
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+fun localProperty(name: String): String? {
+    val fromFile = localProperties.getProperty(name)?.trim().orEmpty()
+    if (fromFile.isNotEmpty()) return fromFile
+    return (project.findProperty(name) as String?)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 android {
@@ -13,11 +27,26 @@ android {
         applicationId = "lvt.crm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
+        versionCode = 18
         // x.y.z — x new menu, y new feature (no new menu), z bug fix
-        versionName = "0.6.1"
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+    }
+
+    signingConfigs {
+        create("release") {
+            val storePath = localProperty("lvt.release.storeFile").orEmpty()
+            if (storePath.isNotEmpty()) {
+                storeFile = rootProject.file(storePath)
+                storePassword = localProperty("lvt.release.storePassword")
+                keyAlias = localProperty("lvt.release.keyAlias") ?: "lvt-release"
+                keyPassword = localProperty("lvt.release.keyPassword") ?: storePassword
+                // AAB upload to Play requires a JAR (v1) signature on the bundle.
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
     }
 
     buildTypes {
@@ -37,6 +66,10 @@ android {
             )
         }
         release {
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

@@ -120,7 +120,7 @@ button { font: inherit; cursor: pointer; }
   cursor: pointer;
   flex: 0 0 16px;
 }
-.auth-forgot-link { justify-self: center; margin-top: 4px; background: transparent; border: 0; color: var(--lvt-teal); font-size: 13px; font-weight: 700; cursor: pointer; }
+.auth-forgot-link { display: inline-flex; justify-self: center; margin-top: 4px; background: transparent; border: 0; color: var(--lvt-teal); font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; }
 .auth-forgot-link:hover { text-decoration: underline; background: transparent; }
 .auth-forgot-link:disabled { opacity: .58; cursor: wait; }
 .password-gate-card { width: min(520px, 100%); }

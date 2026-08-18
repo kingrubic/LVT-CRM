@@ -1,3 +1,8 @@
 ## Copy to local.properties (gitignored) or set in Android Studio.
 ## sdk.dir=/Users/YOU/Library/Android/sdk
 ## lvt.convex.url=https://lvt-convex.vscgroup.io.vn
+## Release signing (never commit the keystore or passwords):
+## lvt.release.storeFile=keystore/lvt-release.jks
+## lvt.release.storePassword=
+## lvt.release.keyAlias=lvt-release
+## lvt.release.keyPassword=

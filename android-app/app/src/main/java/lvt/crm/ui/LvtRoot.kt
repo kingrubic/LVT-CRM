@@ -88,7 +88,7 @@ fun LvtRoot(
 ) {
     val authState by container.authRepository.state.collectAsState()
     when (val state = authState) {
-        AuthState.Loading -> PlaceholderScreen(title = "LVT CRM", body = "Đang tải…")
+        AuthState.Loading -> PlaceholderScreen(title = "CRM Lê Văn Tám", body = "Đang tải…")
         AuthState.SignedOut -> {
             val loginVm: LoginViewModel = viewModel(
                 factory = LoginViewModel.factory(container.authRepository),

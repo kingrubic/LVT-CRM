@@ -8,6 +8,14 @@ import {
   REPORT_PATHS,
   routeForPathname,
 } from '../src/navigationRoutes.js';
+import {
+  ACCOUNT_DELETION_CANONICAL_PATH,
+  PRIVACY_CONTACT_EMAIL,
+  PRIVACY_ORGANIZATION_VI,
+  PRIVACY_POLICY_CANONICAL_PATH,
+  isPublicAccountDeletionPath,
+  isPublicPrivacyPath,
+} from '../src/privacy/privacyPolicy.js';
 
 test('mỗi menu CRM có một đường dẫn con duy nhất', () => {
   const paths = Object.values(MENU_PATHS);
@@ -38,4 +46,20 @@ test('các tab báo cáo đang dùng có đường dẫn riêng', () => {
     assert.equal(pathnameForReportSection(reportSection), pathname);
     assert.deepEqual(routeForPathname(pathname), { menu: 'reports', reportSection });
   }
+});
+
+test('trang chính sách bảo mật là đường dẫn công khai, không phải menu CRM', () => {
+  assert.equal(isPublicPrivacyPath('/privacy'), true);
+  assert.equal(isPublicPrivacyPath('/chinh-sach-bao-mat/'), true);
+  assert.equal(isPublicPrivacyPath('/cong-tac'), false);
+  assert.equal(routeForPathname(PRIVACY_POLICY_CANONICAL_PATH), null);
+  assert.equal(PRIVACY_CONTACT_EMAIL, 'nnqbao@gmail.com');
+  assert.equal(PRIVACY_ORGANIZATION_VI, 'THCS Lê Văn Tám');
+});
+
+test('trang xóa tài khoản là đường dẫn công khai cho Play Console', () => {
+  assert.equal(isPublicAccountDeletionPath('/xoa-tai-khoan'), true);
+  assert.equal(isPublicAccountDeletionPath('/account-deletion/'), true);
+  assert.equal(isPublicPrivacyPath(ACCOUNT_DELETION_CANONICAL_PATH), false);
+  assert.equal(routeForPathname(ACCOUNT_DELETION_CANONICAL_PATH), null);
 });

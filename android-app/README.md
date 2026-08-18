@@ -1,4 +1,4 @@
-# LVT CRM Android (internal APK)
+# LVT CRM Android
 
 Native Android app (Kotlin + Jetpack Compose) for school staff.
 
@@ -41,14 +41,37 @@ Install on a phone (allow unknown sources):
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Identifiers (temporary)
+## Identifiers
 
 | | Value |
 |---|---|
-| App name | LVT CRM |
-| applicationId | `lvt.crm` (debug: `lvt.crm.debug`) |
+| App name | CRM Lê Văn Tám |
+| applicationId | `lvt.crm` (debug: `lvt.crm.debug`) — **do not change** after the first Play upload |
 
-Before Play Store release, consider a more unique id (e.g. `vn.lvt.crm`) — changing `applicationId` later is a new app.
+Privacy policy (Play Console + in-app): `https://lvt.vscgroup.io.vn/privacy`
+
+## Play Store release
+
+1. Create a Play Console app with package `lvt.crm`.
+2. Create a release keystore **once** (gitignored under `android-app/keystore/`) and point `local.properties` at it:
+
+```
+lvt.release.storeFile=keystore/lvt-release.jks
+lvt.release.storePassword=...
+lvt.release.keyAlias=lvt-release
+lvt.release.keyPassword=...
+```
+
+3. High-res icon: `android-app/store/play-icon-512.png` (512×512, same crest as iOS).
+4. Build the signed App Bundle:
+
+```bash
+./gradlew :app:bundleRelease
+```
+
+Output: `app/build/outputs/bundle/release/app-release.aab`
+
+Keep the keystore and passwords in a password manager. Losing them means you cannot update the Play listing.
 
 ## Backend
 
