@@ -18,6 +18,7 @@ import lvt.crm.data.work.WorkOperations
 import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkTaskItem
+import lvt.crm.ui.components.ListSearchState
 
 data class WorkUiState(
     val loading: Boolean = true,
@@ -37,15 +38,24 @@ data class WorkUiState(
     val mineTab: WorkListTab = WorkListTab.Upcoming,
     val createdTab: WorkListTab = WorkListTab.Upcoming,
     val needsExecutionOnly: Boolean = false,
+    val search: ListSearchState = ListSearchState(),
 ) {
-    val visibleMine: List<WorkTaskItem>
+    val tabMine: List<WorkTaskItem>
         get() = if (needsExecutionOnly) {
             filterTasksNeedingExecution(tasks)
         } else {
             filterTasksByTab(tasks, mineTab)
         }
-    val visibleCreated: List<WorkApprovalItem>
+    val tabCreated: List<WorkApprovalItem>
         get() = filterDocumentsByTab(approvals, createdTab)
+    val visibleMine: List<WorkTaskItem>
+        get() = filterTasksBySearch(tabMine, search)
+    val visibleCreated: List<WorkApprovalItem>
+        get() = filterDocumentsBySearch(tabCreated, search)
+    val mineSearchEmpty: Boolean
+        get() = tabMine.isNotEmpty() && visibleMine.isEmpty()
+    val createdSearchEmpty: Boolean
+        get() = tabCreated.isNotEmpty() && visibleCreated.isEmpty()
 }
 
 class WorkViewModel(
@@ -103,6 +113,10 @@ class WorkViewModel(
 
     fun setCreatedTab(tab: WorkListTab) {
         _uiState.update { it.copy(createdTab = tab) }
+    }
+
+    fun updateSearch(search: ListSearchState) {
+        _uiState.update { it.copy(search = search) }
     }
 
     fun applyDashboardFilter(filter: WorkDashboardFilter) {

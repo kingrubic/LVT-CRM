@@ -16,6 +16,7 @@ import lvt.crm.data.convex.ConvexHttpClient
 import lvt.crm.data.duties.DutiesRepository
 import lvt.crm.data.duties.DutiesOperations
 import lvt.crm.data.duties.DutyItem
+import lvt.crm.ui.components.ListSearchState
 
 data class DutiesUiState(
     val loading: Boolean = true,
@@ -31,6 +32,7 @@ data class DutiesUiState(
     val canViewAll: Boolean = false,
     val mineTab: DutyListTab = DutyListTab.Upcoming,
     val createdTab: DutyListTab = DutyListTab.Upcoming,
+    val search: ListSearchState = ListSearchState(),
 ) {
     val lists: SplitDutyLists
         get() = splitDutyLists(
@@ -39,12 +41,20 @@ data class DutiesUiState(
             includeManagedOthers = isAdmin || canViewAll,
             leftoverInMine = !isAdmin,
         )
-    val visibleMine: List<DutyItem>
+    val tabMine: List<DutyItem>
         get() = filterDutiesByTab(lists.mine, mineTab)
-    val visibleCreated: List<DutyItem>
+    val tabCreated: List<DutyItem>
         get() = filterDutiesByTab(lists.created, createdTab)
+    val visibleMine: List<DutyItem>
+        get() = filterDutiesBySearch(tabMine, search)
+    val visibleCreated: List<DutyItem>
+        get() = filterDutiesBySearch(tabCreated, search)
     val showCreatedSection: Boolean
         get() = canCreate || lists.created.isNotEmpty()
+    val mineSearchEmpty: Boolean
+        get() = tabMine.isNotEmpty() && visibleMine.isEmpty()
+    val createdSearchEmpty: Boolean
+        get() = tabCreated.isNotEmpty() && visibleCreated.isEmpty()
 }
 
 class DutiesViewModel(
@@ -112,6 +122,10 @@ class DutiesViewModel(
 
     fun applyListTab(tab: DutyListTab) {
         _uiState.update { it.copy(mineTab = tab, createdTab = tab) }
+    }
+
+    fun updateSearch(search: ListSearchState) {
+        _uiState.update { it.copy(search = search) }
     }
 
     fun setAttendance(dutyId: String, status: String) {

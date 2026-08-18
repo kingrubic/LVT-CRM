@@ -1,6 +1,10 @@
 package lvt.crm.ui.duties
 
 import lvt.crm.data.duties.DutyItem
+import lvt.crm.ui.components.ListSearchState
+import lvt.crm.ui.components.dateRangeOverlaps
+import lvt.crm.ui.components.includesListSearch
+import lvt.crm.ui.components.normalizeListSearchText
 
 enum class DutyListTab {
     Upcoming,
@@ -66,4 +70,28 @@ fun tabForDuty(duty: DutyItem): DutyListTab = when {
     isDutyPast(duty) -> DutyListTab.Past
     duty.isOngoing -> DutyListTab.Ongoing
     else -> DutyListTab.Upcoming
+}
+
+fun filterDutiesBySearch(list: List<DutyItem>, search: ListSearchState): List<DutyItem> {
+    val query = normalizeListSearchText(search.query)
+    val department = normalizeListSearchText(search.department)
+    val person = normalizeListSearchText(search.person)
+    val location = normalizeListSearchText(search.location)
+    val dateFrom = search.dateFrom.trim()
+    val dateTo = search.dateTo.trim()
+    if (query.isBlank() && department.isBlank() && person.isBlank() && location.isBlank() && dateFrom.isBlank() && dateTo.isBlank()) {
+        return list
+    }
+    return list.filter { duty ->
+        val queryText = listOf(duty.title, duty.content).joinToString(" ")
+        val departmentText = duty.departmentNames.joinToString(" ")
+        val personText = (duty.participantNames + duty.departmentParticipants.flatMap { it.participantNames })
+            .joinToString(" ")
+        val locationText = (duty.locationNames + listOf(duty.locationText)).joinToString(" ")
+        if (query.isNotBlank() && !includesListSearch(queryText, query)) return@filter false
+        if (!includesListSearch(departmentText, department)) return@filter false
+        if (!includesListSearch(personText, person)) return@filter false
+        if (!includesListSearch(locationText, location)) return@filter false
+        dateRangeOverlaps(duty.startDate, duty.endDate, dateFrom, dateTo)
+    }
 }
