@@ -1,5 +1,7 @@
 import UIKit
 import QuickLook
+import PhotosUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class WorkViewController: UITableViewController {
@@ -17,6 +19,23 @@ final class WorkViewController: UITableViewController {
     private let downloadDocument: (WorkApprovalItem) async throws -> URL
     private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
+    private var pendingUploadTask: WorkTaskItem?
+
+    private static let maxUploadFileSize = 20 * 1024 * 1024
+    private static let allowedUploadExtensions: Set<String> = ["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg"]
+
+    private static func mimeType(for url: URL) -> String {
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "pdf": return "application/pdf"
+        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "xls": return "application/vnd.ms-excel"
+        case "png": return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        default: return "application/octet-stream"
+        }
+    }
 
     init(
         viewModel: WorkViewModel,
@@ -381,12 +400,72 @@ final class WorkViewController: UITableViewController {
             presentQualityPrompt(item)
             return
         }
-        let alert = UIAlertController(title: "Hoàn thành công việc?", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Hoàn thành", style: .default) { [weak self] _ in
-            self?.viewModel.complete(item, qualityPercent: nil)
+        pendingUploadTask = item
+        let alert = UIAlertController(
+            title: "Nộp bằng chứng hoàn thành",
+            message: "Chọn phương thức nộp tài liệu/hình ảnh để người tạo/cấp trên duyệt.",
+            preferredStyle: .actionSheet
+        )
+        alert.addAction(UIAlertAction(title: "Chọn từ Thư viện ảnh", style: .default) { [weak self] _ in
+            self?.presentPhotoPicker()
         })
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            alert.addAction(UIAlertAction(title: "Chụp ảnh mới", style: .default) { [weak self] _ in
+                self?.presentCamera()
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Chọn từ Tệp", style: .default) { [weak self] _ in
+            self?.presentDocumentPicker()
+        })
+        alert.addAction(UIAlertAction(title: "Huỷ", style: .cancel) { [weak self] _ in
+            self?.pendingUploadTask = nil
+        })
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
         presentFromVisibleController(alert)
+    }
+
+    private func presentPhotoPicker() {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        (navigationController?.visibleViewController ?? self).present(
+            picker,
+            animated: !UIAccessibility.isReduceMotionEnabled
+        )
+    }
+
+    private func presentCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = self
+        (navigationController?.visibleViewController ?? self).present(
+            picker,
+            animated: !UIAccessibility.isReduceMotionEnabled
+        )
+    }
+
+    private func presentDocumentPicker() {
+        let types: [UTType] = [
+            .pdf,
+            .image,
+            UTType(filenameExtension: "docx") ?? .data,
+            UTType(filenameExtension: "xlsx") ?? .data,
+            UTType(filenameExtension: "xls") ?? .data,
+        ]
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
+        picker.delegate = self
+        picker.allowsMultipleSelection = false
+        (navigationController?.visibleViewController ?? self).present(
+            picker,
+            animated: !UIAccessibility.isReduceMotionEnabled
+        )
     }
 
     private func presentQualityPrompt(_ item: WorkTaskItem) {
@@ -597,7 +676,8 @@ private final class WorkItemCell: UITableViewCell {
         backgroundColor = focused ? UIColor.systemIndigo.withAlphaComponent(0.12) : .secondarySystemGroupedBackground
         if WorkHelpers.needsCompletion(item.status) {
             actionButton.configuration = .borderedProminent()
-            setButton("Hoàn thành", busy: busy, action: complete)
+            let title = item.isAdmin ? "Hoàn thành và chấm %" : "Nộp bằng chứng hoàn thành"
+            setButton(title, busy: busy, action: complete)
         } else {
             actionButton.isHidden = true
         }
@@ -682,7 +762,8 @@ private final class WorkTaskDetailViewController: UIViewController {
         if WorkHelpers.needsCompletion(task.status) {
             let button = UIButton(type: .system)
             button.configuration = .filled()
-            button.configuration?.title = busy ? "Đang xử lý…" : "Hoàn thành"
+            let defaultTitle = task.isAdmin ? "Hoàn thành và chấm %" : "Nộp bằng chứng hoàn thành"
+            button.configuration?.title = busy ? "Đang xử lý…" : defaultTitle
             button.isEnabled = !busy
             button.addAction(UIAction { [weak self] _ in self?.onComplete() }, for: .touchUpInside)
             stack.addArrangedSubview(button)
@@ -920,5 +1001,117 @@ private final class WorkReviewViewController: UIViewController, UITextViewDelega
         let alert = UIAlertController(title: "Thông tin chưa hợp lệ", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Đóng", style: .default))
         present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+}
+
+extension WorkViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first, let item = pendingUploadTask else {
+            pendingUploadTask = nil
+            return
+        }
+        pendingUploadTask = nil
+        let ext = url.pathExtension.lowercased()
+        guard Self.allowedUploadExtensions.contains(ext) else {
+            presentValidation("Chỉ chấp nhận tệp PDF, DOCX, Excel, PNG hoặc JPG.")
+            return
+        }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            guard data.count <= Self.maxUploadFileSize else {
+                presentValidation("Dung lượng tệp tối đa là 20MB.")
+                return
+            }
+            guard !data.isEmpty else {
+                presentValidation("Tệp rỗng, vui lòng chọn lại.")
+                return
+            }
+            let fileName = url.lastPathComponent
+            let mime = Self.mimeType(for: url)
+            viewModel.complete(item, qualityPercent: nil, fileData: data, fileName: fileName, mimeType: mime)
+        } catch {
+            presentValidation("Không thể đọc tệp đã chọn. Vui lòng thử lại.")
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        pendingUploadTask = nil
+    }
+}
+
+extension WorkViewController: PHPickerViewControllerDelegate {
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let result = results.first, let item = pendingUploadTask else {
+            pendingUploadTask = nil
+            return
+        }
+        let itemProvider = result.itemProvider
+        guard itemProvider.canLoadObject(ofClass: UIImage.self) else {
+            pendingUploadTask = nil
+            presentValidation("Không thể tải ảnh đã chọn.")
+            return
+        }
+        itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let self, let image = object as? UIImage else {
+                DispatchQueue.main.async {
+                    self?.pendingUploadTask = nil
+                    self?.presentValidation("Không thể đọc ảnh đã chọn.")
+                }
+                return
+            }
+            guard let data = image.jpegData(compressionQuality: 0.85) else {
+                DispatchQueue.main.async {
+                    self.pendingUploadTask = nil
+                    self.presentValidation("Không thể xử lý định dạng ảnh.")
+                }
+                return
+            }
+            guard data.count <= Self.maxUploadFileSize else {
+                DispatchQueue.main.async {
+                    self.pendingUploadTask = nil
+                    self.presentValidation("Dung lượng ảnh tối đa là 20MB.")
+                }
+                return
+            }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd_HHmmss"
+            let fileName = "bang_chung_\(formatter.string(from: Date())).jpg"
+            DispatchQueue.main.async {
+                self.pendingUploadTask = nil
+                self.viewModel.complete(item, qualityPercent: nil, fileData: data, fileName: fileName, mimeType: "image/jpeg")
+            }
+        }
+    }
+}
+
+extension WorkViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+        guard let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage),
+              let item = pendingUploadTask else {
+            pendingUploadTask = nil
+            return
+        }
+        pendingUploadTask = nil
+        guard let data = image.jpegData(compressionQuality: 0.85) else {
+            presentValidation("Không thể xử lý định dạng ảnh.")
+            return
+        }
+        guard data.count <= Self.maxUploadFileSize else {
+            presentValidation("Dung lượng ảnh tối đa là 20MB.")
+            return
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        let fileName = "chup_anh_\(formatter.string(from: Date())).jpg"
+        viewModel.complete(item, qualityPercent: nil, fileData: data, fileName: fileName, mimeType: "image/jpeg")
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        pendingUploadTask = nil
+        picker.dismiss(animated: true)
     }
 }

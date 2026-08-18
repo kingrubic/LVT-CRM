@@ -65,5 +65,9 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Ứng dụng cần quyền sử dụng máy ảnh để chụp ảnh bằng chứng hoàn thành công việc.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Ứng dụng cần quyền truy cập thư viện ảnh để chọn ảnh bằng chứng hoàn thành công việc.</string>
 </dict>
 </plist>

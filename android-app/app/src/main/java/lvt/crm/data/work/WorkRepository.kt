@@ -5,12 +5,24 @@ import kotlinx.coroutines.withContext
 import lvt.crm.data.convex.ConvexConfig
 import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.convex.ConvexHttpClient
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+
+data class WorkUploadedEvidence(
+    val driveFileId: String,
+    val driveChecksum: String,
+    val cleanupToken: String,
+    val fileName: String,
+    val fileType: String,
+    val fileSize: Long,
+)
 
 data class WorkTaskItem(
     val id: String,
@@ -94,7 +106,9 @@ internal fun decisionForUser(currentUserId: String, approvers: List<ApprovalDeci
 
 interface WorkOperations {
     suspend fun listMine(): WorkSnapshot
-    suspend fun complete(item: WorkTaskItem, qualityPercent: Int? = null)
+    suspend fun complete(item: WorkTaskItem, qualityPercent: Int? = null, evidence: WorkUploadedEvidence? = null)
+    suspend fun uploadEvidence(fileBytes: ByteArray, fileName: String, mimeType: String): WorkUploadedEvidence =
+        throw UnsupportedOperationException()
     suspend fun decideApproval(documentId: String, approve: Boolean)
     suspend fun reviewCompletion(
         review: WorkCompletionReviewItem,
@@ -235,10 +249,18 @@ class WorkRepository(
         )
     }
 
-    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?) {
+    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: WorkUploadedEvidence?) {
         val args = JSONObject()
         if (qualityPercent != null) {
             args.put("qualityPercent", qualityPercent)
+        }
+        if (evidence != null) {
+            args.put("driveFileId", evidence.driveFileId)
+            args.put("driveChecksum", evidence.driveChecksum)
+            args.put("cleanupToken", evidence.cleanupToken)
+            args.put("fileName", evidence.fileName)
+            args.put("fileType", evidence.fileType)
+            args.put("fileSize", evidence.fileSize)
         }
         when (item.kind) {
             WorkTaskItem.Kind.WorkItem -> {
@@ -250,6 +272,69 @@ class WorkRepository(
                 convex.mutation("work:completePersonalTask", args)
             }
         }
+        if (evidence != null && evidence.cleanupToken.isNotBlank()) {
+            settleUploadedFile(evidence.cleanupToken, finalize = true)
+        }
+    }
+
+    override suspend fun uploadEvidence(fileBytes: ByteArray, fileName: String, mimeType: String): WorkUploadedEvidence = withContext(Dispatchers.IO) {
+        if (fileBytes.isEmpty()) {
+            throw ConvexException("INVALID_FILE", "Tệp đính kèm không có nội dung.")
+        }
+        if (fileBytes.size > 20 * 1024 * 1024) {
+            throw ConvexException("FILE_TOO_LARGE", "Dung lượng tệp vượt quá giới hạn 20MB.")
+        }
+        val token = tokenProvider()?.takeIf { it.isNotBlank() }
+            ?: throw ConvexException("AUTH_REQUIRED", "Vui lòng đăng nhập lại.")
+        val base = webUrl.trimEnd('/')
+        val encodedName = URLEncoder.encode(fileName, Charsets.UTF_8.name()).replace("+", "%20")
+        val mediaType = mimeType.toMediaTypeOrNull() ?: "application/octet-stream".toMediaType()
+        val request = Request.Builder()
+            .url("$base/api/files/upload")
+            .header("Authorization", "Bearer $token")
+            .header("Content-Type", mimeType)
+            .header("X-File-Name", encodedName)
+            .header("X-LVT-Upload-Purpose", "work")
+            .post(fileBytes.toRequestBody(mediaType))
+            .build()
+
+        downloadHttp.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val errorJson = runCatching { JSONObject(body) }.getOrNull()
+                val code = errorJson?.optString("error")?.takeIf { it.isNotBlank() } ?: "WORK_UPLOAD_FAILED:${response.code}"
+                throw ConvexException(code, "Không thể tải bằng chứng lên. Vui lòng thử lại.")
+            }
+            val json = runCatching { JSONObject(body) }.getOrElse {
+                throw ConvexException("WORK_UPLOAD_INVALID_RESPONSE", "Phản hồi tải tệp không hợp lệ.")
+            }
+            val driveFileId = json.optString("driveFileId")
+            val cleanupToken = json.optString("cleanupToken")
+            if (driveFileId.isBlank() || cleanupToken.isBlank()) {
+                throw ConvexException("WORK_UPLOAD_INVALID_RESPONSE", "Phản hồi tải tệp không hợp lệ.")
+            }
+            val driveChecksum = json.optString("driveChecksum")
+            WorkUploadedEvidence(
+                driveFileId = driveFileId,
+                driveChecksum = driveChecksum,
+                cleanupToken = cleanupToken,
+                fileName = fileName,
+                fileType = mimeType,
+                fileSize = fileBytes.size.toLong(),
+            )
+        }
+    }
+
+    private suspend fun settleUploadedFile(cleanupToken: String, finalize: Boolean) = withContext(Dispatchers.IO) {
+        val token = tokenProvider()?.takeIf { it.isNotBlank() } ?: return@withContext
+        val encodedToken = URLEncoder.encode(cleanupToken, Charsets.UTF_8.name()).replace("+", "%20")
+        val base = webUrl.trimEnd('/')
+        val request = Request.Builder()
+            .url("$base/api/files/uploads/$encodedToken")
+            .header("Authorization", "Bearer $token")
+            .method(if (finalize) "POST" else "DELETE", "".toRequestBody("text/plain".toMediaType()))
+            .build()
+        runCatching { downloadHttp.newCall(request).execute().close() }
     }
 
     override suspend fun decideApproval(documentId: String, approve: Boolean) {

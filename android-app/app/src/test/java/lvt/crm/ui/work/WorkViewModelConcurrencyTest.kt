@@ -76,6 +76,26 @@ class WorkViewModelConcurrencyTest {
         assertEquals(85, repository.lastQualityPercent)
     }
 
+    @Test
+    fun `completeWithEvidence uploads evidence and completes task`() = runTest(dispatcher) {
+        val repository = BlockingWorkOperations()
+        val viewModel = WorkViewModel(repository)
+        repository.releaseRefresh.complete(Unit)
+        advanceUntilIdle()
+
+        val task = task("task-2").copy(isAdmin = false)
+        viewModel.requestComplete(task)
+        assertEquals(task, viewModel.uiState.value.evidencePromptTask)
+
+        viewModel.completeWithEvidence(task, "hello".toByteArray(), "proof.pdf", "application/pdf")
+        advanceUntilIdle()
+
+        assertEquals(1, repository.completionCalls)
+        assertEquals(1, repository.uploadCalls)
+        assertEquals("proof.pdf", repository.lastUploadedEvidence?.fileName)
+        assertEquals(null, viewModel.uiState.value.evidencePromptTask)
+    }
+
     private fun approval(id: String) = WorkApprovalItem(
         id = id,
         fileName = "file.pdf",
@@ -107,7 +127,9 @@ private class BlockingWorkOperations : WorkOperations {
     var listCalls = 0
     var approvalCalls = 0
     var completionCalls = 0
+    var uploadCalls = 0
     var lastQualityPercent: Int? = null
+    var lastUploadedEvidence: lvt.crm.data.work.WorkUploadedEvidence? = null
 
     override suspend fun listMine(): WorkSnapshot {
         if (listCalls++ == 0) {
@@ -123,9 +145,24 @@ private class BlockingWorkOperations : WorkOperations {
         )
     }
 
-    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?) {
+    override suspend fun uploadEvidence(fileBytes: ByteArray, fileName: String, mimeType: String): lvt.crm.data.work.WorkUploadedEvidence {
+        uploadCalls++
+        val evidence = lvt.crm.data.work.WorkUploadedEvidence(
+            driveFileId = "drive-1",
+            driveChecksum = "chk-1",
+            cleanupToken = "tok-1",
+            fileName = fileName,
+            fileType = mimeType,
+            fileSize = fileBytes.size.toLong(),
+        )
+        lastUploadedEvidence = evidence
+        return evidence
+    }
+
+    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: lvt.crm.data.work.WorkUploadedEvidence?) {
         completionCalls++
         lastQualityPercent = qualityPercent
+        lastUploadedEvidence = evidence
     }
 
     override suspend fun decideApproval(documentId: String, approve: Boolean) {

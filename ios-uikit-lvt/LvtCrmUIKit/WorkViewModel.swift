@@ -218,11 +218,25 @@ final class WorkViewModel {
         notifyChange()
     }
 
-    func complete(_ item: WorkTaskItem, qualityPercent: Int?) {
+    func complete(
+        _ item: WorkTaskItem,
+        qualityPercent: Int?,
+        fileData: Data? = nil,
+        fileName: String? = nil,
+        mimeType: String? = nil
+    ) {
         guard busyTaskId == nil else { return }
         busyTaskId = item.id
         runMutation {
-            try await self.repository.complete(item: item, qualityPercent: qualityPercent)
+            var evidence: WorkUploadedEvidence? = nil
+            if let fileData, let fileName, let mimeType {
+                evidence = try await self.repository.uploadEvidence(
+                    fileData: fileData,
+                    fileName: fileName,
+                    mimeType: mimeType
+                )
+            }
+            try await self.repository.complete(item: item, qualityPercent: qualityPercent, evidence: evidence)
             self.tasks = self.tasks.map {
                 guard $0.id == item.id else { return $0 }
                 var updated = $0
