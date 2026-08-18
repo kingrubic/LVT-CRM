@@ -36,6 +36,7 @@ test('format datetime công tác thành 2 hàng ngày-giờ', () => {
 test('datetime-local gộp ngày và giờ trên một ô', () => {
   assert.equal(toDateTimeLocalValue('2024-08-15', '08:00'), '2024-08-15T08:00');
   assert.deepEqual(fromDateTimeLocalValue('2026-08-17T17:00'), { date: '2026-08-17', time: '17:00' });
+  assert.deepEqual(fromDateTimeLocalValue('2026-08-19T08:08:00'), { date: '2026-08-19', time: '08:08' });
   assert.equal(toDateTimeLocalValue('', '08:00'), '');
 });
 

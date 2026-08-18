@@ -32,6 +32,14 @@ export function normalizeWorkVisibilityMode(value: string | null | undefined): W
   return value === WORK_VISIBILITY_CREATOR ? WORK_VISIBILITY_CREATOR : WORK_VISIBILITY_SCHOOL;
 }
 
+/** Accept HH:mm, H:mm, or HH:mm:ss from datetime-local. */
+export function normalizeDutyClock(value: string) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return raw;
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
 export function cleanDutyTitle(value: string) {
   const title = String(value || "").trim();
   if (!title || title.length > DUTY_TITLE_MAX_LENGTH) throw new Error("INVALID_DUTY_TITLE");
