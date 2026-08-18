@@ -53,12 +53,14 @@ import lvt.crm.ui.auth.LoginScreen
 import lvt.crm.ui.auth.LoginViewModel
 import lvt.crm.ui.duties.DutiesScreen
 import lvt.crm.ui.duties.DutiesViewModel
+import lvt.crm.ui.duties.DutyListTab
 import lvt.crm.ui.home.DashboardScreen
 import lvt.crm.ui.home.DashboardViewModel
 import lvt.crm.ui.home.PlaceholderScreen
 import lvt.crm.ui.notifications.NotificationsScreen
 import lvt.crm.ui.notifications.NotificationsViewModel
 import lvt.crm.ui.profile.ProfileScreen
+import lvt.crm.ui.work.WorkDashboardFilter
 import lvt.crm.ui.work.WorkFileOpener
 import lvt.crm.ui.work.WorkScreen
 import lvt.crm.ui.work.WorkViewModel
@@ -146,6 +148,10 @@ private fun MainShell(
     val notificationState by notificationsViewModel.uiState.collectAsState()
     var focusTarget by remember { mutableStateOf<NotificationDestination?>(null) }
     var tabOpenToken by remember { mutableStateOf(0) }
+    var dutyOpenTab by remember { mutableStateOf<DutyListTab?>(null) }
+    var dutyFilterToken by remember { mutableStateOf(0) }
+    var workOpenFilter by remember { mutableStateOf<WorkDashboardFilter?>(null) }
+    var workFilterToken by remember { mutableStateOf(0) }
     var fileError by remember { mutableStateOf<String?>(null) }
 
     val tabs = listOf(
@@ -269,7 +275,10 @@ private fun MainShell(
                 DashboardScreen(
                     viewModel = vm,
                     tabOpenToken = tabOpenToken,
-                    onOpenDuties = {
+                    onOpenDuties = { tab ->
+                        focusTarget = null
+                        dutyOpenTab = tab
+                        dutyFilterToken += 1
                         navController.navigate(Routes.Duties) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
@@ -278,7 +287,10 @@ private fun MainShell(
                             restoreState = true
                         }
                     },
-                    onOpenWork = {
+                    onOpenWork = { filter ->
+                        focusTarget = null
+                        workOpenFilter = filter
+                        workFilterToken += 1
                         navController.navigate(Routes.Work) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
@@ -306,6 +318,8 @@ private fun MainShell(
                         ?.takeIf { it.route == Routes.Duties }
                         ?.sourceId,
                     tabOpenToken = tabOpenToken,
+                    openTab = dutyOpenTab,
+                    openFilterToken = dutyFilterToken,
                 )
             }
             composable(Routes.Work) {
@@ -318,6 +332,8 @@ private fun MainShell(
                         ?.takeIf { it.route == Routes.Work }
                         ?.sourceId,
                     tabOpenToken = tabOpenToken,
+                    openFilter = workOpenFilter,
+                    openFilterToken = workFilterToken,
                     onOpenDocument = ::openDocument,
                 )
             }

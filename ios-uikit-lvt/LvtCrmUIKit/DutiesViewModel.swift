@@ -2,11 +2,13 @@ import Foundation
 
 enum DutyListTab: Int, CaseIterable, Equatable {
     case upcoming
+    case ongoing
     case past
 
     var title: String {
         switch self {
-        case .upcoming: return "Chưa diễn ra"
+        case .upcoming: return "Sắp diễn ra"
+        case .ongoing: return "Đang diễn ra"
         case .past: return "Đã diễn ra"
         }
     }
@@ -37,20 +39,27 @@ enum DutyListRules {
     static func isPast(_ duty: DutyItem) -> Bool { duty.isOverdue }
 
     static func tab(for duty: DutyItem) -> DutyListTab {
-        isPast(duty) ? .past : .upcoming
+        if isPast(duty) { return .past }
+        if duty.isOngoing { return .ongoing }
+        return .upcoming
     }
 
     static func filter(_ list: [DutyItem], tab: DutyListTab) -> [DutyItem] {
-        if tab == .past {
+        let byStart = { (lhs: DutyItem, rhs: DutyItem) in
+            "\(lhs.startDate)T\(lhs.startTime)" < "\(rhs.startDate)T\(rhs.startTime)"
+        }
+        switch tab {
+        case .past:
             return list.filter(isPast).sorted {
                 let lhs = "\($0.endDate)T\($0.endTime)"
                 let rhs = "\($1.endDate)T\($1.endTime)"
                 if lhs != rhs { return lhs < rhs }
-                return "\($0.startDate)T\($0.startTime)" < "\($1.startDate)T\($1.startTime)"
+                return byStart($0, $1)
             }
-        }
-        return list.filter { !isPast($0) }.sorted {
-            "\($0.startDate)T\($0.startTime)" < "\($1.startDate)T\($1.startTime)"
+        case .ongoing:
+            return list.filter(\.isOngoing).sorted(by: byStart)
+        case .upcoming:
+            return list.filter { !isPast($0) && !$0.isOngoing }.sorted(by: byStart)
         }
     }
 }

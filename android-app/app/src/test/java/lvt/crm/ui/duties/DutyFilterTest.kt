@@ -8,12 +8,18 @@ import org.junit.Test
 
 class DutyFilterTest {
     @Test
-    fun upcomingTabKeepsOngoingAndUpcomingAndDropsEnded() {
+    fun tabsMatchDashboardUpcomingOngoingAndPast() {
         val upcoming = duty(id = "a", upcoming = true, startTime = "08:00")
         val later = duty(id = "b", upcoming = true, startTime = "10:00")
+        val ongoing = duty(id = "now", ongoing = true, startTime = "09:00")
         val ended = duty(id = "c", overdue = true, endDate = "2026-08-01")
-        assertEquals(listOf("a", "b"), filterDutiesByTab(listOf(later, ended, upcoming), DutyListTab.Upcoming).map { it.id })
-        assertEquals(listOf("c"), filterDutiesByTab(listOf(later, ended, upcoming), DutyListTab.Past).map { it.id })
+        val list = listOf(later, ended, ongoing, upcoming)
+        assertEquals(listOf("a", "b"), filterDutiesByTab(list, DutyListTab.Upcoming).map { it.id })
+        assertEquals(listOf("now"), filterDutiesByTab(list, DutyListTab.Ongoing).map { it.id })
+        assertEquals(listOf("c"), filterDutiesByTab(list, DutyListTab.Past).map { it.id })
+        assertEquals(DutyListTab.Upcoming, tabForDuty(upcoming))
+        assertEquals(DutyListTab.Ongoing, tabForDuty(ongoing))
+        assertEquals(DutyListTab.Past, tabForDuty(ended))
     }
 
     @Test
@@ -35,10 +41,18 @@ class DutyFilterTest {
 
     @Test
     fun visibleMineHonorsSelectedTab() {
-        val duties = listOf(duty(id = "a", upcoming = true, isMine = true), duty(id = "b", overdue = true, isMine = true))
-        val state = DutiesUiState(duties = duties, currentUserId = "me", mineTab = DutyListTab.Past)
-        assertEquals(listOf("b"), state.visibleMine.map { it.id })
-        assertFalse(state.showCreatedSection)
+        val duties = listOf(
+            duty(id = "a", upcoming = true, isMine = true, createdBy = "boss"),
+            duty(id = "now", ongoing = true, isMine = true, createdBy = "boss"),
+            duty(id = "b", overdue = true, isMine = true, createdBy = "boss"),
+        )
+        val past = DutiesUiState(duties = duties, currentUserId = "me", mineTab = DutyListTab.Past)
+        val ongoing = DutiesUiState(duties = duties, currentUserId = "me", mineTab = DutyListTab.Ongoing)
+        val upcoming = DutiesUiState(duties = duties, currentUserId = "me", mineTab = DutyListTab.Upcoming)
+        assertEquals(listOf("b"), past.visibleMine.map { it.id })
+        assertEquals(listOf("now"), ongoing.visibleMine.map { it.id })
+        assertEquals(listOf("a"), upcoming.visibleMine.map { it.id })
+        assertFalse(past.showCreatedSection)
         assertTrue(dutyDisplayTitle(duty(title = "Đi thực tế", content = "Nội dung")).contains("Đi thực tế"))
     }
 

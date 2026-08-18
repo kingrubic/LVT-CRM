@@ -36,9 +36,14 @@ data class WorkUiState(
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
     val mineTab: WorkListTab = WorkListTab.Upcoming,
     val createdTab: WorkListTab = WorkListTab.Upcoming,
+    val needsExecutionOnly: Boolean = false,
 ) {
     val visibleMine: List<WorkTaskItem>
-        get() = filterTasksByTab(tasks, mineTab)
+        get() = if (needsExecutionOnly) {
+            filterTasksNeedingExecution(tasks)
+        } else {
+            filterTasksByTab(tasks, mineTab)
+        }
     val visibleCreated: List<WorkApprovalItem>
         get() = filterDocumentsByTab(approvals, createdTab)
 }
@@ -93,11 +98,27 @@ class WorkViewModel(
     }
 
     fun setMineTab(tab: WorkListTab) {
-        _uiState.update { it.copy(mineTab = tab) }
+        _uiState.update { it.copy(mineTab = tab, needsExecutionOnly = false) }
     }
 
     fun setCreatedTab(tab: WorkListTab) {
         _uiState.update { it.copy(createdTab = tab) }
+    }
+
+    fun applyDashboardFilter(filter: WorkDashboardFilter) {
+        _uiState.update { state ->
+            when (filter) {
+                WorkDashboardFilter.PendingApproval -> state.copy(
+                    mineTab = WorkListTab.Upcoming,
+                    createdTab = WorkListTab.Upcoming,
+                    needsExecutionOnly = false,
+                )
+                WorkDashboardFilter.NeedsExecution -> state.copy(
+                    mineTab = WorkListTab.Upcoming,
+                    needsExecutionOnly = true,
+                )
+            }
+        }
     }
 
     fun requestComplete(task: WorkTaskItem) {

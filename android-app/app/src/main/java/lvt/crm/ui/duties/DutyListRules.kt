@@ -4,12 +4,14 @@ import lvt.crm.data.duties.DutyItem
 
 enum class DutyListTab {
     Upcoming,
+    Ongoing,
     Past,
     ;
 
     val title: String
         get() = when (this) {
-            Upcoming -> "Chưa diễn ra"
+            Upcoming -> "Sắp diễn ra"
+            Ongoing -> "Đang diễn ra"
             Past -> "Đã diễn ra"
         }
 }
@@ -47,16 +49,21 @@ fun splitDutyLists(
 fun isDutyPast(duty: DutyItem): Boolean = duty.isOverdue
 
 fun filterDutiesByTab(list: List<DutyItem>, tab: DutyListTab): List<DutyItem> {
-    return if (tab == DutyListTab.Past) {
-        list.filter(::isDutyPast).sortedWith(
+    return when (tab) {
+        DutyListTab.Past -> list.filter(::isDutyPast).sortedWith(
             compareBy(DutyItem::endDate, DutyItem::endTime, DutyItem::startDate, DutyItem::startTime),
         )
-    } else {
-        list.filter { !isDutyPast(it) }.sortedWith(
+        DutyListTab.Ongoing -> list.filter { it.isOngoing }.sortedWith(
+            compareBy(DutyItem::startDate, DutyItem::startTime),
+        )
+        DutyListTab.Upcoming -> list.filter { !isDutyPast(it) && !it.isOngoing }.sortedWith(
             compareBy(DutyItem::startDate, DutyItem::startTime),
         )
     }
 }
 
-fun tabForDuty(duty: DutyItem): DutyListTab =
-    if (isDutyPast(duty)) DutyListTab.Past else DutyListTab.Upcoming
+fun tabForDuty(duty: DutyItem): DutyListTab = when {
+    isDutyPast(duty) -> DutyListTab.Past
+    duty.isOngoing -> DutyListTab.Ongoing
+    else -> DutyListTab.Upcoming
+}

@@ -77,7 +77,7 @@ final class DutiesViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         switch sectionKinds[section] {
-        case .mine, .created: return 88
+        case .mine, .created: return 96
         default: return UITableView.automaticDimension
         }
     }
@@ -208,6 +208,13 @@ final class DutiesViewController: UITableViewController {
         render()
     }
 
+    func applyListTab(_ tab: DutyListTab) {
+        loadViewIfNeeded()
+        viewModel.mineTab = tab
+        viewModel.createdTab = tab
+        render()
+    }
+
     private var sectionKinds: [SectionKind] {
         var sections: [SectionKind] = []
         if let actionError = viewModel.actionError {
@@ -327,10 +334,13 @@ final class DutiesViewController: UITableViewController {
 
     private func emptyListCell(at indexPath: IndexPath, created: Bool, tab: DutyListTab) -> UITableViewCell {
         let detail: String
-        if tab == .past {
+        switch tab {
+        case .past:
             detail = created ? "Chưa có công tác bạn tạo đã diễn ra." : "Chưa có sự kiện đã diễn ra."
-        } else {
-            detail = created ? "Bạn chưa tạo công tác nào" : "Bạn chưa có sự kiện nào cần tham gia"
+        case .ongoing:
+            detail = created ? "Chưa có công tác bạn tạo đang diễn ra." : "Chưa có sự kiện đang diễn ra."
+        case .upcoming:
+            detail = created ? "Chưa có công tác bạn tạo sắp diễn ra." : "Chưa có sự kiện sắp diễn ra."
         }
         let cell = stateCell(
             at: indexPath,

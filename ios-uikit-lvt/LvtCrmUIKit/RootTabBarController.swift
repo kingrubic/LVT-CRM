@@ -38,8 +38,8 @@ final class RootTabBarController: UITabBarController {
         let overviewViewController = DashboardViewController(
             dutiesRepository: dutiesRepository,
             workRepository: workRepository,
-            onOpenDuties: { [weak self] in self?.selectTab(.duties) },
-            onOpenWork: { [weak self] in self?.selectTab(.work) }
+            onOpenDuties: { [weak self] tab in self?.openDuties(tab: tab) },
+            onOpenWork: { [weak self] filter in self?.openWork(filter: filter) }
         )
         let overview = navigationController(
             title: "Tổng quan",
@@ -101,6 +101,18 @@ final class RootTabBarController: UITabBarController {
         selectedViewController = tabControllers[tab]
     }
 
+    private func openDuties(tab: DutyListTab) {
+        selectTab(.duties)
+        tabControllers[.duties]?.popToRootViewController(animated: false)
+        dutiesViewController?.applyListTab(tab)
+    }
+
+    private func openWork(filter: WorkDashboardFilter?) {
+        selectTab(.work)
+        tabControllers[.work]?.popToRootViewController(animated: false)
+        workViewController?.applyDashboardFilter(filter)
+    }
+
     func route(_ destination: NotificationDestination, markNotificationRead: Bool = true) {
         let tab = destination.route
         guard let navigationController = tabControllers[tab] else { return }
@@ -140,8 +152,8 @@ final class RootTabBarController: UITabBarController {
 private final class DashboardViewController: UIViewController {
     private let dutiesRepository: DutiesRepository
     private let workRepository: WorkRepository
-    private let onOpenDuties: () -> Void
-    private let onOpenWork: () -> Void
+    private let onOpenDuties: (DutyListTab) -> Void
+    private let onOpenWork: (WorkDashboardFilter?) -> Void
     private let dutiesCard = DashboardCard(
         title: "Công tác",
         subtitle: "Lịch điều phối",
@@ -163,8 +175,8 @@ private final class DashboardViewController: UIViewController {
     init(
         dutiesRepository: DutiesRepository,
         workRepository: WorkRepository,
-        onOpenDuties: @escaping () -> Void,
-        onOpenWork: @escaping () -> Void
+        onOpenDuties: @escaping (DutyListTab) -> Void,
+        onOpenWork: @escaping (WorkDashboardFilter?) -> Void
     ) {
         self.dutiesRepository = dutiesRepository
         self.workRepository = workRepository
@@ -268,8 +280,12 @@ private final class DashboardViewController: UIViewController {
         scrollView.addSubview(stack)
         view.addSubview(scrollView)
 
-        dutiesCard.addAction(UIAction { [weak self] _ in self?.onOpenDuties() }, for: .touchUpInside)
-        workCard.addAction(UIAction { [weak self] _ in self?.onOpenWork() }, for: .touchUpInside)
+        dutiesCard.onOpenPrimary = { [weak self] in self?.onOpenDuties(.upcoming) }
+        dutiesCard.onOpenSecondary = { [weak self] in self?.onOpenDuties(.ongoing) }
+        workCard.onOpenPrimary = { [weak self] in self?.onOpenWork(.pendingApproval) }
+        workCard.onOpenSecondary = { [weak self] in self?.onOpenWork(.needsExecution) }
+        dutiesCard.addAction(UIAction { [weak self] _ in self?.onOpenDuties(.upcoming) }, for: .touchUpInside)
+        workCard.addAction(UIAction { [weak self] _ in self?.onOpenWork(nil) }, for: .touchUpInside)
 
         updateResponsiveLayout()
         synchronizationView.setLoading()
@@ -424,6 +440,8 @@ private enum DashboardPalette {
 }
 
 private final class DashboardCard: UIControl {
+    var onOpenPrimary: (() -> Void)?
+    var onOpenSecondary: (() -> Void)?
     private let tint: UIColor
     private let backgroundView = DashboardGradientView(
         colors: { [DashboardPalette.cardStart.resolvedColor(with: $0), DashboardPalette.cardEnd.resolvedColor(with: $0)] },
@@ -451,8 +469,7 @@ private final class DashboardCard: UIControl {
         self.secondaryMetric = DashboardMetricView(tint: tint)
         super.init(frame: .zero)
         accessibilityLabel = title
-        accessibilityTraits = [.button]
-        accessibilityHint = "Mở danh sách \(title.lowercased())"
+        isAccessibilityElement = false
         configure(title: title, subtitle: subtitle)
         setLoading()
         applyColors()
@@ -478,6 +495,14 @@ private final class DashboardCard: UIControl {
               !isHidden,
               alpha > 0.01,
               self.point(inside: point, with: event) else { return nil }
+        let primaryPoint = convert(point, to: primaryMetric)
+        if primaryMetric.point(inside: primaryPoint, with: event) {
+            return primaryMetric
+        }
+        let secondaryPoint = convert(point, to: secondaryMetric)
+        if secondaryMetric.point(inside: secondaryPoint, with: event) {
+            return secondaryMetric
+        }
         return self
     }
 
@@ -559,6 +584,9 @@ private final class DashboardCard: UIControl {
         metricsStack.distribution = .fillEqually
         metricsStack.alignment = .fill
         metricsStack.spacing = 16
+        primaryMetric.addAction(UIAction { [weak self] _ in self?.onOpenPrimary?() }, for: .touchUpInside)
+        secondaryMetric.addAction(UIAction { [weak self] _ in self?.onOpenSecondary?() }, for: .touchUpInside)
+        accessibilityElements = [primaryMetric, secondaryMetric]
 
         let contentStack = UIStackView(arrangedSubviews: [titleRow, metricsStack])
         contentStack.translatesAutoresizingMaskIntoConstraints = false
@@ -597,7 +625,7 @@ private final class DashboardCard: UIControl {
     }
 }
 
-private final class DashboardMetricView: UIView {
+private final class DashboardMetricView: UIControl {
     private let tint: UIColor
     private let circleView = UIView()
     private let valueLabel = UILabel()
@@ -608,7 +636,8 @@ private final class DashboardMetricView: UIView {
     init(tint: UIColor) {
         self.tint = tint
         super.init(frame: .zero)
-        isAccessibilityElement = false
+        isAccessibilityElement = true
+        accessibilityTraits = .button
         configure()
         applyColors()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (metric: DashboardMetricView, _) in
@@ -629,6 +658,8 @@ private final class DashboardMetricView: UIView {
         valueLabel.isHidden = true
         spinner.startAnimating()
         titleLabel.text = title
+        accessibilityLabel = title
+        accessibilityValue = "Đang tải"
     }
 
     func setError(title: String) {
@@ -636,6 +667,8 @@ private final class DashboardMetricView: UIView {
         valueLabel.isHidden = false
         valueLabel.text = "!"
         titleLabel.text = title
+        accessibilityLabel = title
+        accessibilityValue = "Chưa tải được"
     }
 
     func setValue(_ value: String, title: String) {
@@ -643,6 +676,8 @@ private final class DashboardMetricView: UIView {
         valueLabel.isHidden = false
         valueLabel.text = value
         titleLabel.text = title
+        accessibilityLabel = "\(title), \(value)"
+        accessibilityHint = "Mở danh sách \(title.lowercased())"
     }
 
     private func configure() {
