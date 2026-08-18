@@ -5,13 +5,10 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { buildFcmMessage, isApnsDeviceToken } from "./pushPayload";
 
 function base64Url(value: string) {
   return Buffer.from(value).toString("base64url");
-}
-
-function isApnsDeviceToken(token: string) {
-  return /^[0-9a-f]{64}$/i.test(token.trim());
 }
 
 async function accessToken(serviceAccount: {
@@ -87,20 +84,14 @@ export const sendToUsers = internalAction({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message: {
+            message: buildFcmMessage({
               token: row.token,
-              data: {
-                kind: args.kind,
-                sourceType: args.sourceType,
-                sourceId: args.sourceId,
-                title: args.title,
-                body: args.body,
-              },
-              android: {
-                priority: "high",
-                notification: { channel_id: "lvt_crm_deadlines" },
-              },
-            },
+              title: args.title,
+              body: args.body,
+              kind: args.kind,
+              sourceType: args.sourceType,
+              sourceId: args.sourceId,
+            }),
           }),
         },
       );

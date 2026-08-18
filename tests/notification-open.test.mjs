@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { openNotification } from '../src/notifications/openNotification.js';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, WORK_NOTIFICATION_FOCUS_TYPES } from '../src/notifications/useNotificationFocus.js';
+import { buildFcmMessage, isApnsDeviceToken } from '../convex/pushPayload.ts';
 
 test('an unread notification opens exactly once even when mark-read fails', async () => {
   const opened = [];
@@ -25,4 +26,21 @@ test('new duty assignment notifications focus the same duty card as deadline rem
 test('new work assignment notifications open the work list like other work alerts', () => {
   assert.equal(WORK_NOTIFICATION_FOCUS_TYPES.includes('work_assigned'), true);
   assert.equal(menuForNotification({ kind: 'work', sourceType: 'work_assigned' }), 'work');
+});
+
+test('FCM work alerts stay data-only so Android can show the local feed banner', () => {
+  const message = buildFcmMessage({
+    token: 'fcm-registration-token',
+    title: 'Công việc mới',
+    body: 'Soạn báo cáo',
+    kind: 'work',
+    sourceType: 'department_work',
+    sourceId: 'doc-1',
+  });
+  assert.equal(message.android.priority, 'high');
+  assert.equal('notification' in message.android, false);
+  assert.equal('notification' in message, false);
+  assert.equal(message.data.title, 'Công việc mới');
+  assert.equal(isApnsDeviceToken('a'.repeat(64)), true);
+  assert.equal(isApnsDeviceToken('fcm-registration-token'), false);
 });

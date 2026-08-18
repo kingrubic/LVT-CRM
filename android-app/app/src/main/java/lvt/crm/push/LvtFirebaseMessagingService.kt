@@ -12,6 +12,7 @@ class LvtFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val application = application as? LvtApplication ?: return
         PushEvents.notifyReceived()
+        // FCM is a wake-up. The visible banner comes from the unread feed after sync.
         application.container.notificationScheduler.syncNow()
     }
 }
