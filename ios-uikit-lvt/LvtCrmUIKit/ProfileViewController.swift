@@ -24,8 +24,6 @@ final class ProfileViewController: UITableViewController {
         }
     }
 
-    private static let appearanceDefaultsKey = "lvt_uikit_appearance"
-
     private enum Section: Int, CaseIterable {
         case identity
         case work
@@ -70,7 +68,7 @@ final class ProfileViewController: UITableViewController {
         case .work: return 3
         case .account: return 2
         case .appearance: return 1
-        case .signOut: return 1
+        case .signOut: return 2
         case nil: return 0
         }
     }
@@ -144,13 +142,22 @@ final class ProfileViewController: UITableViewController {
             cell.accessibilityLabel = "Chế độ hiển thị, \(currentAppearance.title)"
             cell.accessibilityHint = "Chọn giao diện sáng, tối hoặc theo hệ thống"
         case .signOut:
-            content.text = "Đăng xuất"
-            content.image = UIImage(systemName: "rectangle.portrait.and.arrow.right")
-            content.textProperties.color = .systemRed
-            content.imageProperties.tintColor = .systemRed
-            cell.selectionStyle = .default
-            cell.accessibilityTraits = .button
-            cell.accessibilityHint = "Đăng xuất khỏi tài khoản này"
+            if indexPath.row == 0 {
+                content.text = "Đăng xuất"
+                content.image = UIImage(systemName: "rectangle.portrait.and.arrow.right")
+                content.textProperties.color = .systemRed
+                content.imageProperties.tintColor = .systemRed
+                cell.selectionStyle = .default
+                cell.accessibilityTraits = .button
+                cell.accessibilityHint = "Đăng xuất khỏi tài khoản này"
+            } else {
+                content.text = "Phiên bản \(AppVersion.marketing)"
+                content.textProperties.font = .preferredFont(forTextStyle: .footnote)
+                content.textProperties.color = .secondaryLabel
+                cell.selectionStyle = .none
+                cell.accessibilityTraits = .staticText
+                cell.accessibilityLabel = "Phiên bản \(AppVersion.marketing)"
+            }
         case nil:
             break
         }
@@ -170,7 +177,7 @@ final class ProfileViewController: UITableViewController {
             showChangePassword()
         case .appearance:
             showAppearancePicker()
-        case .signOut:
+        case .signOut where indexPath.row == 0:
             confirmSignOut()
         default:
             break
@@ -178,7 +185,7 @@ final class ProfileViewController: UITableViewController {
     }
 
     private var currentAppearance: Appearance {
-        Appearance(rawValue: UserDefaults.standard.string(forKey: Self.appearanceDefaultsKey) ?? "") ?? .system
+        Appearance(rawValue: UserDefaults.standard.string(forKey: AppAppearance.defaultsKey) ?? "") ?? .system
     }
 
     private func showAppearancePicker() {
@@ -202,8 +209,7 @@ final class ProfileViewController: UITableViewController {
     }
 
     private func apply(appearance: Appearance) {
-        UserDefaults.standard.set(appearance.rawValue, forKey: Self.appearanceDefaultsKey)
-        view.window?.windowScene?.windows.forEach { $0.overrideUserInterfaceStyle = appearance.interfaceStyle }
+        AppAppearance.persist(rawValue: appearance.rawValue, style: appearance.interfaceStyle)
         tableView.reloadSections(IndexSet(integer: Section.appearance.rawValue), with: .none)
     }
 

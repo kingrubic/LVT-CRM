@@ -44,6 +44,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,6 +75,7 @@ fun ProfileScreen(
     var confirmSignOut by rememberSaveable { mutableStateOf(false) }
     var pickingAppearance by rememberSaveable { mutableStateOf(false) }
     val appearance by appearanceStore.mode.collectAsState()
+    val appVersion = currentAppVersion(LocalContext.current)
 
     if (changingPassword) {
         BackHandler { changingPassword = false }
@@ -222,6 +224,12 @@ fun ProfileScreen(
                 modifier = Modifier.clickable { confirmSignOut = true },
             )
         }
+        Text(
+            "Phiên bản $appVersion",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+        )
         Spacer(modifier = Modifier.height(24.dp))
         }
     }
