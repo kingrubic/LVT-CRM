@@ -1,6 +1,7 @@
 package lvt.crm.ui.duties
 
 import lvt.crm.data.duties.DutyItem
+import lvt.crm.ui.components.ListSearchState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -56,6 +57,52 @@ class DutyFilterTest {
         assertTrue(dutyDisplayTitle(duty(title = "Đi thực tế", content = "Nội dung")).contains("Đi thực tế"))
     }
 
+    @Test
+    fun searchMatchesTitleContentAndAdvancedFiltersWithoutDiacritics() {
+        val meeting = duty(
+            id = "a",
+            title = "Họp khối chuyên môn",
+            content = "Làm việc với UBND",
+            departmentNames = listOf("Phòng Giáo viên"),
+            participantNames = listOf("Trần Anh Vũ"),
+            locationText = "Phòng họp A",
+            startDate = "2026-08-18",
+            endDate = "2026-08-18",
+        )
+        val trip = duty(
+            id = "b",
+            title = "Đi thực tế",
+            content = "Tham quan trường bạn",
+            departmentNames = listOf("Phòng Tổ chức"),
+            participantNames = listOf("Admin"),
+            locationNames = listOf("Sân trường"),
+            startDate = "2026-08-20",
+            endDate = "2026-08-21",
+        )
+        val list = listOf(meeting, trip)
+        assertEquals(listOf("a"), filterDutiesBySearch(list, ListSearchState(query = "hop khoi")).map { it.id })
+        assertEquals(listOf("a"), filterDutiesBySearch(list, ListSearchState(query = "UBND")).map { it.id })
+        assertEquals(listOf("b"), filterDutiesBySearch(list, ListSearchState(query = "thực tế")).map { it.id })
+        assertEquals(listOf("a"), filterDutiesBySearch(list, ListSearchState(department = "giao vien")).map { it.id })
+        assertEquals(listOf("a"), filterDutiesBySearch(list, ListSearchState(person = "anh vu")).map { it.id })
+        assertEquals(listOf("b"), filterDutiesBySearch(list, ListSearchState(location = "san truong")).map { it.id })
+        assertEquals(
+            listOf("b"),
+            filterDutiesBySearch(list, ListSearchState(dateFrom = "2026-08-20", dateTo = "2026-08-20")).map { it.id },
+        )
+        assertEquals(
+            emptyList<String>(),
+            filterDutiesBySearch(list, ListSearchState(query = "hop", department = "to chuc")).map { it.id },
+        )
+        val filtered = DutiesUiState(
+            duties = listOf(meeting.copy(isMine = true, isUpcoming = true)),
+            currentUserId = "me",
+            search = ListSearchState(query = "khong co"),
+        )
+        assertTrue(filtered.mineSearchEmpty)
+        assertTrue(filtered.visibleMine.isEmpty())
+    }
+
     private fun duty(
         id: String = "duty-1",
         upcoming: Boolean = false,
@@ -66,19 +113,24 @@ class DutyFilterTest {
         title: String = "",
         content: String = "Họp",
         startTime: String = "08:00",
+        startDate: String = "2026-08-09",
         endDate: String = "2026-08-09",
+        departmentNames: List<String> = emptyList(),
+        participantNames: List<String> = emptyList(),
+        locationNames: List<String> = emptyList(),
+        locationText: String = "",
     ) = DutyItem(
         id = id,
         content = content,
-        startDate = "2026-08-09",
+        startDate = startDate,
         endDate = endDate,
         startTime = startTime,
         endTime = "09:00",
         allDay = false,
-        locationNames = emptyList(),
-        departmentNames = emptyList(),
+        locationNames = locationNames,
+        departmentNames = departmentNames,
         departmentParticipants = emptyList(),
-        participantNames = emptyList(),
+        participantNames = participantNames,
         myStatus = "pending",
         isMine = isMine,
         isOngoing = ongoing,
@@ -87,5 +139,6 @@ class DutyFilterTest {
         canMarkAttendance = true,
         title = title,
         createdBy = createdBy,
+        locationText = locationText,
     )
 }

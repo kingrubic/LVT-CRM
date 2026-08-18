@@ -23,6 +23,9 @@ data class WorkTaskItem(
     val qualityPercent: Int?,
     val rejectionReason: String,
     val isAdmin: Boolean,
+    val documentTitle: String = "",
+    val fileName: String = "",
+    val memberNames: List<String> = emptyList(),
 ) {
     enum class Kind { WorkItem, PersonalTask }
 }
@@ -193,6 +196,9 @@ class WorkRepository(
                     qualityPercent = t.optIntOrNull("qualityPercent"),
                     rejectionReason = t.optString("rejectionReason"),
                     isAdmin = isAdmin,
+                    documentTitle = t.optString("documentTitle"),
+                    fileName = t.optString("fileName"),
+                    memberNames = t.optJSONArray("members").toMemberNames(),
                 )
             }
         }
@@ -212,6 +218,9 @@ class WorkRepository(
                     qualityPercent = t.optIntOrNull("qualityPercent"),
                     rejectionReason = t.optString("rejectionReason"),
                     isAdmin = isAdmin,
+                    documentTitle = t.optString("documentTitle"),
+                    fileName = t.optString("fileName"),
+                    memberNames = t.optJSONArray("assignees").toMemberNames(),
                 )
             }
         }
@@ -338,6 +347,14 @@ class WorkRepository(
     }
 
     private fun cacheDirFallback(): File = File(System.getProperty("java.io.tmpdir") ?: ".", "lvt-work-temp")
+}
+
+private fun org.json.JSONArray?.toMemberNames(): List<String> {
+    if (this == null) return emptyList()
+    return List(length()) { index ->
+        val member = optJSONObject(index) ?: return@List ""
+        member.optString("name").ifBlank { member.optString("email") }
+    }.filter { it.isNotBlank() }
 }
 
 private fun parseAssignments(items: org.json.JSONArray?): List<WorkDocumentAssignment> {

@@ -13,6 +13,9 @@ struct WorkTaskItem: Identifiable, Equatable, Sendable {
     let qualityPercent: Int?
     let rejectionReason: String
     let isAdmin: Bool
+    let documentTitle: String
+    let fileName: String
+    let memberNames: [String]
 }
 
 struct WorkMemberItem: Identifiable, Equatable, Sendable {
@@ -160,7 +163,10 @@ final class WorkRepository: Sendable {
                 departmentName: (task["departmentName"] as? String) ?? "",
                 qualityPercent: task["qualityPercent"] as? Int,
                 rejectionReason: (task["rejectionReason"] as? String) ?? "",
-                isAdmin: isAdmin
+                isAdmin: isAdmin,
+                documentTitle: (task["documentTitle"] as? String) ?? "",
+                fileName: (task["fileName"] as? String) ?? "",
+                memberNames: Self.memberNames(from: task)
             ))
         }
         for task in result["personalTasks"] as? [[String: Any]] ?? [] {
@@ -177,7 +183,10 @@ final class WorkRepository: Sendable {
                 departmentName: (task["departmentName"] as? String) ?? "",
                 qualityPercent: task["qualityPercent"] as? Int,
                 rejectionReason: (task["rejectionReason"] as? String) ?? "",
-                isAdmin: isAdmin
+                isAdmin: isAdmin,
+                documentTitle: (task["documentTitle"] as? String) ?? "",
+                fileName: (task["fileName"] as? String) ?? "",
+                memberNames: Self.memberNames(from: task, key: "assignees")
             ))
         }
 
@@ -281,6 +290,15 @@ final class WorkRepository: Sendable {
             sourceIdentity: sourceIdentity,
             fileName: document.fileName.isEmpty ? fallbackName : document.fileName
         )
+    }
+
+    private static func memberNames(from value: [String: Any], key: String = "members") -> [String] {
+        ((value[key] as? [[String: Any]]) ?? []).compactMap { member in
+            let name = ((member["name"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
+            let email = ((member["email"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return email.isEmpty ? nil : email
+        }
     }
 
     private func parseAssignments(_ items: [[String: Any]]?) -> [WorkDocumentAssignment] {

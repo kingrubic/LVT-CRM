@@ -44,6 +44,30 @@ enum DutyListRules {
         return .upcoming
     }
 
+    static func filterBySearch(_ list: [DutyItem], search: ListSearchValues) -> [DutyItem] {
+        let query = ListSearch.normalize(search.query)
+        let department = ListSearch.normalize(search.department)
+        let person = ListSearch.normalize(search.person)
+        let location = ListSearch.normalize(search.location)
+        let dateFrom = search.dateFrom.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dateTo = search.dateTo.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty && department.isEmpty && person.isEmpty && location.isEmpty && dateFrom.isEmpty && dateTo.isEmpty {
+            return list
+        }
+        return list.filter { duty in
+            let queryText = [duty.title, duty.content].joined(separator: " ")
+            let departmentText = duty.departmentNames.joined(separator: " ")
+            let personText = (duty.participantNames + duty.departmentParticipants.flatMap(\.participantNames))
+                .joined(separator: " ")
+            let locationText = (duty.locationNames + [duty.locationText]).joined(separator: " ")
+            if !query.isEmpty && !ListSearch.includes(queryText, query) { return false }
+            if !ListSearch.includes(departmentText, department) { return false }
+            if !ListSearch.includes(personText, person) { return false }
+            if !ListSearch.includes(locationText, location) { return false }
+            return ListSearch.dateRangeOverlaps(start: duty.startDate, end: duty.endDate, dateFrom: dateFrom, dateTo: dateTo)
+        }
+    }
+
     static func filter(_ list: [DutyItem], tab: DutyListTab) -> [DutyItem] {
         let byStart = { (lhs: DutyItem, rhs: DutyItem) in
             "\(lhs.startDate)T\(lhs.startTime)" < "\(rhs.startDate)T\(rhs.startTime)"
@@ -82,6 +106,9 @@ final class DutiesViewModel {
     var createdTab: DutyListTab = .upcoming {
         didSet { if createdTab != oldValue { notifyChange() } }
     }
+    var search = ListSearchValues() {
+        didSet { if search != oldValue { notifyChange() } }
+    }
     var onChange: (() -> Void)?
 
     var lists: (mine: [DutyItem], created: [DutyItem]) {
@@ -93,9 +120,13 @@ final class DutiesViewModel {
         )
     }
 
-    var visibleMine: [DutyItem] { DutyListRules.filter(lists.mine, tab: mineTab) }
-    var visibleCreated: [DutyItem] { DutyListRules.filter(lists.created, tab: createdTab) }
+    var tabMine: [DutyItem] { DutyListRules.filter(lists.mine, tab: mineTab) }
+    var tabCreated: [DutyItem] { DutyListRules.filter(lists.created, tab: createdTab) }
+    var visibleMine: [DutyItem] { DutyListRules.filterBySearch(tabMine, search: search) }
+    var visibleCreated: [DutyItem] { DutyListRules.filterBySearch(tabCreated, search: search) }
     var showCreatedSection: Bool { canCreate || !lists.created.isEmpty }
+    var mineSearchEmpty: Bool { !tabMine.isEmpty && visibleMine.isEmpty }
+    var createdSearchEmpty: Bool { !tabCreated.isEmpty && visibleCreated.isEmpty }
 
     private let repository: DutiesRepository
     private let currentUserId: String

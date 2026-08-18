@@ -28,6 +28,7 @@ data class DutyItem(
     val canMarkAttendance: Boolean,
     val title: String = "",
     val createdBy: String = "",
+    val locationText: String = "",
 )
 
 data class DutiesSnapshot(
@@ -76,6 +77,7 @@ class DutiesRepository(
                             canMarkAttendance = timing.optBoolean("canMarkAttendance", false),
                             title = d.optString("title"),
                             createdBy = d.optString("createdBy"),
+                            locationText = d.optString("locationText"),
                         ),
                     )
                 }
