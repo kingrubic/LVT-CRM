@@ -52,6 +52,39 @@ export function dutyListTitle(duty: { title?: string; content?: string }) {
   return String(duty.content || "").trim() || "Công tác";
 }
 
+export function isDutyParticipant(
+  user: { _id: string; departmentId?: string },
+  duty: { departmentIds?: string[]; participantUserIds?: string[] },
+) {
+  const userId = String(user._id || "");
+  if (!userId) return false;
+  if ((duty.participantUserIds || []).some((id) => String(id) === userId)) return true;
+  return Boolean(
+    user.departmentId &&
+    (duty.departmentIds || []).some((id) => String(id) === String(user.departmentId)),
+  );
+}
+
+/** Push recipients for a duty create/update, including the creator when they are a participant. */
+export function dutyPushRecipientIds(args: {
+  departmentIds: string[];
+  participantUserIds: string[];
+  users: Array<{ _id: string; departmentId?: string }>;
+}): string[] {
+  const duty = {
+    departmentIds: args.departmentIds || [],
+    participantUserIds: args.participantUserIds || [],
+  };
+  const recipients = new Set<string>();
+  for (const id of duty.participantUserIds) {
+    if (id) recipients.add(String(id));
+  }
+  for (const user of args.users) {
+    if (isDutyParticipant(user, duty)) recipients.add(String(user._id));
+  }
+  return [...recipients];
+}
+
 export function cleanDutyContent(value: string) {
   const content = String(value || "").trim();
   if (!content || content.length > DUTY_CONTENT_MAX_LENGTH) throw new Error("INVALID_CONTENT");

@@ -15,7 +15,7 @@ import {
   resolveUserMenuAccess,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
-import { dutyListTitle, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
+import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
 
 const HOUR_MS = 60 * 60 * 1000;
 const VN_OFFSET_MS = 7 * HOUR_MS;
@@ -40,17 +40,6 @@ function dutyDueAt(duty: { endDate: string; endTime: string }) {
 function workDueAt(deadline: string) {
   const [year, month, day] = deadline.split("-").map(Number);
   return Date.UTC(year, month - 1, day, 23, 59) - VN_OFFSET_MS;
-}
-
-function isDutyParticipant(
-  user: { _id: string; departmentId?: string },
-  duty: { departmentIds: string[]; participantUserIds: string[] },
-) {
-  return duty.participantUserIds.some((id) => String(id) === String(user._id)) ||
-    Boolean(
-      user.departmentId &&
-      duty.departmentIds.some((id) => String(id) === String(user.departmentId)),
-    );
 }
 
 function taskCompletedForAll(task: any) {

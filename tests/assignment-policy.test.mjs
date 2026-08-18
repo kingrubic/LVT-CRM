@@ -14,6 +14,7 @@ import {
   normalizeDutyClock,
   dutyListTitle,
   dutyLocationLabel,
+  dutyPushRecipientIds,
   isDocumentArchived,
   isWorkItemArchived,
   isWorkNotificationAssignee,
@@ -187,4 +188,18 @@ test('người tạo vẫn nhận thông báo khi tự giao việc cho mình', (
   assert.equal(department.includes('lead-1'), true);
   assert.equal(department.includes('user-1'), true);
   assert.equal(department.includes('admin-1'), false);
+});
+
+test('người tham gia công tác nhận push, kể cả khi tự thêm mình', () => {
+  const creator = { _id: 'lead-1', departmentId: 'dept-a' };
+  const sameDept = { _id: 'user-2', departmentId: 'dept-a' };
+  const otherDept = { _id: 'user-1', departmentId: 'dept-b' };
+  const ids = dutyPushRecipientIds({
+    departmentIds: ['dept-a'],
+    participantUserIds: ['lead-1'],
+    users: [creator, sameDept, otherDept],
+  });
+  assert.equal(ids.includes('lead-1'), true);
+  assert.equal(ids.includes('user-2'), true);
+  assert.equal(ids.includes('user-1'), false);
 });
