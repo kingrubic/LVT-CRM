@@ -110,6 +110,10 @@ class DutiesViewModel(
         _uiState.update { it.copy(createdTab = tab) }
     }
 
+    fun applyListTab(tab: DutyListTab) {
+        _uiState.update { it.copy(mineTab = tab, createdTab = tab) }
+    }
+
     fun setAttendance(dutyId: String, status: String) {
         _uiState.update { it.copy(busyDutyId = dutyId, actionError = null) }
         viewModelScope.launch {

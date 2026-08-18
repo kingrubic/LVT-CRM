@@ -1,5 +1,6 @@
 package lvt.crm.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.WorkOutline
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
@@ -35,13 +35,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import lvt.crm.R
 import lvt.crm.ui.components.LvtScreen
+import lvt.crm.ui.duties.DutyListTab
+import lvt.crm.ui.work.WorkDashboardFilter
 
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     tabOpenToken: Int,
-    onOpenDuties: () -> Unit,
-    onOpenWork: () -> Unit,
+    onOpenDuties: (DutyListTab) -> Unit,
+    onOpenWork: (WorkDashboardFilter?) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(tabOpenToken) { viewModel.refresh() }
@@ -73,7 +75,9 @@ fun DashboardScreen(
                 secondaryValue = state.ongoingDuties,
                 loading = state.loading,
                 error = state.error,
-                onClick = onOpenDuties,
+                onClick = { onOpenDuties(DutyListTab.Upcoming) },
+                onPrimaryClick = { onOpenDuties(DutyListTab.Upcoming) },
+                onSecondaryClick = { onOpenDuties(DutyListTab.Ongoing) },
             )
             Spacer(modifier = Modifier.height(12.dp))
             OverviewCard(
@@ -86,7 +90,9 @@ fun DashboardScreen(
                 secondaryValue = state.pendingExecution,
                 loading = state.loading,
                 error = state.error,
-                onClick = onOpenWork,
+                onClick = { onOpenWork(null) },
+                onPrimaryClick = { onOpenWork(WorkDashboardFilter.PendingApproval) },
+                onSecondaryClick = { onOpenWork(WorkDashboardFilter.NeedsExecution) },
             )
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedCard(modifier = Modifier.fillMaxWidth()) {
@@ -144,9 +150,10 @@ private fun OverviewCard(
     loading: Boolean,
     error: Boolean,
     onClick: () -> Unit,
+    onPrimaryClick: () -> Unit,
+    onSecondaryClick: () -> Unit,
 ) {
     ElevatedCard(
-        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -156,18 +163,23 @@ private fun OverviewCard(
                 leadingContent = {
                     Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 },
+                modifier = Modifier.clickable(onClick = onClick),
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Metric(
                     title = if (error) "Chưa tải được" else primaryTitle,
                     value = if (loading) null else if (error) "!" else primaryValue.toString(),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onPrimaryClick),
                 )
                 Metric(
                     title = if (error) "Chạm để mở" else secondaryTitle,
                     value = if (loading) null else if (error) "!" else secondaryValue.toString(),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onSecondaryClick),
                 )
             }
         }
