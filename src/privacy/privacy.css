@@ -59,7 +59,8 @@
   font-size: 14px;
   line-height: 1.65;
 }
-.privacy-section ul {
+.privacy-section ul,
+.privacy-section ol {
   margin: 0;
   padding-left: 1.2em;
 }

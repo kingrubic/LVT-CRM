@@ -1,4 +1,5 @@
 import {
+  ACCOUNT_DELETION_CANONICAL_PATH,
   PRIVACY_APP_NAME,
   PRIVACY_CONTACT_EMAIL,
   PRIVACY_EFFECTIVE_DATE_EN,
@@ -83,7 +84,8 @@ export default function PrivacyPolicyPage() {
           <div className="privacy-section">
             <h2>6. Quyền của người dùng</h2>
             <p>
-              Cán bộ có tài khoản có thể xem hồ sơ trên menu Cá nhân, đổi mật khẩu, và xem thiết bị đã đăng nhập. Yêu cầu sửa, hạn chế hoặc xóa dữ liệu: gửi email tới{' '}
+              Cán bộ có tài khoản có thể xem hồ sơ trên menu Cá nhân, đổi mật khẩu, và xem thiết bị đã đăng nhập. Yêu cầu sửa, hạn chế hoặc xóa tài khoản: xem{' '}
+              <a href={ACCOUNT_DELETION_CANONICAL_PATH}>hướng dẫn xóa tài khoản</a> hoặc gửi email tới{' '}
               <a href={mail}>{PRIVACY_CONTACT_EMAIL}</a>. Nhà trường sẽ xử lý theo quy chế nội bộ và quy định pháp luật Việt Nam.
             </p>
           </div>
@@ -165,7 +167,8 @@ export default function PrivacyPolicyPage() {
           <div className="privacy-section">
             <h2>6. Your rights</h2>
             <p>
-              Staff can view their profile, change their password, and review signed-in devices in the app. To correct, restrict, or delete data, email{' '}
+              Staff can view their profile, change their password, and review signed-in devices in the app. To correct, restrict, or delete an account, follow the{' '}
+              <a href={ACCOUNT_DELETION_CANONICAL_PATH}>account deletion page</a> or email{' '}
               <a href={mail}>{PRIVACY_CONTACT_EMAIL}</a>. The school will handle requests under internal rules and applicable Vietnamese law.
             </p>
           </div>

@@ -9,9 +9,11 @@ import {
   routeForPathname,
 } from '../src/navigationRoutes.js';
 import {
+  ACCOUNT_DELETION_CANONICAL_PATH,
   PRIVACY_CONTACT_EMAIL,
   PRIVACY_ORGANIZATION_VI,
   PRIVACY_POLICY_CANONICAL_PATH,
+  isPublicAccountDeletionPath,
   isPublicPrivacyPath,
 } from '../src/privacy/privacyPolicy.js';
 
@@ -53,4 +55,11 @@ test('trang chính sách bảo mật là đường dẫn công khai, không ph�
   assert.equal(routeForPathname(PRIVACY_POLICY_CANONICAL_PATH), null);
   assert.equal(PRIVACY_CONTACT_EMAIL, 'nnqbao@gmail.com');
   assert.equal(PRIVACY_ORGANIZATION_VI, 'THCS Lê Văn Tám');
+});
+
+test('trang xóa tài khoản là đường dẫn công khai cho Play Console', () => {
+  assert.equal(isPublicAccountDeletionPath('/xoa-tai-khoan'), true);
+  assert.equal(isPublicAccountDeletionPath('/account-deletion/'), true);
+  assert.equal(isPublicPrivacyPath(ACCOUNT_DELETION_CANONICAL_PATH), false);
+  assert.equal(routeForPathname(ACCOUNT_DELETION_CANONICAL_PATH), null);
 });

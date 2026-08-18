@@ -7,9 +7,23 @@ export const PRIVACY_APP_NAME = 'CRM Lê Văn Tám';
 export const PRIVACY_EFFECTIVE_DATE_VI = '18 tháng 8 năm 2026';
 export const PRIVACY_EFFECTIVE_DATE_EN = '18 August 2026';
 export const PRIVACY_SITE_ORIGIN = 'https://lvt.vscgroup.io.vn';
+export const ACCOUNT_DELETION_PATHS = Object.freeze(['/xoa-tai-khoan', '/account-deletion']);
+export const ACCOUNT_DELETION_CANONICAL_PATH = '/xoa-tai-khoan';
+
+function normalizePublicPath(pathname) {
+  const raw = String(pathname || '/').split(/[?#]/, 1)[0] || '/';
+  if (raw === '/') return '/';
+  return `/${raw.replace(/^\/+|\/+$/g, '')}`;
+}
 
 export function isPublicPrivacyPath(pathname) {
-  const raw = String(pathname || '/').split(/[?#]/, 1)[0] || '/';
-  const normalized = raw === '/' ? '/' : `/${raw.replace(/^\/+|\/+$/g, '')}`;
-  return PRIVACY_POLICY_PATHS.includes(normalized);
+  return PRIVACY_POLICY_PATHS.includes(normalizePublicPath(pathname));
+}
+
+export function isPublicAccountDeletionPath(pathname) {
+  return ACCOUNT_DELETION_PATHS.includes(normalizePublicPath(pathname));
+}
+
+export function isPublicLegalPath(pathname) {
+  return isPublicPrivacyPath(pathname) || isPublicAccountDeletionPath(pathname);
 }

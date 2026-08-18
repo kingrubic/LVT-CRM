@@ -14,8 +14,9 @@ import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
 import { pathnameForMenu, pathnameForReportSection, routeForPathname } from './navigationRoutes';
+import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
-import { isPublicPrivacyPath } from './privacy/privacyPolicy';
+import { isPublicAccountDeletionPath, isPublicPrivacyPath } from './privacy/privacyPolicy';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
@@ -2757,6 +2758,9 @@ function MissingKeyView() {
 function Root() {
   if (isPublicPrivacyPath(window.location.pathname)) {
     return <PrivacyPolicyPage />;
+  }
+  if (isPublicAccountDeletionPath(window.location.pathname)) {
+    return <AccountDeletionPage />;
   }
   if (!convex) return <MissingKeyView />;
   return (
