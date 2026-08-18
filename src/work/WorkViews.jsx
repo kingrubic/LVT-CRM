@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { useConvexAuth } from '@convex-dev/auth/react';
-import { useNotificationFocus } from '../notifications/useNotificationFocus';
+import { useNotificationFocus, WORK_NOTIFICATION_FOCUS_TYPES } from '../notifications/useNotificationFocus';
 import WorkAssignmentRows from './WorkAssignmentRows';
 import WorkCreatePreview from './WorkCreatePreview';
 import { DutyListHeading } from '../duties/DutyListFilters';
@@ -521,7 +521,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const [reviewSaving, setReviewSaving] = useState(false);
 
   useNotificationFocus(focusTarget, {
-    acceptSourceTypes: ['approval', 'department_work', 'personal_task', 'completion_rejected'],
+    acceptSourceTypes: WORK_NOTIFICATION_FOCUS_TYPES,
   });
 
   const documents = listData?.documents || [];
@@ -1025,7 +1025,7 @@ export function WorkUserView({ focusTarget = null }) {
   const pendingCompletionReviews = data?.pendingCompletionReviews || [];
 
   useNotificationFocus(focusTarget, {
-    acceptSourceTypes: ['approval', 'department_work', 'personal_task', 'completion_rejected'],
+    acceptSourceTypes: WORK_NOTIFICATION_FOCUS_TYPES,
   });
 
   const visibleMyTasks = useMemo(() => filterWorksByTab(data?.myTasks || [], listTab), [data?.myTasks, listTab]);

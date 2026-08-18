@@ -1,0 +1,19 @@
+---
+description: Bump the in-app Profile version whenever Android or iOS UIKit changes
+alwaysApply: true
+---
+
+# Native app version (trang Cá nhân)
+
+Every Android (`android-app/`) or standalone iOS (`ios-uikit-lvt/`) change must bump the marketing version shown on **Cá nhân**. Do not leave a native code change on the previous version. Do not touch `ios-app/` unless that app is in scope.
+
+Scheme `x.y.z`: **x** new menu, **y** new feature (no new menu), **z** bug fix. Also increment the integer build number.
+
+| App | Marketing version | Build number |
+|-----|-------------------|--------------|
+| Android | `android-app/app/build.gradle.kts` → `versionName` | same file → `versionCode` |
+| iOS UIKit | `ios-uikit-lvt/LvtCrmUIKit.xcodeproj/project.pbxproj` → `MARKETING_VERSION` (Debug **and** Release) | same file → `CURRENT_PROJECT_VERSION` (both configs) |
+
+Profile reads those values (`currentAppVersion()` / `AppVersion.marketing`). Never hardcode the label in the Profile UI.
+
+Convex-only or web-only changes do not bump native versions.

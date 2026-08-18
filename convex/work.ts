@@ -20,6 +20,7 @@ import {
   cleanWorkTitle,
   isWorkItemArchived,
   isWorkReleased,
+  workAssignmentPushUserIds,
   workListTitle,
 } from "./assignmentPolicy";
 import { internal } from "./_generated/api";
@@ -940,23 +941,11 @@ export const createDocument = mutation({
       }),
       at: now,
     });
-    const recipients = new Set<string>();
     const users = (await ctx.db.query("users").collect()).filter((row: any) => row.status === "active");
-    for (const assignment of assignments) {
-      if (assignment.type === "individual") {
-        for (const id of assignment.userIds) recipients.add(String(id));
-      } else {
-        for (const user of users) {
-          if (String(user.departmentId || "") === String(assignment.departmentId || "")) {
-            recipients.add(String(user._id));
-          }
-        }
-      }
-    }
-    recipients.delete(String(actor.user._id));
-    if (recipients.size) {
+    const recipients = workAssignmentPushUserIds({ assignments, users });
+    if (recipients.length) {
       await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
-        userIds: [...recipients],
+        userIds: recipients,
         title: "Công việc mới",
         body: title,
         kind: "work",
@@ -1093,23 +1082,11 @@ export const updateDocument = mutation({
       }),
       at: now,
     });
-    const recipients = new Set<string>();
     const users = (await ctx.db.query("users").collect()).filter((row: any) => row.status === "active");
-    for (const assignment of assignments) {
-      if (assignment.type === "individual") {
-        for (const id of assignment.userIds) recipients.add(String(id));
-      } else {
-        for (const user of users) {
-          if (String(user.departmentId || "") === String(assignment.departmentId || "")) {
-            recipients.add(String(user._id));
-          }
-        }
-      }
-    }
-    recipients.delete(String(actor.user._id));
-    if (recipients.size) {
+    const recipients = workAssignmentPushUserIds({ assignments, users });
+    if (recipients.length) {
       await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
-        userIds: [...recipients],
+        userIds: recipients,
         title: "Công việc đã cập nhật",
         body: workListTitle({ title, fileName: replacement?.fileName || document.fileName, content: firstAssignment.content }),
         kind: "work",

@@ -96,6 +96,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         authFlowCoordinator?.open(destination)
     }
 
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
+        Task { @MainActor in
+            await appDelegate.container.notificationSync.syncNow()
+        }
+    }
+
     deinit {
         if let destinationObserver {
             NotificationCenter.default.removeObserver(destinationObserver)

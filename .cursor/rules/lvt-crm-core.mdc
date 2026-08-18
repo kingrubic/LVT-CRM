@@ -17,7 +17,7 @@ Production: `https://lvt.vscgroup.io.vn`. Stack: React 19 + Vite (`src/`), Conve
 
 - Web UI: `src/` (`main.jsx` shell; `settings/`, `work/`, `boarding/`, `reports/`, `notifications/`)
 - Backend: `convex/` — never hand-edit `convex/_generated/`
-- Native: `ios-uikit-lvt/` only when scoped; preserve `ios-app/` and `android-app/` unless asked
+- Native: `ios-uikit-lvt/` only when scoped; preserve `ios-app/` and `android-app/` unless asked. Any Android/iOS UIKit change must bump the Profile version (see `.cursor/rules/native-app-version.mdc`)
 - Tests: `npm test` → `tests/*.test.mjs`
 
 ## Roles
