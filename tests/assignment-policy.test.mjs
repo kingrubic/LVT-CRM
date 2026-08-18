@@ -5,6 +5,7 @@ import {
   canCreateAssignments,
   canCreatorMutateWork,
   canReviewWorkCompletion,
+  shouldBypassWorkCompletionReview,
   canSeeArchivedWork,
   canSeeLiveWork,
   cleanDutyContent,
@@ -141,6 +142,10 @@ test('người được giao luôn thấy việc của mình; chế độ creato
 test('người tạo mới được duyệt hoàn thành; khóa sửa khi đã có nộp', () => {
   assert.equal(canReviewWorkCompletion({ actorUserId: 'lead', createdBy: 'lead' }), true);
   assert.equal(canReviewWorkCompletion({ actorUserId: 'admin', createdBy: 'lead' }), false);
+  assert.equal(shouldBypassWorkCompletionReview(true, 100), true);
+  assert.equal(shouldBypassWorkCompletionReview(true, 0), true);
+  assert.equal(shouldBypassWorkCompletionReview(true, undefined), false);
+  assert.equal(shouldBypassWorkCompletionReview(false, 100), false);
   assert.equal(canCreatorMutateWork([{ completions: [] }]), true);
   assert.equal(
     canCreatorMutateWork([{ completions: [{ status: 'pending_approval' }] }]),
