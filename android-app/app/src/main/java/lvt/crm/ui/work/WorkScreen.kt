@@ -83,9 +83,19 @@ fun WorkScreen(
     viewModel: WorkViewModel,
     focusId: String?,
     tabOpenToken: Int,
+    openFilter: WorkDashboardFilter? = null,
+    openFilterToken: Int = 0,
     onOpenDocument: (WorkApprovalItem) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+    LaunchedEffect(openFilterToken) {
+        if (openFilterToken == 0) return@LaunchedEffect
+        if (openFilter == null) {
+            viewModel.setMineTab(WorkListTab.Upcoming)
+        } else {
+            viewModel.applyDashboardFilter(openFilter)
+        }
+    }
     if (state.isAdmin) {
         AdminWorkScreen(
             state = state,
@@ -257,7 +267,11 @@ fun WorkScreen(
                     }
                     if (state.visibleMine.isEmpty()) {
                         item(key = "mine-empty") {
-                            WorkListEmpty(tab = state.mineTab, created = false)
+                            WorkListEmpty(
+                                tab = state.mineTab,
+                                created = false,
+                                needsExecutionOnly = state.needsExecutionOnly,
+                            )
                         }
                     } else {
                         items(state.visibleMine, key = { "${it.kind}-${it.id}" }) { task ->
@@ -503,7 +517,13 @@ private fun AdminWorkScreen(
                         )
                     }
                     if (state.visibleMine.isEmpty()) {
-                        item(key = "mine-empty") { WorkListEmpty(tab = state.mineTab, created = false) }
+                        item(key = "mine-empty") {
+                            WorkListEmpty(
+                                tab = state.mineTab,
+                                created = false,
+                                needsExecutionOnly = state.needsExecutionOnly,
+                            )
+                        }
                     } else {
                         items(state.visibleMine, key = { "mine-${it.kind}-${it.id}" }) { task ->
                             WorkCard(
@@ -735,11 +755,15 @@ private fun WorkListSectionHeader(
 }
 
 @Composable
-private fun WorkListEmpty(tab: WorkListTab, created: Boolean) {
-    val message = if (tab == WorkListTab.Past) {
-        if (created) "Chưa có công việc bạn tạo đã diễn ra." else "Chưa có công việc đã diễn ra."
-    } else {
-        if (created) "Bạn chưa tạo công việc nào" else "Bạn chưa có công việc nào cần xử lý"
+private fun WorkListEmpty(
+    tab: WorkListTab,
+    created: Boolean,
+    needsExecutionOnly: Boolean = false,
+) {
+    val message = when {
+        needsExecutionOnly -> "Chưa có công việc cần thực hiện."
+        tab == WorkListTab.Past -> if (created) "Chưa có công việc bạn tạo đã diễn ra." else "Chưa có công việc đã diễn ra."
+        else -> if (created) "Bạn chưa tạo công việc nào" else "Bạn chưa có công việc nào cần xử lý"
     }
     StatePanel(
         icon = Icons.Outlined.TaskAlt,

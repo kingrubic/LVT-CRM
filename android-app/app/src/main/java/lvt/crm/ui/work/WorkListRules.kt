@@ -4,6 +4,12 @@ import java.util.Calendar
 import java.util.TimeZone
 import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkTaskItem
+import lvt.crm.data.work.needsCompletion
+
+enum class WorkDashboardFilter {
+    PendingApproval,
+    NeedsExecution,
+}
 
 enum class WorkListTab {
     Upcoming,
@@ -62,6 +68,9 @@ fun filterDocumentsByTab(
             ?: document.deadline
     }
 }
+
+fun filterTasksNeedingExecution(list: List<WorkTaskItem>): List<WorkTaskItem> =
+    list.filter { needsCompletion(it.status) }.sortedBy { it.deadline }
 
 fun tabForTask(task: WorkTaskItem, today: String = vietnamToday()): WorkListTab =
     if (isTaskPast(task, today)) WorkListTab.Past else WorkListTab.Upcoming

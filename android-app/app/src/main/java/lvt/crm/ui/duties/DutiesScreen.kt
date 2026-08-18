@@ -2,6 +2,8 @@ package lvt.crm.ui.duties
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -57,6 +59,8 @@ fun DutiesScreen(
     viewModel: DutiesViewModel,
     focusId: String?,
     tabOpenToken: Int,
+    openTab: DutyListTab? = null,
+    openFilterToken: Int = 0,
 ) {
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -96,6 +100,12 @@ fun DutiesScreen(
         }
     }
     LaunchedEffect(tabOpenToken) {
+        if (state.duties.isNotEmpty()) listState.scrollToItem(0)
+    }
+    LaunchedEffect(openFilterToken) {
+        val tab = openTab ?: return@LaunchedEffect
+        if (openFilterToken == 0) return@LaunchedEffect
+        viewModel.applyListTab(tab)
         if (state.duties.isNotEmpty()) listState.scrollToItem(0)
     }
 
@@ -230,7 +240,10 @@ private fun DutyListSectionHeader(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, style = MaterialTheme.typography.titleLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             DutyListTab.entries.forEach { value ->
                 FilterChip(
                     selected = tab == value,
@@ -244,10 +257,10 @@ private fun DutyListSectionHeader(
 
 @Composable
 private fun DutyListEmpty(tab: DutyListTab, created: Boolean) {
-    val message = if (tab == DutyListTab.Past) {
-        if (created) "Chưa có công tác bạn tạo đã diễn ra." else "Chưa có sự kiện đã diễn ra."
-    } else {
-        if (created) "Bạn chưa tạo công tác nào" else "Bạn chưa có sự kiện nào cần tham gia"
+    val message = when (tab) {
+        DutyListTab.Past -> if (created) "Chưa có công tác bạn tạo đã diễn ra." else "Chưa có sự kiện đã diễn ra."
+        DutyListTab.Ongoing -> if (created) "Chưa có công tác bạn tạo đang diễn ra." else "Chưa có sự kiện đang diễn ra."
+        DutyListTab.Upcoming -> if (created) "Chưa có công tác bạn tạo sắp diễn ra." else "Chưa có sự kiện sắp diễn ra."
     }
     StatePanel(
         icon = Icons.Outlined.EventBusy,

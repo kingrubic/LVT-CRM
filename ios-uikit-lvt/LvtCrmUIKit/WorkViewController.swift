@@ -68,7 +68,10 @@ final class WorkViewController: UITableViewController {
             return workSectionHeader(
                 title: "Việc của tôi",
                 tab: viewModel.mineTab,
-                onChange: { [weak self] tab in self?.viewModel.mineTab = tab }
+                onChange: { [weak self] tab in
+                    self?.viewModel.showNeedsCompletionOnly = false
+                    self?.viewModel.mineTab = tab
+                }
             )
         case .approvals:
             return workSectionHeader(
@@ -171,7 +174,10 @@ final class WorkViewController: UITableViewController {
             return cell
         case .tasks(let items):
             guard !items.isEmpty else {
-                return emptyCell(indexPath, "Việc của tôi", "Bạn chưa có công việc nào cần xử lý")
+                let detail = viewModel.showNeedsCompletionOnly
+                    ? "Chưa có công việc cần thực hiện."
+                    : "Bạn chưa có công việc nào cần xử lý"
+                return emptyCell(indexPath, "Việc của tôi", detail)
             }
             let item = items[indexPath.row]
             let cell = workCell(at: indexPath)
@@ -214,11 +220,34 @@ final class WorkViewController: UITableViewController {
 
     func focus(itemId: String) {
         loadViewIfNeeded()
+        viewModel.showNeedsCompletionOnly = false
         pendingFocusId = itemId
         if let task = viewModel.tasks.first(where: { $0.id == itemId }) {
             viewModel.mineTab = WorkListRules.tab(for: task)
         }
         render()
+    }
+
+    func applyDashboardFilter(_ filter: WorkDashboardFilter?) {
+        loadViewIfNeeded()
+        if let filter {
+            viewModel.applyDashboardFilter(filter)
+        } else {
+            viewModel.clearDashboardFilter()
+        }
+        render()
+        if filter == .pendingApproval {
+            DispatchQueue.main.async { [weak self] in
+                self?.scrollToReviewsIfNeeded()
+            }
+        }
+    }
+
+    private func scrollToReviewsIfNeeded() {
+        guard let section = sectionKinds.firstIndex(where: { if case .reviews = $0 { true } else { false } }) else { return }
+        let rowCount = tableView.numberOfRows(inSection: section)
+        guard rowCount > 0 else { return }
+        tableView.scrollToRow(at: IndexPath(row: 0, section: section), at: .top, animated: false)
     }
 
     private var sectionKinds: [SectionKind] {

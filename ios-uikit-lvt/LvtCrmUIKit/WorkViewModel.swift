@@ -12,6 +12,11 @@ enum WorkListTab: Int, CaseIterable, Equatable {
     }
 }
 
+enum WorkDashboardFilter: Equatable {
+    case pendingApproval
+    case needsExecution
+}
+
 enum WorkListRules {
     private static let completed: Set<String> = ["completed", "completed_late"]
 
@@ -73,12 +78,16 @@ final class WorkViewModel {
     private(set) var busyReviewId: String?
     var mineTab: WorkListTab = .upcoming { didSet { if mineTab != oldValue { notifyChange() } } }
     var createdTab: WorkListTab = .upcoming { didSet { if createdTab != oldValue { notifyChange() } } }
+    var showNeedsCompletionOnly = false
     var onChange: (() -> Void)?
 
     var canApprove: Bool { false }
 
     var visibleMine: [WorkTaskItem] {
-        WorkListRules.filterTasks(tasks, tab: mineTab)
+        if showNeedsCompletionOnly {
+            return tasks.filter { WorkHelpers.needsCompletion($0.status) }.sorted { $0.deadline < $1.deadline }
+        }
+        return WorkListRules.filterTasks(tasks, tab: mineTab)
     }
 
     var visibleCreated: [WorkApprovalItem] {
@@ -136,6 +145,25 @@ final class WorkViewModel {
 
     func review(focusId: String) -> WorkCompletionReviewItem? {
         completionReviews.first { $0.id == focusId || $0.workItemId == focusId }
+    }
+
+    func applyDashboardFilter(_ filter: WorkDashboardFilter) {
+        switch filter {
+        case .pendingApproval:
+            showNeedsCompletionOnly = false
+            mineTab = .upcoming
+            createdTab = .upcoming
+        case .needsExecution:
+            showNeedsCompletionOnly = true
+            mineTab = .upcoming
+        }
+        notifyChange()
+    }
+
+    func clearDashboardFilter() {
+        showNeedsCompletionOnly = false
+        mineTab = .upcoming
+        notifyChange()
     }
 
     func complete(_ item: WorkTaskItem, qualityPercent: Int?) {
