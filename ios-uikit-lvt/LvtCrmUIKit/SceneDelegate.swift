@@ -1,5 +1,54 @@
 import UIKit
 
+enum AppAppearance {
+    static let defaultsKey = "lvt_uikit_appearance"
+
+    static var storedStyle: UIUserInterfaceStyle {
+        switch UserDefaults.standard.string(forKey: defaultsKey) {
+        case "light": return .light
+        case "dark": return .dark
+        default: return .unspecified
+        }
+    }
+
+    static func persist(rawValue: String, style: UIUserInterfaceStyle) {
+        UserDefaults.standard.set(rawValue, forKey: defaultsKey)
+        apply(style)
+    }
+
+    static func apply(_ style: UIUserInterfaceStyle) {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .forEach { $0.overrideUserInterfaceStyle = style }
+        NotificationCenter.default.post(name: .lvtUserInterfaceStyleDidChange, object: nil)
+    }
+
+    static func resolvedTraits(for view: UIView) -> UITraitCollection {
+        let window = view.window
+        var style = view.traitCollection.userInterfaceStyle
+        if let override = window?.overrideUserInterfaceStyle, override != .unspecified {
+            style = override
+        } else if style == .unspecified {
+            style = window?.traitCollection.userInterfaceStyle
+                ?? UITraitCollection.current.userInterfaceStyle
+        }
+        guard style != .unspecified else { return view.traitCollection }
+        return UITraitCollection(traitsFrom: [
+            view.traitCollection,
+            UITraitCollection(userInterfaceStyle: style),
+        ])
+    }
+}
+
+enum AppVersion {
+    static var marketing: String {
+        let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "0.0.0" : trimmed
+    }
+}
+
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var authFlowCoordinator: AuthFlowCoordinator?
@@ -13,11 +62,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         let window = UIWindow(windowScene: windowScene)
-        switch UserDefaults.standard.string(forKey: "lvt_uikit_appearance") {
-        case "light": window.overrideUserInterfaceStyle = .light
-        case "dark": window.overrideUserInterfaceStyle = .dark
-        default: window.overrideUserInterfaceStyle = .unspecified
-        }
+        window.overrideUserInterfaceStyle = AppAppearance.storedStyle
         guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
         let authFlowCoordinator = AuthFlowCoordinator(window: window, container: appDelegate.container)
         authFlowCoordinator.start()

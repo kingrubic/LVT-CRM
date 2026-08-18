@@ -4,6 +4,7 @@ import BackgroundTasks
 
 extension Notification.Name {
     static let openNotificationDestination = Notification.Name("OpenNotificationDestination")
+    static let lvtUserInterfaceStyleDidChange = Notification.Name("lvt.userInterfaceStyleDidChange")
 }
 
 @main

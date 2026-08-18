@@ -159,6 +159,7 @@ private final class DashboardViewController: UIViewController {
     private let headerRow = UIStackView()
     private let refreshControl = UIRefreshControl()
     private var refreshTask: Task<Void, Never>?
+    private var appearanceObserver: NSObjectProtocol?
 
     init(
         dutiesRepository: DutiesRepository,
@@ -177,7 +178,12 @@ private final class DashboardViewController: UIViewController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    deinit { refreshTask?.cancel() }
+    deinit {
+        refreshTask?.cancel()
+        if let appearanceObserver {
+            NotificationCenter.default.removeObserver(appearanceObserver)
+        }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -188,6 +194,13 @@ private final class DashboardViewController: UIViewController {
         }
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (controller: DashboardViewController, _) in
             controller.updateResponsiveLayout()
+        }
+        appearanceObserver = NotificationCenter.default.addObserver(
+            forName: .lvtUserInterfaceStyleDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyAppearance()
         }
         applyAppearance()
     }
@@ -309,18 +322,23 @@ private final class DashboardViewController: UIViewController {
     }
 
     private func applyAppearance() {
-        view.backgroundColor = DashboardPalette.canvas
-        refreshControl.tintColor = DashboardPalette.primaryText
+        let traits = AppAppearance.resolvedTraits(for: view)
+        view.backgroundColor = DashboardPalette.canvas.resolvedColor(with: traits)
+        refreshControl.tintColor = DashboardPalette.primaryText.resolvedColor(with: traits)
         dutiesCard.applyColors()
         workCard.applyColors()
         synchronizationView.applyColors()
         guard let navigationBar = navigationController?.navigationBar else { return }
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = DashboardPalette.canvas
+        appearance.backgroundColor = DashboardPalette.canvas.resolvedColor(with: traits)
         appearance.shadowColor = .clear
-        appearance.titleTextAttributes = [.foregroundColor: DashboardPalette.primaryText]
-        appearance.largeTitleTextAttributes = [.foregroundColor: DashboardPalette.primaryText]
+        appearance.titleTextAttributes = [
+            .foregroundColor: DashboardPalette.primaryText.resolvedColor(with: traits),
+        ]
+        appearance.largeTitleTextAttributes = [
+            .foregroundColor: DashboardPalette.primaryText.resolvedColor(with: traits),
+        ]
         navigationBar.standardAppearance = appearance
         navigationBar.scrollEdgeAppearance = appearance
         navigationBar.compactAppearance = appearance
@@ -583,17 +601,18 @@ private final class DashboardCard: UIControl {
     }
 
     fileprivate func applyColors() {
+        let traits = AppAppearance.resolvedTraits(for: self)
         backgroundView.applyColors()
         accentView.applyColors()
         iconTile.applyColors()
         primaryMetric.applyColors()
         secondaryMetric.applyColors()
         backgroundView.layer.borderWidth = 1
-        backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traitCollection).cgColor
-        titleLabel.textColor = DashboardPalette.primaryText
-        subtitleLabel.textColor = DashboardPalette.secondaryText
-        arrowView.tintColor = DashboardPalette.secondaryText
-        layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.12
+        backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traits).cgColor
+        titleLabel.textColor = DashboardPalette.primaryText.resolvedColor(with: traits)
+        subtitleLabel.textColor = DashboardPalette.secondaryText.resolvedColor(with: traits)
+        arrowView.tintColor = DashboardPalette.secondaryText.resolvedColor(with: traits)
+        layer.shadowOpacity = traits.userInterfaceStyle == .dark ? 0.30 : 0.12
     }
 }
 
@@ -696,12 +715,13 @@ private final class DashboardMetricView: UIView {
     }
 
     fileprivate func applyColors() {
-        circleView.backgroundColor = tint.withAlphaComponent(
-            traitCollection.userInterfaceStyle == .dark ? 0.11 : 0.09
+        let traits = AppAppearance.resolvedTraits(for: self)
+        circleView.backgroundColor = tint.resolvedColor(with: traits).withAlphaComponent(
+            traits.userInterfaceStyle == .dark ? 0.11 : 0.09
         )
-        circleView.layer.borderColor = tint.withAlphaComponent(0.42).cgColor
-        valueLabel.textColor = DashboardPalette.primaryText
-        titleLabel.textColor = DashboardPalette.secondaryText
+        circleView.layer.borderColor = tint.resolvedColor(with: traits).withAlphaComponent(0.42).cgColor
+        valueLabel.textColor = DashboardPalette.primaryText.resolvedColor(with: traits)
+        titleLabel.textColor = DashboardPalette.secondaryText.resolvedColor(with: traits)
     }
 }
 
@@ -752,17 +772,19 @@ private final class DashboardIconTile: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         gradientLayer.frame = bounds
+        applyColors()
     }
 
     fileprivate func applyColors() {
+        let traits = AppAppearance.resolvedTraits(for: self)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         gradientLayer.colors = [
-            tint.resolvedColor(with: traitCollection).cgColor,
-            tint.withAlphaComponent(0.55).resolvedColor(with: traitCollection).cgColor,
+            tint.resolvedColor(with: traits).cgColor,
+            tint.withAlphaComponent(0.55).resolvedColor(with: traits).cgColor,
         ]
         CATransaction.commit()
-        layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.30 : 0.18
+        layer.shadowOpacity = traits.userInterfaceStyle == .dark ? 0.30 : 0.18
     }
 }
 
@@ -885,12 +907,13 @@ private final class DashboardSynchronizationView: UIView {
     }
 
     fileprivate func applyColors() {
+        let traits = AppAppearance.resolvedTraits(for: self)
         backgroundView.applyColors()
         backgroundView.layer.borderWidth = 1
-        backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traitCollection).cgColor
+        backgroundView.layer.borderColor = DashboardPalette.cardBorder.resolvedColor(with: traits).cgColor
         symbolContainer.backgroundColor = DashboardPalette.dutiesAccent.withAlphaComponent(0.12)
-        detailLabel.textColor = DashboardPalette.secondaryText
-        layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.18 : 0.07
+        detailLabel.textColor = DashboardPalette.secondaryText.resolvedColor(with: traits)
+        layer.shadowOpacity = traits.userInterfaceStyle == .dark ? 0.18 : 0.07
     }
 }
 
@@ -920,12 +943,14 @@ private final class DashboardGradientView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         gradientLayer.frame = bounds
+        applyColors()
     }
 
     fileprivate func applyColors() {
+        let traits = AppAppearance.resolvedTraits(for: self)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        gradientLayer.colors = colors(traitCollection).map(\.cgColor)
+        gradientLayer.colors = colors(traits).map(\.cgColor)
         CATransaction.commit()
     }
 }
