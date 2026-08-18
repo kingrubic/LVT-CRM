@@ -279,7 +279,7 @@ function WorkStatus({ status }) {
   return <span className={`work-status ${status || 'pending'}`}>{workStatusLabel(status)}</span>;
 }
 
-function WorkFileDropzone({ file, onFile }) {
+function WorkFileDropzone({ file, onFile, label = 'Kéo thả công văn vào đây' }) {
   const [dragging, setDragging] = useState(false);
   const handleFile = (candidate) => {
     if (!candidate) return;
@@ -321,7 +321,7 @@ function WorkFileDropzone({ file, onFile }) {
         </>
       ) : (
         <>
-          <strong>Kéo thả công văn vào đây</strong>
+          <strong>{label}</strong>
           <small>hoặc bấm để chọn · PDF, DOCX, Excel, PNG, JPG · tối đa 20MB</small>
         </>
       )}
@@ -399,6 +399,7 @@ function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
         <p className="work-modal-context">Đính kèm file bằng chứng hoàn thành rồi bấm Nộp. Người tạo việc sẽ đánh dấu hoàn thành.</p>
         <WorkFileDropzone
           file={file}
+          label="Kéo thả tài liệu/hình vào đây"
           onFile={(nextFile, fileError) => {
             setFile(nextFile);
             if (fileError) setError(fileError);
