@@ -57,6 +57,15 @@ struct WorkApprovalItem: Identifiable, Equatable, Sendable {
     let assignments: [WorkDocumentAssignment]
 }
 
+struct WorkUploadedEvidence: Sendable {
+    let driveFileId: String
+    let driveChecksum: String
+    let cleanupToken: String
+    let fileName: String
+    let fileType: String
+    let fileSize: Int
+}
+
 struct WorkSnapshot: Equatable, Sendable {
     let assignerMode: String
     let isAdmin: Bool
@@ -206,9 +215,17 @@ final class WorkRepository: Sendable {
         )
     }
 
-    func complete(item: WorkTaskItem, qualityPercent: Int? = nil) async throws {
+    func complete(item: WorkTaskItem, qualityPercent: Int? = nil, evidence: WorkUploadedEvidence? = nil) async throws {
         var args: [String: Any] = [:]
         if let qualityPercent { args["qualityPercent"] = qualityPercent }
+        if let evidence {
+            args["driveFileId"] = evidence.driveFileId
+            args["driveChecksum"] = evidence.driveChecksum
+            args["cleanupToken"] = evidence.cleanupToken
+            args["fileName"] = evidence.fileName
+            args["fileType"] = evidence.fileType
+            args["fileSize"] = evidence.fileSize
+        }
         switch item.kind {
         case .workItem:
             args["workItemId"] = item.id
@@ -217,6 +234,75 @@ final class WorkRepository: Sendable {
             args["taskId"] = item.id
             _ = try await convex.mutation("work:completePersonalTask", args: args)
         }
+        if let token = evidence?.cleanupToken {
+            Task {
+                await self.settleUploadedFile(cleanupToken: token, finalize: true)
+            }
+        }
+    }
+
+    func uploadEvidence(fileData: Data, fileName: String, mimeType: String) async throws -> WorkUploadedEvidence {
+        guard !fileData.isEmpty else {
+            throw ConvexException(code: "INVALID_FILE", message: "Tệp đính kèm không có nội dung.")
+        }
+        guard fileData.count <= 20 * 1024 * 1024 else {
+            throw ConvexException(code: "FILE_TOO_LARGE", message: "Dung lượng tệp vượt quá giới hạn 20MB.")
+        }
+        guard let token = tokenProvider(), !token.isEmpty else {
+            throw ConvexException(code: "AUTH_REQUIRED", message: "Vui lòng đăng nhập lại.")
+        }
+        guard let url = URL(string: "\(ConvexConfig.webURL)/api/files/upload") else {
+            throw ConvexException(code: "INVALID_URL", message: "Địa chỉ tải tệp không hợp lệ.")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+        let encodedName = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? fileName
+        request.setValue(encodedName, forHTTPHeaderField: "X-File-Name")
+        request.setValue("work", forHTTPHeaderField: "X-LVT-Upload-Purpose")
+        request.httpBody = fileData
+        request.timeoutInterval = 120
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 120
+        configuration.timeoutIntervalForResource = 180
+        let session = URLSession(configuration: configuration)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ConvexException(code: "WORK_UPLOAD_FAILED", message: "Không thể kết nối đến máy chủ.")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let errorJson = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let code = (errorJson?["error"] as? String) ?? "WORK_UPLOAD_FAILED:\(http.statusCode)"
+            throw ConvexException(code: code, message: "Không thể tải bằng chứng lên. Vui lòng thử lại.")
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let driveFileId = json["driveFileId"] as? String,
+              let cleanupToken = json["cleanupToken"] as? String else {
+            throw ConvexException(code: "WORK_UPLOAD_INVALID_RESPONSE", message: "Phản hồi tải tệp không hợp lệ.")
+        }
+        let driveChecksum = (json["driveChecksum"] as? String) ?? ""
+        return WorkUploadedEvidence(
+            driveFileId: driveFileId,
+            driveChecksum: driveChecksum,
+            cleanupToken: cleanupToken,
+            fileName: fileName,
+            fileType: mimeType,
+            fileSize: fileData.count
+        )
+    }
+
+    private func settleUploadedFile(cleanupToken: String, finalize: Bool) async {
+        guard !cleanupToken.isEmpty,
+              let token = tokenProvider(), !token.isEmpty,
+              let encodedToken = cleanupToken.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: "\(ConvexConfig.webURL)/api/files/uploads/\(encodedToken)") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = finalize ? "POST" : "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
+        _ = try? await URLSession.shared.data(for: request)
     }
 
     func decideApproval(documentId: String, approve: Bool) async throws {
