@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { openNotification } from '../src/notifications/openNotification.js';
-import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification } from '../src/notifications/useNotificationFocus.js';
+import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, WORK_NOTIFICATION_FOCUS_TYPES } from '../src/notifications/useNotificationFocus.js';
 
 test('an unread notification opens exactly once even when mark-read fails', async () => {
   const opened = [];
@@ -20,4 +20,9 @@ test('new duty assignment notifications focus the same duty card as deadline rem
   assert.deepEqual(DUTY_NOTIFICATION_FOCUS_TYPES, ['duty', 'duty_assigned']);
   assert.equal(menuForNotification({ kind: 'duty', sourceType: 'duty_assigned' }), 'duties');
   assert.equal(DUTY_NOTIFICATION_FOCUS_TYPES.includes('duty_assigned'), true);
+});
+
+test('new work assignment notifications open the work list like other work alerts', () => {
+  assert.equal(WORK_NOTIFICATION_FOCUS_TYPES.includes('work_assigned'), true);
+  assert.equal(menuForNotification({ kind: 'work', sourceType: 'work_assigned' }), 'work');
 });

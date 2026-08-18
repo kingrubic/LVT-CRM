@@ -16,6 +16,7 @@ import {
   dutyLocationLabel,
   isDocumentArchived,
   isWorkItemArchived,
+  isWorkNotificationAssignee,
   isWorkReleased,
   workListTitle,
 } from '../convex/assignmentPolicy.ts';
@@ -147,4 +148,15 @@ test('người tạo mới được duyệt hoàn thành; khóa sửa khi đã c
     canCreatorMutateWork([{ completions: [{ status: 'rejected' }] }]),
     true,
   );
+});
+
+test('thông báo công việc mới: admin nhận khi được giao cá nhân, không nhận việc phòng ban', () => {
+  const admin = { _id: 'admin-1', role: 'admin', departmentId: 'dept-a' };
+  const teacher = { _id: 'user-1', role: 'user', departmentId: 'dept-a' };
+  const individual = { assignmentType: 'individual', assigneeUserIds: ['admin-1'], departmentId: 'dept-a' };
+  const department = { assignmentType: 'department', assigneeUserIds: [], departmentId: 'dept-a' };
+  assert.equal(isWorkNotificationAssignee({ user: admin, item: individual }), true);
+  assert.equal(isWorkNotificationAssignee({ user: teacher, item: individual }), false);
+  assert.equal(isWorkNotificationAssignee({ user: admin, item: department }), false);
+  assert.equal(isWorkNotificationAssignee({ user: teacher, item: department }), true);
 });

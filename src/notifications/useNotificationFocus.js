@@ -1,6 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 export const DUTY_NOTIFICATION_FOCUS_TYPES = ['duty', 'duty_assigned'];
+export const WORK_NOTIFICATION_FOCUS_TYPES = [
+  'approval',
+  'department_work',
+  'personal_task',
+  'completion_rejected',
+  'work_assigned',
+];
 
 /**
  * Scrolls to and briefly highlights the element matching focusTarget.sourceId

@@ -10,6 +10,10 @@ function base64Url(value: string) {
   return Buffer.from(value).toString("base64url");
 }
 
+function isApnsDeviceToken(token: string) {
+  return /^[0-9a-f]{64}$/i.test(token.trim());
+}
+
 async function accessToken(serviceAccount: {
   client_email: string;
   private_key: string;
@@ -67,11 +71,13 @@ export const sendToUsers = internalAction({
       await ctx.runQuery(internal.push.tokensForUsers, {
       userIds: args.userIds,
       });
-    if (!tokens.length) return { sent: 0, skipped: "NO_REGISTERED_TOKENS" };
+        if (!tokens.length) return { sent: 0, skipped: "NO_REGISTERED_TOKENS" };
+    const fcmTokens = tokens.filter((row) => !isApnsDeviceToken(row.token));
+    if (!fcmTokens.length) return { sent: 0, skipped: "NO_FCM_TOKENS" };
     const bearer = await accessToken(credential);
     const invalidIds = [];
     let sent = 0;
-    for (const row of tokens) {
+    for (const row of fcmTokens) {
       const response = await fetch(
         `https://fcm.googleapis.com/v1/projects/${credential.project_id}/messages:send`,
         {

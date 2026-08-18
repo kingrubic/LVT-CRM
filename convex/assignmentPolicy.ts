@@ -166,3 +166,22 @@ export function canReviewWorkCompletion(args: {
 }) {
   return String(args.actorUserId) === String(args.createdBy);
 }
+
+/** Who should get a work-assignment notification for this work item. */
+export function isWorkNotificationAssignee(args: {
+  user: { _id: string; role?: string; departmentId?: string };
+  item: { assignmentType?: string; assigneeUserIds?: string[]; departmentId?: string };
+  document?: { approverUserIds?: string[] } | null;
+  excludedIndividualIds?: Iterable<string>;
+}) {
+  const userId = String(args.user._id || "");
+  if (!userId) return false;
+  if (args.item.assignmentType === "individual") {
+    return (args.item.assigneeUserIds || []).some((id) => String(id) === userId);
+  }
+  if (isOperationalManagerRole(String(args.user.role || ""))) return false;
+  if ((args.document?.approverUserIds || []).some((id) => String(id) === userId)) return false;
+  const excluded = new Set([...(args.excludedIndividualIds || [])].map(String));
+  if (excluded.has(userId)) return false;
+  return String(args.user.departmentId || "") === String(args.item.departmentId || "");
+}
