@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.gms.google-services")
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+fun localProperty(name: String): String? {
+    val fromFile = localProperties.getProperty(name)?.trim().orEmpty()
+    if (fromFile.isNotEmpty()) return fromFile
+    return (project.findProperty(name) as String?)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 android {
@@ -22,13 +36,15 @@ android {
 
     signingConfigs {
         create("release") {
-            val storePath = (project.findProperty("lvt.release.storeFile") as String?)?.trim().orEmpty()
+            val storePath = localProperty("lvt.release.storeFile").orEmpty()
             if (storePath.isNotEmpty()) {
                 storeFile = rootProject.file(storePath)
-                storePassword = project.findProperty("lvt.release.storePassword") as String?
-                keyAlias = (project.findProperty("lvt.release.keyAlias") as String?) ?: "lvt-release"
-                keyPassword = (project.findProperty("lvt.release.keyPassword") as String?)
-                    ?: storePassword
+                storePassword = localProperty("lvt.release.storePassword")
+                keyAlias = localProperty("lvt.release.keyAlias") ?: "lvt-release"
+                keyPassword = localProperty("lvt.release.keyPassword") ?: storePassword
+                // AAB upload to Play requires a JAR (v1) signature on the bundle.
+                enableV1Signing = true
+                enableV2Signing = true
             }
         }
     }
