@@ -20,6 +20,7 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let submitButton = UIButton(type: .system)
     private let modeButton = UIButton(type: .system)
+    private let privacyButton = UIButton(type: .system)
 
     init(authRepository: AuthRepository) {
         self.authRepository = authRepository
@@ -102,6 +103,11 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         configureButton(modeButton, filled: false)
         modeButton.addTarget(self, action: #selector(toggleMode), for: .touchUpInside)
 
+        configureButton(privacyButton, filled: false)
+        privacyButton.configuration?.title = "Chính sách bảo mật"
+        privacyButton.accessibilityHint = "Mở trang chính sách bảo mật trên Safari"
+        privacyButton.addTarget(self, action: #selector(openPrivacyPolicy), for: .touchUpInside)
+
         [emailField, passwordField].forEach {
             $0.delegate = self
             $0.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
@@ -123,7 +129,7 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
             activityIndicator.leadingAnchor.constraint(equalTo: submitButton.leadingAnchor, constant: 16),
         ])
 
-        [titleLabel, subtitleLabel, formTitleLabel, emailField, passwordField, messageLabel, submitRow, modeButton]
+        [titleLabel, subtitleLabel, formTitleLabel, emailField, passwordField, messageLabel, submitRow, modeButton, privacyButton]
             .forEach(contentStack.addArrangedSubview)
         contentStack.setCustomSpacing(28, after: subtitleLabel)
     }
@@ -149,6 +155,7 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
             passwordField.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             submitButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
             modeButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            privacyButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])
     }
 
@@ -193,6 +200,11 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         updateMode(animated: true)
     }
 
+    @objc private func openPrivacyPolicy() {
+        guard let url = URL(string: "https://lvt.vscgroup.io.vn/privacy") else { return }
+        UIApplication.shared.open(url)
+    }
+
     private func updateMode(animated: Bool) {
         let isSignIn = mode == .signIn
         formTitleLabel.text = isSignIn ? "Đăng nhập" : "Quên mật khẩu"
@@ -211,6 +223,7 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         emailField.isEnabled = !isBusy
         passwordField.isEnabled = !isBusy
         modeButton.isEnabled = !isBusy
+        privacyButton.isEnabled = !isBusy
     }
 
     @objc private func submit() {
