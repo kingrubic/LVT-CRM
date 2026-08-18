@@ -17,6 +17,7 @@
 - Standalone native UIKit app: `ios-uikit-lvt/` (`vn.lvt.crm.uikit`).
 - Existing SwiftUI workspace: `ios-app/`; preserve it unless the task explicitly targets it.
 - Android app: `android-app/`; touch only when explicitly in scope.
+- Any Android / iOS UIKit change must bump the Profile version (`versionName` / `MARKETING_VERSION`) and build number. See `.cursor/rules/native-app-version.mdc`.
 - Tests: Node test runner under `tests/*.test.mjs`.
 - Production frontend: `https://lvt.vscgroup.io.vn`.
 - Self-hosted Convex deployment commands must use the repository wrapper scripts; never expose or inline admin keys.
