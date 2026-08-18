@@ -15,7 +15,7 @@ import {
   resolveUserMenuAccess,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
-import { dutyListTitle } from "./assignmentPolicy";
+import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
 
 const HOUR_MS = 60 * 60 * 1000;
 const VN_OFFSET_MS = 7 * HOUR_MS;
@@ -23,7 +23,7 @@ const OVERDUE_VISIBILITY_MS = 24 * HOUR_MS;
 
 type NotificationSource = {
   kind: "duty" | "work";
-  sourceType: "duty" | "duty_assigned" | "approval" | "department_work" | "personal_task" | "completion_rejected";
+  sourceType: "duty" | "duty_assigned" | "approval" | "department_work" | "personal_task" | "completion_rejected" | "work_assigned";
   sourceId: string;
   title: string;
   description: string;
@@ -40,17 +40,6 @@ function dutyDueAt(duty: { endDate: string; endTime: string }) {
 function workDueAt(deadline: string) {
   const [year, month, day] = deadline.split("-").map(Number);
   return Date.UTC(year, month - 1, day, 23, 59) - VN_OFFSET_MS;
-}
-
-function isDutyParticipant(
-  user: { _id: string; departmentId?: string },
-  duty: { departmentIds: string[]; participantUserIds: string[] },
-) {
-  return duty.participantUserIds.some((id) => String(id) === String(user._id)) ||
-    Boolean(
-      user.departmentId &&
-      duty.departmentIds.some((id) => String(id) === String(user.departmentId)),
-    );
 }
 
 function taskCompletedForAll(task: any) {
@@ -199,9 +188,6 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   }
 
   if (canUseWork && assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
-    const activeUsers = (await ctx.db.query("users").collect()).filter(
-      (row: any) => row.status === "active",
-    );
     for (const item of activeWorkItems) {
       const document = documentsById.get(String(item.documentId)) as any;
       if (document?.status !== "approved") continue;
@@ -221,28 +207,18 @@ async function notificationItems(ctx: any, requestedNow?: number) {
         continue;
       }
       const type = item.assignmentType === "individual" ? "individual" : "department";
-      let isAssignee = false;
-      if (type === "individual") {
-        isAssignee = (item.assigneeUserIds || []).some(
-          (id: string) => String(id) === String(user._id),
-        );
-      } else {
-        const excluded = new Set<string>();
-        for (const sibling of activeWorkItems) {
-          if (String(sibling.documentId) !== String(item.documentId)) continue;
-          if (sibling.assignmentType !== "individual") continue;
-          for (const id of sibling.assigneeUserIds || []) excluded.add(String(id));
-        }
-        if (isOperationalManagerRole(user.role)) continue;
-        if ((document.approverUserIds || []).some((id: string) => String(id) === String(user._id))) {
-          continue;
-        }
-        if (excluded.has(String(user._id))) continue;
-        isAssignee =
-          String(user.departmentId || "") === String(item.departmentId || "") &&
-          activeUsers.some((row: any) => String(row._id) === String(user._id));
+      const excluded = new Set<string>();
+      for (const sibling of activeWorkItems) {
+        if (String(sibling.documentId) !== String(item.documentId)) continue;
+        if (sibling.assignmentType !== "individual") continue;
+        for (const id of sibling.assigneeUserIds || []) excluded.add(String(id));
       }
-      if (!isAssignee) continue;
+      if (!isWorkNotificationAssignee({
+        user,
+        item,
+        document,
+        excludedIndividualIds: excluded,
+      })) continue;
       workSources.push({
         kind: "work",
         sourceType: type === "individual" ? "personal_task" : "department_work",
@@ -385,6 +361,55 @@ async function notificationItems(ctx: any, requestedNow?: number) {
           availableAt: duty.createdAt,
         }))
     : [];
+  const newWorkAssignments = canUseWork
+    ? activeWorkItems
+        .filter((item: any) => {
+          const document = documentsById.get(String(item.documentId)) as any;
+          if (!document || document.status === "rejected" || !item.createdAt) return false;
+          if (workDueAt(item.deadline) < now) return false;
+          const completed = (item.completedUserIds || []).some(
+            (id: string) => String(id) === String(user._id),
+          );
+          if (completed) return false;
+          const pendingOrRejected = (item.completions || []).find(
+            (completion: any) =>
+              String(completion.userId) === String(user._id) &&
+              (completion.status === "pending_approval" || completion.status === "rejected"),
+          );
+          if (pendingOrRejected) return false;
+          const excluded = new Set<string>();
+          for (const sibling of activeWorkItems) {
+            if (String(sibling.documentId) !== String(item.documentId)) continue;
+            if (sibling.assignmentType !== "individual") continue;
+            for (const id of sibling.assigneeUserIds || []) excluded.add(String(id));
+          }
+          return isWorkNotificationAssignee({
+            user,
+            item,
+            document,
+            excludedIndividualIds: excluded,
+          });
+        })
+        .map((item: any) => {
+          const document = documentsById.get(String(item.documentId)) as any;
+          const type = item.assignmentType === "individual" ? "individual" : "department";
+          return {
+            key: `work:work_assigned:${String(item._id)}:new`,
+            kind: "work" as const,
+            sourceType: "work_assigned" as const,
+            sourceId: String(item._id),
+            title: `Công việc mới: ${item.content || workListTitle(document || {})}`,
+            description:
+              type === "individual"
+                ? "Công việc cá nhân cần hoàn thành."
+                : `${departmentMap.get(String(item.departmentId)) || "Phòng ban"} · Công việc phòng ban`,
+            dueAt: workDueAt(item.deadline),
+            milestoneHours: 0,
+            milestoneLabel: "Mới phân công",
+            availableAt: item.createdAt,
+          };
+        })
+    : [];
   const scheduledMilestones = createMilestones(
     [...dutySources, ...workSources],
     milestonesHours,
@@ -408,7 +433,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
       milestoneLabel: "Cần duyệt",
       availableAt: now,
     }));
-  const milestones = [...newDutyAssignments, ...pendingApprovalItems, ...scheduledMilestones]
+  const milestones = [...newDutyAssignments, ...newWorkAssignments, ...pendingApprovalItems, ...scheduledMilestones]
     .sort((a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"));
   const [reads, dismissals] = await Promise.all([
     ctx.db

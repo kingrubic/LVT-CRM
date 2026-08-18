@@ -37,6 +37,7 @@
 		20000000000000000000001F /* NotificationSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000001F /* NotificationSyncService.swift */; };
 		200000000000000000000020 /* PushEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000020 /* PushEvents.swift */; };
 		200000000000000000000021 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000021 /* Assets.xcassets */; };
+		200000000000000000000022 /* ListSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000022 /* ListSearch.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -73,6 +74,9 @@
 		30000000000000000000001F /* NotificationSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSyncService.swift; sourceTree = "<group>"; };
 		300000000000000000000020 /* PushEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushEvents.swift; sourceTree = "<group>"; };
 		300000000000000000000021 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		300000000000000000000022 /* ListSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSearch.swift; sourceTree = "<group>"; };
+		300000000000000000000023 /* LvtCrmUIKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LvtCrmUIKit.entitlements; sourceTree = "<group>"; };
+		300000000000000000000024 /* LvtCrmUIKitRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LvtCrmUIKitRelease.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +121,7 @@
 				300000000000000000000019 /* DutiesViewController.swift */,
 				300000000000000000000018 /* DutiesViewModel.swift */,
 				300000000000000000000017 /* DutiesRepository.swift */,
+				300000000000000000000022 /* ListSearch.swift */,
 				30000000000000000000001C /* WorkViewController.swift */,
 				30000000000000000000001B /* WorkViewModel.swift */,
 				30000000000000000000001A /* WorkRepository.swift */,
@@ -128,6 +133,8 @@
 				300000000000000000000009 /* ConvexConfig.swift */,
 				30000000000000000000000A /* ConvexHttpClient.swift */,
 				300000000000000000000021 /* Assets.xcassets */,
+				300000000000000000000023 /* LvtCrmUIKit.entitlements */,
+				300000000000000000000024 /* LvtCrmUIKitRelease.entitlements */,
 				300000000000000000000004 /* Info.plist */,
 			);
 			path = LvtCrmUIKit;
@@ -236,6 +243,7 @@
 				20000000000000000000001E /* NotificationCenterService.swift in Sources */,
 				20000000000000000000001F /* NotificationSyncService.swift in Sources */,
 				200000000000000000000020 /* PushEvents.swift in Sources */,
+				200000000000000000000022 /* ListSearch.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -283,8 +291,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -292,7 +301,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -307,8 +316,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKitRelease.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -316,7 +326,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

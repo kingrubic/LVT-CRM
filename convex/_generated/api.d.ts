@@ -26,6 +26,7 @@ import type * as permissionGroups from "../permissionGroups.js";
 import type * as positions from "../positions.js";
 import type * as push from "../push.js";
 import type * as pushActions from "../pushActions.js";
+import type * as pushPayload from "../pushPayload.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   positions: typeof positions;
   push: typeof push;
   pushActions: typeof pushActions;
+  pushPayload: typeof pushPayload;
   reports: typeof reports;
   seed: typeof seed;
   sessions: typeof sessions;

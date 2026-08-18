@@ -57,6 +57,46 @@ enum WorkListRules {
         isTaskPast(task) ? .past : .upcoming
     }
 
+    static func filterTasksBySearch(_ list: [WorkTaskItem], search: ListSearchValues) -> [WorkTaskItem] {
+        let query = ListSearch.normalize(search.query)
+        let department = ListSearch.normalize(search.department)
+        let person = ListSearch.normalize(search.person)
+        let dateFrom = search.dateFrom.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dateTo = search.dateTo.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty && department.isEmpty && person.isEmpty && dateFrom.isEmpty && dateTo.isEmpty {
+            return list
+        }
+        return list.filter { task in
+            let queryText = [task.title, task.documentTitle, task.fileName, task.documentContent].joined(separator: " ")
+            if !query.isEmpty && !ListSearch.includes(queryText, query) { return false }
+            if !ListSearch.includes(task.departmentName, department) { return false }
+            if !ListSearch.includes(task.memberNames.joined(separator: " "), person) { return false }
+            return ListSearch.anyDate([task.deadline], dateFrom: dateFrom, dateTo: dateTo)
+        }
+    }
+
+    static func filterDocumentsBySearch(_ list: [WorkApprovalItem], search: ListSearchValues) -> [WorkApprovalItem] {
+        let query = ListSearch.normalize(search.query)
+        let department = ListSearch.normalize(search.department)
+        let person = ListSearch.normalize(search.person)
+        let dateFrom = search.dateFrom.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dateTo = search.dateTo.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty && department.isEmpty && person.isEmpty && dateFrom.isEmpty && dateTo.isEmpty {
+            return list
+        }
+        return list.filter { document in
+            let queryText = ([document.fileName, document.content] + document.assignments.map(\.content)).joined(separator: " ")
+            let departmentText = document.assignments.map(\.departmentName).joined(separator: " ")
+            let personText = document.assignments.flatMap { $0.members.map(\.name) }.joined(separator: " ")
+            var deadlines = document.assignments.map(\.deadline).filter { !$0.isEmpty }
+            if deadlines.isEmpty, !document.deadline.isEmpty { deadlines = [document.deadline] }
+            if !query.isEmpty && !ListSearch.includes(queryText, query) { return false }
+            if !ListSearch.includes(departmentText, department) { return false }
+            if !ListSearch.includes(personText, person) { return false }
+            return ListSearch.anyDate(deadlines, dateFrom: dateFrom, dateTo: dateTo)
+        }
+    }
+
     private static func deadlineKey(_ document: WorkApprovalItem) -> String {
         document.assignments.map(\.deadline).filter { !$0.isEmpty }.min() ?? document.deadline
     }
@@ -79,20 +119,32 @@ final class WorkViewModel {
     var mineTab: WorkListTab = .upcoming { didSet { if mineTab != oldValue { notifyChange() } } }
     var createdTab: WorkListTab = .upcoming { didSet { if createdTab != oldValue { notifyChange() } } }
     var showNeedsCompletionOnly = false
+    var search = ListSearchValues() { didSet { if search != oldValue { notifyChange() } } }
     var onChange: (() -> Void)?
 
     var canApprove: Bool { false }
 
-    var visibleMine: [WorkTaskItem] {
+    var tabMine: [WorkTaskItem] {
         if showNeedsCompletionOnly {
             return tasks.filter { WorkHelpers.needsCompletion($0.status) }.sorted { $0.deadline < $1.deadline }
         }
         return WorkListRules.filterTasks(tasks, tab: mineTab)
     }
 
-    var visibleCreated: [WorkApprovalItem] {
+    var tabCreated: [WorkApprovalItem] {
         WorkListRules.filterDocuments(approvals, tab: createdTab)
     }
+
+    var visibleMine: [WorkTaskItem] {
+        WorkListRules.filterTasksBySearch(tabMine, search: search)
+    }
+
+    var visibleCreated: [WorkApprovalItem] {
+        WorkListRules.filterDocumentsBySearch(tabCreated, search: search)
+    }
+
+    var mineSearchEmpty: Bool { !tabMine.isEmpty && visibleMine.isEmpty }
+    var createdSearchEmpty: Bool { !tabCreated.isEmpty && visibleCreated.isEmpty }
 
     var visibleApprovals: [WorkApprovalItem] { visibleCreated }
     var visibleTasks: [WorkTaskItem] { visibleMine }

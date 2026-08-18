@@ -103,7 +103,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 - Feed tính theo mốc giờ trước hạn (mặc định `48 · 24 · 12 · 0` / Đến hạn) cho **Công tác** và **Công việc** được gán cho user.
 - Chuông trên header + trang Thông báo; đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` = `edit`.
-- **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác.
+- **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác; `work_assigned` cùng `department_work` / `personal_task` focus thẻ công việc. Công việc mới (giống công tác mới) hiện ngay trên feed với nhãn **Mới phân công**, không chờ mốc hạn. Công tác mới/cập nhật cũng gửi APNs/FCM tới người tham gia (phòng ban hoặc cá nhân), kể cả khi người tạo tự thêm mình. Người được giao công việc nhận thông báo kể cả khi tự tạo việc cho mình; người tạo không nhận nếu chỉ giao cho người khác. Android nhận FCM data-only (không gắn `android.notification` rỗng) rồi hiện banner từ feed; mở lại app cũng sync ngay. iOS lock screen cần APNs alert (`APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`; `APNS_BUNDLE_ID` mặc định `vn.lvt.crm.uikit`; `APNS_PRODUCTION=true` khi cài Ad Hoc/TestFlight).
 - Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; **Ai nhìn thấy công việc?** (chỉ người tạo / người tạo+người nhận+4/5★+admin/mod); bật/tắt nguồn thông báo Công tác/Công việc; chỉnh danh sách mốc giờ.
 
 ## Schema chính

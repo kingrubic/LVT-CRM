@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.PendingActions
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -73,6 +74,8 @@ import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkDocumentAssignment
 import lvt.crm.data.work.needsCompletion
+import lvt.crm.ui.components.ListSearchBar
+import lvt.crm.ui.components.ListSearchState
 import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatePanel
 import lvt.crm.ui.components.StatusPill
@@ -105,6 +108,7 @@ fun WorkScreen(
             onOpenDocument = onOpenDocument,
             onMineTab = viewModel::setMineTab,
             onCreatedTab = viewModel::setCreatedTab,
+            onSearchChange = viewModel::updateSearch,
             onCompleteTask = { task -> viewModel.requestComplete(task) },
         )
         return
@@ -252,6 +256,14 @@ fun WorkScreen(
                         )
                     }
                 }
+                ListSearchBar(
+                    value = state.search,
+                    onChange = viewModel::updateSearch,
+                    queryPlaceholder = "Tìm theo tên hoặc nội dung công việc",
+                    personPlaceholder = "Tên người được giao",
+                    showLocation = false,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     state = listState,
@@ -271,6 +283,7 @@ fun WorkScreen(
                                 tab = state.mineTab,
                                 created = false,
                                 needsExecutionOnly = state.needsExecutionOnly,
+                                filtered = state.mineSearchEmpty,
                             )
                         }
                     } else {
@@ -411,6 +424,7 @@ private fun AdminWorkScreen(
     onOpenDocument: (WorkApprovalItem) -> Unit,
     onMineTab: (WorkListTab) -> Unit,
     onCreatedTab: (WorkListTab) -> Unit,
+    onSearchChange: (ListSearchState) -> Unit,
     onCompleteTask: (WorkTaskItem) -> Unit,
 ) {
     var selectedDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -481,6 +495,14 @@ private fun AdminWorkScreen(
                 )
             }
             selectedDocument == null -> {
+                ListSearchBar(
+                    value = state.search,
+                    onChange = onSearchChange,
+                    queryPlaceholder = "Tìm theo tên hoặc nội dung công việc",
+                    personPlaceholder = "Tên người được giao",
+                    showLocation = false,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(bottom = 28.dp),
@@ -522,6 +544,7 @@ private fun AdminWorkScreen(
                                 tab = state.mineTab,
                                 created = false,
                                 needsExecutionOnly = state.needsExecutionOnly,
+                                filtered = state.mineSearchEmpty,
                             )
                         }
                     } else {
@@ -544,7 +567,13 @@ private fun AdminWorkScreen(
                         )
                     }
                     if (documents.isEmpty()) {
-                        item(key = "created-empty") { WorkListEmpty(tab = state.createdTab, created = true) }
+                        item(key = "created-empty") {
+                            WorkListEmpty(
+                                tab = state.createdTab,
+                                created = true,
+                                filtered = state.createdSearchEmpty,
+                            )
+                        }
                     } else {
                         items(documents, key = { "created-${it.id}" }) { document ->
                             AdminDocumentCard(document = document, onOpen = { selectedDocumentId = document.id })
@@ -759,14 +788,16 @@ private fun WorkListEmpty(
     tab: WorkListTab,
     created: Boolean,
     needsExecutionOnly: Boolean = false,
+    filtered: Boolean = false,
 ) {
     val message = when {
+        filtered -> "Không tìm thấy công việc phù hợp."
         needsExecutionOnly -> "Chưa có công việc cần thực hiện."
         tab == WorkListTab.Past -> if (created) "Chưa có công việc bạn tạo đã diễn ra." else "Chưa có công việc đã diễn ra."
         else -> if (created) "Bạn chưa tạo công việc nào" else "Bạn chưa có công việc nào cần xử lý"
     }
     StatePanel(
-        icon = Icons.Outlined.TaskAlt,
+        icon = if (filtered) Icons.Outlined.Search else Icons.Outlined.TaskAlt,
         title = if (created) "Việc tôi tạo" else "Việc của tôi",
         message = message,
     )

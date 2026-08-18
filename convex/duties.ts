@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import {
   assignmentCreatorOrThrow,
@@ -17,7 +18,9 @@ import {
   cleanDutyContent,
   cleanDutyLocationText,
   cleanDutyTitle,
+  dutyListTitle,
   dutyLocationLabel,
+  dutyPushRecipientIds,
   normalizeDutyClock,
 } from "./assignmentPolicy";
 
@@ -120,6 +123,33 @@ async function requireDutyWrite(ctx: any) {
     throw new Error("FORBIDDEN: duties menu hidden");
   }
   return actor;
+}
+
+async function scheduleDutyPush(
+  ctx: any,
+  args: {
+    dutyId: string;
+    title: string;
+    body: string;
+    departmentIds: string[];
+    participantUserIds: string[];
+  },
+) {
+  const users = (await ctx.db.query("users").collect()).filter((row: any) => row.status === "active");
+  const userIds = dutyPushRecipientIds({
+    departmentIds: args.departmentIds,
+    participantUserIds: args.participantUserIds,
+    users,
+  });
+  if (!userIds.length) return;
+  await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+    userIds,
+    title: args.title,
+    body: args.body,
+    kind: "duty",
+    sourceType: "duty_assigned",
+    sourceId: String(args.dutyId),
+  });
 }
 
 function canMutateDuty(actor: { user: any; isOps: boolean }, duty: { createdBy?: string }) {
@@ -453,6 +483,13 @@ export const create = mutation({
       details: JSON.stringify({ id, title: input.title, content: input.content }),
       at: now,
     });
+    await scheduleDutyPush(ctx, {
+      dutyId: String(id),
+      title: "Công tác mới",
+      body: dutyListTitle(input),
+      departmentIds: input.departmentIds,
+      participantUserIds: input.participantUserIds,
+    });
     return id;
   },
 });
@@ -489,6 +526,13 @@ export const update = mutation({
       action: "duty.update",
       details: JSON.stringify({ id: args.id, title: input.title, content: input.content }),
       at: now,
+    });
+    await scheduleDutyPush(ctx, {
+      dutyId: String(args.id),
+      title: "Công tác đã cập nhật",
+      body: dutyListTitle(input),
+      departmentIds: input.departmentIds,
+      participantUserIds: input.participantUserIds,
     });
   },
 });

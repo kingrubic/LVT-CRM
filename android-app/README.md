@@ -102,8 +102,11 @@ android-app/
 
 After sign-in, the app asks for notification permission on Android 13+ and
 schedules a network-constrained background sync. Android only guarantees
-periodic WorkManager runs at roughly 15-minute intervals; opening the app also
-triggers an immediate sync.
+periodic WorkManager runs at roughly 15-minute intervals; opening or
+foregrounding the app also triggers an immediate sync. FCM is data-only (high
+priority) so `onMessageReceived` can run in the background and refresh the
+unread feed; the visible banner is posted from that feed, not from an empty
+system `android.notification` payload.
 
 Notification taps use the same `kind`, `sourceType`, `sourceId`, and
 `notificationKey` contract as the web app. The app marks the item read, opens

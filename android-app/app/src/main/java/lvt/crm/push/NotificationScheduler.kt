@@ -37,9 +37,11 @@ class NotificationScheduler(context: Context) {
         val immediate = OneTimeWorkRequestBuilder<NotificationSyncWorker>()
             .setConstraints(constraints)
             .build()
+        // REPLACE: an FCM wake-up must not be dropped while a stale immediate
+        // sync (started before the new feed item existed) is still pending.
         workManager.enqueueUniqueWork(
             IMMEDIATE_WORK,
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             immediate,
         )
     }
