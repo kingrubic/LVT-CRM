@@ -19,7 +19,7 @@ Native Android app (Kotlin + Jetpack Compose) for school staff.
 
 - Android Studio Ladybug+ (or newer)
 - JDK 17 (bundled with Android Studio is fine)
-- Android SDK with **minSdk 26** (Android 8.0)
+- Android SDK with **minSdk 26** (Android 8.0) and **compile/target SDK 36** (Android 16)
 - Device/emulator API 26+
 
 ## Open & build debug APK

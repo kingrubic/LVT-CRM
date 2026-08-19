@@ -21,15 +21,15 @@ fun localProperty(name: String): String? {
 
 android {
     namespace = "lvt.crm"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "lvt.crm"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 20
+        targetSdk = 36
+        versionCode = 21
         // x.y.z — x new menu, y new feature (no new menu), z bug fix
-        versionName = "0.7.2"
+        versionName = "0.7.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     }
