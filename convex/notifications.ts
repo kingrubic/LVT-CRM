@@ -13,6 +13,7 @@ import {
   NOTIFICATION_SOURCE_DEFAULT,
   NOTIFICATION_WORK_ENABLED_SETTING_KEY,
   resolveUserMenuAccess,
+  canOperateMenu,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
 import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
@@ -457,7 +458,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   return {
     items,
     unreadCount: items.filter((item) => !item.read).length,
-    canDelete: menuAccess.notifications === "edit",
+    canDelete: canOperateMenu(menuAccess.notifications),
     settings: {
       dutiesEnabled,
       workEnabled,
@@ -525,8 +526,8 @@ export const dismiss = mutation({
   args: { notificationKey: v.string() },
   handler: async (ctx, args) => {
     const { user, menuAccess } = await notificationContext(ctx);
-    if (menuAccess.notifications !== "edit") {
-      throw new Error("FORBIDDEN: notifications edit required");
+    if (!canOperateMenu(menuAccess.notifications)) {
+      throw new Error("FORBIDDEN: notifications access required");
     }
     const notificationKey = args.notificationKey.trim();
     if (!notificationKey || notificationKey.length > 300) {

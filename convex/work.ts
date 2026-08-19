@@ -374,7 +374,7 @@ async function requireWorkAccess(ctx: any) {
   const positions = await ctx.db.query("positions").collect();
   return {
     user,
-    access: isOperationalManagerRole(user.role) ? "edit" : menuAccess.work,
+    access: isOperationalManagerRole(user.role) ? "view_all" : menuAccess.work,
     isAdmin: isOperationalManagerRole(user.role),
     level: isOperationalManagerRole(user.role) ? 5 : activePositionLevel(user, positions),
     positions,
