@@ -19,7 +19,7 @@ Native Android app (Kotlin + Jetpack Compose) for school staff.
 
 - Android Studio Ladybug+ (or newer)
 - JDK 17 (bundled with Android Studio is fine)
-- Android SDK with **minSdk 26** (Android 8.0)
+- Android SDK with **minSdk 26** (Android 8.0) and **compile/target SDK 36** (Android 16)
 - Device/emulator API 26+
 
 ## Open & build debug APK
@@ -69,7 +69,7 @@ lvt.release.keyPassword=...
 ./gradlew :app:bundleRelease
 ```
 
-Output: `app/build/outputs/bundle/release/app-release.aab`
+Output: `app/build/outputs/bundle/release/lvt-crm-<versionName>-<versionCode>.aab` (for example `lvt-crm-0.7.3-21.aab`). Do not upload a leftover `app-release.aab` from an older build.
 
 Keep the keystore and passwords in a password manager. Losing them means you cannot update the Play listing.
 
