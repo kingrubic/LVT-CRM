@@ -19,6 +19,9 @@ fun localProperty(name: String): String? {
     return (project.findProperty(name) as String?)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
+val lvtVersionCode = 21
+val lvtVersionName = "0.7.3"
+
 android {
     namespace = "lvt.crm"
     compileSdk = 36
@@ -27,9 +30,9 @@ android {
         applicationId = "lvt.crm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
+        versionCode = lvtVersionCode
         // x.y.z — x new menu, y new feature (no new menu), z bug fix
-        versionName = "0.7.3"
+        versionName = lvtVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     }
@@ -140,4 +143,21 @@ dependencies {
     testImplementation("org.json:json:20240303")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+base {
+    archivesName.set("lvt-crm-$lvtVersionName-$lvtVersionCode")
+}
+
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    doLast {
+        val dir = layout.buildDirectory.dir("outputs/bundle/release").get().asFile
+        val dest = dir.resolve("lvt-crm-$lvtVersionName-$lvtVersionCode.aab")
+        val src = dir.listFiles()
+            ?.filter { it.extension == "aab" && it.name != dest.name }
+            ?.maxByOrNull { it.lastModified() }
+        if (src != null && src.exists()) {
+            src.copyTo(dest, overwrite = true)
+        }
+    }
 }
