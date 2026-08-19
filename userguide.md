@@ -133,9 +133,10 @@ Nhóm quyền quyết định User nhìn thấy menu nào và được sử dụ
 ### Các mức quyền
 
 - **Ẩn:** không thấy menu.
-- **Xem:** xem dữ liệu trong phạm vi thông thường của mình.
-- **Xem tối cao:** xem phạm vi rộng hơn hoặc toàn hệ thống ở những chức năng có hỗ trợ, nhưng không thay đổi dữ liệu.
-- **Sửa:** được thực hiện các thao tác mà chức năng đó đang hỗ trợ, trong phạm vi chức vụ và nhiệm vụ được giao.
+- **Xem:** xem và thao tác nghiệp vụ trong phạm vi thông thường của mình.
+- **Xem tối cao:** xem và thao tác nghiệp vụ trên phạm vi rộng hơn hoặc toàn hệ thống ở những chức năng có hỗ trợ.
+
+Tạo công việc hoặc công tác cho cả trường vẫn theo vai trò/cấp bậc, không do mức Xem hay Xem tối cao.
 
 ### Tạo nhóm quyền
 

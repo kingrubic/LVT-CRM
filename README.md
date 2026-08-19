@@ -59,7 +59,7 @@ Mỗi nhóm quy định quyền trên **6** menu **Chức năng chính**:
 | `homeroom` | Lớp chủ nhiệm |
 | `people-review` | Đánh giá nhân sự |
 
-Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (chỉ xem phạm vi thông thường) · **`view_all`** (xem mọi user, không chỉnh sửa) · **`edit`** (thêm/sửa nội dung khi module sẵn sàng).
+Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (thao tác nghiệp vụ trong phạm vi của mình) · **`view_all`** (thao tác nghiệp vụ trên phạm vi toàn trường, nơi module hỗ trợ). Mức legacy **`edit`** được đọc/ghi thành **`view`**. Tạo công việc/công tác toàn trường vẫn theo role/cấp, không theo mức menu.
 
 - Mỗi nhóm có **mã** (`code`): tối đa **20** ký tự, chỉ `A–Z 0–9 _ -`, luôn lưu/hiển thị **IN HOA**; dùng trong file import user (`ma_nhom_quyen`).
 - Nhóm cũ thiếu mã được backfill tự động (`permissionGroups.ensureCodes`): chữ cái đầu mỗi từ tên (bỏ dấu), nếu trùng thì 3 rồi 4 ký tự đầu, rồi thêm số.
@@ -367,7 +367,7 @@ npx convex deploy -y   # cần CONVEX_SELF_HOSTED_*
 - [ ] First admin qua internal action; password tạm đã rotate.
 - [ ] Public signup/reset/email verification disabled.
 - [ ] Vai trò chỉ `admin`|`moderator`|`user`; user cũ `manager` đã migrate.
-- [ ] Test: CRUD user/PB/địa điểm/nhóm quyền/chức vụ; gán user; menu ẩn/xem/sửa; profile + đổi MK; self-disable/delete blocked; audit.
+- [ ] Test: CRUD user/PB/địa điểm/nhóm quyền/chức vụ; gán user; menu ẩn/xem/xem tối cao; profile + đổi MK; self-disable/delete blocked; audit.
 - [ ] Test: thông báo (chuông, đọc, click → Công tác/Công việc); thiết lập hiển thị; báo cáo 3 loại.
 - [ ] Hiểu JWT TTL vs session invalidation (beta).
 - [ ] `SITE_URL` / origins khớp domain thật.

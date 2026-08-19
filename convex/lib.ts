@@ -6,18 +6,27 @@ import {
   normalizeWorkVisibilityMode,
   WORK_VISIBILITY_DEFAULT,
 } from "./assignmentPolicy";
+import {
+  canOperateMenu,
+  defaultAccessForMenu,
+  defaultMenuAccess,
+  normalizeMenuAccess,
+  SYSTEM_MENU_DEFS,
+  type LegacyMenuAccess,
+  type MenuAccess,
+  type MenuId,
+} from "./menuAccess";
 
 export type DbCtx = QueryCtx | MutationCtx;
 
-/** Primary feature menus controlled by permission groups for regular users. */
-export const SYSTEM_MENU_DEFS = [
-  { id: "reports", label: "Báo cáo" },
-  { id: "notifications", label: "Thông báo" },
-  { id: "duties", label: "Công tác" },
-  { id: "work", label: "Công việc" },
-  { id: "homeroom", label: "Lớp chủ nhiệm" },
-  { id: "people-review", label: "Đánh giá nhân sự" },
-] as const;
+export {
+  canOperateMenu,
+  defaultAccessForMenu,
+  defaultMenuAccess,
+  normalizeMenuAccess,
+  SYSTEM_MENU_DEFS,
+};
+export type { LegacyMenuAccess, MenuAccess, MenuId };
 
 /** System setting key controlling whether duty attendance confirmation is shown. */
 export const DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY = "dutyAttendanceConfirmationEnabled";
@@ -50,8 +59,6 @@ export const LOGIN_ATTEMPT_WINDOW_MINUTES_SETTING_KEY = "login.attemptWindowMinu
 export const LOGIN_MAX_FAILED_ATTEMPTS_DEFAULT = 5;
 export const LOGIN_ATTEMPT_WINDOW_MINUTES_DEFAULT = 15;
 
-export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
-export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
 export type SystemRole = "admin" | "moderator" | "user";
 
 export const SYSTEM_ROLES: { key: SystemRole; name: string }[] = [
@@ -66,25 +73,6 @@ export function isSystemRole(role: string): role is SystemRole {
 
 export function isOperationalManagerRole(role: string): role is "admin" | "moderator" {
   return role === "admin" || role === "moderator";
-}
-
-export function defaultMenuAccess(): { menu: string; access: MenuAccess }[] {
-  return SYSTEM_MENU_DEFS.map((item) => ({
-    menu: item.id,
-    access: (item.id === "notifications" ? "view" : "hidden") as MenuAccess,
-  }));
-}
-
-export function normalizeMenuAccess(
-  entries: { menu: string; access: MenuAccess }[] | undefined,
-): { menu: string; access: MenuAccess }[] {
-  const map = new Map((entries || []).map((e) => [e.menu, e.access]));
-  return SYSTEM_MENU_DEFS.map((item) => ({
-    menu: item.id,
-    access:
-      (map.get(item.id) as MenuAccess | undefined) ||
-      (item.id === "notifications" ? "view" : "hidden"),
-  }));
 }
 
 /**
@@ -296,14 +284,11 @@ export async function resolveUserMenuAccess(
   ctx: DbCtx,
   user: { role: string; permissionGroupId?: string },
 ): Promise<Record<string, MenuAccess>> {
-  const full = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "edit" as MenuAccess]));
+  const full = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "view_all" as MenuAccess]));
   if (isOperationalManagerRole(user.role)) return full;
 
   const empty = Object.fromEntries(
-    SYSTEM_MENU_DEFS.map((m) => [
-      m.id,
-      (m.id === "notifications" ? "view" : "hidden") as MenuAccess,
-    ]),
+    SYSTEM_MENU_DEFS.map((m) => [m.id, defaultAccessForMenu(m.id)]),
   );
   if (!user.permissionGroupId) return empty;
 

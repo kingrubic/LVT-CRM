@@ -72,7 +72,7 @@ const SUPREME_SETTINGS = [
   ['display-settings', 'Thiết lập hiển thị'],
 ];
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
-const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', edit: 'Sửa' };
+const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao' };
 
 function signInMessageFor(error) {
   const raw = convexErrorText(error);
@@ -400,7 +400,7 @@ function AppShell({ session }) {
         ) : (
           <PlaceholderView
             title={title}
-            access={canManageOperations ? 'edit' : menuAccess?.[active] || 'view'}
+            access={canManageOperations ? 'view_all' : menuAccess?.[active] || 'view'}
             isAdmin={canManageOperations}
           />
         )}
@@ -967,7 +967,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setSubordinateAttendance = useMutation(anyApi.duties.setAttendanceForUser);
   const { pending, feedback, setFeedback, run } = useFeedback();
-  const canEdit = access === 'edit' || data?.canEdit;
+  const canEdit = access !== 'hidden' || Boolean(data?.canEdit);
   const canCreate = Boolean(data?.canCreate);
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
@@ -1584,7 +1584,7 @@ function UserManagement() {
           </select>
           <small>
             {usesPermissionGroup
-              ? 'Chỉ áp dụng cho User. Quyết định menu Ẩn / Xem / Xem tối cao / Sửa.'
+              ? 'Chỉ áp dụng cho User. Quyết định menu Ẩn / Xem / Xem tối cao.'
               : `${ROLE_LABELS[form.role]} có toàn quyền chức năng — không cần gán nhóm quyền.`}
           </small>
         </label>
@@ -2051,7 +2051,9 @@ function PermissionGroupManagement() {
   const startEdit = (item) => {
     setEditing(item);
     const access = defaultAccessForm();
-    for (const entry of item.menuAccess || []) access[entry.menu] = entry.access;
+    for (const entry of item.menuAccess || []) {
+      access[entry.menu] = entry.access === 'edit' ? 'view' : entry.access;
+    }
     setForm({ name: item.name, code: item.code || '', description: item.description || '', access });
   };
 
@@ -2100,7 +2102,7 @@ function PermissionGroupManagement() {
           <span className="status-pill blue">Nhóm quyền</span>
           <h2>Thiết lập nhóm quyền</h2>
           <p>
-            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem, Xem tối cao (xem mọi user nhưng không chỉnh sửa), hoặc Sửa.
+            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem (thao tác nghiệp vụ trong phạm vi của mình), hoặc Xem tối cao (thao tác nghiệp vụ trên phạm vi toàn trường).
             Mã nhóm quyền (tối đa 20 ký tự) dùng khi import user hàng loạt.
           </p>
         </div>
@@ -2158,12 +2160,11 @@ function PermissionGroupManagement() {
             <span>Ẩn</span>
             <span>Xem</span>
             <span>Xem tối cao</span>
-            <span>Sửa</span>
           </div>
           {menus.map((menu) => (
             <div className="perm-matrix-row" key={menu.id}>
               <span>{menu.label}</span>
-              {['hidden', 'view', 'view_all', 'edit'].map((level) => (
+              {['hidden', 'view', 'view_all'].map((level) => (
                 <label key={level} className="radio-cell">
                   <input
                     type="radio"
@@ -2584,11 +2585,9 @@ function MustChangePasswordView() {
 function PlaceholderView({ title, access, isAdmin }) {
   const accessLabel = isAdmin
     ? 'Quản trị'
-    : access === 'edit'
-      ? 'Được sửa'
-      : access === 'view_all'
-        ? 'Xem tối cao'
-        : 'Chỉ xem';
+    : access === 'view_all'
+      ? 'Xem tối cao'
+      : 'Xem';
   return (
     <section className="placeholder-view">
       <span className="placeholder-icon">⌁</span>
@@ -2596,9 +2595,11 @@ function PlaceholderView({ title, access, isAdmin }) {
       <h2>{title}</h2>
       <p>
         Nội dung nghiệp vụ đang được hoàn thiện.
-        {!isAdmin && access === 'view' ? ' Bạn chỉ có quyền xem mục này.' : ''}
-        {!isAdmin && access === 'view_all' ? ' Bạn có thể xem dữ liệu của mọi user nhưng không thể chỉnh sửa.' : ''}
-        {!isAdmin && access === 'edit' ? ' Bạn có quyền thêm/sửa nội dung khi module sẵn sàng.' : ''}
+        {!isAdmin && access === 'view_all'
+          ? ' Bạn có thể xem và thao tác dữ liệu của mọi user khi module sẵn sàng.'
+          : !isAdmin
+            ? ' Bạn có thể xem và thao tác nghiệp vụ trong phạm vi của mình khi module sẵn sàng.'
+            : ''}
       </p>
     </section>
   );

@@ -74,9 +74,9 @@ export const seed = internalMutation({
     if (!groups.some((g) => g.name === "Toàn quyền nghiệp vụ")) {
       await ctx.db.insert("permissionGroups", {
         name: "Toàn quyền nghiệp vụ",
-        description: "Xem và sửa mọi menu Quản trị hệ thống (không gồm Cài đặt)",
+        description: "Xem và thao tác nghiệp vụ mọi menu Quản trị hệ thống (không gồm Cài đặt)",
         menuAccess: normalizeMenuAccess(
-          defaultMenuAccess().map((e) => ({ ...e, access: "edit" as const })),
+          defaultMenuAccess().map((e) => ({ ...e, access: "view_all" as const })),
         ),
         active: true,
         createdAt: now,
