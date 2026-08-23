@@ -16,7 +16,102 @@ export type AttendanceDayRow = {
   effectiveStatus: EffectiveStatus | string;
   rawObservation?: string;
   enrollmentId?: string;
+  studentCode?: string;
+  fullName?: string;
 };
+
+export const UNKNOWN_STUDENT_CODE = "—";
+export const UNKNOWN_STUDENT_NAME = "Học sinh không còn hiệu lực";
+
+export type PublicStudentIdentity = {
+  studentCode: string;
+  fullName: string;
+};
+
+export type AttendanceStudentRecord = {
+  _id: string;
+  studentCode?: string;
+  fullName?: string;
+  status?: string;
+};
+
+export type ScopedClassRecord = {
+  _id: string;
+  name?: string;
+  code?: string;
+  schoolYearId?: string;
+};
+
+export type ScopedYearRecord = {
+  _id: string;
+  name?: string;
+};
+
+function usablePublicStudent(student?: AttendanceStudentRecord | null): boolean {
+  if (!student) return false;
+  if (student.status && student.status !== "active") return false;
+  return true;
+}
+
+export function publicStudentIdentity(student?: AttendanceStudentRecord | null): PublicStudentIdentity {
+  if (!usablePublicStudent(student)) {
+    return { studentCode: UNKNOWN_STUDENT_CODE, fullName: UNKNOWN_STUDENT_NAME };
+  }
+  const studentCode = String(student?.studentCode || "").trim();
+  const fullName = String(student?.fullName || "").trim();
+  if (!studentCode && !fullName) {
+    return { studentCode: UNKNOWN_STUDENT_CODE, fullName: UNKNOWN_STUDENT_NAME };
+  }
+  return {
+    studentCode: studentCode || UNKNOWN_STUDENT_CODE,
+    fullName: fullName || UNKNOWN_STUDENT_NAME,
+  };
+}
+
+export function enrichAttendanceSummaryRows(
+  days: AttendanceDayRow[],
+  students: AttendanceStudentRecord[],
+): Array<AttendanceDayRow & PublicStudentIdentity> {
+  const byId = new Map(students.map((row) => [String(row._id), row]));
+  return days.map((row) => ({
+    ...row,
+    ...publicStudentIdentity(byId.get(String(row.studentId))),
+  }));
+}
+
+export function resolveScopedExportTitles(args: {
+  classId?: string;
+  schoolYearId?: string;
+  scopedClassIds: string[];
+  classes: ScopedClassRecord[];
+  schoolYears: ScopedYearRecord[];
+}): { className: string; schoolYearName: string } {
+  const allowed = new Set(args.scopedClassIds.map(String));
+  const scopedClasses = args.classes.filter((row) => allowed.has(String(row._id)));
+  const requestedClass = args.classId
+    ? scopedClasses.find((row) => String(row._id) === args.classId)
+    : scopedClasses.length === 1
+      ? scopedClasses[0]
+      : undefined;
+  const className = requestedClass ? String(requestedClass.name || requestedClass.code || "").trim() : "";
+
+  const yearById = new Map(args.schoolYears.map((row) => [String(row._id), row]));
+  const requestedYear = args.schoolYearId ? yearById.get(args.schoolYearId) : undefined;
+  if (requestedYear?.name) {
+    return { className, schoolYearName: String(requestedYear.name).trim() };
+  }
+  const yearNames = [
+    ...new Set(
+      scopedClasses
+        .map((row) => yearById.get(String(row.schoolYearId || ""))?.name)
+        .filter((name): name is string => Boolean(name && String(name).trim())),
+    ),
+  ];
+  return {
+    className,
+    schoolYearName: yearNames.length === 1 ? String(yearNames[0]).trim() : "",
+  };
+}
 
 const COUNTED_ABSENCE = new Set(["absent_excused", "absent_unexcused", "absent_pending"]);
 const COUNTED_PRESENT = new Set(["present", "late"]);
@@ -88,6 +183,8 @@ export function buildAttendanceExportPayload(args: {
     rows: args.summary.days.map((row) => ({
       classId: row.classId,
       studentId: row.studentId,
+      studentCode: row.studentCode || "",
+      fullName: row.fullName || "",
       attendanceDate: row.attendanceDate,
       effectiveStatus: row.effectiveStatus,
       rawObservation: row.rawObservation || "",

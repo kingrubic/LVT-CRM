@@ -12,6 +12,7 @@ import {
   isAttendanceReplaceModeRequired,
   proposedUniqueNameMatches,
 } from './attendanceImportPreview';
+import { AttendanceReportsTable } from './AttendanceReportsTable';
 import { downloadAttendancePdf, downloadAttendanceXlsx } from './homeroomExport';
 import { vietnamTodayYmd } from './homeroomTime';
 import { ClassCards, ClassCatalogPanel, ClassManagePanel } from './HomeroomClassCatalog';
@@ -484,18 +485,7 @@ function AttendanceReports({ classId, yearId }) {
         <>
           <p>Tỷ lệ chuyên cần: {(report.summary.attendanceRate * 100).toFixed(1)}% ({report.summary.ratedRows} buổi tính tỷ lệ)</p>
           <div className="homeroom-table-wrap">
-            <table className="homeroom-table">
-              <thead><tr><th>Ngày</th><th>Học sinh</th><th>Trạng thái</th></tr></thead>
-              <tbody>
-                {report.summary.days.map((row) => (
-                  <tr key={`${row.studentId}-${row.attendanceDate}`}>
-                    <td>{row.attendanceDate}</td>
-                    <td>{row.studentId}</td>
-                    <td>{statusChip(row.effectiveStatus)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <AttendanceReportsTable days={report.summary.days} />
           </div>
         </>
       )}

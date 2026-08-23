@@ -5,6 +5,8 @@ import { classVisibleInScope, resolveClassScope } from "./homeroomPolicy";
 import {
   authorizeAttendanceSummaryRows,
   buildAttendanceExportPayload,
+  enrichAttendanceSummaryRows,
+  resolveScopedExportTitles,
   summarizeAttendanceDays,
 } from "./homeroomReportPolicy";
 import { enrollmentsCoveringDate } from "./homeroomCatalog";
@@ -31,12 +33,47 @@ export const attendanceSummary = query({
       to: range.to,
       schoolYearId: args.schoolYearId,
     });
-    const classIds = args.classId ? [args.classId] : [...new Set(days.map((row) => row.classId))];
-    const summary = summarizeAttendanceDays(days, { classIds, from: args.from, to: args.to });
+    const allowedStudentIds = new Set(days.map((row) => row.studentId));
+    const students = (await ctx.db.query("students").collect())
+      .filter((row) => allowedStudentIds.has(String(row._id)))
+      .map((row) => ({
+        _id: String(row._id),
+        studentCode: row.studentCode,
+        fullName: row.fullName,
+        status: row.status,
+      }));
+    const enrichedDays = enrichAttendanceSummaryRows(days, students);
+    const classIds = args.classId ? [args.classId] : [...new Set(enrichedDays.map((row) => row.classId))];
+    const summary = summarizeAttendanceDays(enrichedDays, { classIds, from: args.from, to: args.to });
+    const scopedClassIds = [...new Set([...classIds, ...enrichedDays.map((row) => row.classId)])];
+    const classes = (await ctx.db.query("homeroomClasses").collect())
+      .filter((row) => scopedClassIds.includes(String(row._id)))
+      .map((row) => ({
+        _id: String(row._id),
+        name: row.name,
+        code: row.code,
+        schoolYearId: row.schoolYearId,
+      }));
+    const yearIds = new Set<string>(
+      classes.map((row) => row.schoolYearId).filter((id): id is string => Boolean(id)),
+    );
+    if (args.schoolYearId) yearIds.add(args.schoolYearId);
+    const schoolYears = (await ctx.db.query("schoolYears").collect())
+      .filter((row) => yearIds.has(String(row._id)))
+      .map((row) => ({ _id: String(row._id), name: row.name }));
+    const titles = resolveScopedExportTitles({
+      classId: args.classId,
+      schoolYearId: args.schoolYearId,
+      scopedClassIds,
+      classes,
+      schoolYears,
+    });
     return {
       summary,
       exportPayload: buildAttendanceExportPayload({
         summary,
+        className: titles.className,
+        schoolYearName: titles.schoolYearName,
         from: args.from,
         to: args.to,
         generatedAt: Date.now(),

@@ -3,9 +3,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+  UNKNOWN_STUDENT_CODE,
+  UNKNOWN_STUDENT_NAME,
   assertExportWithinScope,
   authorizeAttendanceSummaryRows,
   buildAttendanceExportPayload,
+  enrichAttendanceSummaryRows,
+  resolveScopedExportTitles,
   summarizeAttendanceDays,
 } from '../convex/homeroomReportPolicy.ts';
 import { HOMEROOM_SCOPE_FORBIDDEN } from '../convex/homeroomPolicy.ts';
@@ -214,4 +218,132 @@ test('attendance summary authorizes every row by class and attendanceDate, not o
   assert.doesNotMatch(source, /assertClassReadable/);
   assert.doesNotMatch(source, /evaluateMissingUploadAlert\(/);
   assert.match(source, /evaluateScopedMissingUploadAlerts/);
+});
+
+const INTERNAL_STUDENT_ID = 'qn7abcinternalstudent01';
+const OTHER_STUDENT_ID = 'qn9leakotherstudent02';
+
+const uatAuthorizedDays = [
+  {
+    classId: 'class-6a1',
+    studentId: INTERNAL_STUDENT_ID,
+    attendanceDate: '2026-09-01',
+    effectiveStatus: 'present',
+    rawObservation: 'present',
+  },
+  {
+    classId: 'class-6a1',
+    studentId: INTERNAL_STUDENT_ID,
+    attendanceDate: '2026-09-02',
+    effectiveStatus: 'absent_unexcused',
+    rawObservation: 'absent',
+  },
+];
+
+test('attendance summary enriches scoped rows with public student identity after authorize', () => {
+  const students = [
+    {
+      _id: INTERNAL_STUDENT_ID,
+      studentCode: 'QA-HS001',
+      fullName: 'Nguyễn An',
+      status: 'active',
+      studentPhone: '0909000001',
+      guardianName: 'Không được lộ',
+    },
+    {
+      _id: OTHER_STUDENT_ID,
+      studentCode: 'QA-HS999',
+      fullName: 'Học sinh lớp khác',
+      status: 'active',
+      studentPhone: '0909000999',
+    },
+    {
+      _id: 'qn8deactivatedstudent03',
+      studentCode: 'QA-HS008',
+      fullName: 'Học sinh nghỉ',
+      status: 'inactive',
+    },
+  ];
+
+  const enriched = enrichAttendanceSummaryRows(uatAuthorizedDays, students);
+  assert.equal(enriched.length, 2);
+  assert.equal(enriched[0].studentCode, 'QA-HS001');
+  assert.equal(enriched[0].fullName, 'Nguyễn An');
+  assert.equal(enriched[0].studentId, INTERNAL_STUDENT_ID);
+  assert.equal(enriched[0].studentPhone, undefined);
+  assert.equal(enriched[0].guardianName, undefined);
+  assert.equal(enriched.some((row) => row.studentCode === 'QA-HS999'), false);
+
+  const missing = enrichAttendanceSummaryRows(
+    [{ ...uatAuthorizedDays[0], studentId: 'qn7missingstudent99' }],
+    students,
+  );
+  assert.equal(missing[0].studentCode, UNKNOWN_STUDENT_CODE);
+  assert.equal(missing[0].fullName, UNKNOWN_STUDENT_NAME);
+  assert.equal(missing[0].studentId, 'qn7missingstudent99');
+
+  const deactivated = enrichAttendanceSummaryRows(
+    [{ ...uatAuthorizedDays[0], studentId: 'qn8deactivatedstudent03' }],
+    students,
+  );
+  assert.equal(deactivated[0].studentCode, UNKNOWN_STUDENT_CODE);
+  assert.equal(deactivated[0].fullName, UNKNOWN_STUDENT_NAME);
+  assert.equal(deactivated[0].studentId, 'qn8deactivatedstudent03');
+
+  const source = readFileSync(new URL('../convex/homeroomReports.ts', import.meta.url), 'utf8');
+  const authorizeAt = source.indexOf('authorizeAttendanceSummaryRows');
+  const enrichAt = source.indexOf('enrichAttendanceSummaryRows');
+  assert.ok(authorizeAt >= 0 && enrichAt > authorizeAt);
+  assert.match(source, /resolveScopedExportTitles/);
+  assert.doesNotMatch(source, /studentGuardians|studentPhone|guardian/);
+});
+
+test('export payload keeps UAT rate and shows class/year titles from scoped records only', () => {
+  const enriched = enrichAttendanceSummaryRows(uatAuthorizedDays, [
+    { _id: INTERNAL_STUDENT_ID, studentCode: 'QA-HS001', fullName: 'Nguyễn An', status: 'active' },
+  ]);
+  const summary = summarizeAttendanceDays(enriched, {
+    classIds: ['class-6a1'],
+    from: '2026-09-01',
+    to: '2026-09-02',
+  });
+  assert.equal(summary.totalRows, 2);
+  assert.equal(summary.ratedRows, 2);
+  assert.equal(summary.attendanceRate, 0.5);
+  assert.equal((summary.attendanceRate * 100).toFixed(1), '50.0');
+
+  const titles = resolveScopedExportTitles({
+    classId: 'class-6a1',
+    schoolYearId: 'year-1',
+    scopedClassIds: ['class-6a1'],
+    classes: [
+      { _id: 'class-6a1', name: '6A1', code: '6A1', schoolYearId: 'year-1' },
+      { _id: 'class-leak', name: 'Lớp ngoài phạm vi', code: '9Z9', schoolYearId: 'year-leak' },
+    ],
+    schoolYears: [
+      { _id: 'year-1', name: '2026-2027' },
+      { _id: 'year-leak', name: 'Năm học rò rỉ' },
+    ],
+  });
+  assert.equal(titles.className, '6A1');
+  assert.equal(titles.schoolYearName, '2026-2027');
+
+  const payload = buildAttendanceExportPayload({
+    summary,
+    className: titles.className,
+    schoolYearName: titles.schoolYearName,
+    from: '2026-09-01',
+    to: '2026-09-02',
+    generatedAt: 1,
+    generatedByUserId: 'u1',
+    generatedByName: 'Giám thị',
+  });
+  assert.equal(payload.className, '6A1');
+  assert.equal(payload.schoolYearName, '2026-2027');
+  assert.equal(payload.attendanceRate, 0.5);
+  assert.equal(payload.rows.length, 2);
+  assert.equal(payload.rows[0].studentCode, 'QA-HS001');
+  assert.equal(payload.rows[0].fullName, 'Nguyễn An');
+  assert.equal(payload.rows[0].studentId, INTERNAL_STUDENT_ID);
+  assert.equal(payload.rows[1].effectiveStatus, 'absent_unexcused');
 });
