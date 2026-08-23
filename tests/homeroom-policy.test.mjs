@@ -225,6 +225,98 @@ test('guessed archived or no-enrollment student IDs fail closed and do not leak 
   assert.equal(canSeeSensitiveContacts(viewAll, { assignedToClass: true }), false);
 });
 
+const transferredEnrollments = [
+  {
+    classId: 'class-6a1',
+    schoolYearId: 'year-1',
+    startDate: '2026-08-15',
+    endDate: '2026-10-31',
+  },
+  {
+    classId: 'class-6a2',
+    schoolYearId: 'year-1',
+    startDate: '2026-11-01',
+  },
+];
+
+test('enrolled authorized student with no attendance days returns empty history', () => {
+  const empty = filterStudentAttendanceHistory({
+    actor: teacher,
+    assignments: [teacherAssignment],
+    enrollments: [{ classId: 'class-6a1', schoolYearId: 'year-1', startDate: '2026-08-15' }],
+    days: [],
+    corrections: [],
+  });
+  assert.deepEqual(empty, { days: [], corrections: [] });
+  const adminEmpty = filterStudentAttendanceHistory({
+    actor: admin,
+    assignments: [],
+    enrollments: [{ classId: 'class-6a1', schoolYearId: 'year-1', startDate: '2026-08-15' }],
+    days: [],
+    corrections: [],
+  });
+  assert.deepEqual(adminEmpty, { days: [], corrections: [] });
+});
+
+test('out-of-scope student with no attendance days stays forbidden', () => {
+  assert.throws(
+    () =>
+      filterStudentAttendanceHistory({
+        actor: teacher,
+        assignments: [teacherAssignment],
+        enrollments: [{ classId: 'class-6a2', schoolYearId: 'year-1', startDate: '2026-08-15' }],
+        days: [],
+        corrections: [],
+      }),
+    new RegExp(HOMEROOM_SCOPE_FORBIDDEN),
+  );
+  assert.throws(
+    () =>
+      filterStudentAttendanceHistory({
+        actor: otherTeacher,
+        assignments: [teacherAssignment],
+        enrollments: [],
+        days: [],
+        corrections: [],
+      }),
+    new RegExp(HOMEROOM_SCOPE_FORBIDDEN),
+  );
+});
+
+test('mixed historical attendance rows are filtered by effective class and date', () => {
+  const days = [
+    { _id: 'd1', classId: 'class-6a1', studentId: 'st-1', attendanceDate: '2026-10-01' },
+    { _id: 'd2', classId: 'class-6a2', studentId: 'st-1', attendanceDate: '2026-11-15' },
+    { _id: 'd-leak', classId: 'class-6a1', studentId: 'st-1', attendanceDate: '2026-11-20' },
+  ];
+  const corrections = [
+    { attendanceDayId: 'd1', studentId: 'st-1', attendanceDate: '2026-10-01' },
+    { attendanceDayId: 'd2', studentId: 'st-1', attendanceDate: '2026-11-15' },
+    { attendanceDayId: 'd-leak', studentId: 'st-1', attendanceDate: '2026-11-20' },
+  ];
+  const assignments = [{ ...teacherAssignment, effectiveTo: '2026-10-31' }];
+  const history = filterStudentAttendanceHistory({
+    actor: teacher,
+    assignments,
+    enrollments: transferredEnrollments,
+    days,
+    corrections,
+  });
+  assert.deepEqual(history.days.map((row) => row._id), ['d1']);
+  assert.deepEqual(history.corrections.map((row) => row.attendanceDayId), ['d1']);
+  assert.throws(
+    () =>
+      filterStudentAttendanceHistory({
+        actor: teacher,
+        assignments: [teacherAssignment],
+        enrollments: [{ classId: 'class-6a2', schoolYearId: 'year-1', startDate: '2026-11-01' }],
+        days: [{ _id: 'leftover', classId: 'class-6a1', studentId: 'st-1', attendanceDate: '2026-09-01' }],
+        corrections: [{ attendanceDayId: 'leftover', studentId: 'st-1', attendanceDate: '2026-09-01' }],
+      }),
+    new RegExp(HOMEROOM_SCOPE_FORBIDDEN),
+  );
+});
+
 test('transferred attendance history is scoped to the actor class period', () => {
   const days = [
     { _id: 'd1', classId: 'class-6a1', studentId: 'st-1', attendanceDate: '2026-10-01' },
@@ -251,6 +343,7 @@ test('transferred attendance history is scoped to the actor class period', () =>
   const oldHistory = filterStudentAttendanceHistory({
     actor: oldTeacher,
     assignments,
+    enrollments: transferredEnrollments,
     days,
     corrections,
   });
@@ -259,6 +352,7 @@ test('transferred attendance history is scoped to the actor class period', () =>
   const newHistory = filterStudentAttendanceHistory({
     actor: newTeacher,
     assignments,
+    enrollments: transferredEnrollments,
     days,
     corrections,
   });
@@ -267,6 +361,7 @@ test('transferred attendance history is scoped to the actor class period', () =>
   const managerHistory = filterStudentAttendanceHistory({
     actor: admin,
     assignments,
+    enrollments: transferredEnrollments,
     days,
     corrections,
   });
@@ -274,6 +369,7 @@ test('transferred attendance history is scoped to the actor class period', () =>
   const viewAllHistory = filterStudentAttendanceHistory({
     actor: viewAll,
     assignments,
+    enrollments: transferredEnrollments,
     days,
     corrections,
   });
@@ -283,6 +379,7 @@ test('transferred attendance history is scoped to the actor class period', () =>
       filterStudentAttendanceHistory({
         actor: teacher,
         assignments: [],
+        enrollments: transferredEnrollments,
         days,
         corrections,
       }),
@@ -306,11 +403,13 @@ test('transfer-date attendance is authorized only for the new class teacher', ()
     },
   ];
   const incoming = { ...otherTeacher, userId: 'teacher-2' };
+  const enrollments = [{ classId: 'class-6a2', schoolYearId: 'year-1', startDate: '2026-11-01' }];
   assert.equal(canReadClass(teacher, assignments, 'class-6a2', '2026-11-01'), false);
   assert.equal(canReadClass(incoming, assignments, 'class-6a2', '2026-11-01'), true);
   const newHistory = filterStudentAttendanceHistory({
     actor: incoming,
     assignments,
+    enrollments,
     days,
     corrections,
   });
@@ -320,6 +419,7 @@ test('transfer-date attendance is authorized only for the new class teacher', ()
       filterStudentAttendanceHistory({
         actor: teacher,
         assignments,
+        enrollments,
         days,
         corrections,
       }),

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -111,4 +112,16 @@ test('supplement leaves absent_pending unresolved days unchanged', () => {
   assert.equal(merged.rawObservation, 'absent');
   assert.equal(merged.disposition, 'pending');
   assert.equal(merged.effectiveStatus, 'absent_pending');
+});
+
+test('getStudentHistory authorizes the student from enrollments before filtering days', () => {
+  const source = readFileSync(new URL('../convex/studentAttendance.ts', import.meta.url), 'utf8');
+  const query = source.slice(
+    source.indexOf('export const getStudentHistory'),
+    source.indexOf('export const getClassSummary'),
+  );
+  assert.match(query, /classEnrollments/);
+  assert.match(query, /enrollments/);
+  assert.match(query, /filterStudentAttendanceHistory/);
+  assert.match(query, /enrollments,/);
 });

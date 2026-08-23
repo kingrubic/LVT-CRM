@@ -20,6 +20,7 @@ import {
   filterActiveClasses,
   classStatusLabel,
 } from './classCatalog';
+import { HomeroomStudentQueryErrorBoundary } from './studentQueryErrorBoundary';
 import { messageFor } from '../lib/appErrorMessage';
 import './homeroom.css';
 
@@ -113,7 +114,9 @@ export default function HomeroomRouter({ session }) {
           onBack={() => go(homeroomPathname())}
         />
       ) : route.view === 'student' ? (
-        <StudentDetail studentId={route.studentId} />
+        <HomeroomStudentQueryErrorBoundary onBack={() => go(homeroomPathname())}>
+          <StudentDetail studentId={route.studentId} />
+        </HomeroomStudentQueryErrorBoundary>
       ) : route.view === 'import' ? (
         <AttendanceImportView yearId={selectedYearId} />
       ) : null}

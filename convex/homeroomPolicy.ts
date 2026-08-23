@@ -188,11 +188,13 @@ export function filterStudentAttendanceHistory<
 >(args: {
   actor: HomeroomActor;
   assignments: HomeroomAssignment[];
+  enrollments: Array<{ classId: string; schoolYearId?: string; startDate: string; endDate?: string }>;
   days: TDay[];
   corrections: TCorrection[];
   from?: string;
   to?: string;
 }): { days: TDay[]; corrections: TCorrection[] } {
+  authorizeAccessibleEnrollments(args.actor, args.assignments, args.enrollments);
   const from = args.from ? assertYmd(args.from) : undefined;
   const to = args.to ? assertYmd(args.to) : undefined;
   if (from && to) assertYmdRange(from, to);
@@ -203,7 +205,6 @@ export function filterStudentAttendanceHistory<
       return canReadClass(args.actor, args.assignments, day.classId, day.attendanceDate);
     })
     .sort((a, b) => a.attendanceDate.localeCompare(b.attendanceDate));
-  if (!days.length) throw new Error(HOMEROOM_SCOPE_FORBIDDEN);
   const authorizedDayIds = new Set(days.map((day) => String(day._id || "")));
   const authorizedKeys = new Set(days.map((day) => `${day.studentId}:${day.attendanceDate}`));
   const corrections = args.corrections.filter((row) => {

@@ -42,6 +42,9 @@ export const getStudentHistory = query({
   handler: async (ctx, args) => {
     const { actor } = await homeroomActorOrThrow(ctx);
     const assignments = await loadAssignments(ctx);
+    const enrollments = (await ctx.db.query("classEnrollments").collect()).filter(
+      (row) => row.studentId === args.studentId,
+    );
     const days = (await ctx.db.query("studentAttendanceDays").collect()).filter(
       (row) => row.studentId === args.studentId,
     );
@@ -51,6 +54,7 @@ export const getStudentHistory = query({
     return filterStudentAttendanceHistory({
       actor,
       assignments,
+      enrollments,
       days,
       corrections,
       from: args.from,
