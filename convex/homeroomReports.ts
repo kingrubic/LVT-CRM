@@ -98,7 +98,10 @@ export const overview = query({
       .map((row) => ({ classId: String(row._id), code: row.code, name: row.name }));
     return {
       date,
-      classes,
+      classes: classes.map((row) => ({
+        ...row,
+        rosterCount: enrollmentsCoveringDate(allEnrollments, { classId: String(row._id), date }).length,
+      })),
       studentCount: enrollments.length,
       summary,
       missingUpload: { ...missingUpload, missingClasses },

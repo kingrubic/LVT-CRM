@@ -14,6 +14,12 @@ import {
 } from './attendanceImportPreview';
 import { downloadAttendancePdf, downloadAttendanceXlsx } from './homeroomExport';
 import { vietnamTodayYmd } from './homeroomTime';
+import { ClassCards, ClassCatalogPanel, ClassManagePanel } from './HomeroomClassCatalog';
+import {
+  BACK_TO_OVERVIEW,
+  filterActiveClasses,
+  classStatusLabel,
+} from './classCatalog';
 import { messageFor } from '../lib/appErrorMessage';
 import './homeroom.css';
 
@@ -90,7 +96,12 @@ export default function HomeroomRouter({ session }) {
       {!selectedYearId ? (
         <EmptySchoolYearState canCreate={Boolean(session?.isOperationalManager)} onCreate={createSchoolYear} />
       ) : route.view === 'overview' ? (
-        <HomeroomOverview overview={overview} onOpenClass={(id) => go(homeroomPathname({ classId: id }))} />
+        <HomeroomOverview
+          overview={overview}
+          yearId={selectedYearId}
+          session={session}
+          onOpenClass={(id) => go(homeroomPathname({ classId: id }))}
+        />
       ) : route.view === 'class' ? (
         <ClassDetail
           classId={route.classId}
@@ -99,6 +110,7 @@ export default function HomeroomRouter({ session }) {
           session={session}
           onTab={(tab) => go(homeroomPathname({ classId: route.classId, tab }))}
           onOpenStudent={(id) => go(homeroomPathname({ studentId: id }))}
+          onBack={() => go(homeroomPathname())}
         />
       ) : route.view === 'student' ? (
         <StudentDetail studentId={route.studentId} />
@@ -156,9 +168,10 @@ function EmptySchoolYearState({ canCreate, onCreate }) {
   );
 }
 
-function HomeroomOverview({ overview, onOpenClass }) {
+function HomeroomOverview({ overview, yearId, session, onOpenClass }) {
   if (overview === undefined) return <p className="homeroom-empty">Đang tải tổng quan…</p>;
   const counts = overview.summary?.counts || {};
+  const canManage = Boolean(session?.isOperationalManager);
   return (
     <>
       <div className="homeroom-cards">
@@ -168,6 +181,7 @@ function HomeroomOverview({ overview, onOpenClass }) {
         <article className="homeroom-card"><span>Trễ</span><strong>{counts.late || 0}</strong></article>
         <article className="homeroom-card"><span>Vắng chờ xử lý</span><strong>{counts.absent_pending || 0}</strong></article>
       </div>
+      <ClassCatalogPanel session={session} yearId={yearId} onOpenClass={onOpenClass} />
       <div className="homeroom-panel">
         <h3>Cảnh báo</h3>
         {overview.missingUpload?.scopeEmpty ? (
@@ -190,30 +204,33 @@ function HomeroomOverview({ overview, onOpenClass }) {
           <p className="homeroom-issue">Còn {overview.unresolvedAbsences.length} buổi vắng chờ phân loại.</p>
         ) : null}
       </div>
-      <div className="homeroom-panel">
-        <h3>Lớp trong phạm vi</h3>
-        {!overview.classes.length ? <p className="homeroom-empty">Không có lớp trong phạm vi của bạn.</p> : (
-          <ul>
-            {overview.classes.map((item) => (
-              <li key={item._id}>
-                <button type="button" className="text-button" onClick={() => onOpenClass(item._id)}>{item.code} — {item.name}</button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {overview.classes.length || !canManage ? (
+        <div className="homeroom-panel">
+          <h3>Lớp trong phạm vi</h3>
+          <ClassCards classes={overview.classes} canManage={canManage} onOpenClass={onOpenClass} />
+        </div>
+      ) : null}
     </>
   );
 }
 
-function ClassDetail({ classId, tab, yearId, session, onTab, onOpenStudent }) {
+function ClassDetail({ classId, tab, yearId, session, onTab, onOpenStudent, onBack }) {
   const detail = useQuery(anyApi.homeroomClasses.getScoped, { classId });
   const roster = useQuery(anyApi.students.listByClass, { classId });
   if (detail === undefined) return <p className="homeroom-empty">Đang tải lớp…</p>;
+  const archived = detail.class.status === 'archived';
   return (
     <div className="homeroom-panel">
       <h2>{detail.class.code} — {detail.class.name}</h2>
-      <p className="muted">Sĩ số hiện tại: {detail.rosterCount}</p>
+      {archived ? (
+        <p className="homeroom-issue warn" role="status">
+          {classStatusLabel('archived')}. Không thể phân công, nhập danh sách hoặc dùng camera.
+        </p>
+      ) : null}
+      <p className="muted">Sĩ số hiện tại: {detail.rosterCount} · {classStatusLabel(detail.class.status)}</p>
+      <div className="homeroom-class-actions">
+        <button type="button" onClick={onBack}>{BACK_TO_OVERVIEW}</button>
+      </div>
       <div className="homeroom-tabs" role="tablist">
         <button type="button" onClick={() => onTab('danh-sach')}>Danh sách học sinh</button>
         <button type="button" onClick={() => onTab('diem-danh')}>Điểm danh</button>
@@ -224,15 +241,21 @@ function ClassDetail({ classId, tab, yearId, session, onTab, onOpenStudent }) {
       ) : tab === 'bao-cao' ? (
         <AttendanceReports classId={classId} yearId={yearId} />
       ) : (
-        <StudentRoster classId={classId} roster={roster} session={session} onOpenStudent={onOpenStudent} />
+        <StudentRoster classId={classId} roster={roster} session={session} onOpenStudent={onOpenStudent} archived={archived} />
       )}
+      {session?.isOperationalManager ? (
+        <details className="homeroom-manage-disclosure">
+          <summary>Quản lý lớp</summary>
+          <ClassManagePanel classId={classId} yearId={yearId} detail={detail} session={session} canManage={session?.isOperationalManager} />
+        </details>
+      ) : null}
     </div>
   );
 }
 
-function StudentRoster({ classId, roster, session, onOpenStudent }) {
+function StudentRoster({ classId, roster, session, onOpenStudent, archived = false }) {
   const [open, setOpen] = useState(false);
-  const canImport = session?.isOperationalManager || session?.menuAccess?.homeroom === 'view' || session?.menuAccess?.homeroom === 'view_all';
+  const canImport = !archived && (session?.isOperationalManager || session?.menuAccess?.homeroom === 'view' || session?.menuAccess?.homeroom === 'view_all');
   return (
     <div>
       <div className="homeroom-toolbar">
@@ -499,7 +522,7 @@ function AttendanceImportView({ yearId }) {
           Lớp
           <select value={classId} onChange={(e) => setClassId(e.target.value)}>
             <option value="">Chọn lớp</option>
-            {(classes || []).map((item) => <option key={item._id} value={item._id}>{item.code}</option>)}
+            {filterActiveClasses(classes).map((item) => <option key={item._id} value={item._id}>{item.code}</option>)}
           </select>
         </label>
         <label>Ngày <input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>

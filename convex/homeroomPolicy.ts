@@ -14,6 +14,7 @@ export const HOMEROOM_SCOPE_FORBIDDEN = "HOMEROOM_SCOPE_FORBIDDEN";
 export const SUPERVISOR_REQUIRED = "SUPERVISOR_REQUIRED";
 export const HOMEROOM_MENU_HIDDEN = "HOMEROOM_MENU_HIDDEN";
 export const SENSITIVE_CONTACTS_FORBIDDEN = "SENSITIVE_CONTACTS_FORBIDDEN";
+export const CLASS_ARCHIVED = "CLASS_ARCHIVED";
 
 export type HomeroomActor = {
   userId: string;
@@ -56,6 +57,22 @@ export function isHomeroomViewAllUser(actor: HomeroomActor): boolean {
 
 export function canWriteHomeroomCatalog(actor: HomeroomActor): boolean {
   return isHomeroomOperationalManager(actor);
+}
+
+export function classIncludedInScopedList(
+  row: { status?: string },
+  args: { includeArchived?: boolean } = {},
+): boolean {
+  if (args.includeArchived) return true;
+  return row.status === "active";
+}
+
+export function assertCanIncludeArchivedClasses(actor: HomeroomActor) {
+  if (!canWriteHomeroomCatalog(actor)) throw new Error(HOMEROOM_SCOPE_FORBIDDEN);
+}
+
+export function assertClassNotArchived(klass: { status?: string }) {
+  if (klass.status === "archived") throw new Error(CLASS_ARCHIVED);
 }
 
 export function assignmentCovers(

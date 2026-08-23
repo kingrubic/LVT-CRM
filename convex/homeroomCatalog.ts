@@ -221,6 +221,33 @@ export function planStudentTransfer(args: {
   };
 }
 
+export function toAssignmentCandidate(user: {
+  _id: unknown;
+  name?: string | null;
+  role: string;
+}): { _id: string; name: string; role: string } {
+  return {
+    _id: String(user._id),
+    name: String(user.name || "").trim(),
+    role: user.role,
+  };
+}
+
+export function isActiveAssignmentCandidate(user: { status?: string }): boolean {
+  return user.status === "active";
+}
+
+export function toSafeAssignmentUser(
+  user: { _id?: unknown; name?: string | null; role?: string } | null | undefined,
+  userId: string,
+): { _id: string; name: string; role: string } {
+  return {
+    _id: user ? String(user._id) : String(userId),
+    name: String(user?.name || "").trim() || "Người dùng không còn hoạt động",
+    role: user?.role || "",
+  };
+}
+
 export function planHomeroomTeacherReplacement(args: {
   assignment: { effectiveFrom: string };
   date: string;

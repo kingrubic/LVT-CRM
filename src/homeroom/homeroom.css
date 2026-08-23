@@ -1,9 +1,26 @@
-.homeroom-view { display: grid; gap: 16px; }
-.homeroom-view h2, .homeroom-view h3 { margin: 0; }
-.homeroom-toolbar, .homeroom-cards, .homeroom-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.homeroom-view { display: grid; gap: 16px; min-width: 0; max-width: 100%; overflow-x: clip; }
+.homeroom-view h2, .homeroom-view h3, .homeroom-view h4 { margin: 0; }
+.homeroom-view :focus-visible { outline: 2px solid var(--lvt-teal); outline-offset: 2px; }
+.homeroom-toolbar, .homeroom-cards, .homeroom-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; min-width: 0; }
 .homeroom-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-.homeroom-card, .homeroom-panel { background: var(--lvt-paper); border: 1px solid var(--lvt-line); border-radius: 12px; padding: 16px; }
+.homeroom-card, .homeroom-panel { background: var(--lvt-paper); border: 1px solid var(--lvt-line); border-radius: 12px; padding: 16px; min-width: 0; }
 .homeroom-card strong, .homeroom-stat { display: block; font-size: 22px; }
+.homeroom-class-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.homeroom-class-card { display: grid; gap: 8px; align-content: start; }
+.homeroom-class-card p { margin: 0; color: var(--lvt-muted); }
+.homeroom-catalog-panel .muted, .homeroom-manage-panel .muted { margin: 6px 0 0; }
+.homeroom-class-form, .homeroom-assignment-form, .homeroom-manage-panel, .homeroom-assignment-groups { display: grid; gap: 12px; min-width: 0; }
+.homeroom-class-form label, .homeroom-assignment-form label { display: grid; gap: 6px; min-width: 0; color: #526b80; font-size: 12px; font-weight: 700; }
+.homeroom-class-form input, .homeroom-class-form select, .homeroom-class-form textarea,
+.homeroom-assignment-form input, .homeroom-assignment-form select {
+  min-height: 44px; width: 100%; max-width: 100%; padding: 0 10px; border: 1px solid #d8e2e9; border-radius: 7px;
+  color: var(--lvt-ink); background: #fff; font: inherit;
+}
+.homeroom-class-form textarea { min-height: 88px; padding: 10px; resize: vertical; }
+.homeroom-class-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.homeroom-assignment-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.homeroom-assignment-item { display: grid; gap: 4px; min-width: 0; padding: 12px; border: 1px solid var(--lvt-line); border-radius: 10px; background: #fff; }
+.homeroom-success { margin: 0; padding: 8px 12px; border-left: 4px solid #138f7b; background: #e5f6ef; color: #14604e; }
 .homeroom-table-wrap { overflow: auto; max-width: 100%; border: 1px solid var(--lvt-line); border-radius: 12px; }
 .homeroom-table { width: 100%; border-collapse: collapse; min-width: 720px; }
 .homeroom-table th, .homeroom-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e6edf2; font-size: 13px; }
@@ -21,6 +38,24 @@
 .homeroom-issue { border-left: 4px solid #c0392b; padding: 8px 12px; background: #fff5f5; }
 .homeroom-issue.warn { border-left-color: #d4a017; background: #fff9e8; }
 .homeroom-empty { color: var(--lvt-muted); padding: 24px 0; }
+.homeroom-manage-disclosure {
+  border: 1px solid var(--lvt-line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+.homeroom-manage-disclosure > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+.homeroom-manage-disclosure[open] > summary { margin-bottom: 12px; }
+.homeroom-archived-catalog { display: grid; gap: 8px; margin-top: 12px; }
 @media (max-width: 720px) {
   .homeroom-table { min-width: 560px; }
+  .homeroom-toolbar, .homeroom-filters, .homeroom-class-actions, .homeroom-tabs { flex-direction: column; align-items: stretch; }
+  .homeroom-cards, .homeroom-class-cards { grid-template-columns: 1fr; }
+  .homeroom-view button, .homeroom-manage-disclosure > summary { width: 100%; }
 }

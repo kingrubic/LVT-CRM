@@ -14,7 +14,11 @@ import {
   canReadClass,
   canSeeSensitiveContacts,
   canUploadCamera,
+  assertCanIncludeArchivedClasses,
+  assertClassNotArchived,
   canWriteHomeroomCatalog,
+  CLASS_ARCHIVED,
+  classIncludedInScopedList,
   classVisibleInScope,
   filterStudentAttendanceHistory,
   HOMEROOM_SCOPE_FORBIDDEN,
@@ -415,6 +419,23 @@ test('only operational managers write school-year and class catalogs', () => {
   assert.equal(canWriteHomeroomCatalog({ ...admin, role: 'moderator' }), true);
   assert.equal(canWriteHomeroomCatalog(teacher), false);
   assert.equal(canWriteHomeroomCatalog(supervisor), false);
+});
+
+test('includeArchived is catalog-manager only and scoped lists default to active classes', () => {
+  assert.equal(classIncludedInScopedList({ status: 'active' }), true);
+  assert.equal(classIncludedInScopedList({ status: 'archived' }), false);
+  assert.equal(classIncludedInScopedList({ status: 'archived' }, { includeArchived: false }), false);
+  assert.equal(classIncludedInScopedList({ status: 'archived' }, { includeArchived: true }), true);
+  assert.doesNotThrow(() => assertCanIncludeArchivedClasses(admin));
+  assert.doesNotThrow(() => assertCanIncludeArchivedClasses({ ...admin, role: 'moderator' }));
+  assert.throws(() => assertCanIncludeArchivedClasses(teacher), new RegExp(HOMEROOM_SCOPE_FORBIDDEN));
+  assert.throws(() => assertCanIncludeArchivedClasses(supervisor), new RegExp(HOMEROOM_SCOPE_FORBIDDEN));
+  assert.throws(() => assertCanIncludeArchivedClasses(viewAll), new RegExp(HOMEROOM_SCOPE_FORBIDDEN));
+});
+
+test('archived classes reject assignment, roster import, and camera use', () => {
+  assert.throws(() => assertClassNotArchived({ status: 'archived' }), new RegExp(CLASS_ARCHIVED));
+  assert.doesNotThrow(() => assertClassNotArchived({ status: 'active' }));
 });
 
 test('Vietnam school dates are deterministic under a UTC runtime', () => {

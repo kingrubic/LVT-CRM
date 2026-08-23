@@ -4,6 +4,7 @@ import {
   assertCanReadClass,
   assertCanSupervisorImport,
   assertCanWriteHomeroomCatalog,
+  assertClassNotArchived,
   assertHomeroomActorReady,
   type HomeroomActor,
   type HomeroomAssignment,
@@ -91,6 +92,7 @@ export async function assertClassRosterWritable(
   date = vietnamDateFromUtcMs(Date.now()),
 ) {
   const found = await assertClassReadable(ctx, actor, classId, date);
+  assertClassNotArchived(found);
   const assignments = await loadAssignments(ctx, found.schoolYearId);
   assertCanMaintainAssignedRoster(actor, assignments, String(found._id), date);
   return found;
@@ -105,6 +107,7 @@ export async function assertClassSupervisor(
   const rows = await ctx.db.query("homeroomClasses").collect();
   const found = rows.find((row) => String(row._id) === String(classId));
   if (!found) throw new Error("CLASS_NOT_FOUND");
+  assertClassNotArchived(found);
   const assignments = await loadAssignments(ctx, found.schoolYearId);
   assertCanSupervisorImport(actor, assignments, String(found._id), date);
   return found;
