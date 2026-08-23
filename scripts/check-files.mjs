@@ -133,16 +133,10 @@ for (const marker of [
   "DutiesAdminView",
   "DutiesUserView",
   "DutyReportsView",
-  "BoardingManagement",
-  "BoardingReportsView",
   "ReportSubmenu",
-  "Quản lý bán trú",
   "PermissionGroupManagement",
   "PositionManagement",
   "Thiết lập địa điểm",
-  "Cả ngày",
-  "Gần đến hạn",
-  "Đã quá hạn",
   "StarRating",
   "hidden",
   "ProfileView",
@@ -150,8 +144,28 @@ for (const marker of [
   if (!client.includes(marker)) throw new Error(`Admin/password UI marker missing: ${marker}`);
 }
 
+// Component names live in their modules, not in the shell. Check only labels
+// that already exist in those origin/main files — do not invent product copy.
+const boardingManagement = readFileSync("src/boarding/BoardingManagement.jsx", "utf8");
+if (!boardingManagement.includes("BoardingManagement")) {
+  throw new Error("Boarding management marker missing: BoardingManagement");
+}
+const boardingReports = readFileSync("src/boarding/BoardingReportsView.jsx", "utf8");
+if (!boardingReports.includes("BoardingReportsView")) {
+  throw new Error("Boarding reports marker missing: BoardingReportsView");
+}
+
+const dutyUi = [
+  readFileSync("src/duties/DutyEditorFields.jsx", "utf8"),
+  readFileSync("src/duties/DutyListSummary.jsx", "utf8"),
+  readFileSync("src/reports/DutyReportsView.jsx", "utf8"),
+].join("\n");
+for (const marker of ["Cả ngày", "Gần đến hạn"]) {
+  if (!dutyUi.includes(marker)) throw new Error(`Duty UI marker missing: ${marker}`);
+}
+
 const reports = readFileSync("src/reports/DutyReportsView.jsx", "utf8");
-for (const marker of ["DutyReportsView", "Báo cáo · Công tác", "Tuần", "Tháng", "Quý", "Năm"]) {
+for (const marker of ["DutyReportsView", "Tuần", "Tháng", "Quý", "Năm"]) {
   if (!reports.includes(marker)) throw new Error(`Reports UI marker missing: ${marker}`);
 }
 

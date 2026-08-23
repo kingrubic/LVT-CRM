@@ -6,18 +6,17 @@ import {
   normalizeWorkVisibilityMode,
   WORK_VISIBILITY_DEFAULT,
 } from "./assignmentPolicy";
+import { SYSTEM_MENU_DEFS, effectiveMenuAccessLevel, type MenuAccess } from "./menuAccess";
 
 export type DbCtx = QueryCtx | MutationCtx;
 
-/** Primary feature menus controlled by permission groups for regular users. */
-export const SYSTEM_MENU_DEFS = [
-  { id: "reports", label: "Báo cáo" },
-  { id: "notifications", label: "Thông báo" },
-  { id: "duties", label: "Công tác" },
-  { id: "work", label: "Công việc" },
-  { id: "homeroom", label: "Lớp chủ nhiệm" },
-  { id: "people-review", label: "Đánh giá nhân sự" },
-] as const;
+export {
+  SYSTEM_MENU_DEFS,
+  defaultMenuAccess,
+  normalizeMenuAccess,
+  type MenuAccess,
+  type MenuId,
+} from "./menuAccess";
 
 /** System setting key controlling whether duty attendance confirmation is shown. */
 export const DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY = "dutyAttendanceConfirmationEnabled";
@@ -50,8 +49,6 @@ export const LOGIN_ATTEMPT_WINDOW_MINUTES_SETTING_KEY = "login.attemptWindowMinu
 export const LOGIN_MAX_FAILED_ATTEMPTS_DEFAULT = 5;
 export const LOGIN_ATTEMPT_WINDOW_MINUTES_DEFAULT = 15;
 
-export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
-export type MenuAccess = "hidden" | "view" | "view_all" | "edit";
 export type SystemRole = "admin" | "moderator" | "user";
 
 export const SYSTEM_ROLES: { key: SystemRole; name: string }[] = [
@@ -66,25 +63,6 @@ export function isSystemRole(role: string): role is SystemRole {
 
 export function isOperationalManagerRole(role: string): role is "admin" | "moderator" {
   return role === "admin" || role === "moderator";
-}
-
-export function defaultMenuAccess(): { menu: string; access: MenuAccess }[] {
-  return SYSTEM_MENU_DEFS.map((item) => ({
-    menu: item.id,
-    access: (item.id === "notifications" ? "view" : "hidden") as MenuAccess,
-  }));
-}
-
-export function normalizeMenuAccess(
-  entries: { menu: string; access: MenuAccess }[] | undefined,
-): { menu: string; access: MenuAccess }[] {
-  const map = new Map((entries || []).map((e) => [e.menu, e.access]));
-  return SYSTEM_MENU_DEFS.map((item) => ({
-    menu: item.id,
-    access:
-      (map.get(item.id) as MenuAccess | undefined) ||
-      (item.id === "notifications" ? "view" : "hidden"),
-  }));
 }
 
 /**
@@ -314,8 +292,8 @@ export async function resolveUserMenuAccess(
   if (!group?.active) return empty;
 
   const result = { ...empty };
-  for (const entry of normalizeMenuAccess(group.menuAccess)) {
-    result[entry.menu] = entry.access;
+  for (const entry of group.menuAccess || []) {
+    result[entry.menu] = effectiveMenuAccessLevel(entry.menu, entry.access);
   }
   return result;
 }

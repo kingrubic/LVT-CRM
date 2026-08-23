@@ -187,17 +187,19 @@ button { font: inherit; cursor: pointer; }
 .muted, .muted-block { color: var(--lvt-muted); font-size: 12px; }
 .muted-block { display: block; margin-top: 4px; }
 .perm-matrix { display: grid; gap: 0; border: 1px solid var(--lvt-line); border-radius: 8px; overflow: hidden; background: var(--lvt-paper); }
-.perm-matrix-head, .perm-matrix-row { display: grid; grid-template-columns: 1.6fr .55fr .55fr .9fr .55fr; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; }
+.perm-matrix-head, .perm-matrix-row { display: grid; grid-template-columns: 1.4fr .5fr .5fr .85fr .7fr; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12px; }
 .perm-matrix-head { color: #8a9aa8; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; background: #edf1f4; }
 .perm-matrix-row { border-top: 1px solid #e5ecef; background: #fff; color: #3a4a68; font-weight: 600; }
 .radio-cell { display: grid; place-items: center; margin: 0; }
 .radio-cell input { width: 16px; height: 16px; accent-color: var(--lvt-teal); }
+.radio-cell-unavailable { color: #9aa6b5; font-weight: 700; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 .perm-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .access-chip { padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #edf1f4; color: #5a6b8a; }
 .access-chip.view { background: #e8f1fb; color: var(--lvt-blue); }
 .access-chip.view_all { background: #fff1c6; color: #85601b; }
 .access-chip.edit { background: #e5f6ef; color: #14604e; }
+.access-chip.supervisor { background: #efe7fb; color: #5b3d8a; }
 .access-chip.hidden { background: #f3f4f7; color: #97a0b5; }
 .wide-form { width: min(100%, 720px); grid-template-columns: minmax(0, 1fr); }
 .approval-note { flex-direction: column; align-items: flex-start; gap: 4px; }

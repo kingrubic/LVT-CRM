@@ -18,6 +18,7 @@ import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
 import { isPublicAccountDeletionPath, isPublicPrivacyPath } from './privacy/privacyPolicy';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
+import HomeroomRouter from './homeroom/HomeroomRouter';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
@@ -72,7 +73,14 @@ const SUPREME_SETTINGS = [
   ['display-settings', 'Thiết lập hiển thị'],
 ];
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
-const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao', edit: 'Sửa' };
+const ACCESS_LABELS = {
+  hidden: 'Ẩn',
+  view: 'Xem',
+  view_all: 'Xem tối cao',
+  supervisor: 'Giám thị',
+  edit: 'Xem',
+};
+const MATRIX_ACCESS_LEVELS = ['hidden', 'view', 'view_all', 'supervisor'];
 
 function signInMessageFor(error) {
   const raw = convexErrorText(error);
@@ -395,6 +403,8 @@ function AppShell({ session }) {
           <PeopleReviewView />
         ) : active === 'reports' ? (
           reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
+        ) : active === 'homeroom' ? (
+          <HomeroomRouter session={session} />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
           <ProfileView session={session} />
         ) : (
@@ -1584,7 +1594,7 @@ function UserManagement() {
           </select>
           <small>
             {usesPermissionGroup
-              ? 'Chỉ áp dụng cho User. Quyết định menu Ẩn / Xem / Xem tối cao / Sửa.'
+              ? 'Chỉ áp dụng cho User. Quyết định menu Ẩn / Xem / Xem tối cao / Giám thị (Giám thị chỉ dành cho Lớp chủ nhiệm).'
               : `${ROLE_LABELS[form.role]} có toàn quyền chức năng — không cần gán nhóm quyền.`}
           </small>
         </label>
@@ -2100,7 +2110,8 @@ function PermissionGroupManagement() {
           <span className="status-pill blue">Nhóm quyền</span>
           <h2>Thiết lập nhóm quyền</h2>
           <p>
-            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem, Xem tối cao (xem mọi user nhưng không chỉnh sửa), hoặc Sửa.
+            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem, Xem tối cao, hoặc Giám thị.
+            Giám thị chỉ dành cho menu Lớp chủ nhiệm; các menu khác không thể chọn mức này.
             Mã nhóm quyền (tối đa 20 ký tự) dùng khi import user hàng loạt.
           </p>
         </div>
@@ -2158,22 +2169,32 @@ function PermissionGroupManagement() {
             <span>Ẩn</span>
             <span>Xem</span>
             <span>Xem tối cao</span>
-            <span>Sửa</span>
+            <span>Giám thị</span>
           </div>
           {menus.map((menu) => (
             <div className="perm-matrix-row" key={menu.id}>
               <span>{menu.label}</span>
-              {['hidden', 'view', 'view_all', 'edit'].map((level) => (
-                <label key={level} className="radio-cell">
-                  <input
-                    type="radio"
-                    name={`access-${menu.id}`}
-                    checked={(form.access[menu.id] || 'hidden') === level}
-                    onChange={() => setForm((f) => ({ ...f, access: { ...f.access, [menu.id]: level } }))}
-                  />
-                  <span className="sr-only">{ACCESS_LABELS[level]}</span>
-                </label>
-              ))}
+              {MATRIX_ACCESS_LEVELS.map((level) => {
+                if (level === 'supervisor' && menu.id !== 'homeroom') {
+                  return (
+                    <span key={level} className="radio-cell radio-cell-unavailable" aria-hidden="true">
+                      —
+                    </span>
+                  );
+                }
+                const current = form.access[menu.id] === 'edit' ? 'view' : form.access[menu.id] || 'hidden';
+                return (
+                  <label key={level} className="radio-cell">
+                    <input
+                      type="radio"
+                      name={`access-${menu.id}`}
+                      checked={current === level}
+                      onChange={() => setForm((f) => ({ ...f, access: { ...f.access, [menu.id]: level } }))}
+                    />
+                    <span className="sr-only">{ACCESS_LABELS[level]}</span>
+                  </label>
+                );
+              })}
             </div>
           ))}
         </div>
