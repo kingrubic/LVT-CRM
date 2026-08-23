@@ -1,5 +1,35 @@
-import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
+
+export const VIETNAMESE_PDF_FONT = {
+  family: 'NotoSans',
+  fileName: 'NotoSans-Regular.ttf',
+  style: 'normal',
+};
+
+export const ATTENDANCE_PDF_LAYOUT = {
+  format: /** @type {const} */ ('a4'),
+  unit: /** @type {const} */ ('pt'),
+  margin: 48,
+  titleSize: 16,
+  metaSize: 10,
+  tableSize: 9,
+  footerSize: 8,
+  metaGap: 14,
+  tableLineHeight: 12,
+  footerBand: 40,
+  columns: {
+    date: 78,
+    code: 72,
+    name: 210,
+    status: 139,
+  },
+  /**
+   * @param {number} pageWidth
+   */
+  contentRight(pageWidth) {
+    return pageWidth - this.margin;
+  },
+};
 
 const STATUS_LABELS = {
   present: 'Có mặt',
@@ -58,10 +88,10 @@ export function buildAttendancePdfLines(payload) {
   return [
     payload.title,
     `${payload.schoolName} — ${payload.className || ''} — ${payload.schoolYearName || ''}`,
-    `Khoảng: ${payload.from} → ${payload.to}`,
+    `Khoảng: ${payload.from} đến ${payload.to}`,
     `Tạo: ${new Date(payload.generatedAt).toLocaleString('vi-VN')} bởi ${payload.generatedByName || payload.generatedByUserId}`,
     `Tỷ lệ chuyên cần (không tính miễn/chưa có dữ liệu): ${(payload.attendanceRate * 100).toFixed(1)}%`,
-    ...(payload.rows || []).slice(0, 40).map((row) =>
+    ...(payload.rows || []).map((row) =>
       `${row.attendanceDate}  ${row.studentCode}  ${row.fullName}  ${attendanceStatusLabel(row.effectiveStatus)}`,
     ),
   ];
@@ -74,34 +104,17 @@ export function downloadAttendanceXlsx(payload) {
   XLSX.writeFile(workbook, `bao_cao_diem_danh_${payload.from}_${payload.to}.xlsx`);
 }
 
-export function downloadAttendancePdf(payload) {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const margin = 48;
-  let y = margin;
-  const lines = buildAttendancePdfLines(payload);
-  const metaLines = lines.slice(1, 5);
-  const bodyLines = lines.slice(5);
-  doc.setFontSize(14);
-  doc.text(lines[0], margin, y);
-  y += 22;
-  doc.setFontSize(10);
-  metaLines.forEach((line) => {
-    doc.text(line, margin, y);
-    y += 16;
-  });
-  bodyLines.forEach((line) => {
-    if (y > 760) {
-      doc.addPage();
-      y = margin;
-    }
-    doc.text(line, margin, y);
-    y += 14;
-  });
-  const pages = doc.getNumberOfPages();
-  for (let i = 1; i <= pages; i += 1) {
-    doc.setPage(i);
-    doc.setFontSize(9);
-    doc.text(`Trang ${i}/${pages}`, 500, 820);
-  }
-  doc.save(`bao_cao_diem_danh_${payload.from}_${payload.to}.pdf`);
+export async function buildAttendancePdf(payload) {
+  const { buildAttendancePdf: renderAttendancePdf } = await import('./attendancePdf.js');
+  return renderAttendancePdf(payload, { statusLabel: attendanceStatusLabel });
+}
+
+export async function createAttendancePdf(payload) {
+  const { createAttendancePdf: renderAttendancePdfBytes } = await import('./attendancePdf.js');
+  return renderAttendancePdfBytes(payload, { statusLabel: attendanceStatusLabel });
+}
+
+export async function downloadAttendancePdf(payload) {
+  const { downloadAttendancePdf: saveAttendancePdf } = await import('./attendancePdf.js');
+  return saveAttendancePdf(payload, { statusLabel: attendanceStatusLabel });
 }
