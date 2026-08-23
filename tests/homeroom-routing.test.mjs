@@ -32,3 +32,13 @@ test('homeroom frontend date defaults use Vietnam calendar, including UTC 18:00'
   assert.match(source, /vietnamTodayYmd/);
   assert.doesNotMatch(source, /toISOString\(\)\.slice\(0,\s*10\)/);
 });
+
+test('empty school-year state is actionable and never renders an infinite overview loader', () => {
+  const source = readFileSync(new URL('../src/homeroom/HomeroomRouter.jsx', import.meta.url), 'utf8');
+  assert.match(source, /Chưa cấu hình năm học/);
+  assert.match(source, /Thiết lập năm học đầu tiên/);
+  assert.match(source, /createSchoolYear/);
+  assert.match(source, /disabled=\{!years\?\.length\}/);
+  assert.match(source, /!selectedYearId \? \(/);
+  assert.match(source, /selectedYearId && \(session\?\.isOperationalManager/);
+});

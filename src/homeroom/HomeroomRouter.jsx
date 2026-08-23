@@ -55,6 +55,7 @@ export default function HomeroomRouter({ session }) {
   const [yearId, setYearId] = useState('');
   const selectedYearId = yearId || years?.find((item) => item.active)?._id || years?.[0]?._id || '';
   const overview = useQuery(anyApi.homeroomReports.overview, selectedYearId ? { schoolYearId: selectedYearId } : 'skip');
+  const createSchoolYear = useMutation(anyApi.schoolYears.create);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -74,21 +75,23 @@ export default function HomeroomRouter({ session }) {
       <div className="homeroom-toolbar">
         <label>
           Năm học
-          <select value={selectedYearId} onChange={(e) => setYearId(e.target.value)}>
+          <select value={selectedYearId} onChange={(e) => setYearId(e.target.value)} disabled={!years?.length}>
+            {!years?.length ? <option value="">Chưa có năm học</option> : null}
             {(years || []).map((year) => (
               <option key={year._id} value={year._id}>{year.name}</option>
             ))}
           </select>
         </label>
         <button type="button" className="primary-button" onClick={() => go(homeroomPathname())}>Tổng quan</button>
-        {session?.isOperationalManager || session?.menuAccess?.homeroom === 'supervisor' ? (
+        {selectedYearId && (session?.isOperationalManager || session?.menuAccess?.homeroom === 'supervisor') ? (
           <button type="button" onClick={() => go(homeroomPathname({ importAttendance: true }))}>Nhập điểm danh camera</button>
         ) : null}
       </div>
-      {route.view === 'overview' && (
+      {!selectedYearId ? (
+        <EmptySchoolYearState canCreate={Boolean(session?.isOperationalManager)} onCreate={createSchoolYear} />
+      ) : route.view === 'overview' ? (
         <HomeroomOverview overview={overview} onOpenClass={(id) => go(homeroomPathname({ classId: id }))} />
-      )}
-      {route.view === 'class' && (
+      ) : route.view === 'class' ? (
         <ClassDetail
           classId={route.classId}
           tab={route.tab}
@@ -97,10 +100,59 @@ export default function HomeroomRouter({ session }) {
           onTab={(tab) => go(homeroomPathname({ classId: route.classId, tab }))}
           onOpenStudent={(id) => go(homeroomPathname({ studentId: id }))}
         />
-      )}
-      {route.view === 'student' && <StudentDetail studentId={route.studentId} />}
-      {route.view === 'import' && <AttendanceImportView yearId={selectedYearId} />}
+      ) : route.view === 'student' ? (
+        <StudentDetail studentId={route.studentId} />
+      ) : route.view === 'import' ? (
+        <AttendanceImportView yearId={selectedYearId} />
+      ) : null}
     </section>
+  );
+}
+
+function EmptySchoolYearState({ canCreate, onCreate }) {
+  const [name, setName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!canCreate) {
+    return (
+      <div className="homeroom-panel">
+        <h2>Chưa cấu hình năm học</h2>
+        <p className="homeroom-empty">Vui lòng liên hệ quản trị viên để tạo năm học trước khi sử dụng Lớp chủ nhiệm.</p>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="homeroom-panel"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setPending(true);
+        setError('');
+        try {
+          await onCreate({ name, startDate, endDate, active: true });
+        } catch (err) {
+          setError(messageFor(err));
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      <h2>Thiết lập năm học đầu tiên</h2>
+      <p className="muted">Hệ thống chưa có năm học. Nhập đúng thời gian áp dụng; dữ liệu này được dùng để phân lớp và tính điểm danh.</p>
+      <div className="homeroom-filters">
+        <label>Tên năm học<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ví dụ: 2026–2027" required /></label>
+        <label>Ngày bắt đầu<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required /></label>
+        <label>Ngày kết thúc<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required /></label>
+      </div>
+      {error ? <p className="homeroom-issue">{error}</p> : null}
+      <button type="submit" className="primary-button" disabled={pending}>
+        {pending ? 'Đang tạo năm học…' : 'Tạo năm học'}
+      </button>
+    </form>
   );
 }
 
