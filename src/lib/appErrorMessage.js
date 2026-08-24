@@ -137,6 +137,7 @@ export function messageFor(error) {
     DUTY_PARTICIPANTS_REQUIRED: 'Vui lòng chọn ít nhất một người tham gia.',
     INVALID_WORK_TITLE: 'Vui lòng nhập tên công việc (tối đa 200 ký tự).',
     WORK_EVIDENCE_REQUIRED: 'Khi nộp việc phải đính kèm file bằng chứng hoàn thành.',
+    INVALID_COMPLETION_NOTE: 'Nội dung gửi người giao tối đa 500 ký tự.',
     WORK_APPROVAL_DISABLED: 'Công việc không còn bước duyệt công văn.',
     WORK_COMPLETION_REVIEWER_REQUIRED: 'Chỉ người tạo công việc mới được đánh dấu hoàn thành hoặc trả về.',
     WORK_COMPLETION_NOT_PENDING: 'Task không còn ở trạng thái chờ duyệt hoàn thành.',

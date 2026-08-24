@@ -411,8 +411,18 @@ fun WorkScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        "Chọn tài liệu hoặc hình ảnh bằng chứng hoàn thành công việc “${task.title}” (tối đa 20MB):",
+                        "Chọn tài liệu hoặc hình ảnh bằng chứng hoàn thành công việc “${task.title}” (tối đa 20MB). Có thể gửi thêm nội dung cho người giao.",
                         style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedTextField(
+                        value = state.evidenceNote,
+                        onValueChange = viewModel::onEvidenceNoteChange,
+                        label = { Text("Nội dung gửi người giao (không bắt buộc)") },
+                        supportingText = { Text("${state.evidenceNote.trim().length}/500") },
+                        minLines = 3,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
                     )
                     OutlinedButton(
                         onClick = {
@@ -621,6 +631,13 @@ private fun AdminWorkScreen(
                                         "${review.userName} · hạn ${review.deadline}",
                                         style = MaterialTheme.typography.bodySmall,
                                     )
+                                    if (review.note.isNotBlank()) {
+                                        Text(
+                                            review.note,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.padding(top = 6.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -739,6 +756,9 @@ private fun AdminWorkScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("${review.userName} · ${review.content}")
+                    if (review.note.isNotBlank()) {
+                        Text("Nội dung từ người nộp: ${review.note}")
+                    }
                     OutlinedTextField(
                         value = qualityPercent,
                         onValueChange = { qualityPercent = it.filter(Char::isDigit).take(3) },
@@ -1530,6 +1550,13 @@ private fun WorkCard(
                         DetailLine(
                             icon = Icons.Outlined.Business,
                             text = task.departmentName,
+                        )
+                    }
+                    if (task.note.isNotBlank()) {
+                        Text(
+                            "Nội dung đã gửi người giao: ${task.note}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                     if (task.rejectionReason.isNotBlank()) {

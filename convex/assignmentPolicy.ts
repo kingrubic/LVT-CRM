@@ -13,6 +13,7 @@ export const DUTY_LOCATION_MAX_LENGTH = 200;
 export const DUTY_TITLE_MAX_LENGTH = 200;
 export const DUTY_CONTENT_MAX_LENGTH = 200;
 export const WORK_TITLE_MAX_LENGTH = 200;
+export const WORK_COMPLETION_NOTE_MAX_LENGTH = 500;
 
 export function isTeamLeadLevel(level: number) {
   return level === 2 || level === 3;
@@ -111,6 +112,14 @@ export function cleanWorkTitle(value: string) {
   const title = String(value || "").trim();
   if (!title || title.length > WORK_TITLE_MAX_LENGTH) throw new Error("INVALID_WORK_TITLE");
   return title;
+}
+
+/** Optional text the assignee sends to the creator when submitting completion evidence. */
+export function cleanCompletionNote(value: string | null | undefined) {
+  const note = String(value || "").trim();
+  if (!note) return undefined;
+  if (note.length > WORK_COMPLETION_NOTE_MAX_LENGTH) throw new Error("INVALID_COMPLETION_NOTE");
+  return note;
 }
 
 export function workListTitle(document: { title?: string; fileName?: string; content?: string }) {

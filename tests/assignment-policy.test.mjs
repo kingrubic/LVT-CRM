@@ -12,6 +12,7 @@ import {
   cleanDutyLocationText,
   cleanDutyTitle,
   cleanWorkTitle,
+  cleanCompletionNote,
   normalizeDutyClock,
   dutyListTitle,
   dutyLocationLabel,
@@ -137,6 +138,13 @@ test('người được giao luôn thấy việc của mình; chế độ creato
   );
   assert.equal(canSeeArchivedWork('admin'), true);
   assert.equal(canSeeArchivedWork('user'), false);
+});
+
+test('nội dung nộp hoàn thành là tùy chọn và tối đa 500 ký tự', () => {
+  assert.equal(cleanCompletionNote(''), undefined);
+  assert.equal(cleanCompletionNote('   '), undefined);
+  assert.equal(cleanCompletionNote('  Đã gửi báo cáo  '), 'Đã gửi báo cáo');
+  assert.throws(() => cleanCompletionNote('x'.repeat(501)), /INVALID_COMPLETION_NOTE/);
 });
 
 test('người tạo mới được duyệt hoàn thành; khóa sửa khi đã có nộp', () => {

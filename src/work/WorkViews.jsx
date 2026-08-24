@@ -17,6 +17,7 @@ import {
   filterWorksByTab,
   formatWorkDate,
   WORK_LIST_TAB_UPCOMING,
+  WORK_COMPLETION_NOTE_MAX_LENGTH,
   workAssignmentPayload,
 } from './workDisplay';
 import './work.css';
@@ -349,9 +350,20 @@ function DepartmentProgress({ status, taskCount }) {
   );
 }
 
+function SubmitterNote({ note, label = 'Nội dung từ người nộp' }) {
+  if (!note) return null;
+  return (
+    <div className="work-submitter-note" role="note">
+      <strong>{label}</strong>
+      <p>{note}</p>
+    </div>
+  );
+}
+
 function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
   const { fetchAccessToken } = useConvexAuth();
   const [file, setFile] = useState(null);
+  const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const submit = async (event) => {
     event.preventDefault();
@@ -377,6 +389,7 @@ function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
         throw new Error(uploaded?.error || `WORK_UPLOAD_FAILED:${response.status}`);
       }
       await onSubmit({
+        note: note.trim(),
         uploaded: {
           driveFileId: uploaded.driveFileId,
           driveChecksum: uploaded.driveChecksum,
@@ -397,7 +410,7 @@ function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
         <button type="button" className="work-modal-close" onClick={onClose} aria-label="Đóng">×</button>
         <span className="work-kicker">Nộp công việc</span>
         <h3>{title}</h3>
-        <p className="work-modal-context">Đính kèm file bằng chứng hoàn thành rồi bấm Nộp. Người tạo việc sẽ đánh dấu hoàn thành.</p>
+        <p className="work-modal-context">Đính kèm file bằng chứng hoàn thành rồi bấm Nộp. Có thể gửi thêm nội dung cho người giao. Người tạo việc sẽ đánh dấu hoàn thành.</p>
         <WorkFileDropzone
           file={file}
           label="Kéo thả tài liệu/hình vào đây"
@@ -406,6 +419,16 @@ function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
             if (fileError) setError(fileError);
           }}
         />
+        <label className="work-field-label" htmlFor="completion-note">Nội dung gửi người giao (không bắt buộc)</label>
+        <textarea
+          id="completion-note"
+          rows={4}
+          maxLength={WORK_COMPLETION_NOTE_MAX_LENGTH}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="Nhập nội dung phản hồi cho người giao việc…"
+        />
+        <small>{note.trim().length}/{WORK_COMPLETION_NOTE_MAX_LENGTH}</small>
         {error ? <div className="work-feedback error">{error}</div> : null}
         <div className="work-modal-actions">
           <button type="button" className="work-ghost-button" onClick={onClose}>Hủy</button>
@@ -453,6 +476,7 @@ function CompletionReviewModal({ item, onClose, onSubmit, saving }) {
           {item.userName} · {item.departmentName} · Hạn {formatWorkDate(item.deadline)}
           {item.submittedLate ? ' · Nộp trễ' : ''}
         </p>
+        <SubmitterNote note={item.note} />
         <div className="work-assignment-actions">
           <button type="button" className={`work-outline-button ${mode === 'approve' ? 'is-active' : ''}`} onClick={() => setMode('approve')}>Duyệt</button>
           <button type="button" className={`work-outline-button ${mode === 'reject' ? 'is-active' : ''}`} onClick={() => setMode('reject')}>Chưa duyệt</button>
@@ -864,6 +888,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
                     <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
                     {item.submittedLate ? <span className="work-late-flag">Nộp trễ</span> : null}
                   </div>
+                  <SubmitterNote note={item.note} />
                 </div>
                 <div className="work-completion-review-actions">
                   <WorkStatus status="pending_completion" />
@@ -1102,9 +1127,9 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
-  /** @param {{ uploaded?: { driveFileId: string, driveChecksum?: string, cleanupToken: string, fileName: string, fileType: string, fileSize: number } }} [result] */
+  /** @param {{ uploaded?: { driveFileId: string, driveChecksum?: string, cleanupToken: string, fileName: string, fileType: string, fileSize: number }, note?: string }} [result] */
   const handleCompleteWorkItem = async (result = {}) => {
-    const { uploaded } = result;
+    const { uploaded, note } = result;
     if (!completing || !uploaded) return;
     setCompletingSaving(true);
     setFeedback({ type: '', text: '' });
@@ -1117,6 +1142,7 @@ export function WorkUserView({ focusTarget = null }) {
         fileName: uploaded.fileName,
         fileType: uploaded.fileType,
         fileSize: uploaded.fileSize,
+        ...(note ? { note } : {}),
       });
       await settleWorkUploadedFile(fetchAccessToken, uploaded.cleanupToken, true);
       setCompleting(null);
@@ -1128,9 +1154,9 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
-  /** @param {{ qualityPercent?: number }} [result] */
+  /** @param {{ qualityPercent?: number, note?: string }} [result] */
   const handleCompletePersonal = async (result = {}) => {
-    const { qualityPercent } = result;
+    const { qualityPercent, note } = result;
     if (!completing) return;
     setCompletingSaving(true);
     setFeedback({ type: '', text: '' });
@@ -1138,6 +1164,7 @@ export function WorkUserView({ focusTarget = null }) {
       await completePersonalTask({
         taskId: completing._id,
         ...(qualityPercent !== undefined ? { qualityPercent } : {}),
+        ...(note ? { note } : {}),
       });
       setCompleting(null);
       setFeedback({
@@ -1208,6 +1235,7 @@ export function WorkUserView({ focusTarget = null }) {
                     <span>Người nộp <strong>{item.userName}</strong></span>
                     <span>Hạn <strong>{formatWorkDate(item.deadline)}</strong></span>
                   </div>
+                  <SubmitterNote note={item.note} />
                 </div>
                 <div className="work-completion-review-actions">
                   <WorkStatus status="pending_completion" />
@@ -1321,6 +1349,7 @@ export function WorkUserView({ focusTarget = null }) {
                               <p>{task.rejectionReason}</p>
                             </div>
                           ) : null}
+                          <SubmitterNote note={task.completion?.note} label="Nội dung đã gửi người giao" />
                           <PrivateFileLink
                             className="work-file-link"
                             documentId={task.documentId}
@@ -1447,6 +1476,7 @@ export function WorkUserView({ focusTarget = null }) {
                               <p>{task.rejectionReason}</p>
                             </div>
                           ) : null}
+                          <SubmitterNote note={task.completion?.note} label="Nội dung đã gửi người giao" />
                           {task.status === 'pending_completion' ? (
                             <small className="work-overdue-note">Đang chờ cấp trên duyệt hoàn thành.</small>
                           ) : null}
