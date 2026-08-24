@@ -16,6 +16,7 @@ struct WorkTaskItem: Identifiable, Equatable, Sendable {
     let documentTitle: String
     let fileName: String
     let memberNames: [String]
+    let note: String
 }
 
 struct WorkMemberItem: Identifiable, Equatable, Sendable {
@@ -41,6 +42,7 @@ struct WorkCompletionReviewItem: Identifiable, Equatable, Sendable {
     let content: String
     let deadline: String
     let departmentName: String
+    let note: String
 }
 
 struct WorkApprovalItem: Identifiable, Equatable, Sendable {
@@ -158,6 +160,9 @@ final class WorkRepository: Sendable {
                     assignments: parseAssignments(document["assignments"] as? [[String: Any]])
                 )
             }
+            completionReviews = parseCompletionReviews(
+                result["pendingCompletionReviews"] as? [[String: Any]]
+            )
         }
 
         var tasks: [WorkTaskItem] = []
@@ -175,7 +180,8 @@ final class WorkRepository: Sendable {
                 isAdmin: isAdmin,
                 documentTitle: (task["documentTitle"] as? String) ?? "",
                 fileName: (task["fileName"] as? String) ?? "",
-                memberNames: Self.memberNames(from: task)
+                memberNames: Self.memberNames(from: task),
+                note: Self.completionNote(from: task)
             ))
         }
         for task in result["personalTasks"] as? [[String: Any]] ?? [] {
@@ -195,7 +201,8 @@ final class WorkRepository: Sendable {
                 isAdmin: isAdmin,
                 documentTitle: (task["documentTitle"] as? String) ?? "",
                 fileName: (task["fileName"] as? String) ?? "",
-                memberNames: Self.memberNames(from: task, key: "assignees")
+                memberNames: Self.memberNames(from: task, key: "assignees"),
+                note: Self.completionNote(from: task)
             ))
         }
 
@@ -215,7 +222,7 @@ final class WorkRepository: Sendable {
         )
     }
 
-    func complete(item: WorkTaskItem, qualityPercent: Int? = nil, evidence: WorkUploadedEvidence? = nil) async throws {
+    func complete(item: WorkTaskItem, qualityPercent: Int? = nil, evidence: WorkUploadedEvidence? = nil, note: String? = nil) async throws {
         var args: [String: Any] = [:]
         if let qualityPercent { args["qualityPercent"] = qualityPercent }
         if let evidence {
@@ -225,6 +232,10 @@ final class WorkRepository: Sendable {
             args["fileName"] = evidence.fileName
             args["fileType"] = evidence.fileType
             args["fileSize"] = evidence.fileSize
+        }
+        let trimmedNote = (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedNote.isEmpty {
+            args["note"] = String(trimmedNote.prefix(500))
         }
         switch item.kind {
         case .workItem:
@@ -378,6 +389,14 @@ final class WorkRepository: Sendable {
         )
     }
 
+    private static func completionNote(from value: [String: Any]) -> String {
+        if let nested = value["completion"] as? [String: Any] {
+            let note = ((nested["note"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !note.isEmpty { return note }
+        }
+        return ((value["note"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private static func memberNames(from value: [String: Any], key: String = "members") -> [String] {
         ((value[key] as? [[String: Any]]) ?? []).compactMap { member in
             let name = ((member["name"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -417,7 +436,8 @@ final class WorkRepository: Sendable {
                 userName: (item["userName"] as? String) ?? "",
                 content: (item["content"] as? String) ?? "",
                 deadline: (item["deadline"] as? String) ?? "",
-                departmentName: (item["departmentName"] as? String) ?? ""
+                departmentName: (item["departmentName"] as? String) ?? "",
+                note: (item["note"] as? String) ?? ""
             )
         }
     }
