@@ -25,6 +25,7 @@ import { convexErrorText, messageFor } from './lib/appErrorMessage';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyCreatePreview from './duties/DutyCreatePreview';
+import { EditActionConfirm } from './lib/ConfirmActionModal';
 import DutyEditorFields from './duties/DutyEditorFields';
 import { DutyListEmpty, DutyListHeading, DutyListSearch, DutyListTabs } from './duties/DutyListFilters';
 import DutyListSummary from './duties/DutyListSummary';
@@ -611,6 +612,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [mineSearch, setMineSearch] = useState(emptyDutySearch);
   const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const { pending, feedback, setFeedback, run } = useFeedback();
   const { mine, created } = useMemo(
@@ -651,6 +653,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const closeEditor = () => {
     setEditing(null);
     setPreviewOpen(false);
+    setEditConfirm(null);
     setForm(emptyDutyForm());
     setEditorOpen(false);
   };
@@ -678,7 +681,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const submit = (event) => {
     event.preventDefault();
     if (editing) {
-      void persistDuty();
+      setEditConfirm('save');
       return;
     }
     if (!dutyFormHasParticipants(form)) {
@@ -811,7 +814,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           </div>
           <div className="duty-editor-heading-actions">
             {editing ? (
-              <button type="button" className="work-ghost-button" onClick={() => { setEditing(null); setForm(emptyDutyForm()); }}>
+              <button type="button" className="work-ghost-button" onClick={() => setEditConfirm('cancel')}>
                 Hủy chỉnh sửa
               </button>
             ) : null}
@@ -861,7 +864,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           <button
             type="button"
             className="work-ghost-button"
-            onClick={editing ? closeEditor : () => setForm(emptyDutyForm())}
+            onClick={editing ? () => setEditConfirm('cancel') : () => setForm(emptyDutyForm())}
           >
             {editing ? 'Hủy sửa' : 'Xóa biểu mẫu'}
           </button>
@@ -880,6 +883,16 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           onConfirm={() => void persistDuty()}
         />
       ) : null}
+
+      <EditActionConfirm
+        action={editConfirm}
+        onDismiss={() => setEditConfirm(null)}
+        onConfirmCancel={() => closeEditor()}
+        onConfirmSave={() => {
+          setEditConfirm(null);
+          void persistDuty();
+        }}
+      />
 
       <div className="duty-list-section">
         <DutyListHeading>Công tác của tôi</DutyListHeading>
@@ -991,6 +1004,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const [mineSearch, setMineSearch] = useState(emptyDutySearch);
   const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const duties = data?.duties;
   const { mine, created } = useMemo(
@@ -1028,6 +1042,14 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     setForm(dutyFormFromItem(item));
   };
 
+  const closeEditor = () => {
+    setEditing(null);
+    setPreviewOpen(false);
+    setEditConfirm(null);
+    setForm(emptyDutyForm());
+    setEditorOpen(false);
+  };
+
   const persistDuty = async () => {
     if (pending === 'save') return;
     const includeDepartments = Boolean(options?.isOps);
@@ -1058,7 +1080,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const submit = (event) => {
     event.preventDefault();
     if (editing) {
-      void persistDuty();
+      setEditConfirm('save');
       return;
     }
     if (!dutyFormHasParticipants(form, { includeDepartments: Boolean(options?.isOps) })) {
@@ -1222,7 +1244,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
               <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
               <h3>{editing ? 'Sửa công tác' : 'Tạo công tác'}</h3>
             </div>
-            <button type="button" className="duty-editor-close" onClick={() => { setEditing(null); setPreviewOpen(false); setForm(emptyDutyForm()); setEditorOpen(false); }} aria-label="Đóng biểu mẫu">
+            <button type="button" className="duty-editor-close" onClick={closeEditor} aria-label="Đóng biểu mẫu">
               <span aria-hidden="true">×</span> Đóng
             </button>
           </div>
@@ -1250,6 +1272,11 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
             </div>
           ) : null}
           <div className="work-editor-actions duty-editor-actions">
+            {editing ? (
+              <button type="button" className="work-ghost-button" onClick={() => setEditConfirm('cancel')}>
+                Hủy sửa
+              </button>
+            ) : null}
             <button className="work-primary-button" disabled={Boolean(pending)}>
               {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
             </button>
@@ -1266,6 +1293,16 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
           onConfirm={() => void persistDuty()}
         />
       ) : null}
+
+      <EditActionConfirm
+        action={editConfirm}
+        onDismiss={() => setEditConfirm(null)}
+        onConfirmCancel={() => closeEditor()}
+        onConfirmSave={() => {
+          setEditConfirm(null);
+          void persistDuty();
+        }}
+      />
 
       {feedback.text && !editorOpen ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">

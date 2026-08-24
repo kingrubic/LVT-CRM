@@ -1560,6 +1560,22 @@
   border-top: 1px solid #e4ebed;
 }
 
+.work-confirm-modal {
+  width: min(100%, 400px);
+  max-height: none;
+  overflow: visible;
+}
+
+.work-confirm-modal h3 {
+  margin: 6px 0 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.work-confirm-modal .work-modal-actions {
+  margin-top: 18px;
+}
+
 .work-muted {
   margin: 0;
   padding: 10px;

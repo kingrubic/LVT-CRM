@@ -6,6 +6,7 @@ import { useConvexAuth } from '@convex-dev/auth/react';
 import { useNotificationFocus, WORK_NOTIFICATION_FOCUS_TYPES } from '../notifications/useNotificationFocus';
 import WorkAssignmentRows from './WorkAssignmentRows';
 import WorkCreatePreview from './WorkCreatePreview';
+import { EditActionConfirm } from '../lib/ConfirmActionModal';
 import { DutyListHeading } from '../duties/DutyListFilters';
 import { WorkListEmpty, WorkListSearch, WorkListTabs } from './WorkListFilters';
 import WorkListSummary from './WorkListSummary';
@@ -511,6 +512,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const [title, setTitle] = useState('');
   const [assignments, setAssignments] = useState([]);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [editConfirm, setEditConfirm] = useState(null);
   const [listTab, setListTab] = useState(WORK_LIST_TAB_UPCOMING);
   const [listSearch, setListSearch] = useState(emptyWorkSearch);
   const [expanded, setExpanded] = useState(null);
@@ -544,6 +546,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
 
   const closeEditor = () => {
     reset();
+    setEditConfirm(null);
     setOpen(false);
   };
 
@@ -681,8 +684,12 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
 
   const submit = (event) => {
     event.preventDefault();
-    if (pendingSettlement || editingDocument) {
+    if (pendingSettlement) {
       void persistWork();
+      return;
+    }
+    if (editingDocument) {
+      setEditConfirm('save');
       return;
     }
     if (!assignments.length) {
@@ -802,7 +809,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
           />
           {feedback.text ? <div className={`work-feedback ${feedback.type}`}>{feedback.text}</div> : null}
           <div className="work-editor-actions duty-editor-actions">
-            <button type="button" className="work-ghost-button" onClick={reset}>{editingDocument ? 'Hủy sửa' : 'Xóa biểu mẫu'}</button>
+            <button type="button" className="work-ghost-button" onClick={editingDocument ? () => setEditConfirm('cancel') : reset}>{editingDocument ? 'Hủy sửa' : 'Xóa biểu mẫu'}</button>
             <button type="submit" className="work-primary-button" disabled={saving}>
               {saving
                 ? (editingDocument ? 'Đang lưu…' : 'Đang tạo…')
@@ -827,6 +834,16 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
           onConfirm={() => void persistWork()}
         />
       ) : null}
+
+      <EditActionConfirm
+        action={editConfirm}
+        onDismiss={() => setEditConfirm(null)}
+        onConfirmCancel={() => closeEditor()}
+        onConfirmSave={() => {
+          setEditConfirm(null);
+          void persistWork();
+        }}
+      />
 
       {!hideCompletionQueue && pendingCompletionReviews.length ? (
         <section className="work-completion-queue">
