@@ -5,17 +5,18 @@ import {
   adminPermissionOrThrow,
   defaultMenuAccess,
   hasActiveNameConflict,
-  normalizeMenuAccess,
   SYSTEM_MENU_DEFS,
   type LegacyMenuAccess,
   type MenuAccess,
 } from "./lib";
+import { cleanPermissionGroupMenuAccess, normalizeMenuAccess } from "./menuAccess";
 
 const accessValidator = v.union(
   v.literal("hidden"),
   v.literal("view"),
   v.literal("view_all"),
   v.literal("edit"),
+  v.literal("supervisor"),
 );
 
 function cleanGroup(args: {
@@ -29,13 +30,7 @@ function cleanGroup(args: {
   if (!name || name.length > 120) throw new Error("INVALID_NAME");
   const description = args.description?.trim() || undefined;
   if (description && description.length > 500) throw new Error("INVALID_DESCRIPTION");
-  const menuAccess = normalizeMenuAccess(args.menuAccess || defaultMenuAccess());
-  const known = new Set(SYSTEM_MENU_DEFS.map((m) => m.id));
-  for (const entry of menuAccess) {
-    if (!known.has(entry.menu as (typeof SYSTEM_MENU_DEFS)[number]["id"])) {
-      throw new Error("INVALID_MENU");
-    }
-  }
+  const menuAccess = cleanPermissionGroupMenuAccess(args.menuAccess || defaultMenuAccess());
   return { name, code, description, menuAccess };
 }
 

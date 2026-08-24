@@ -1,4 +1,4 @@
-/** Pure menu-access levels for permission groups. */
+/** Canonical menu-access helpers. Giám thị (`supervisor`) is homeroom-only. */
 
 export const SYSTEM_MENU_DEFS = [
   { id: "reports", label: "Báo cáo" },
@@ -10,9 +10,13 @@ export const SYSTEM_MENU_DEFS = [
 ] as const;
 
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
-export type MenuAccess = "hidden" | "view" | "view_all";
-/** Stored rows may still have `edit`; normalizeMenuAccess maps it to `view`. */
+/** Stored/legacy values. `edit` remains readable so existing groups keep write semantics. */
+export type MenuAccess = "hidden" | "view" | "view_all" | "edit" | "supervisor";
 export type LegacyMenuAccess = MenuAccess | "edit";
+export type CanonicalMenuAccess = "hidden" | "view" | "view_all" | "supervisor";
+
+export const HOMEROOM_MENU_ID: MenuId = "homeroom";
+export const INVALID_MENU_ACCESS = "INVALID_MENU_ACCESS";
 
 export function defaultAccessForMenu(menuId: string): MenuAccess {
   return menuId === "notifications" ? "view" : "hidden";
@@ -25,26 +29,88 @@ export function defaultMenuAccess(): { menu: string; access: MenuAccess }[] {
   }));
 }
 
-function coerceMenuAccess(access: string | undefined, fallback: MenuAccess): MenuAccess {
+export function canonicalizeMenuAccessLevel(access: string | undefined): CanonicalMenuAccess {
   if (access === "edit") return "view";
+  if (access === "supervisor") return "supervisor";
   if (access === "hidden" || access === "view" || access === "view_all") return access;
-  return fallback;
+  return "hidden";
 }
 
-/** View, view-all, and legacy edit all allow module business operations; hidden does not. */
+export function isMenuVisible(access: MenuAccess | CanonicalMenuAccess | undefined): boolean {
+  return access != null && access !== "hidden";
+}
+
+export function isViewAllAccess(access: MenuAccess | CanonicalMenuAccess | undefined): boolean {
+  return access === "view_all";
+}
+
+export function isHomeroomSupervisorAccess(
+  access: MenuAccess | CanonicalMenuAccess | undefined,
+): boolean {
+  return access === "supervisor";
+}
+
+/**
+ * Runtime resolution keeps legacy `edit` so canOperateMenu still matches stored rows.
+ * `supervisor` never grants another menu and never satisfies view_all.
+ */
+export function effectiveMenuAccessLevel(
+  menu: string,
+  raw: string | undefined,
+): MenuAccess {
+  if (raw === "supervisor") {
+    return menu === HOMEROOM_MENU_ID ? "supervisor" : "hidden";
+  }
+  if (raw === "edit") return "edit";
+  if (raw === "view" || raw === "view_all" || raw === "hidden") return raw;
+  if (!raw) return defaultAccessForMenu(menu);
+  return "hidden";
+}
+
+/** View, view_all, and legacy edit allow module business operations; hidden and supervisor do not. */
 export function canOperateMenu(access: string | undefined): boolean {
   return access === "view" || access === "view_all" || access === "edit";
 }
 
+export function assertValidMenuAccessEntries(
+  entries: { menu: string; access: string }[] | undefined,
+) {
+  for (const entry of entries || []) {
+    if (entry.access === "supervisor" && entry.menu !== HOMEROOM_MENU_ID) {
+      throw new Error(INVALID_MENU_ACCESS);
+    }
+  }
+}
+
 export function normalizeMenuAccess(
-  entries: { menu: string; access: LegacyMenuAccess | string }[] | undefined,
+  entries: { menu: string; access: MenuAccess | string }[] | undefined,
 ): { menu: string; access: MenuAccess }[] {
   const map = new Map((entries || []).map((e) => [e.menu, e.access]));
   return SYSTEM_MENU_DEFS.map((item) => {
-    const fallback = defaultAccessForMenu(item.id);
+    const raw = map.get(item.id);
+    if (raw === undefined) {
+      return { menu: item.id, access: defaultAccessForMenu(item.id) };
+    }
+    if (raw === "supervisor" && item.id !== HOMEROOM_MENU_ID) {
+      return { menu: item.id, access: "hidden" as MenuAccess };
+    }
     return {
       menu: item.id,
-      access: coerceMenuAccess(map.get(item.id), fallback),
+      access: canonicalizeMenuAccessLevel(raw) as MenuAccess,
     };
   });
+}
+
+/** Shared create/update boundary: reject crafted non-homeroom supervisor payloads. */
+export function cleanPermissionGroupMenuAccess(
+  entries: { menu: string; access: MenuAccess | string }[] | undefined,
+): { menu: string; access: MenuAccess }[] {
+  assertValidMenuAccessEntries(entries);
+  const known = new Set(SYSTEM_MENU_DEFS.map((m) => m.id));
+  for (const entry of entries || []) {
+    if (entry.menu && !known.has(entry.menu as MenuId)) {
+      throw new Error("INVALID_MENU");
+    }
+  }
+  return normalizeMenuAccess(entries);
 }

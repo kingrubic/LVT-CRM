@@ -86,6 +86,7 @@ class WorkViewModelConcurrencyTest {
         val task = task("task-2").copy(isAdmin = false)
         viewModel.requestComplete(task)
         assertEquals(task, viewModel.uiState.value.evidencePromptTask)
+        viewModel.onEvidenceNoteChange("  Đã nộp báo cáo  ")
 
         viewModel.completeWithEvidence(task, "hello".toByteArray(), "proof.pdf", "application/pdf")
         advanceUntilIdle()
@@ -93,6 +94,7 @@ class WorkViewModelConcurrencyTest {
         assertEquals(1, repository.completionCalls)
         assertEquals(1, repository.uploadCalls)
         assertEquals("proof.pdf", repository.lastUploadedEvidence?.fileName)
+        assertEquals("Đã nộp báo cáo", repository.lastNote)
         assertEquals(null, viewModel.uiState.value.evidencePromptTask)
     }
 
@@ -130,6 +132,7 @@ private class BlockingWorkOperations : WorkOperations {
     var uploadCalls = 0
     var lastQualityPercent: Int? = null
     var lastUploadedEvidence: lvt.crm.data.work.WorkUploadedEvidence? = null
+    var lastNote: String? = null
 
     override suspend fun listMine(): WorkSnapshot {
         if (listCalls++ == 0) {
@@ -159,10 +162,11 @@ private class BlockingWorkOperations : WorkOperations {
         return evidence
     }
 
-    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: lvt.crm.data.work.WorkUploadedEvidence?) {
+    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: lvt.crm.data.work.WorkUploadedEvidence?, note: String?) {
         completionCalls++
         lastQualityPercent = qualityPercent
         lastUploadedEvidence = evidence
+        lastNote = note
     }
 
     override suspend fun decideApproval(documentId: String, approve: Boolean) {

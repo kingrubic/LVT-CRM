@@ -1,0 +1,20 @@
+# Homeroom & student attendance
+
+Canonical plan: `docs/plans/2026-08-15-homeroom-attendance-three-phase-plan.md`.
+
+## Permission
+
+- Giám thị is `{ menu: "homeroom", access: "supervisor" }`, not `users.role`.
+- Reject `supervisor` on every other menu (`INVALID_MENU_ACCESS`).
+- Legacy `edit` normalizes to `view`; do not reuse `edit` as Giám thị.
+- `supervisor` is not `view_all`. Class/whole-school scope comes from explicit `homeroomAssignments`.
+
+## Data
+
+- Do not reuse `dutyAttendances` or employee user-import for students.
+- Camera observation and human disposition are separate facts; never overwrite raw observation.
+- School-year history is immutable: transfers close+create enrollment/assignment rows.
+- Transfer/replacement date belongs only to the new class/teacher. Old enrollment `endDate` and old GVCN `effectiveTo` are the day before (`addDaysYmd(date, -1)`); coverage is inclusive. Reject transfer before the current enrollment `startDate`.
+- GVCN replacement keeps the outgoing row `active: true` so date-effective historical access still works. Reserve `active: false` for revocation/removal that must erase current and future access.
+- Roster import is atomic: any blocking row commits nothing. Preview reports every failing row, field, safe value, stable code, and Vietnamese message.
+- Use `Asia/Ho_Chi_Minh` for attendance dates. No student photos in this module.

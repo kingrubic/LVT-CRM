@@ -10,6 +10,7 @@ const menuAccessLevel = v.union(
   v.literal("view_all"),
   /** Legacy write level; normalizeMenuAccess maps this to `view`. */
   v.literal("edit"),
+  v.literal("supervisor"),
 );
 
 export default defineSchema({
@@ -90,7 +91,7 @@ export default defineSchema({
     /** Admin-defined uppercase code (≤20, A-Z0-9_-). Optional only for legacy rows pending backfill. */
     code: v.optional(v.string()),
     description: v.optional(v.string()),
-    /** One entry per system menu: hidden | view | view_all. Legacy `edit` is accepted and normalized to `view`. */
+    /** One entry per system menu: hidden | view | view_all | supervisor; legacy edit accepted and normalized to view */
     menuAccess: v.array(
       v.object({
         menu: v.string(),
@@ -320,6 +321,7 @@ export default defineSchema({
           reviewedAt: v.optional(v.number()),
           reviewedBy: v.optional(v.string()),
           rejectionReason: v.optional(v.string()),
+          note: v.optional(v.string()),
           driveFileId: v.optional(v.string()),
           driveChecksum: v.optional(v.string()),
           fileName: v.optional(v.string()),
@@ -359,6 +361,7 @@ export default defineSchema({
           reviewedAt: v.optional(v.number()),
           reviewedBy: v.optional(v.string()),
           rejectionReason: v.optional(v.string()),
+          note: v.optional(v.string()),
           driveFileId: v.optional(v.string()),
           driveChecksum: v.optional(v.string()),
           fileName: v.optional(v.string()),
@@ -469,4 +472,213 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_user_request", ["userId", "requestId"]),
+  schoolYears: defineTable({
+    name: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+    attendanceUploadDueTime: v.string(),
+    active: v.boolean(),
+    lockedAt: v.optional(v.number()),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_name", ["name"])
+    .index("by_active", ["active"]),
+  schoolCalendarDays: defineTable({
+    schoolYearId: v.string(),
+    date: v.string(),
+    kind: v.string(),
+    note: v.optional(v.string()),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_year_date", ["schoolYearId", "date"])
+    .index("by_date", ["date"]),
+  homeroomClasses: defineTable({
+    schoolYearId: v.string(),
+    code: v.string(),
+    name: v.string(),
+    gradeLevel: v.number(),
+    status: v.string(),
+    notes: v.optional(v.string()),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_year", ["schoolYearId"])
+    .index("by_year_code", ["schoolYearId", "code"]),
+  homeroomAssignments: defineTable({
+    classId: v.string(),
+    schoolYearId: v.string(),
+    userId: v.string(),
+    assignmentType: v.string(),
+    scopeKind: v.string(),
+    effectiveFrom: v.string(),
+    effectiveTo: v.optional(v.string()),
+    active: v.boolean(),
+    createdBy: v.string(),
+    endedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_user_active", ["userId", "active"])
+    .index("by_class_type", ["classId", "assignmentType"])
+    .index("by_year_user", ["schoolYearId", "userId"]),
+  students: defineTable({
+    studentCode: v.string(),
+    fullName: v.string(),
+    dateOfBirth: v.optional(v.string()),
+    gender: v.optional(v.string()),
+    studentPhone: v.optional(v.string()),
+    priorityCategory: v.optional(v.string()),
+    ethnicity: v.optional(v.string()),
+    hardshipNote: v.optional(v.string()),
+    status: v.string(),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_code", ["studentCode"])
+    .index("by_status", ["status"]),
+  studentGuardians: defineTable({
+    studentId: v.string(),
+    relationship: v.string(),
+    fullName: v.string(),
+    phone: v.optional(v.string()),
+    isPrimaryContact: v.boolean(),
+    notes: v.optional(v.string()),
+    active: v.boolean(),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_student_active", ["studentId", "active"]),
+  classEnrollments: defineTable({
+    studentId: v.string(),
+    classId: v.string(),
+    schoolYearId: v.string(),
+    rosterNumber: v.optional(v.number()),
+    startDate: v.string(),
+    endDate: v.optional(v.string()),
+    status: v.string(),
+    transferReason: v.optional(v.string()),
+    createdBy: v.string(),
+    updatedBy: v.optional(v.string()),
+    ...timestamps,
+  })
+    .index("by_student_year", ["studentId", "schoolYearId"])
+    .index("by_class_status", ["classId", "status"])
+    .index("by_year_status", ["schoolYearId", "status"]),
+  studentRosterImportUploads: defineTable({
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    fileSize: v.number(),
+    checksum: v.optional(v.string()),
+    uploadedBy: v.string(),
+    schoolYearId: v.string(),
+    classId: v.string(),
+    mode: v.string(),
+    status: v.string(),
+    rowCount: v.optional(v.number()),
+    successCount: v.optional(v.number()),
+    errorCount: v.optional(v.number()),
+    requestKey: v.optional(v.string()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    committedAt: v.optional(v.number()),
+  })
+    .index("by_class", ["classId"])
+    .index("by_expiresAt", ["expiresAt"]),
+  studentRosterImportRows: defineTable({
+    uploadId: v.string(),
+    rowNumber: v.number(),
+    payload: v.string(),
+    issues: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_upload", ["uploadId"]),
+  attendanceImportUploads: defineTable({
+    schoolYearId: v.string(),
+    classId: v.optional(v.string()),
+    attendanceDate: v.string(),
+    sourceKind: v.string(),
+    fileName: v.string(),
+    fileSize: v.number(),
+    checksum: v.string(),
+    storageId: v.id("_storage"),
+    uploadedBy: v.string(),
+    columnMapping: v.object({
+      studentCode: v.optional(v.string()),
+      studentName: v.optional(v.string()),
+      classCode: v.optional(v.string()),
+      observedAt: v.optional(v.string()),
+      sourceStatus: v.optional(v.string()),
+    }),
+    presencePolicy: v.string(),
+    status: v.string(),
+    rowCount: v.number(),
+    matchedCount: v.number(),
+    warningCount: v.number(),
+    errorCount: v.number(),
+    publishedAt: v.optional(v.number()),
+    supersedesImportId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("by_date", ["attendanceDate"])
+    .index("by_checksum_date", ["checksum", "attendanceDate"])
+    .index("by_class_date", ["classId", "attendanceDate"]),
+  attendanceImportRows: defineTable({
+    importId: v.string(),
+    rowNumber: v.number(),
+    rawStudentCode: v.optional(v.string()),
+    rawStudentName: v.optional(v.string()),
+    rawClassCode: v.optional(v.string()),
+    rawObservedAt: v.optional(v.string()),
+    rawStatus: v.optional(v.string()),
+    matchedStudentId: v.optional(v.string()),
+    matchedClassId: v.optional(v.string()),
+    resolution: v.string(),
+    messages: v.array(v.string()),
+    normalizedObservedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_import", ["importId"]),
+  studentAttendanceDays: defineTable({
+    schoolYearId: v.string(),
+    classId: v.string(),
+    enrollmentId: v.string(),
+    studentId: v.string(),
+    attendanceDate: v.string(),
+    sourceImportId: v.optional(v.string()),
+    rawObservation: v.string(),
+    rawObservedAt: v.optional(v.number()),
+    disposition: v.string(),
+    effectiveStatus: v.string(),
+    reasonCode: v.optional(v.string()),
+    note: v.optional(v.string()),
+    firstPublishedAt: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index("by_student_date", ["studentId", "attendanceDate"])
+    .index("by_class_date", ["classId", "attendanceDate"])
+    .index("by_year_date", ["schoolYearId", "attendanceDate"])
+    .index("by_import", ["sourceImportId"]),
+  studentAttendanceCorrections: defineTable({
+    attendanceDayId: v.string(),
+    studentId: v.string(),
+    attendanceDate: v.string(),
+    previousDisposition: v.string(),
+    nextDisposition: v.string(),
+    previousEffectiveStatus: v.string(),
+    nextEffectiveStatus: v.string(),
+    reasonCode: v.optional(v.string()),
+    note: v.optional(v.string()),
+    evidenceAttachmentIds: v.optional(v.array(v.string())),
+    actorUserId: v.string(),
+    at: v.number(),
+  })
+    .index("by_day", ["attendanceDayId"])
+    .index("by_student_date", ["studentId", "attendanceDate"]),
 });

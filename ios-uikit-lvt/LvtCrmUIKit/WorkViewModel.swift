@@ -223,7 +223,8 @@ final class WorkViewModel {
         qualityPercent: Int?,
         fileData: Data? = nil,
         fileName: String? = nil,
-        mimeType: String? = nil
+        mimeType: String? = nil,
+        note: String? = nil
     ) {
         guard busyTaskId == nil else { return }
         busyTaskId = item.id
@@ -236,7 +237,7 @@ final class WorkViewModel {
                     mimeType: mimeType
                 )
             }
-            try await self.repository.complete(item: item, qualityPercent: qualityPercent, evidence: evidence)
+            try await self.repository.complete(item: item, qualityPercent: qualityPercent, evidence: evidence, note: note)
             self.tasks = self.tasks.map {
                 guard $0.id == item.id else { return $0 }
                 var updated = $0

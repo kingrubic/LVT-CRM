@@ -35,6 +35,7 @@ data class WorkUiState(
     val qualityPromptTask: WorkTaskItem? = null,
     val qualityInput: String = "100",
     val evidencePromptTask: WorkTaskItem? = null,
+    val evidenceNote: String = "",
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
     val mineTab: WorkListTab = WorkListTab.Upcoming,
     val createdTab: WorkListTab = WorkListTab.Upcoming,
@@ -143,13 +144,17 @@ class WorkViewModel(
             }
         } else {
             _uiState.update {
-                it.copy(evidencePromptTask = task, actionError = null)
+                it.copy(evidencePromptTask = task, evidenceNote = "", actionError = null)
             }
         }
     }
 
     fun dismissEvidencePrompt() {
-        _uiState.update { it.copy(evidencePromptTask = null) }
+        _uiState.update { it.copy(evidencePromptTask = null, evidenceNote = "") }
+    }
+
+    fun onEvidenceNoteChange(value: String) {
+        _uiState.update { it.copy(evidenceNote = value.take(500)) }
     }
 
     fun setActionError(error: String) {
@@ -263,14 +268,15 @@ class WorkViewModel(
         fileName: String? = null,
         mimeType: String? = null,
     ) {
-        _uiState.update { it.copy(busyTaskId = task.id, actionError = null, evidencePromptTask = null) }
+        val note = _uiState.value.evidenceNote.trim().ifBlank { null }
+        _uiState.update { it.copy(busyTaskId = task.id, actionError = null, evidencePromptTask = null, evidenceNote = "") }
         viewModelScope.launch {
             operationMutex.withLock {
                 try {
                     val evidence = if (fileBytes != null && fileName != null && mimeType != null) {
                         repository.uploadEvidence(fileBytes, fileName, mimeType)
                     } else null
-                    repository.complete(task, qualityPercent, evidence)
+                    repository.complete(task, qualityPercent, evidence, note)
                     _uiState.update { state ->
                         state.copy(
                             tasks = state.tasks.map { item ->

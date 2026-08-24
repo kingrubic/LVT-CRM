@@ -18,6 +18,7 @@ import {
   canSeeArchivedWork,
   canSeeLiveWork,
   cleanWorkTitle,
+  cleanCompletionNote,
   isWorkItemArchived,
   isWorkReleased,
   shouldBypassWorkCompletionReview,
@@ -61,6 +62,7 @@ type CompletionRow = {
   reviewedAt?: number;
   reviewedBy?: string;
   rejectionReason?: string;
+  note?: string;
   driveFileId?: string;
   driveChecksum?: string;
   fileName?: string;
@@ -629,6 +631,7 @@ function completionView(item: any, userId: string, catalogData: any) {
     submittedLate: row.submittedLate,
     qualityPercent: row.qualityPercent ?? null,
     rejectionReason: row.rejectionReason || "",
+    note: row.note || "",
     reviewedAt: row.reviewedAt || null,
     reviewerName: reviewer ? reviewer.name || reviewer.email || "—" : null,
   };
@@ -1290,6 +1293,7 @@ export const listAdmin = query({
           deadline: item.deadline,
           submittedAt: row.submittedAt,
           submittedLate: row.submittedLate,
+          note: row.note || "",
           type: assignmentTypeOf(item),
           departmentName:
             assignmentTypeOf(item) === "individual"
@@ -1398,6 +1402,7 @@ export const completePersonalTask = mutation({
   args: {
     taskId: v.id("personalTasks"),
     qualityPercent: v.optional(v.number()),
+    note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const access = await requireWorkAccess(ctx);
@@ -1418,6 +1423,7 @@ export const completePersonalTask = mutation({
 
     const late = task.deadline < todayInVietnam();
     const now = Date.now();
+    const note = cleanCompletionNote(args.note);
     const bypassReview = shouldBypassWorkCompletionReview(access.isAdmin, args.qualityPercent);
     if (access.isAdmin && args.qualityPercent === undefined) {
       throw new Error("QUALITY_PERCENT_REQUIRED");
@@ -1432,6 +1438,7 @@ export const completePersonalTask = mutation({
         qualityPercent,
         reviewedAt: now,
         reviewedBy: String(access.user._id),
+        ...(note ? { note } : {}),
       });
       const synced = syncApprovedArrays(completions);
       await ctx.db.patch(args.taskId, {
@@ -1448,6 +1455,7 @@ export const completePersonalTask = mutation({
       status: "pending_approval",
       submittedAt: now,
       submittedLate: late,
+      ...(note ? { note } : {}),
     });
     await ctx.db.patch(args.taskId, {
       completions,
@@ -1467,6 +1475,7 @@ export const completeWorkItem = mutation({
     fileName: v.optional(v.string()),
     fileType: v.optional(v.string()),
     fileSize: v.optional(v.number()),
+    note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const access = await requireWorkAccess(ctx);
@@ -1495,6 +1504,7 @@ export const completeWorkItem = mutation({
     if (!existing && isUserApproved(item, String(access.user._id))) return;
 
     const hasEvidence = Boolean(args.driveFileId);
+    const note = cleanCompletionNote(args.note);
     let evidence: {
       driveFileId?: string;
       driveChecksum?: string;
@@ -1535,6 +1545,7 @@ export const completeWorkItem = mutation({
         reviewedAt: now,
         reviewedBy: String(access.user._id),
         ...evidence,
+        ...(note ? { note } : {}),
       });
       const synced = syncApprovedArrays(completions);
       await ctx.db.patch(args.workItemId, {
@@ -1552,6 +1563,7 @@ export const completeWorkItem = mutation({
       submittedAt: now,
       submittedLate: late,
       ...evidence,
+      ...(note ? { note } : {}),
     });
     await ctx.db.patch(args.workItemId, {
       completions,
@@ -1878,6 +1890,7 @@ export const listMine = query({
               deadline: item.deadline,
               submittedAt: row.submittedAt,
               submittedLate: row.submittedLate,
+              note: row.note || "",
               type: assignmentTypeOf(item),
               departmentName:
                 assignmentTypeOf(item) === "individual"
@@ -1993,6 +2006,7 @@ export const listMine = query({
           deadline: task.deadline,
           submittedAt: row.submittedAt,
           submittedLate: row.submittedLate,
+          note: row.note || "",
           type: "individual",
           departmentName: item
             ? String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")

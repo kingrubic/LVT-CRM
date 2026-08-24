@@ -45,8 +45,21 @@ function normalizePathname(pathname) {
   return `/${raw.replace(/^\/+|\/+$/g, '')}`;
 }
 
+export function homeroomPathname(args = {}) {
+  if (args.studentId) return `/lop-chu-nhiem/hoc-sinh/${encodeURIComponent(args.studentId)}`;
+  if (args.importAttendance) return '/lop-chu-nhiem/import-diem-danh';
+  if (args.classId && args.tab) {
+    return `/lop-chu-nhiem/lop/${encodeURIComponent(args.classId)}/${args.tab}`;
+  }
+  if (args.classId) return `/lop-chu-nhiem/lop/${encodeURIComponent(args.classId)}`;
+  return MENU_PATHS.homeroom;
+}
+
 export function routeForPathname(pathname) {
   const normalized = normalizePathname(pathname);
+  if (normalized === MENU_PATHS.homeroom || normalized.startsWith(`${MENU_PATHS.homeroom}/`)) {
+    return { menu: 'homeroom', reportSection: undefined, homeroomPath: normalized };
+  }
   const alias = HIDDEN_MENU_ALIASES[normalized];
   if (alias) return { menu: alias.menu, reportSection: alias.reportSection };
   const route = PATH_ROUTES.get(normalized);

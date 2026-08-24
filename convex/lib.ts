@@ -10,6 +10,7 @@ import {
   canOperateMenu,
   defaultAccessForMenu,
   defaultMenuAccess,
+  effectiveMenuAccessLevel,
   normalizeMenuAccess,
   SYSTEM_MENU_DEFS,
   type LegacyMenuAccess,
@@ -23,6 +24,7 @@ export {
   canOperateMenu,
   defaultAccessForMenu,
   defaultMenuAccess,
+  effectiveMenuAccessLevel,
   normalizeMenuAccess,
   SYSTEM_MENU_DEFS,
 };
@@ -299,8 +301,8 @@ export async function resolveUserMenuAccess(
   if (!group?.active) return empty;
 
   const result = { ...empty };
-  for (const entry of normalizeMenuAccess(group.menuAccess)) {
-    result[entry.menu] = entry.access;
+  for (const entry of group.menuAccess || []) {
+    result[entry.menu] = effectiveMenuAccessLevel(entry.menu, entry.access);
   }
   return result;
 }

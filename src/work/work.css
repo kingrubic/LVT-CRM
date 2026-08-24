@@ -958,6 +958,31 @@
   line-height: 1.5;
 }
 
+.work-submitter-note {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid #b8ded6;
+  border-radius: 12px;
+  background: #e8f6f2;
+  color: var(--work-navy);
+}
+
+.work-submitter-note strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #267c70;
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.work-submitter-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .work-late-flag {
   color: #9a6a12;
   font-weight: 800;
@@ -1558,6 +1583,22 @@
   margin-top: 17px;
   padding-top: 14px;
   border-top: 1px solid #e4ebed;
+}
+
+.work-confirm-modal {
+  width: min(100%, 400px);
+  max-height: none;
+  overflow: visible;
+}
+
+.work-confirm-modal h3 {
+  margin: 6px 0 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.work-confirm-modal .work-modal-actions {
+  margin-top: 18px;
 }
 
 .work-muted {

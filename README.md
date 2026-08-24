@@ -32,7 +32,8 @@ Vận hành production:
 - Administrator quản lý thông số tối cao; Administrator và Moderator cùng quản lý nghiệp vụ (công tác, công việc, …).
 - Mật khẩu băm bởi Convex Auth (Scrypt); plaintext không lưu / không ghi audit. Tài khoản tạo/reset có `mustChangePassword=true`.
 - **Đã có luồng dữ liệu:** Công tác (lịch + xác nhận tham gia, địa điểm nhập text), Công việc (tạo/giao ngay, nộp + duyệt hoàn thành), Báo cáo (Công tác · Công việc; Bán trú đang ẩn), Thông báo (mốc hạn + click mở đúng mục), Thiết lập hiển thị.
-- **Vẫn placeholder:** Lớp chủ nhiệm, Đánh giá nhân sự.
+- **Đã có nền tảng Lớp chủ nhiệm (Phase 1):** năm học, lớp, phân công GVCN/Giám thị, học sinh/phụ huynh, nhập danh sách Excel (atomic), nhập/công bố điểm danh camera có giới hạn, sổ điểm danh ngày, phân loại vắng, báo cáo/xuất cơ bản. Ngày chuyển lớp / thay GVCN thuộc lớp/GVCN mới; bản ghi cũ đóng ngày trước đó (`endDate`/`effectiveTo` inclusive). Chưa chốt workbook camera thật và lịch ngày học nhà trường.
+- **Vẫn placeholder:** Đánh giá nhân sự.
 
 ## Mô hình phân quyền
 
@@ -59,7 +60,7 @@ Mỗi nhóm quy định quyền trên **6** menu **Chức năng chính**:
 | `homeroom` | Lớp chủ nhiệm |
 | `people-review` | Đánh giá nhân sự |
 
-Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (thao tác nghiệp vụ trong phạm vi của mình) · **`view_all`** (thao tác nghiệp vụ trên phạm vi toàn trường, nơi module hỗ trợ). Mức legacy **`edit`** được đọc/ghi thành **`view`**. Tạo công việc/công tác toàn trường vẫn theo role/cấp, không theo mức menu.
+Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (thao tác nghiệp vụ trong phạm vi của mình) · **`view_all`** (thao tác nghiệp vụ trên phạm vi toàn trường, nơi module hỗ trợ) · **`supervisor`** (**Giám thị**, chỉ menu `homeroom`). Mức legacy **`edit`** vẫn đọc được nhưng chuẩn hóa thành `view` khi lưu; không dùng `edit` để biểu diễn Giám thị. **Giám thị** không phải vai trò hệ thống (`users.role` vẫn là `user`), không thỏa `view_all`, và không được `canOperateMenu`. Phạm vi lớp/toàn trường của Giám thị đến từ phân công riêng, không từ riêng mức menu. Tạo công việc/công tác toàn trường vẫn theo role/cấp, không theo mức menu.
 
 - Mỗi nhóm có **mã** (`code`): tối đa **20** ký tự, chỉ `A–Z 0–9 _ -`, luôn lưu/hiển thị **IN HOA**; dùng trong file import user (`ma_nhom_quyen`).
 - Nhóm cũ thiếu mã được backfill tự động (`permissionGroups.ensureCodes`): chữ cái đầu mỗi từ tên (bỏ dấu), nếu trùng thì 3 rồi 4 ký tự đầu, rồi thêm số.
@@ -88,7 +89,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Công việc / công văn
 
-- Công việc **không duyệt công văn**. Tạo xong là giao ngay. User **Nộp** kèm file bằng chứng; **người tạo** mới đánh dấu hoàn thành (kèm %) hoặc trả về (kèm lý do, có thể đổi hạn).
+- Công việc **không duyệt công văn**. Tạo xong là giao ngay. User **Nộp** kèm file bằng chứng và có thể gửi thêm nội dung text (không bắt buộc) cho người giao; **người tạo** mới đánh dấu hoàn thành (kèm %) hoặc trả về (kèm lý do, có thể đổi hạn).
 - Sửa/xóa: người tạo đến khi user nộp; admin/mod mọi lúc.
 - File đính kèm công việc là tùy chọn. Danh sách ưu tiên **tên công việc**.
 - File xem/tải qua `/api/files/:documentId` + cache server; không trả URL Drive hay Convex Storage cho client.
@@ -113,7 +114,11 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `users` (+ authTables) | Hồ sơ, `role`, `departmentId`, `permissionGroupId`, `positionId`, status, `mustChangePassword`, `loginLockedAt`, `importRollbackAt` |
 | `departments` | Phòng ban (`code` unique) |
 | `locations` | Địa điểm (catalog cũ; công tác mới dùng `duties.locationText`) |
-| `permissionGroups` | Nhóm quyền + `code` + `menuAccess[]` |
+| `permissionGroups` | Nhóm quyền + `code` + `menuAccess[]` (`supervisor` chỉ cho `homeroom`) |
+| `schoolYears`, `schoolCalendarDays`, `homeroomClasses`, `homeroomAssignments` | Năm học, lịch ngày học, lớp, phân công GVCN/Giám thị |
+| `students`, `studentGuardians`, `classEnrollments` | Học sinh, liên hệ, quá trình học theo năm |
+| `studentRosterImportUploads`, `studentRosterImportRows` | Nhập danh sách lớp (staged, atomic) |
+| `attendanceImportUploads`, `attendanceImportRows`, `studentAttendanceDays`, `studentAttendanceCorrections` | Import camera, sổ ngày, nhật ký phân loại |
 | `positions` | Chức vụ + `code` + `level` 1–5 |
 | `userImportUploads` | File Excel import user tạm (Convex Storage, TTL 1 giờ) |
 | `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |

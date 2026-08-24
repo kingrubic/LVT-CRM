@@ -135,6 +135,7 @@ Nhóm quyền quyết định User nhìn thấy menu nào và được sử dụ
 - **Ẩn:** không thấy menu.
 - **Xem:** xem và thao tác nghiệp vụ trong phạm vi thông thường của mình.
 - **Xem tối cao:** xem và thao tác nghiệp vụ trên phạm vi rộng hơn hoặc toàn hệ thống ở những chức năng có hỗ trợ.
+- **Giám thị:** chỉ có trên menu **Lớp chủ nhiệm**. Tài khoản vẫn là User; mức này mở workflow điểm danh/camera trong phạm vi được phân công, không phải quyền xem toàn trường và không áp dụng cho menu khác.
 
 Tạo công việc hoặc công tác cho cả trường vẫn theo vai trò/cấp bậc, không do mức Xem hay Xem tối cao.
 
@@ -142,7 +143,7 @@ Tạo công việc hoặc công tác cho cả trường vẫn theo vai trò/cấ
 
 1. Vào **Thiết lập tối cao → Thiết lập nhóm quyền**.
 2. Nhập tên nhóm và mô tả.
-3. Chọn mức quyền cho từng menu đang được nhà trường sử dụng.
+3. Chọn mức quyền cho từng menu đang được nhà trường sử dụng. Cột **Giám thị** chỉ chọn được ở hàng **Lớp chủ nhiệm**; các hàng khác hiện `—`.
 4. Chọn **Thêm nhóm quyền**.
 
 ### Thêm User vào nhóm quyền
@@ -517,6 +518,18 @@ Khi thêm đánh giá:
 2. Tải tệp nếu được phép.
 3. Ban Giám hiệu nhập nhận xét vào phần **BGH đánh giá**.
 4. Chọn **Lưu**.
+
+## 5B. Lớp chủ nhiệm và điểm danh
+
+Menu **Lớp chủ nhiệm** chỉ hiện khi nhóm quyền cho phép **Xem**, **Xem tối cao**, hoặc **Giám thị**. Giáo viên chỉ thấy lớp được phân công. Giám thị nhập file camera và phân loại vắng trong phạm vi được giao — không phải quyền xem toàn trường.
+
+1. Chọn năm học trên trang tổng quan.
+2. Mở lớp → **Danh sách học sinh** để xem sĩ số; Admin/Mod (hoặc GVCN được phép) có thể tải mẫu Excel và nhập danh sách. Nếu một dòng lỗi, hệ thống **không nhập dòng nào** và liệt kê từng dòng, cột, mã lỗi.
+3. Giám thị vào **Nhập điểm danh camera**, chọn ngày/lớp, tải file `.xlsx`, xác nhận cột, rồi công bố. File trùng ngày khác nội dung phải chọn bổ sung hoặc thay quan sát camera.
+4. Tab **Điểm danh** xem trạng thái camera gốc và trạng thái hiệu lực. Đổi có phép/không phép cần lý do; quan sát camera không bị ghi đè.
+5. Tab **Báo cáo** xem tổng hợp và xuất XLSX/PDF trong đúng phạm vi.
+
+Chưa dùng ảnh học sinh. Lịch ngày học/cảnh báo 08:30 chỉ chạy khi nhà trường đã cấu hình ngày học — không tự hiểu thứ bảy/chủ nhật.
 
 ## 6. Thông tin cá nhân
 

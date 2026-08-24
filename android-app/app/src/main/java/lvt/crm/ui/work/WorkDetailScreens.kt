@@ -160,6 +160,12 @@ fun WorkTaskDetailScreen(
             task.qualityPercent?.let {
                 Text("Chất lượng: $it%", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (task.note.isNotBlank()) {
+                Text(
+                    "Nội dung đã gửi người giao: ${task.note}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (task.rejectionReason.isNotBlank()) {
                 Text(
                     "Lý do từ chối: ${task.rejectionReason}",

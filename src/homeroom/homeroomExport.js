@@ -1,0 +1,120 @@
+import * as XLSX from 'xlsx';
+
+export const VIETNAMESE_PDF_FONT = {
+  family: 'NotoSans',
+  fileName: 'NotoSans-Regular.ttf',
+  style: 'normal',
+};
+
+export const ATTENDANCE_PDF_LAYOUT = {
+  format: /** @type {const} */ ('a4'),
+  unit: /** @type {const} */ ('pt'),
+  margin: 48,
+  titleSize: 16,
+  metaSize: 10,
+  tableSize: 9,
+  footerSize: 8,
+  metaGap: 14,
+  tableLineHeight: 12,
+  footerBand: 40,
+  columns: {
+    date: 78,
+    code: 72,
+    name: 210,
+    status: 139,
+  },
+  /**
+   * @param {number} pageWidth
+   */
+  contentRight(pageWidth) {
+    return pageWidth - this.margin;
+  },
+};
+
+const STATUS_LABELS = {
+  present: 'Có mặt',
+  late: 'Đi trễ',
+  absent_excused: 'Vắng có phép',
+  absent_unexcused: 'Vắng không phép',
+  absent_pending: 'Vắng chờ xử lý',
+  no_data: 'Chưa có dữ liệu',
+  exempt: 'Miễn',
+};
+
+export function attendanceStatusLabel(status) {
+  return STATUS_LABELS[status] || status;
+}
+
+export function formatAttendanceStudentLabel(row) {
+  const code = String(row?.studentCode || '').trim();
+  const name = String(row?.fullName || '').trim();
+  return [code, name].filter(Boolean).join(' ');
+}
+
+export function buildAttendanceReportVisibleMatrix(days) {
+  return [
+    ['Ngày', 'Học sinh', 'Trạng thái'],
+    ...(days || []).map((row) => [
+      row.attendanceDate,
+      formatAttendanceStudentLabel(row),
+      attendanceStatusLabel(row.effectiveStatus),
+    ]),
+  ];
+}
+
+export function buildAttendanceXlsxMatrix(payload) {
+  const header = [
+    payload.title,
+    `Lớp: ${payload.className || 'Theo phạm vi'}`,
+    `Năm học: ${payload.schoolYearName || ''}`,
+    `Từ ${payload.from} đến ${payload.to}`,
+    `Tạo lúc: ${new Date(payload.generatedAt).toISOString()}`,
+    `Người tạo: ${payload.generatedByName || payload.generatedByUserId}`,
+  ];
+  return [
+    [header.join(' | ')],
+    ['Ngày', 'Mã HS', 'Học sinh', 'Trạng thái hiệu lực', 'Quan sát camera'],
+    ...(payload.rows || []).map((row) => [
+      row.attendanceDate,
+      row.studentCode,
+      row.fullName,
+      attendanceStatusLabel(row.effectiveStatus),
+      row.rawObservation,
+    ]),
+  ];
+}
+
+export function buildAttendancePdfLines(payload) {
+  return [
+    payload.title,
+    `${payload.schoolName} — ${payload.className || ''} — ${payload.schoolYearName || ''}`,
+    `Khoảng: ${payload.from} đến ${payload.to}`,
+    `Tạo: ${new Date(payload.generatedAt).toLocaleString('vi-VN')} bởi ${payload.generatedByName || payload.generatedByUserId}`,
+    `Tỷ lệ chuyên cần (không tính miễn/chưa có dữ liệu): ${(payload.attendanceRate * 100).toFixed(1)}%`,
+    ...(payload.rows || []).map((row) =>
+      `${row.attendanceDate}  ${row.studentCode}  ${row.fullName}  ${attendanceStatusLabel(row.effectiveStatus)}`,
+    ),
+  ];
+}
+
+export function downloadAttendanceXlsx(payload) {
+  const sheet = XLSX.utils.aoa_to_sheet(buildAttendanceXlsxMatrix(payload));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, 'diem_danh');
+  XLSX.writeFile(workbook, `bao_cao_diem_danh_${payload.from}_${payload.to}.xlsx`);
+}
+
+export async function buildAttendancePdf(payload) {
+  const { buildAttendancePdf: renderAttendancePdf } = await import('./attendancePdf.js');
+  return renderAttendancePdf(payload, { statusLabel: attendanceStatusLabel });
+}
+
+export async function createAttendancePdf(payload) {
+  const { createAttendancePdf: renderAttendancePdfBytes } = await import('./attendancePdf.js');
+  return renderAttendancePdfBytes(payload, { statusLabel: attendanceStatusLabel });
+}
+
+export async function downloadAttendancePdf(payload) {
+  const { downloadAttendancePdf: saveAttendancePdf } = await import('./attendancePdf.js');
+  return saveAttendancePdf(payload, { statusLabel: attendanceStatusLabel });
+}

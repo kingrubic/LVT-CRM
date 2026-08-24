@@ -37,6 +37,7 @@
 ## Authorization and privacy invariants
 
 - `admin` and `moderator` are operational managers; only `admin` has supreme settings/account authority.
+- Homeroom **Giám thị** is menu access `supervisor` on `homeroom` only — never a fourth `users.role`. Create/update of permission groups must reject `supervisor` on any other menu with `INVALID_MENU_ACCESS`. Legacy `edit` normalizes to `view` and must not be reused as Giám thị. `supervisor` makes the homeroom menu visible but does not satisfy generic `view_all` checks or grant another module.
 - Do not disable, delete, or demote the last active admin (`LAST_ACTIVE_ADMIN`).
 - Login failures stay distinct and blocking: invalid credentials, `ACCOUNT_LOCKED`, `USER_NOT_ACTIVE`.
 - `loginLockedAt` is enforced at sign-in **and** on authenticated calls (`currentUserOrThrow`).

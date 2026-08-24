@@ -18,12 +18,14 @@ import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
 import { isPublicAccountDeletionPath, isPublicPrivacyPath } from './privacy/privacyPolicy';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
+import HomeroomRouter from './homeroom/HomeroomRouter';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyCreatePreview from './duties/DutyCreatePreview';
+import { EditActionConfirm } from './lib/ConfirmActionModal';
 import DutyEditorFields from './duties/DutyEditorFields';
 import { DutyListEmpty, DutyListHeading, DutyListSearch, DutyListTabs } from './duties/DutyListFilters';
 import DutyListSummary from './duties/DutyListSummary';
@@ -48,6 +50,7 @@ import './profile/profile.css';
 import './profile/devices.css';
 import './settings/displaySettings.css';
 import './notifications/notifications.css';
+import { navIconFor } from './navIcons';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl =
@@ -72,7 +75,14 @@ const SUPREME_SETTINGS = [
   ['display-settings', 'Thiết lập hiển thị'],
 ];
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
-const ACCESS_LABELS = { hidden: 'Ẩn', view: 'Xem', view_all: 'Xem tối cao' };
+const ACCESS_LABELS = {
+  hidden: 'Ẩn',
+  view: 'Xem',
+  view_all: 'Xem tối cao',
+  supervisor: 'Giám thị',
+  edit: 'Xem',
+};
+const MATRIX_ACCESS_LEVELS = ['hidden', 'view', 'view_all', 'supervisor'];
 
 function signInMessageFor(error) {
   const raw = convexErrorText(error);
@@ -395,6 +405,8 @@ function AppShell({ session }) {
           <PeopleReviewView />
         ) : active === 'reports' ? (
           reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
+        ) : active === 'homeroom' ? (
+          <HomeroomRouter session={session} />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
           <ProfileView session={session} />
         ) : (
@@ -504,19 +516,19 @@ function ReportSubmenu({ active, onChoose }) {
   return (
     <div className="report-submenu" aria-label="Loại báo cáo">
       <button type="button" className={active === 'duties' ? 'active' : ''} onClick={() => onChoose('duties')}>
-        <span>◷</span> Công tác
+        <span className="nav-icon">{navIconFor('duties')}</span> Công tác
       </button>
       <button type="button" className={active === 'work' ? 'active' : ''} onClick={() => onChoose('work')}>
-        <span>✓</span> Công việc
+        <span className="nav-icon">{navIconFor('work')}</span> Công việc
       </button>
     </div>
   );
 }
 
-function NavButton({ id, label, icon = '→', active, onClick, nested = false, badge = 0 }) {
+function NavButton({ id, label, active, onClick, nested = false, badge = 0 }) {
   return (
     <button type="button" className={`shell-nav-button ${active === id ? 'active' : ''} ${nested ? 'nested' : ''}`} onClick={() => onClick(id)}>
-      <span className="nav-icon">{icon}</span>
+      <span className="nav-icon">{navIconFor(id)}</span>
       <span>{label}</span>
       {badge > 0 ? <b className="nav-badge">{badge > 99 ? '99+' : badge}</b> : null}
     </button>
@@ -601,6 +613,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [mineSearch, setMineSearch] = useState(emptyDutySearch);
   const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const { pending, feedback, setFeedback, run } = useFeedback();
   const { mine, created } = useMemo(
@@ -641,6 +654,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const closeEditor = () => {
     setEditing(null);
     setPreviewOpen(false);
+    setEditConfirm(null);
     setForm(emptyDutyForm());
     setEditorOpen(false);
   };
@@ -668,7 +682,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const submit = (event) => {
     event.preventDefault();
     if (editing) {
-      void persistDuty();
+      setEditConfirm('save');
       return;
     }
     if (!dutyFormHasParticipants(form)) {
@@ -801,7 +815,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           </div>
           <div className="duty-editor-heading-actions">
             {editing ? (
-              <button type="button" className="work-ghost-button" onClick={() => { setEditing(null); setForm(emptyDutyForm()); }}>
+              <button type="button" className="work-ghost-button" onClick={() => setEditConfirm('cancel')}>
                 Hủy chỉnh sửa
               </button>
             ) : null}
@@ -848,8 +862,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           </div>
         ) : null}
         <div className="work-editor-actions duty-editor-actions">
-          <button type="button" className="work-ghost-button" onClick={() => setForm(emptyDutyForm())}>
-            Xóa biểu mẫu
+          <button
+            type="button"
+            className="work-ghost-button"
+            onClick={editing ? () => setEditConfirm('cancel') : () => setForm(emptyDutyForm())}
+          >
+            {editing ? 'Hủy sửa' : 'Xóa biểu mẫu'}
           </button>
           <button className="work-primary-button" disabled={Boolean(pending)}>
             {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
@@ -866,6 +884,16 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           onConfirm={() => void persistDuty()}
         />
       ) : null}
+
+      <EditActionConfirm
+        action={editConfirm}
+        onDismiss={() => setEditConfirm(null)}
+        onConfirmCancel={() => closeEditor()}
+        onConfirmSave={() => {
+          setEditConfirm(null);
+          void persistDuty();
+        }}
+      />
 
       <div className="duty-list-section">
         <DutyListHeading>Công tác của tôi</DutyListHeading>
@@ -977,6 +1005,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const [mineSearch, setMineSearch] = useState(emptyDutySearch);
   const [createdSearch, setCreatedSearch] = useState(emptyDutySearch);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const duties = data?.duties;
   const { mine, created } = useMemo(
@@ -1014,6 +1043,14 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     setForm(dutyFormFromItem(item));
   };
 
+  const closeEditor = () => {
+    setEditing(null);
+    setPreviewOpen(false);
+    setEditConfirm(null);
+    setForm(emptyDutyForm());
+    setEditorOpen(false);
+  };
+
   const persistDuty = async () => {
     if (pending === 'save') return;
     const includeDepartments = Boolean(options?.isOps);
@@ -1044,7 +1081,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const submit = (event) => {
     event.preventDefault();
     if (editing) {
-      void persistDuty();
+      setEditConfirm('save');
       return;
     }
     if (!dutyFormHasParticipants(form, { includeDepartments: Boolean(options?.isOps) })) {
@@ -1208,7 +1245,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
               <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
               <h3>{editing ? 'Sửa công tác' : 'Tạo công tác'}</h3>
             </div>
-            <button type="button" className="duty-editor-close" onClick={() => { setEditing(null); setPreviewOpen(false); setForm(emptyDutyForm()); setEditorOpen(false); }} aria-label="Đóng biểu mẫu">
+            <button type="button" className="duty-editor-close" onClick={closeEditor} aria-label="Đóng biểu mẫu">
               <span aria-hidden="true">×</span> Đóng
             </button>
           </div>
@@ -1236,6 +1273,11 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
             </div>
           ) : null}
           <div className="work-editor-actions duty-editor-actions">
+            {editing ? (
+              <button type="button" className="work-ghost-button" onClick={() => setEditConfirm('cancel')}>
+                Hủy sửa
+              </button>
+            ) : null}
             <button className="work-primary-button" disabled={Boolean(pending)}>
               {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
             </button>
@@ -1252,6 +1294,16 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
           onConfirm={() => void persistDuty()}
         />
       ) : null}
+
+      <EditActionConfirm
+        action={editConfirm}
+        onDismiss={() => setEditConfirm(null)}
+        onConfirmCancel={() => closeEditor()}
+        onConfirmSave={() => {
+          setEditConfirm(null);
+          void persistDuty();
+        }}
+      />
 
       {feedback.text && !editorOpen ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
@@ -1584,7 +1636,7 @@ function UserManagement() {
           </select>
           <small>
             {usesPermissionGroup
-              ? 'Chỉ áp dụng cho User. Quyết định menu Ẩn / Xem / Xem tối cao.'
+              ? 'Chỉ áp dụng cho User. Quyết định menu Ẩn / Xem / Xem tối cao / Giám thị (Giám thị chỉ dành cho Lớp chủ nhiệm).'
               : `${ROLE_LABELS[form.role]} có toàn quyền chức năng — không cần gán nhóm quyền.`}
           </small>
         </label>
@@ -2102,7 +2154,8 @@ function PermissionGroupManagement() {
           <span className="status-pill blue">Nhóm quyền</span>
           <h2>Thiết lập nhóm quyền</h2>
           <p>
-            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem (thao tác nghiệp vụ trong phạm vi của mình), hoặc Xem tối cao (thao tác nghiệp vụ trên phạm vi toàn trường).
+            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem (thao tác nghiệp vụ trong phạm vi của mình), Xem tối cao (thao tác nghiệp vụ trên phạm vi toàn trường), hoặc Giám thị.
+            Giám thị chỉ dành cho menu Lớp chủ nhiệm; các menu khác không thể chọn mức này.
             Mã nhóm quyền (tối đa 20 ký tự) dùng khi import user hàng loạt.
           </p>
         </div>
@@ -2160,21 +2213,32 @@ function PermissionGroupManagement() {
             <span>Ẩn</span>
             <span>Xem</span>
             <span>Xem tối cao</span>
+            <span>Giám thị</span>
           </div>
           {menus.map((menu) => (
             <div className="perm-matrix-row" key={menu.id}>
               <span>{menu.label}</span>
-              {['hidden', 'view', 'view_all'].map((level) => (
-                <label key={level} className="radio-cell">
-                  <input
-                    type="radio"
-                    name={`access-${menu.id}`}
-                    checked={(form.access[menu.id] || 'hidden') === level}
-                    onChange={() => setForm((f) => ({ ...f, access: { ...f.access, [menu.id]: level } }))}
-                  />
-                  <span className="sr-only">{ACCESS_LABELS[level]}</span>
-                </label>
-              ))}
+              {MATRIX_ACCESS_LEVELS.map((level) => {
+                if (level === 'supervisor' && menu.id !== 'homeroom') {
+                  return (
+                    <span key={level} className="radio-cell radio-cell-unavailable" aria-hidden="true">
+                      —
+                    </span>
+                  );
+                }
+                const current = form.access[menu.id] === 'edit' ? 'view' : form.access[menu.id] || 'hidden';
+                return (
+                  <label key={level} className="radio-cell">
+                    <input
+                      type="radio"
+                      name={`access-${menu.id}`}
+                      checked={current === level}
+                      onChange={() => setForm((f) => ({ ...f, access: { ...f.access, [menu.id]: level } }))}
+                    />
+                    <span className="sr-only">{ACCESS_LABELS[level]}</span>
+                  </label>
+                );
+              })}
             </div>
           ))}
         </div>

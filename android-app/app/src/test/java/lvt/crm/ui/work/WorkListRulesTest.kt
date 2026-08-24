@@ -40,7 +40,7 @@ class WorkListRulesTest {
     fun searchMatchesTitleContentDepartmentPersonAndDeadline() {
         val mine = task(
             id = "a",
-            deadline = "2026-08-20",
+            deadline = "2099-12-31",
             status = "pending_task",
             title = "Soạn báo cáo tuần",
             documentTitle = "Họp tổ chuyên môn",

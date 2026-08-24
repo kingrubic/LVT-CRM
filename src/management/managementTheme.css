@@ -495,6 +495,11 @@
   background: #fff0bd;
 }
 
+.modern-management .access-chip.supervisor {
+  color: #5b3d8a;
+  background: #efe7fb;
+}
+
 .modern-management .access-chip.hidden {
   color: #8793a0;
   background: #edf0f2;

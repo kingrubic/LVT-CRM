@@ -20,6 +20,7 @@ final class WorkViewController: UITableViewController {
     private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
     private var pendingUploadTask: WorkTaskItem?
+    private var pendingUploadNote = ""
 
     private static let maxUploadFileSize = 20 * 1024 * 1024
     private static let allowedUploadExtensions: Set<String> = ["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg"]
@@ -401,6 +402,28 @@ final class WorkViewController: UITableViewController {
             return
         }
         pendingUploadTask = item
+        pendingUploadNote = ""
+        let alert = UIAlertController(
+            title: "Nộp bằng chứng hoàn thành",
+            message: "Nhập nội dung gửi người giao (không bắt buộc), rồi chọn tệp bằng chứng.",
+            preferredStyle: .alert
+        )
+        alert.addTextField {
+            $0.placeholder = "Nội dung gửi người giao"
+            $0.accessibilityLabel = "Nội dung gửi người giao"
+        }
+        alert.addAction(UIAlertAction(title: "Huỷ", style: .cancel) { [weak self] _ in
+            self?.clearPendingUpload()
+        })
+        alert.addAction(UIAlertAction(title: "Chọn tệp", style: .default) { [weak self, weak alert] _ in
+            let raw = alert?.textFields?.first?.text ?? ""
+            self?.pendingUploadNote = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+            self?.presentEvidenceSourceSheet()
+        })
+        presentFromVisibleController(alert)
+    }
+
+    private func presentEvidenceSourceSheet() {
         let alert = UIAlertController(
             title: "Nộp bằng chứng hoàn thành",
             message: "Chọn phương thức nộp tài liệu/hình ảnh để người tạo/cấp trên duyệt.",
@@ -418,7 +441,7 @@ final class WorkViewController: UITableViewController {
             self?.presentDocumentPicker()
         })
         alert.addAction(UIAlertAction(title: "Huỷ", style: .cancel) { [weak self] _ in
-            self?.pendingUploadTask = nil
+            self?.clearPendingUpload()
         })
         if let popover = alert.popoverPresentationController {
             popover.sourceView = view
@@ -426,6 +449,17 @@ final class WorkViewController: UITableViewController {
             popover.permittedArrowDirections = []
         }
         presentFromVisibleController(alert)
+    }
+
+    private func clearPendingUpload() {
+        pendingUploadTask = nil
+        pendingUploadNote = ""
+    }
+
+    private func submitEvidence(item: WorkTaskItem, fileData: Data, fileName: String, mimeType: String) {
+        let note = pendingUploadNote
+        clearPendingUpload()
+        viewModel.complete(item, qualityPercent: nil, fileData: fileData, fileName: fileName, mimeType: mimeType, note: note.isEmpty ? nil : note)
     }
 
     private func presentPhotoPicker() {
@@ -671,8 +705,17 @@ private final class WorkItemCell: UITableViewCell {
         detailLabel.text = item.documentContent
         detailLabel.isHidden = item.documentContent.isEmpty
         metaLabel.text = "\(item.departmentName) · Hạn \(item.deadline)"
-        reasonLabel.text = item.rejectionReason.isEmpty ? nil : "Lý do từ chối: \(item.rejectionReason)"
-        reasonLabel.isHidden = item.rejectionReason.isEmpty
+        if !item.rejectionReason.isEmpty {
+            reasonLabel.text = "Lý do từ chối: \(item.rejectionReason)"
+            reasonLabel.textColor = .systemRed
+            reasonLabel.isHidden = false
+        } else if !item.note.isEmpty {
+            reasonLabel.text = "Nội dung đã gửi: \(item.note)"
+            reasonLabel.textColor = .secondaryLabel
+            reasonLabel.isHidden = false
+        } else {
+            reasonLabel.isHidden = true
+        }
         backgroundColor = focused ? UIColor.systemIndigo.withAlphaComponent(0.12) : .secondarySystemGroupedBackground
         if WorkHelpers.needsCompletion(item.status) {
             actionButton.configuration = .borderedProminent()
@@ -691,7 +734,13 @@ private final class WorkItemCell: UITableViewCell {
         detailLabel.text = item.content
         detailLabel.isHidden = false
         metaLabel.text = "\(item.departmentName) · Hạn \(item.deadline)"
-        reasonLabel.isHidden = true
+        if item.note.isEmpty {
+            reasonLabel.isHidden = true
+        } else {
+            reasonLabel.text = "Nội dung: \(item.note)"
+            reasonLabel.textColor = .secondaryLabel
+            reasonLabel.isHidden = false
+        }
         actionButton.configuration = .borderedProminent()
         setButton("Đánh giá", busy: busy, action: review)
         accessibilityLabel = "Chờ xác nhận. \(item.userName). \(item.content). \(metaLabel.text ?? "")"
@@ -754,6 +803,7 @@ private final class WorkTaskDetailViewController: UIViewController {
             label("Đơn vị: \(task.departmentName)", .body, .secondaryLabel),
             label("Hạn: \(task.deadline)", .body, .secondaryLabel),
             label(task.qualityPercent.map { "Chất lượng: \($0)%" } ?? "", .body, .secondaryLabel),
+            label(task.note.isEmpty ? "" : "Nội dung đã gửi người giao: \(task.note)", .body, .secondaryLabel),
             label(task.rejectionReason.isEmpty ? "" : "Lý do từ chối: \(task.rejectionReason)", .body, .systemRed),
         ].filter { $0.text?.isEmpty == false }
         let stack = UIStackView(arrangedSubviews: rows)
@@ -953,6 +1003,9 @@ private final class WorkReviewViewController: UIViewController, UITextViewDelega
         fieldLabel.adjustsFontForContentSizeCategory = true
         let summary = UILabel()
         summary.text = "\(review.userName)\n\(review.content)\n\(review.departmentName) · Hạn \(review.deadline)"
+        if !review.note.isEmpty {
+            summary.text = (summary.text ?? "") + "\nNội dung từ người nộp: \(review.note)"
+        }
         summary.font = .preferredFont(forTextStyle: .body)
         summary.adjustsFontForContentSizeCategory = true
         summary.numberOfLines = 0
@@ -1007,12 +1060,12 @@ private final class WorkReviewViewController: UIViewController, UITextViewDelega
 extension WorkViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first, let item = pendingUploadTask else {
-            pendingUploadTask = nil
+            clearPendingUpload()
             return
         }
-        pendingUploadTask = nil
         let ext = url.pathExtension.lowercased()
         guard Self.allowedUploadExtensions.contains(ext) else {
+            clearPendingUpload()
             presentValidation("Chỉ chấp nhận tệp PDF, DOCX, Excel, PNG hoặc JPG.")
             return
         }
@@ -1021,23 +1074,26 @@ extension WorkViewController: UIDocumentPickerDelegate {
         do {
             let data = try Data(contentsOf: url)
             guard data.count <= Self.maxUploadFileSize else {
+                clearPendingUpload()
                 presentValidation("Dung lượng tệp tối đa là 20MB.")
                 return
             }
             guard !data.isEmpty else {
+                clearPendingUpload()
                 presentValidation("Tệp rỗng, vui lòng chọn lại.")
                 return
             }
             let fileName = url.lastPathComponent
             let mime = Self.mimeType(for: url)
-            viewModel.complete(item, qualityPercent: nil, fileData: data, fileName: fileName, mimeType: mime)
+            submitEvidence(item: item, fileData: data, fileName: fileName, mimeType: mime)
         } catch {
+            clearPendingUpload()
             presentValidation("Không thể đọc tệp đã chọn. Vui lòng thử lại.")
         }
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        pendingUploadTask = nil
+        clearPendingUpload()
     }
 }
 
@@ -1045,33 +1101,33 @@ extension WorkViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
         guard let result = results.first, let item = pendingUploadTask else {
-            pendingUploadTask = nil
+            clearPendingUpload()
             return
         }
         let itemProvider = result.itemProvider
         guard itemProvider.canLoadObject(ofClass: UIImage.self) else {
-            pendingUploadTask = nil
+            clearPendingUpload()
             presentValidation("Không thể tải ảnh đã chọn.")
             return
         }
         itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
             guard let self, let image = object as? UIImage else {
                 DispatchQueue.main.async {
-                    self?.pendingUploadTask = nil
+                    self?.clearPendingUpload()
                     self?.presentValidation("Không thể đọc ảnh đã chọn.")
                 }
                 return
             }
             guard let data = image.jpegData(compressionQuality: 0.85) else {
                 DispatchQueue.main.async {
-                    self.pendingUploadTask = nil
+                    self.clearPendingUpload()
                     self.presentValidation("Không thể xử lý định dạng ảnh.")
                 }
                 return
             }
             guard data.count <= Self.maxUploadFileSize else {
                 DispatchQueue.main.async {
-                    self.pendingUploadTask = nil
+                    self.clearPendingUpload()
                     self.presentValidation("Dung lượng ảnh tối đa là 20MB.")
                 }
                 return
@@ -1080,8 +1136,7 @@ extension WorkViewController: PHPickerViewControllerDelegate {
             formatter.dateFormat = "yyyyMMdd_HHmmss"
             let fileName = "bang_chung_\(formatter.string(from: Date())).jpg"
             DispatchQueue.main.async {
-                self.pendingUploadTask = nil
-                self.viewModel.complete(item, qualityPercent: nil, fileData: data, fileName: fileName, mimeType: "image/jpeg")
+                self.submitEvidence(item: item, fileData: data, fileName: fileName, mimeType: "image/jpeg")
             }
         }
     }
@@ -1092,26 +1147,27 @@ extension WorkViewController: UIImagePickerControllerDelegate, UINavigationContr
         picker.dismiss(animated: true)
         guard let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage),
               let item = pendingUploadTask else {
-            pendingUploadTask = nil
+            clearPendingUpload()
             return
         }
-        pendingUploadTask = nil
         guard let data = image.jpegData(compressionQuality: 0.85) else {
+            clearPendingUpload()
             presentValidation("Không thể xử lý định dạng ảnh.")
             return
         }
         guard data.count <= Self.maxUploadFileSize else {
+            clearPendingUpload()
             presentValidation("Dung lượng ảnh tối đa là 20MB.")
             return
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         let fileName = "chup_anh_\(formatter.string(from: Date())).jpg"
-        viewModel.complete(item, qualityPercent: nil, fileData: data, fileName: fileName, mimeType: "image/jpeg")
+        submitEvidence(item: item, fileData: data, fileName: fileName, mimeType: "image/jpeg")
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-        pendingUploadTask = nil
+        clearPendingUpload()
         picker.dismiss(animated: true)
     }
 }

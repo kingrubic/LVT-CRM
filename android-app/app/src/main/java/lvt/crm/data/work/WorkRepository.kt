@@ -38,6 +38,7 @@ data class WorkTaskItem(
     val documentTitle: String = "",
     val fileName: String = "",
     val memberNames: List<String> = emptyList(),
+    val note: String = "",
 ) {
     enum class Kind { WorkItem, PersonalTask }
 }
@@ -64,6 +65,7 @@ data class WorkCompletionReviewItem(
     val content: String,
     val deadline: String,
     val departmentName: String,
+    val note: String = "",
 )
 
 data class WorkApprovalItem(
@@ -106,7 +108,12 @@ internal fun decisionForUser(currentUserId: String, approvers: List<ApprovalDeci
 
 interface WorkOperations {
     suspend fun listMine(): WorkSnapshot
-    suspend fun complete(item: WorkTaskItem, qualityPercent: Int? = null, evidence: WorkUploadedEvidence? = null)
+    suspend fun complete(
+        item: WorkTaskItem,
+        qualityPercent: Int? = null,
+        evidence: WorkUploadedEvidence? = null,
+        note: String? = null,
+    )
     suspend fun uploadEvidence(fileBytes: ByteArray, fileName: String, mimeType: String): WorkUploadedEvidence =
         throw UnsupportedOperationException()
     suspend fun decideApproval(documentId: String, approve: Boolean)
@@ -193,6 +200,8 @@ class WorkRepository(
                 )
             }
             completionReviews = parseCompletionReviews(adminResult.optJSONArray("pendingCompletionReviews"))
+        } else {
+            completionReviews = parseCompletionReviews(result.optJSONArray("pendingCompletionReviews"))
         }
 
         val myTasks = result.optJSONArray("myTasks")
@@ -213,6 +222,7 @@ class WorkRepository(
                     documentTitle = t.optString("documentTitle"),
                     fileName = t.optString("fileName"),
                     memberNames = t.optJSONArray("members").toMemberNames(),
+                    note = t.optWorkNote(),
                 )
             }
         }
@@ -235,6 +245,7 @@ class WorkRepository(
                     documentTitle = t.optString("documentTitle"),
                     fileName = t.optString("fileName"),
                     memberNames = t.optJSONArray("assignees").toMemberNames(),
+                    note = t.optWorkNote(),
                 )
             }
         }
@@ -249,7 +260,7 @@ class WorkRepository(
         )
     }
 
-    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: WorkUploadedEvidence?) {
+    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: WorkUploadedEvidence?, note: String?) {
         val args = JSONObject()
         if (qualityPercent != null) {
             args.put("qualityPercent", qualityPercent)
@@ -261,6 +272,10 @@ class WorkRepository(
             args.put("fileName", evidence.fileName)
             args.put("fileType", evidence.fileType)
             args.put("fileSize", evidence.fileSize)
+        }
+        val trimmedNote = note?.trim().orEmpty()
+        if (trimmedNote.isNotEmpty()) {
+            args.put("note", trimmedNote.take(500))
         }
         when (item.kind) {
             WorkTaskItem.Kind.WorkItem -> {
@@ -476,6 +491,7 @@ private fun parseCompletionReviews(items: org.json.JSONArray?): List<WorkComplet
             content = item.optString("content"),
             deadline = item.optString("deadline"),
             departmentName = item.optString("departmentName"),
+            note = item.optString("note").trim(),
         )
     }
 }
@@ -495,6 +511,12 @@ internal fun orderedWorkTasks(tasks: List<WorkTaskItem>): List<WorkTaskItem> = t
         { it.title },
     ),
 )
+
+private fun JSONObject.optWorkNote(): String {
+    val nested = optJSONObject("completion")?.optString("note")?.trim().orEmpty()
+    if (nested.isNotEmpty()) return nested
+    return optString("note").trim()
+}
 
 private fun JSONObject.optIntOrNull(key: String): Int? {
     if (!has(key) || isNull(key)) return null
