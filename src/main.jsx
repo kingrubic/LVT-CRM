@@ -858,8 +858,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
           </div>
         ) : null}
         <div className="work-editor-actions duty-editor-actions">
-          <button type="button" className="work-ghost-button" onClick={() => setForm(emptyDutyForm())}>
-            Xóa biểu mẫu
+          <button
+            type="button"
+            className="work-ghost-button"
+            onClick={editing ? closeEditor : () => setForm(emptyDutyForm())}
+          >
+            {editing ? 'Hủy sửa' : 'Xóa biểu mẫu'}
           </button>
           <button className="work-primary-button" disabled={Boolean(pending)}>
             {pending === 'save' ? (editing ? 'Đang lưu…' : 'Đang tạo…') : editing ? 'Lưu thay đổi' : 'Tạo'}
