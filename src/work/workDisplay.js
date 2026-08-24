@@ -1,5 +1,7 @@
 export const WORK_LIST_TAB_UPCOMING = 'upcoming';
 export const WORK_LIST_TAB_PAST = 'past';
+/** Keep in sync with WORK_COMPLETION_NOTE_MAX_LENGTH in convex/assignmentPolicy.ts */
+export const WORK_COMPLETION_NOTE_MAX_LENGTH = 500;
 
 const COMPLETED_STATUSES = new Set(['completed', 'completed_late']);
 
