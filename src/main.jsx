@@ -49,6 +49,7 @@ import './profile/profile.css';
 import './profile/devices.css';
 import './settings/displaySettings.css';
 import './notifications/notifications.css';
+import { navIconFor } from './navIcons';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl =
@@ -514,19 +515,19 @@ function ReportSubmenu({ active, onChoose }) {
   return (
     <div className="report-submenu" aria-label="Loại báo cáo">
       <button type="button" className={active === 'duties' ? 'active' : ''} onClick={() => onChoose('duties')}>
-        <span>◷</span> Công tác
+        <span className="nav-icon">{navIconFor('duties')}</span> Công tác
       </button>
       <button type="button" className={active === 'work' ? 'active' : ''} onClick={() => onChoose('work')}>
-        <span>✓</span> Công việc
+        <span className="nav-icon">{navIconFor('work')}</span> Công việc
       </button>
     </div>
   );
 }
 
-function NavButton({ id, label, icon = '→', active, onClick, nested = false, badge = 0 }) {
+function NavButton({ id, label, active, onClick, nested = false, badge = 0 }) {
   return (
     <button type="button" className={`shell-nav-button ${active === id ? 'active' : ''} ${nested ? 'nested' : ''}`} onClick={() => onClick(id)}>
-      <span className="nav-icon">{icon}</span>
+      <span className="nav-icon">{navIconFor(id)}</span>
       <span>{label}</span>
       {badge > 0 ? <b className="nav-badge">{badge > 99 ? '99+' : badge}</b> : null}
     </button>
