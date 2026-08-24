@@ -96,14 +96,14 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Thông báo, Công tác (nút **Tạo công tác** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân.
+1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Công tác (nút **Tạo công tác** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**.
 2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
 3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 
 ### Thông báo & Thiết lập hiển thị
 
 - Feed tính theo mốc giờ trước hạn (mặc định `48 · 24 · 12 · 0` / Đến hạn) cho **Công tác** và **Công việc** được gán cho user.
-- Chuông trên header + trang Thông báo; đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` = `edit`.
+- Chuông trên header (và **Xem toàn bộ**); đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` cho phép thao tác. Trang `/thong-bao` vẫn mở được; không còn mục Thông báo trên sidebar.
 - **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác; `work_assigned` cùng `department_work` / `personal_task` focus thẻ công việc. Công việc mới (giống công tác mới) hiện ngay trên feed với nhãn **Mới phân công**, không chờ mốc hạn. Công tác mới/cập nhật cũng gửi APNs/FCM tới người tham gia (phòng ban hoặc cá nhân), kể cả khi người tạo tự thêm mình. Người được giao công việc nhận thông báo kể cả khi tự tạo việc cho mình; người tạo không nhận nếu chỉ giao cho người khác. Android nhận FCM data-only (không gắn `android.notification` rỗng) rồi hiện banner từ feed; mở lại app cũng sync ngay. iOS lock screen cần APNs alert (`APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`; `APNS_BUNDLE_ID` mặc định `vn.lvt.crm.uikit`; `APNS_PRODUCTION=true` khi cài Ad Hoc/TestFlight).
 - Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; **Ai nhìn thấy công việc?** (chỉ người tạo / người tạo+người nhận+4/5★+admin/mod); bật/tắt nguồn thông báo Công tác/Công việc; chỉnh danh sách mốc giờ.
 

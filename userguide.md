@@ -365,7 +365,7 @@ Trang **Thông báo** hiển thị các công tác và công việc sắp đến
 
 ### Xem một thông báo
 
-1. Chọn biểu tượng chuông ở góc trên hoặc vào menu **Thông báo**.
+1. Chọn biểu tượng chuông ở góc trên, rồi **Xem toàn bộ** nếu cần danh sách đầy đủ.
 2. Chọn thông báo cần xem.
 3. Hệ thống tự mở đúng công tác hoặc công việc liên quan.
 

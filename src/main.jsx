@@ -13,7 +13,7 @@ import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
-import { pathnameForMenu, pathnameForReportSection, routeForPathname } from './navigationRoutes';
+import { isSidebarPrimaryMenu, pathnameForMenu, pathnameForReportSection, routeForPathname } from './navigationRoutes';
 import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
 import { isPublicAccountDeletionPath, isPublicPrivacyPath } from './privacy/privacyPolicy';
@@ -155,10 +155,14 @@ function AppShell({ session }) {
     if (canManageOperations) return PRIMARY_MENUS;
     return PRIMARY_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
   }, [canManageOperations, menuAccess]);
+  const sidebarPrimaryMenus = useMemo(
+    () => visiblePrimaryMenus.filter(([id]) => isSidebarPrimaryMenu(id)),
+    [visiblePrimaryMenus],
+  );
 
   const defaultActive = canManageOperations
     ? 'reports'
-    : visiblePrimaryMenus[0]?.[0] || 'profile';
+    : sidebarPrimaryMenus[0]?.[0] || 'profile';
   const initialRoute = routeForPathname(window.location.pathname);
   const [active, setActive] = useState(initialRoute?.menu || defaultActive);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -299,7 +303,7 @@ function AppShell({ session }) {
           {visiblePrimaryMenus.length === 0 && !canManageOperations ? (
             <p className="nav-empty">Chưa được gán menu. Liên hệ quản trị viên.</p>
           ) : (
-            visiblePrimaryMenus.map(([id, label]) => (
+            sidebarPrimaryMenus.map(([id, label]) => (
               <React.Fragment key={id}>
                 <NavButton id={id} label={label} badge={id === 'work' ? workBadge?.count : 0} active={active} onClick={choose} />
                 {id === 'reports' && active === 'reports' ? (
