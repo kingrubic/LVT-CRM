@@ -37,9 +37,13 @@ button { font: inherit; cursor: pointer; }
 .report-submenu button { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 8px; border: 0; border-radius: 7px; color: #738099; background: transparent; text-align: left; font-size: 11px; }
 .report-submenu button:hover { color: var(--lvt-navy); background: #edf8f5; }
 .report-submenu button.active { color: #14604e; background: #e5f6ef; font-weight: 800; }
-.report-submenu button span { width: 13px; color: #8ca0bd; text-align: center; }
-.report-submenu button.active span { color: var(--lvt-teal); }
-.nav-icon { width: 22px; color: #71809e; font-size: 17px; text-align: center; }
+.report-submenu .nav-icon { width: 16px; height: 16px; color: #8ca0bd; }
+.report-submenu .nav-icon svg { width: 14px; height: 14px; }
+.report-submenu button:hover .nav-icon,
+.report-submenu button.active .nav-icon { color: var(--lvt-teal); }
+.nav-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: 0 0 auto; color: #71809e; }
+.nav-icon svg { display: block; width: 18px; height: 18px; }
+.shell-nav-button:hover .nav-icon { color: var(--lvt-navy); }
 .shell-nav-button.active .nav-icon { color: var(--lvt-teal); }
 .nav-badge { display: grid; place-items: center; min-width: 20px; height: 20px; margin-left: auto; padding: 0 5px; border-radius: 50%; color: #fff; background: var(--lvt-coral); font-size: 9px; font-weight: 900; line-height: 1; box-shadow: 0 3px 8px rgba(227, 109, 85, .3); }
 .shell-nav-button em { margin-left: auto; padding: 2px 6px; border-radius: 999px; color: #14604e; background: #e5f6ef; font-size: 9px; font-style: normal; font-weight: 800; }
