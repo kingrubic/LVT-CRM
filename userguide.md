@@ -133,9 +133,11 @@ Nhóm quyền quyết định User nhìn thấy menu nào và được sử dụ
 ### Các mức quyền
 
 - **Ẩn:** không thấy menu.
-- **Xem:** xem dữ liệu trong phạm vi thông thường của mình.
-- **Xem tối cao:** xem phạm vi rộng hơn hoặc toàn hệ thống ở những chức năng có hỗ trợ, nhưng không thay đổi dữ liệu.
+- **Xem:** xem và thao tác nghiệp vụ trong phạm vi thông thường của mình.
+- **Xem tối cao:** xem và thao tác nghiệp vụ trên phạm vi rộng hơn hoặc toàn hệ thống ở những chức năng có hỗ trợ.
 - **Giám thị:** chỉ có trên menu **Lớp chủ nhiệm**. Tài khoản vẫn là User; mức này mở workflow điểm danh/camera trong phạm vi được phân công, không phải quyền xem toàn trường và không áp dụng cho menu khác.
+
+Tạo công việc hoặc công tác cho cả trường vẫn theo vai trò/cấp bậc, không do mức Xem hay Xem tối cao.
 
 ### Tạo nhóm quyền
 

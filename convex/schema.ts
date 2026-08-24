@@ -8,6 +8,7 @@ const menuAccessLevel = v.union(
   v.literal("hidden"),
   v.literal("view"),
   v.literal("view_all"),
+  /** Legacy write level; normalizeMenuAccess maps this to `view`. */
   v.literal("edit"),
   v.literal("supervisor"),
 );
@@ -90,7 +91,7 @@ export default defineSchema({
     /** Admin-defined uppercase code (≤20, A-Z0-9_-). Optional only for legacy rows pending backfill. */
     code: v.optional(v.string()),
     description: v.optional(v.string()),
-    /** One entry per system menu: hidden | view | view_all | supervisor; legacy edit kept for compatibility */
+    /** One entry per system menu: hidden | view | view_all | supervisor; legacy edit accepted and normalized to view */
     menuAccess: v.array(
       v.object({
         menu: v.string(),

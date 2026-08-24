@@ -12,15 +12,20 @@ export const SYSTEM_MENU_DEFS = [
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
 /** Stored/legacy values. `edit` remains readable so existing groups keep write semantics. */
 export type MenuAccess = "hidden" | "view" | "view_all" | "edit" | "supervisor";
+export type LegacyMenuAccess = MenuAccess | "edit";
 export type CanonicalMenuAccess = "hidden" | "view" | "view_all" | "supervisor";
 
 export const HOMEROOM_MENU_ID: MenuId = "homeroom";
 export const INVALID_MENU_ACCESS = "INVALID_MENU_ACCESS";
 
+export function defaultAccessForMenu(menuId: string): MenuAccess {
+  return menuId === "notifications" ? "view" : "hidden";
+}
+
 export function defaultMenuAccess(): { menu: string; access: MenuAccess }[] {
   return SYSTEM_MENU_DEFS.map((item) => ({
     menu: item.id,
-    access: (item.id === "notifications" ? "view" : "hidden") as MenuAccess,
+    access: defaultAccessForMenu(item.id),
   }));
 }
 
@@ -46,7 +51,7 @@ export function isHomeroomSupervisorAccess(
 }
 
 /**
- * Runtime resolution keeps legacy `edit` so duties/work write checks stay intact.
+ * Runtime resolution keeps legacy `edit` so canOperateMenu still matches stored rows.
  * `supervisor` never grants another menu and never satisfies view_all.
  */
 export function effectiveMenuAccessLevel(
@@ -58,8 +63,13 @@ export function effectiveMenuAccessLevel(
   }
   if (raw === "edit") return "edit";
   if (raw === "view" || raw === "view_all" || raw === "hidden") return raw;
-  if (!raw) return menu === "notifications" ? "view" : "hidden";
+  if (!raw) return defaultAccessForMenu(menu);
   return "hidden";
+}
+
+/** View, view_all, and legacy edit allow module business operations; hidden and supervisor do not. */
+export function canOperateMenu(access: string | undefined): boolean {
+  return access === "view" || access === "view_all" || access === "edit";
 }
 
 export function assertValidMenuAccessEntries(
@@ -78,6 +88,9 @@ export function normalizeMenuAccess(
   const map = new Map((entries || []).map((e) => [e.menu, e.access]));
   return SYSTEM_MENU_DEFS.map((item) => {
     const raw = map.get(item.id);
+    if (raw === undefined) {
+      return { menu: item.id, access: defaultAccessForMenu(item.id) };
+    }
     if (raw === "supervisor" && item.id !== HOMEROOM_MENU_ID) {
       return { menu: item.id, access: "hidden" as MenuAccess };
     }

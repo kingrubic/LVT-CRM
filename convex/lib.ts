@@ -6,17 +6,29 @@ import {
   normalizeWorkVisibilityMode,
   WORK_VISIBILITY_DEFAULT,
 } from "./assignmentPolicy";
-import { SYSTEM_MENU_DEFS, effectiveMenuAccessLevel, type MenuAccess } from "./menuAccess";
+import {
+  canOperateMenu,
+  defaultAccessForMenu,
+  defaultMenuAccess,
+  effectiveMenuAccessLevel,
+  normalizeMenuAccess,
+  SYSTEM_MENU_DEFS,
+  type LegacyMenuAccess,
+  type MenuAccess,
+  type MenuId,
+} from "./menuAccess";
 
 export type DbCtx = QueryCtx | MutationCtx;
 
 export {
-  SYSTEM_MENU_DEFS,
+  canOperateMenu,
+  defaultAccessForMenu,
   defaultMenuAccess,
+  effectiveMenuAccessLevel,
   normalizeMenuAccess,
-  type MenuAccess,
-  type MenuId,
-} from "./menuAccess";
+  SYSTEM_MENU_DEFS,
+};
+export type { LegacyMenuAccess, MenuAccess, MenuId };
 
 /** System setting key controlling whether duty attendance confirmation is shown. */
 export const DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY = "dutyAttendanceConfirmationEnabled";
@@ -274,14 +286,11 @@ export async function resolveUserMenuAccess(
   ctx: DbCtx,
   user: { role: string; permissionGroupId?: string },
 ): Promise<Record<string, MenuAccess>> {
-  const full = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "edit" as MenuAccess]));
+  const full = Object.fromEntries(SYSTEM_MENU_DEFS.map((m) => [m.id, "view_all" as MenuAccess]));
   if (isOperationalManagerRole(user.role)) return full;
 
   const empty = Object.fromEntries(
-    SYSTEM_MENU_DEFS.map((m) => [
-      m.id,
-      (m.id === "notifications" ? "view" : "hidden") as MenuAccess,
-    ]),
+    SYSTEM_MENU_DEFS.map((m) => [m.id, defaultAccessForMenu(m.id)]),
   );
   if (!user.permissionGroupId) return empty;
 

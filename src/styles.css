@@ -202,7 +202,6 @@ button { font: inherit; cursor: pointer; }
 .access-chip { padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #edf1f4; color: #5a6b8a; }
 .access-chip.view { background: #e8f1fb; color: var(--lvt-blue); }
 .access-chip.view_all { background: #fff1c6; color: #85601b; }
-.access-chip.edit { background: #e5f6ef; color: #14604e; }
 .access-chip.supervisor { background: #efe7fb; color: #5b3d8a; }
 .access-chip.hidden { background: #f3f4f7; color: #97a0b5; }
 .wide-form { width: min(100%, 720px); grid-template-columns: minmax(0, 1fr); }

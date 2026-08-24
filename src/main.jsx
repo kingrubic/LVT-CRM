@@ -412,7 +412,7 @@ function AppShell({ session }) {
         ) : (
           <PlaceholderView
             title={title}
-            access={canManageOperations ? 'edit' : menuAccess?.[active] || 'view'}
+            access={canManageOperations ? 'view_all' : menuAccess?.[active] || 'view'}
             isAdmin={canManageOperations}
           />
         )}
@@ -995,7 +995,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setSubordinateAttendance = useMutation(anyApi.duties.setAttendanceForUser);
   const { pending, feedback, setFeedback, run } = useFeedback();
-  const canEdit = access === 'edit' || data?.canEdit;
+  const canEdit = access !== 'hidden' || Boolean(data?.canEdit);
   const canCreate = Boolean(data?.canCreate);
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
@@ -2103,7 +2103,9 @@ function PermissionGroupManagement() {
   const startEdit = (item) => {
     setEditing(item);
     const access = defaultAccessForm();
-    for (const entry of item.menuAccess || []) access[entry.menu] = entry.access;
+    for (const entry of item.menuAccess || []) {
+      access[entry.menu] = entry.access === 'edit' ? 'view' : entry.access;
+    }
     setForm({ name: item.name, code: item.code || '', description: item.description || '', access });
   };
 
@@ -2152,7 +2154,7 @@ function PermissionGroupManagement() {
           <span className="status-pill blue">Nhóm quyền</span>
           <h2>Thiết lập nhóm quyền</h2>
           <p>
-            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem, Xem tối cao, hoặc Giám thị.
+            Mỗi nhóm quy định quyền trên menu Quản trị hệ thống: Ẩn, Xem (thao tác nghiệp vụ trong phạm vi của mình), Xem tối cao (thao tác nghiệp vụ trên phạm vi toàn trường), hoặc Giám thị.
             Giám thị chỉ dành cho menu Lớp chủ nhiệm; các menu khác không thể chọn mức này.
             Mã nhóm quyền (tối đa 20 ký tự) dùng khi import user hàng loạt.
           </p>
@@ -2647,11 +2649,9 @@ function MustChangePasswordView() {
 function PlaceholderView({ title, access, isAdmin }) {
   const accessLabel = isAdmin
     ? 'Quản trị'
-    : access === 'edit'
-      ? 'Được sửa'
-      : access === 'view_all'
-        ? 'Xem tối cao'
-        : 'Chỉ xem';
+    : access === 'view_all'
+      ? 'Xem tối cao'
+      : 'Xem';
   return (
     <section className="placeholder-view">
       <span className="placeholder-icon">⌁</span>
@@ -2659,9 +2659,11 @@ function PlaceholderView({ title, access, isAdmin }) {
       <h2>{title}</h2>
       <p>
         Nội dung nghiệp vụ đang được hoàn thiện.
-        {!isAdmin && access === 'view' ? ' Bạn chỉ có quyền xem mục này.' : ''}
-        {!isAdmin && access === 'view_all' ? ' Bạn có thể xem dữ liệu của mọi user nhưng không thể chỉnh sửa.' : ''}
-        {!isAdmin && access === 'edit' ? ' Bạn có quyền thêm/sửa nội dung khi module sẵn sàng.' : ''}
+        {!isAdmin && access === 'view_all'
+          ? ' Bạn có thể xem và thao tác dữ liệu của mọi user khi module sẵn sàng.'
+          : !isAdmin
+            ? ' Bạn có thể xem và thao tác nghiệp vụ trong phạm vi của mình khi module sẵn sàng.'
+            : ''}
       </p>
     </section>
   );

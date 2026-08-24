@@ -11,6 +11,7 @@ import {
   isOperationalManagerRole,
   isSameDepartmentSubordinate,
   resolveUserMenuAccess,
+  canOperateMenu,
   type MenuAccess,
 } from "./lib";
 import {
@@ -204,17 +205,16 @@ function mapNames(ids: string[], rows: { _id: string; name: string }[]) {
   return ids.map((id) => map.get(String(id))).filter((name): name is string => Boolean(name));
 }
 
-async function requireDutiesAccess(ctx: any, min: "view" | "edit" = "view") {
+async function requireDutiesAccess(ctx: any) {
   const user = await currentUserOrThrow(ctx);
   if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
   if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
   const menuAccess = await resolveUserMenuAccess(ctx, user);
   const access = (menuAccess.duties || "hidden") as MenuAccess;
   if (isOperationalManagerRole(user.role)) {
-    return { user, access: "edit" as MenuAccess, isAdmin: true };
+    return { user, access: "view_all" as MenuAccess, isAdmin: true };
   }
   if (access === "hidden") throw new Error("FORBIDDEN: duties menu hidden");
-  if (min === "edit" && access !== "edit") throw new Error("FORBIDDEN: duties edit required");
   return { user, access, isAdmin: false };
 }
 
@@ -317,7 +317,7 @@ export const listAdmin = query({
 export const listMine = query({
   args: {},
   handler: async (ctx) => {
-    const { user, access, isAdmin } = await requireDutiesAccess(ctx, "view");
+    const { user, access, isAdmin } = await requireDutiesAccess(ctx);
     const [duties, locations, departments, users, positions, attendances, attendanceConfirmationEnabled] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
@@ -333,7 +333,7 @@ export const listMine = query({
     ]);
 
     const attMap = new Map(attendances.map((a) => [`${String(a.dutyId)}:${String(a.userId)}`, a.status]));
-    const canEdit = isAdmin || access === "edit";
+    const canEdit = isAdmin || canOperateMenu(access);
     const canViewAll = !isAdmin && access === "view_all";
     const actorLevel = activePositionLevel(user, positions);
     const subordinateUsers = users.filter(
@@ -567,8 +567,8 @@ export const setAttendance = mutation({
       DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
     );
     if (!attendanceConfirmationEnabled) throw new Error("ATTENDANCE_CONFIRMATION_DISABLED");
-    const { user, access } = await requireDutiesAccess(ctx, "edit");
-    if (access !== "edit") throw new Error("FORBIDDEN: duties edit required");
+    const { user, access } = await requireDutiesAccess(ctx);
+    if (!canOperateMenu(access)) throw new Error("FORBIDDEN: duties menu hidden");
 
     const duty = await ctx.db.get(args.dutyId);
     if (!duty?.active) throw new Error("DUTY_NOT_FOUND");
@@ -622,8 +622,8 @@ export const setAttendanceForUser = mutation({
       DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
     );
     if (!attendanceConfirmationEnabled) throw new Error("ATTENDANCE_CONFIRMATION_DISABLED");
-    const { user, access, isAdmin } = await requireDutiesAccess(ctx, "edit");
-    if (!isAdmin && access !== "edit") throw new Error("FORBIDDEN: duties edit required");
+    const { user, access, isAdmin } = await requireDutiesAccess(ctx);
+    if (!isAdmin && !canOperateMenu(access)) throw new Error("FORBIDDEN: duties menu hidden");
 
     const duty = await ctx.db.get(args.dutyId);
     if (!duty?.active) throw new Error("DUTY_NOT_FOUND");

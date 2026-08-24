@@ -1,11 +1,12 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { assertEntityCode, generateCodeFromName, normalizeEntityCode } from "./entityCodes";
 import {
   adminPermissionOrThrow,
   defaultMenuAccess,
   hasActiveNameConflict,
   SYSTEM_MENU_DEFS,
+  type LegacyMenuAccess,
   type MenuAccess,
 } from "./lib";
 import { cleanPermissionGroupMenuAccess, normalizeMenuAccess } from "./menuAccess";
@@ -22,7 +23,7 @@ function cleanGroup(args: {
   name: string;
   code: string;
   description?: string;
-  menuAccess?: { menu: string; access: MenuAccess }[];
+  menuAccess?: { menu: string; access: MenuAccess | LegacyMenuAccess }[];
 }) {
   const name = args.name.trim();
   const code = assertEntityCode(args.code);
@@ -61,7 +62,7 @@ async function releaseInactiveCodeIfNeeded(
   await ctx.db.patch(duplicate._id, { code: undefined, updatedAt: Date.now() });
 }
 
-/** Backfill missing codes for legacy permission groups. Safe to call repeatedly. */
+/** Backfill missing codes and remap legacy `edit` menu access to `view`. Safe to call repeatedly. */
 export const ensureCodes = mutation({
   args: {},
   handler: async (ctx) => {
@@ -73,14 +74,52 @@ export const ensureCodes = mutation({
     const now = Date.now();
     let patched = 0;
     for (const group of groups) {
+      const menuAccess = normalizeMenuAccess(group.menuAccess);
+      const accessChanged = JSON.stringify(menuAccess) !== JSON.stringify(group.menuAccess);
+      const patch: { code?: string; menuAccess?: typeof menuAccess; updatedAt: number } = {
+        updatedAt: now,
+      };
+      let changed = accessChanged;
+      if (accessChanged) patch.menuAccess = menuAccess;
       // Only backfill missing codes. Invalid existing codes must be fixed by admin.
-      if (group.code) continue;
-      const code = generateCodeFromName(group.name, used);
-      used.add(code);
-      await ctx.db.patch(group._id, { code, updatedAt: now });
+      if (!group.code) {
+        const code = generateCodeFromName(group.name, used);
+        used.add(code);
+        patch.code = code;
+        changed = true;
+      }
+      if (!changed) continue;
+      await ctx.db.patch(group._id, patch);
       patched += 1;
     }
     return { patched };
+  },
+});
+
+/** Persist legacy `edit` as `view` and fill missing menus. Safe to run after deploy. */
+export const remapLegacyEditAccess = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const groups = await ctx.db.query("permissionGroups").collect();
+    const now = Date.now();
+    const results = [];
+    for (const group of groups) {
+      const menuAccess = normalizeMenuAccess(group.menuAccess);
+      const hadEdit = (group.menuAccess || []).some((entry) => entry.access === "edit");
+      const patched = JSON.stringify(menuAccess) !== JSON.stringify(group.menuAccess);
+      if (patched) {
+        await ctx.db.patch(group._id, { menuAccess, updatedAt: now });
+      }
+      results.push({
+        name: group.name,
+        code: group.code || "",
+        active: group.active,
+        hadEdit,
+        patched,
+        menuAccess,
+      });
+    }
+    return results;
   },
 });
 
