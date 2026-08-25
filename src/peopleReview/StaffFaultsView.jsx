@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
+import { messageFor } from '../lib/appErrorMessage';
 import './peopleReview.css';
 import {
   DateRangeFilter,
@@ -88,7 +89,30 @@ function FaultPersonPicker({ people, onSelect, onClose }) {
   );
 }
 
-export default function StaffFaultsView() {
+class StaffFaultsErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="pr-loading" role="alert">
+          <strong>Không thể tải ghi nhận lỗi.</strong>
+          <p>{messageFor(this.state.error)}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function StaffFaultsPage() {
   const defaultTo = todayIso();
   const defaultFrom = addDays(defaultTo, -29);
   const [range, setRange] = useState({ from: defaultFrom, to: defaultTo });
@@ -205,5 +229,13 @@ export default function StaffFaultsView() {
         />
       ) : null}
     </section>
+  );
+}
+
+export default function StaffFaultsView() {
+  return (
+    <StaffFaultsErrorBoundary>
+      <StaffFaultsPage />
+    </StaffFaultsErrorBoundary>
   );
 }

@@ -850,33 +850,10 @@ export const staffFaultLog = query({
     const [users, departments, collected] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("departments").collect(),
-      viewAll
-        ? ctx.db
-            .query("personnelFaults")
-            .withIndex("by_violation_date", (q: any) =>
-              q.eq("active", true).gte("violationDate", faultFrom).lte("violationDate", faultTo),
-            )
-            .collect()
-        : Promise.all([
-            ctx.db
-              .query("personnelFaults")
-              .withIndex("by_target", (q: any) => q.eq("targetUserId", actorId).eq("active", true))
-              .collect(),
-            ctx.db
-              .query("personnelFaults")
-              .withIndex("by_recorder", (q: any) => q.eq("recordedByUserId", actorId).eq("active", true))
-              .collect(),
-          ]).then((parts) => {
-            const seen = new Set<string>();
-            const merged: any[] = [];
-            for (const row of parts.flat()) {
-              const id = String(row._id);
-              if (seen.has(id)) continue;
-              seen.add(id);
-              merged.push(row);
-            }
-            return merged;
-          }),
+      ctx.db
+        .query("personnelFaults")
+        .withIndex("by_violation_date", (q: any) => q.eq("active", true))
+        .collect(),
     ]);
 
     const usersById = new Map(users.map((user: any) => [String(user._id), user]));

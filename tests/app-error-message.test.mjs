@@ -40,4 +40,10 @@ test('messageFor đọc được lỗi Convex bị bọc trong data object', () 
     messageFor({ message: 'PASSWORD_CHANGE_REQUIRED' }),
     'Bạn cần đổi mật khẩu trước khi tiếp tục.',
   );
+  assert.equal(
+    messageFor({
+      message: '[CONVEX Q(peopleReview:staffFaultLog)] [Request ID: abc] Server Error\nCould not find public function',
+    }),
+    'Máy chủ chưa cập nhật chức năng Ghi nhận lỗi. Vui lòng tải lại trang sau khi hệ thống cập nhật, rồi thử lại.',
+  );
 });
