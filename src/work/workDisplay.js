@@ -1,11 +1,12 @@
-export const WORK_LIST_TAB_INCOMPLETE = 'incomplete';
-export const WORK_LIST_TAB_COMPLETED = 'completed';
-export const WORK_LIST_TAB_UPCOMING = 'upcoming';
+export const WORK_LIST_TAB_TODO = 'todo';
+export const WORK_LIST_TAB_PENDING = 'pending';
 export const WORK_LIST_TAB_OVERDUE = 'overdue';
+export const WORK_LIST_TAB_COMPLETED = 'completed';
 /** Keep in sync with WORK_COMPLETION_NOTE_MAX_LENGTH in convex/assignmentPolicy.ts */
 export const WORK_COMPLETION_NOTE_MAX_LENGTH = 500;
 
 const COMPLETED_STATUSES = new Set(['completed', 'completed_late']);
+const PENDING_REVIEW_STATUSES = new Set(['pending_completion', 'pending_approval']);
 
 export function vietnamToday(now = Date.now()) {
   return new Date(now + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -66,7 +67,14 @@ export function workDeadlines(item) {
 }
 
 export function isWorkCompleted(item) {
-  return COMPLETED_STATUSES.has(item?.workStatus || item?.status);
+  if (COMPLETED_STATUSES.has(item?.workStatus || item?.status)) return true;
+  const assignmentStatuses = (item?.assignments || []).map((row) => row?.status).filter(Boolean);
+  return assignmentStatuses.length > 0 && assignmentStatuses.every((status) => COMPLETED_STATUSES.has(status));
+}
+
+export function isWorkPendingReview(item) {
+  if (PENDING_REVIEW_STATUSES.has(item?.workStatus || item?.status)) return true;
+  return (item?.assignments || []).some((row) => PENDING_REVIEW_STATUSES.has(row?.status));
 }
 
 function allWorkDeadlinesPassed(item, today) {
@@ -89,19 +97,36 @@ export function workDeadlineKey(item) {
   return [...deadlines].sort()[0];
 }
 
-export function filterWorksByTab(list, tab = WORK_LIST_TAB_INCOMPLETE, today = vietnamToday()) {
+export function workListTabOf(item, today = vietnamToday()) {
+  if (isWorkCompleted(item)) return WORK_LIST_TAB_COMPLETED;
+  if (isWorkPendingReview(item)) return WORK_LIST_TAB_PENDING;
+  if (isWorkOverdue(item, today)) return WORK_LIST_TAB_OVERDUE;
+  return WORK_LIST_TAB_TODO;
+}
+
+export function filterWorksByTab(list, tab = WORK_LIST_TAB_TODO, today = vietnamToday()) {
   const items = Array.isArray(list) ? list : [];
   const compare = (a, b) => workDeadlineKey(a).localeCompare(workDeadlineKey(b));
-  if (tab === WORK_LIST_TAB_COMPLETED) {
-    return items.filter((item) => isWorkCompleted(item)).sort(compare);
+  return items.filter((item) => workListTabOf(item, today) === tab).sort(compare);
+}
+
+export function workListTabCounts(list, today = vietnamToday()) {
+  const counts = {
+    [WORK_LIST_TAB_TODO]: 0,
+    [WORK_LIST_TAB_PENDING]: 0,
+    [WORK_LIST_TAB_OVERDUE]: 0,
+    [WORK_LIST_TAB_COMPLETED]: 0,
+  };
+  for (const item of Array.isArray(list) ? list : []) {
+    counts[workListTabOf(item, today)] += 1;
   }
-  if (tab === WORK_LIST_TAB_OVERDUE) {
-    return items.filter((item) => isWorkOverdue(item, today)).sort(compare);
-  }
-  if (tab === WORK_LIST_TAB_UPCOMING) {
-    return items.filter((item) => !isWorkCompleted(item) && !isWorkOverdue(item, today)).sort(compare);
-  }
-  return items.filter((item) => !isWorkCompleted(item)).sort(compare);
+  return counts;
+}
+
+export function formatWorkTabCount(count) {
+  const n = Number(count) || 0;
+  if (n <= 0) return '';
+  return n > 99 ? '99+' : String(n);
 }
 
 export function emptyWorkSearch() {

@@ -16,10 +16,11 @@ import {
   workAssignmentPayload,
   workContentSummary,
   workDeadlineKey,
+  workListTabCounts,
   WORK_LIST_TAB_COMPLETED,
-  WORK_LIST_TAB_INCOMPLETE,
   WORK_LIST_TAB_OVERDUE,
-  WORK_LIST_TAB_UPCOMING,
+  WORK_LIST_TAB_PENDING,
+  WORK_LIST_TAB_TODO,
   workListTitle,
 } from '../src/work/workDisplay.js';
 
@@ -50,7 +51,7 @@ test('sửa công việc tách cá nhân thành một người mỗi row', () =>
   });
 });
 
-test('tab chưa hoàn thành gồm việc quá hạn; đã hoàn thành chỉ việc xong', () => {
+test('bốn tab Công việc tách việc cần làm, chờ duyệt, quá hạn và đã duyệt', () => {
   const today = '2026-08-17';
   const upcoming = {
     _id: 'a',
@@ -60,6 +61,7 @@ test('tab chưa hoàn thành gồm việc quá hạn; đã hoàn thành chỉ vi
   };
   const overdue = { _id: 'b', title: 'Hết hạn', deadline: '2026-08-10', status: 'overdue' };
   const done = { _id: 'c', title: 'Xong', deadline: '2026-08-30', workStatus: 'completed' };
+  const waiting = { _id: 'e', title: 'Chờ duyệt', deadline: '2026-08-10', status: 'pending_completion' };
   const later = {
     _id: 'd',
     title: 'Nhiều hạn',
@@ -75,14 +77,27 @@ test('tab chưa hoàn thành gồm việc quá hạn; đã hoàn thành chỉ vi
   assert.equal(isWorkCompleted(overdue), false);
   assert.equal(isWorkCompleted(done), true);
   assert.equal(workDeadlineKey(later), '2026-08-19');
-  const open = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_INCOMPLETE, today);
-  assert.deepEqual(open.map((item) => item._id), ['b', 'd', 'a']);
-  const completed = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_COMPLETED, today);
-  assert.deepEqual(completed.map((item) => item._id), ['c']);
-  const notDue = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_UPCOMING, today);
-  assert.deepEqual(notDue.map((item) => item._id), ['d', 'a']);
-  const pastDue = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_OVERDUE, today);
-  assert.deepEqual(pastDue.map((item) => item._id), ['b']);
+  const list = [later, overdue, done, upcoming, waiting];
+  assert.deepEqual(filterWorksByTab(list, WORK_LIST_TAB_TODO, today).map((item) => item._id), ['d', 'a']);
+  assert.deepEqual(filterWorksByTab(list, WORK_LIST_TAB_PENDING, today).map((item) => item._id), ['e']);
+  assert.deepEqual(filterWorksByTab(list, WORK_LIST_TAB_OVERDUE, today).map((item) => item._id), ['b']);
+  assert.deepEqual(filterWorksByTab(list, WORK_LIST_TAB_COMPLETED, today).map((item) => item._id), ['c']);
+  assert.deepEqual(workListTabCounts(list, today), {
+    [WORK_LIST_TAB_TODO]: 2,
+    [WORK_LIST_TAB_PENDING]: 1,
+    [WORK_LIST_TAB_OVERDUE]: 1,
+    [WORK_LIST_TAB_COMPLETED]: 1,
+  });
+  const createdWaiting = {
+    _id: 'f',
+    title: 'Công việc tôi tạo',
+    status: 'approved',
+    assignments: [
+      { deadline: '2026-08-10', status: 'pending_completion' },
+    ],
+  };
+  assert.deepEqual(filterWorksByTab([createdWaiting], WORK_LIST_TAB_PENDING, today).map((item) => item._id), ['f']);
+  assert.deepEqual(filterWorksByTab([createdWaiting], WORK_LIST_TAB_OVERDUE, today).map((item) => item._id), []);
 });
 
 test('preview tạo công việc gom nhãn đối tượng', () => {
@@ -168,13 +183,15 @@ test('tìm kiếm nâng cao công việc theo phòng ban, cá nhân và hạn ch
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, query: 'hop', department: 'to chuc' }).map((item) => item._id), []);
 });
 
-test('tab Chưa hoàn thành hiện badge số khi còn việc chưa xong', () => {
+test('mỗi tab Công việc hiện badge số việc', () => {
   const source = readFileSync(new URL('../src/work/WorkListFilters.jsx', import.meta.url), 'utf8');
-  assert.match(source, /incompleteCount/);
+  assert.match(source, /counts/);
   assert.match(source, /nav-badge duty-list-tab-badge/);
-  assert.match(source, /99\+/);
-  assert.match(source, /Chưa đến hạn/);
-  assert.match(source, /Đã quá hạn/);
+  assert.match(source, /formatWorkTabCount/);
+  assert.match(source, /Việc cần làm/);
+  assert.match(source, /Đang chờ duyệt/);
+  assert.match(source, /Quá hạn/);
+  assert.match(source, /Đã duyệt hoàn thành/);
 });
 
 test('query work.badge cộng chờ duyệt với hai tab chưa hoàn thành', () => {

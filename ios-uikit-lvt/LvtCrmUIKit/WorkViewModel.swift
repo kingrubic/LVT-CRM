@@ -1,17 +1,17 @@
 import Foundation
 
 enum WorkListTab: Int, CaseIterable, Equatable {
-    case incomplete
-    case completed
-    case upcoming
+    case todo
+    case pendingReview
     case overdue
+    case completed
 
     var title: String {
         switch self {
-        case .incomplete: return "Chưa hoàn thành"
-        case .completed: return "Đã hoàn thành"
-        case .upcoming: return "Chưa đến hạn"
-        case .overdue: return "Đã quá hạn"
+        case .todo: return "Việc cần làm"
+        case .pendingReview: return "Đang chờ duyệt"
+        case .overdue: return "Quá hạn"
+        case .completed: return "Đã duyệt hoàn thành"
         }
     }
 }
@@ -23,6 +23,7 @@ enum WorkDashboardFilter: Equatable {
 
 enum WorkListRules {
     private static let completed: Set<String> = ["completed", "completed_late"]
+    private static let pendingReview: Set<String> = ["pending_completion", "pending_approval"]
 
     static func vietnamToday(_ now: Date = Date()) -> String {
         var calendar = Calendar(identifier: .gregorian)
@@ -35,10 +36,19 @@ enum WorkListRules {
         completed.contains(task.status)
     }
 
+    static func isTaskPendingReview(_ task: WorkTaskItem) -> Bool {
+        pendingReview.contains(task.status)
+    }
+
     static func isDocumentCompleted(_ document: WorkApprovalItem) -> Bool {
         if completed.contains(document.status) { return true }
         let assignmentStatuses = document.assignments.map(\.status)
         return !assignmentStatuses.isEmpty && assignmentStatuses.allSatisfy { completed.contains($0) }
+    }
+
+    static func isDocumentPendingReview(_ document: WorkApprovalItem) -> Bool {
+        if pendingReview.contains(document.status) { return true }
+        return document.assignments.contains { pendingReview.contains($0.status) }
     }
 
     static func isTaskOverdue(_ task: WorkTaskItem, today: String = vietnamToday()) -> Bool {
@@ -66,47 +76,45 @@ enum WorkListRules {
     }
 
     static func filterTasks(_ list: [WorkTaskItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkTaskItem] {
-        let filtered: [WorkTaskItem]
-        switch tab {
-        case .completed:
-            filtered = list.filter { isTaskCompleted($0) }
-        case .overdue:
-            filtered = list.filter { isTaskOverdue($0, today: today) }
-        case .upcoming:
-            filtered = list.filter { !isTaskCompleted($0) && !isTaskOverdue($0, today: today) }
-        case .incomplete:
-            filtered = list.filter { !isTaskCompleted($0) }
-        }
-        return filtered.sorted { $0.deadline < $1.deadline }
+        list.filter { self.tab(for: $0, today: today) == tab }.sorted { $0.deadline < $1.deadline }
     }
 
     static func filterDocuments(_ list: [WorkApprovalItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkApprovalItem] {
-        let filtered: [WorkApprovalItem]
-        switch tab {
-        case .completed:
-            filtered = list.filter { isDocumentCompleted($0) }
-        case .overdue:
-            filtered = list.filter { isDocumentOverdue($0, today: today) }
-        case .upcoming:
-            filtered = list.filter { !isDocumentCompleted($0) && !isDocumentOverdue($0, today: today) }
-        case .incomplete:
-            filtered = list.filter { !isDocumentCompleted($0) }
-        }
-        return filtered.sorted {
+        list.filter { self.tab(for: $0, today: today) == tab }.sorted {
             deadlineKey($0) < deadlineKey($1)
         }
     }
 
+    static func counts(forTasks list: [WorkTaskItem], today: String = vietnamToday()) -> [WorkListTab: Int] {
+        var counts = Dictionary(uniqueKeysWithValues: WorkListTab.allCases.map { ($0, 0) })
+        for task in list {
+            let tab = tab(for: task, today: today)
+            counts[tab, default: 0] += 1
+        }
+        return counts
+    }
+
+    static func counts(forDocuments list: [WorkApprovalItem], today: String = vietnamToday()) -> [WorkListTab: Int] {
+        var counts = Dictionary(uniqueKeysWithValues: WorkListTab.allCases.map { ($0, 0) })
+        for document in list {
+            let tab = tab(for: document, today: today)
+            counts[tab, default: 0] += 1
+        }
+        return counts
+    }
+
     static func tab(for task: WorkTaskItem, today: String = vietnamToday()) -> WorkListTab {
         if isTaskCompleted(task) { return .completed }
+        if isTaskPendingReview(task) { return .pendingReview }
         if isTaskOverdue(task, today: today) { return .overdue }
-        return .incomplete
+        return .todo
     }
 
     static func tab(for document: WorkApprovalItem, today: String = vietnamToday()) -> WorkListTab {
         if isDocumentCompleted(document) { return .completed }
+        if isDocumentPendingReview(document) { return .pendingReview }
         if isDocumentOverdue(document, today: today) { return .overdue }
-        return .incomplete
+        return .todo
     }
 
     static func filterTasksBySearch(_ list: [WorkTaskItem], search: ListSearchValues) -> [WorkTaskItem] {
@@ -168,8 +176,8 @@ final class WorkViewModel {
     private(set) var busyTaskId: String?
     private(set) var busyApprovalId: String?
     private(set) var busyReviewId: String?
-    var mineTab: WorkListTab = .incomplete { didSet { if mineTab != oldValue { notifyChange() } } }
-    var createdTab: WorkListTab = .incomplete { didSet { if createdTab != oldValue { notifyChange() } } }
+    var mineTab: WorkListTab = .todo { didSet { if mineTab != oldValue { notifyChange() } } }
+    var createdTab: WorkListTab = .todo { didSet { if createdTab != oldValue { notifyChange() } } }
     var showNeedsCompletionOnly = false
     var search = ListSearchValues() { didSet { if search != oldValue { notifyChange() } } }
     var onChange: (() -> Void)?
@@ -177,10 +185,7 @@ final class WorkViewModel {
     var canApprove: Bool { false }
 
     var tabMine: [WorkTaskItem] {
-        if showNeedsCompletionOnly {
-            return tasks.filter { WorkHelpers.needsCompletion($0.status) }.sorted { $0.deadline < $1.deadline }
-        }
-        return WorkListRules.filterTasks(tasks, tab: mineTab)
+        WorkListRules.filterTasks(tasks, tab: mineTab)
     }
 
     var tabCreated: [WorkApprovalItem] {
@@ -197,14 +202,11 @@ final class WorkViewModel {
 
     var mineSearchEmpty: Bool { !tabMine.isEmpty && visibleMine.isEmpty }
     var createdSearchEmpty: Bool { !tabCreated.isEmpty && visibleCreated.isEmpty }
-    var incompleteMineCount: Int {
-        if showNeedsCompletionOnly {
-            return tasks.filter { WorkHelpers.needsCompletion($0.status) }.count
-        }
-        return tasks.filter { !WorkListRules.isTaskCompleted($0) }.count
+    var mineTabCounts: [WorkListTab: Int] {
+        WorkListRules.counts(forTasks: tasks)
     }
-    var incompleteCreatedCount: Int {
-        approvals.filter { !WorkListRules.isDocumentCompleted($0) }.count
+    var createdTabCounts: [WorkListTab: Int] {
+        WorkListRules.counts(forDocuments: approvals)
     }
 
     var visibleApprovals: [WorkApprovalItem] { visibleCreated }
@@ -264,18 +266,18 @@ final class WorkViewModel {
         switch filter {
         case .pendingApproval:
             showNeedsCompletionOnly = false
-            mineTab = .incomplete
-            createdTab = .incomplete
+            mineTab = .pendingReview
+            createdTab = .pendingReview
         case .needsExecution:
-            showNeedsCompletionOnly = true
-            mineTab = .incomplete
+            showNeedsCompletionOnly = false
+            mineTab = .todo
         }
         notifyChange()
     }
 
     func clearDashboardFilter() {
         showNeedsCompletionOnly = false
-        mineTab = .incomplete
+        mineTab = .todo
         notifyChange()
     }
 

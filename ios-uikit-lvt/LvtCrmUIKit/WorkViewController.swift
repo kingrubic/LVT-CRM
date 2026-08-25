@@ -99,7 +99,7 @@ final class WorkViewController: UITableViewController {
             return workSectionHeader(
                 title: "Việc của tôi",
                 tab: viewModel.mineTab,
-                incompleteCount: viewModel.incompleteMineCount,
+                counts: viewModel.mineTabCounts,
                 onChange: { [weak self] tab in
                     self?.viewModel.showNeedsCompletionOnly = false
                     self?.viewModel.mineTab = tab
@@ -109,7 +109,7 @@ final class WorkViewController: UITableViewController {
             return workSectionHeader(
                 title: "Việc tôi tạo",
                 tab: viewModel.createdTab,
-                incompleteCount: viewModel.incompleteCreatedCount,
+                counts: viewModel.createdTabCounts,
                 onChange: { [weak self] tab in self?.viewModel.createdTab = tab }
             )
         default:
@@ -132,24 +132,24 @@ final class WorkViewController: UITableViewController {
     private func emptyCopy(tab: WorkListTab, created: Bool) -> String {
         switch tab {
         case .completed:
-            return created ? "Chưa có công việc bạn tạo đã hoàn thành." : "Chưa có công việc đã hoàn thành."
-        case .upcoming:
-            return created ? "Chưa có công việc bạn tạo chưa đến hạn." : "Chưa có công việc chưa đến hạn."
+            return created ? "Chưa có công việc bạn tạo đã duyệt hoàn thành." : "Chưa có công việc đã duyệt hoàn thành."
+        case .pendingReview:
+            return created ? "Không có công việc bạn tạo đang chờ duyệt." : "Không có công việc đang chờ duyệt."
         case .overdue:
-            return created ? "Chưa có công việc bạn tạo đã quá hạn." : "Chưa có công việc quá hạn."
-        case .incomplete:
-            return created ? "Bạn chưa tạo công việc nào" : "Bạn chưa có công việc nào cần xử lý"
+            return created ? "Chưa có công việc bạn tạo quá hạn." : "Chưa có công việc quá hạn."
+        case .todo:
+            return created ? "Không có việc cần làm trong các công việc bạn tạo." : "Bạn chưa có việc cần làm."
         }
     }
 
     private func workSectionHeader(
         title: String,
         tab: WorkListTab,
-        incompleteCount: Int,
+        counts: [WorkListTab: Int],
         onChange: @escaping (WorkListTab) -> Void
     ) -> UIView {
         let header = WorkTabsHeaderView()
-        header.configure(title: title, tab: tab, incompleteCount: incompleteCount, onChange: onChange)
+        header.configure(title: title, tab: tab, counts: counts, onChange: onChange)
         return header
     }
 
@@ -1175,7 +1175,6 @@ extension WorkViewController: UIImagePickerControllerDelegate, UINavigationContr
 private final class WorkTabsHeaderView: UIView {
     private let titleLabel = UILabel()
     private let control = UISegmentedControl(items: WorkListTab.allCases.map(\.title))
-    private let badgeLabel = UILabel()
     private var onChange: ((WorkListTab) -> Void)?
 
     override init(frame: CGRect) {
@@ -1186,25 +1185,17 @@ private final class WorkTabsHeaderView: UIView {
         titleLabel.textColor = UIColor(red: 20 / 255, green: 53 / 255, blue: 95 / 255, alpha: 1)
         control.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            self.onChange?(WorkListTab(rawValue: self.control.selectedSegmentIndex) ?? .incomplete)
+            self.onChange?(WorkListTab(rawValue: self.control.selectedSegmentIndex) ?? .todo)
         }, for: .valueChanged)
-        let tabFont = UIFont.systemFont(ofSize: 11, weight: .semibold)
-        let tabFontSelected = UIFont.systemFont(ofSize: 11, weight: .bold)
+        let tabFont = UIFont.systemFont(ofSize: 10, weight: .semibold)
+        let tabFontSelected = UIFont.systemFont(ofSize: 10, weight: .bold)
         control.setTitleTextAttributes([.font: tabFont], for: .normal)
         control.setTitleTextAttributes([.font: tabFontSelected], for: .selected)
-        badgeLabel.font = .systemFont(ofSize: 10, weight: .heavy)
-        badgeLabel.textColor = .white
-        badgeLabel.textAlignment = .center
-        badgeLabel.backgroundColor = UIColor(red: 227 / 255, green: 109 / 255, blue: 85 / 255, alpha: 1)
-        badgeLabel.layer.cornerRadius = 10
-        badgeLabel.clipsToBounds = true
-        badgeLabel.isHidden = true
         let stack = UIStackView(arrangedSubviews: [titleLabel, control])
         stack.axis = .vertical
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
-        addSubview(badgeLabel)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
@@ -1216,31 +1207,16 @@ private final class WorkTabsHeaderView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(title: String, tab: WorkListTab, incompleteCount: Int, onChange: @escaping (WorkListTab) -> Void) {
+    func configure(title: String, tab: WorkListTab, counts: [WorkListTab: Int], onChange: @escaping (WorkListTab) -> Void) {
         titleLabel.text = title
         control.selectedSegmentIndex = tab.rawValue
         self.onChange = onChange
-        badgeLabel.isHidden = incompleteCount <= 0
-        badgeLabel.text = incompleteCount > 99 ? "99+" : "\(incompleteCount)"
-        badgeLabel.accessibilityLabel = "\(incompleteCount) công việc chưa hoàn thành"
-        setNeedsLayout()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard !badgeLabel.isHidden, control.numberOfSegments > 0 else { return }
-        let segmentWidth = control.bounds.width / CGFloat(control.numberOfSegments)
-        let text = (badgeLabel.text as NSString?) ?? ""
-        let textWidth = text.size(withAttributes: [.font: badgeLabel.font as Any]).width
-        let width = max(20, textWidth + 10)
-        let height: CGFloat = 20
-        let local = CGRect(
-            x: segmentWidth - width - 6,
-            y: (control.bounds.height - height) / 2,
-            width: width,
-            height: height
-        )
-        badgeLabel.frame = control.convert(local, to: self)
-        badgeLabel.layer.cornerRadius = height / 2
+        for (index, item) in WorkListTab.allCases.enumerated() {
+            let count = counts[item] ?? 0
+            let badge = count > 99 ? "99+" : "\(count)"
+            let label = count > 0 ? "\(item.title) \(badge)" : item.title
+            control.setTitle(label, forSegmentAt: index)
+            control.setEnabled(true, forSegmentAt: index)
+        }
     }
 }

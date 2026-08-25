@@ -37,17 +37,13 @@ data class WorkUiState(
     val evidencePromptTask: WorkTaskItem? = null,
     val evidenceNote: String = "",
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
-    val mineTab: WorkListTab = WorkListTab.Incomplete,
-    val createdTab: WorkListTab = WorkListTab.Incomplete,
+    val mineTab: WorkListTab = WorkListTab.Todo,
+    val createdTab: WorkListTab = WorkListTab.Todo,
     val needsExecutionOnly: Boolean = false,
     val search: ListSearchState = ListSearchState(),
 ) {
     val tabMine: List<WorkTaskItem>
-        get() = if (needsExecutionOnly) {
-            filterTasksNeedingExecution(tasks)
-        } else {
-            filterTasksByTab(tasks, mineTab)
-        }
+        get() = filterTasksByTab(tasks, mineTab)
     val tabCreated: List<WorkApprovalItem>
         get() = filterDocumentsByTab(approvals, createdTab)
     val visibleMine: List<WorkTaskItem>
@@ -58,14 +54,10 @@ data class WorkUiState(
         get() = tabMine.isNotEmpty() && visibleMine.isEmpty()
     val createdSearchEmpty: Boolean
         get() = tabCreated.isNotEmpty() && visibleCreated.isEmpty()
-    val incompleteMineCount: Int
-        get() = if (needsExecutionOnly) {
-            filterTasksNeedingExecution(tasks).size
-        } else {
-            filterTasksByTab(tasks, WorkListTab.Incomplete).size
-        }
-    val incompleteCreatedCount: Int
-        get() = filterDocumentsByTab(approvals, WorkListTab.Incomplete).size
+    val mineTabCounts: Map<WorkListTab, Int>
+        get() = countTasksByTab(tasks)
+    val createdTabCounts: Map<WorkListTab, Int>
+        get() = countDocumentsByTab(approvals)
 }
 
 class WorkViewModel(
@@ -133,13 +125,13 @@ class WorkViewModel(
         _uiState.update { state ->
             when (filter) {
                 WorkDashboardFilter.PendingApproval -> state.copy(
-                    mineTab = WorkListTab.Incomplete,
-                    createdTab = WorkListTab.Incomplete,
+                    mineTab = WorkListTab.PendingReview,
+                    createdTab = WorkListTab.PendingReview,
                     needsExecutionOnly = false,
                 )
                 WorkDashboardFilter.NeedsExecution -> state.copy(
-                    mineTab = WorkListTab.Incomplete,
-                    needsExecutionOnly = true,
+                    mineTab = WorkListTab.Todo,
+                    needsExecutionOnly = false,
                 )
             }
         }

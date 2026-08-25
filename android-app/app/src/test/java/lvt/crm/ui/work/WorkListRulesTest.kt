@@ -11,26 +11,27 @@ import org.junit.Test
 
 class WorkListRulesTest {
     @Test
-    fun incompleteTabKeepsOverdueAndDropsCompletedTasks() {
+    fun actionTabsSplitTodoPendingOverdueAndCompleted() {
         val today = "2026-08-17"
-        val open = task("a", "2026-08-20", "pending_task")
+        val open = task("a", "2099-08-20", "pending_task")
         val done = task("b", "2026-08-20", "completed")
         val late = task("c", "2026-08-10", "overdue")
-        assertEquals(listOf("c", "a"), filterTasksByTab(listOf(open, done, late), WorkListTab.Incomplete, today).map { it.id })
-        assertEquals(listOf("b"), filterTasksByTab(listOf(open, done, late), WorkListTab.Completed, today).map { it.id })
-        assertEquals(listOf("a"), filterTasksByTab(listOf(open, done, late), WorkListTab.Upcoming, today).map { it.id })
-        assertEquals(listOf("c"), filterTasksByTab(listOf(open, done, late), WorkListTab.Overdue, today).map { it.id })
+        val waiting = task("e", "2026-08-10", "pending_completion")
+        val list = listOf(open, done, late, waiting)
+        assertEquals(listOf("a"), filterTasksByTab(list, WorkListTab.Todo, today).map { it.id })
+        assertEquals(listOf("e"), filterTasksByTab(list, WorkListTab.PendingReview, today).map { it.id })
+        assertEquals(listOf("c"), filterTasksByTab(list, WorkListTab.Overdue, today).map { it.id })
+        assertEquals(listOf("b"), filterTasksByTab(list, WorkListTab.Completed, today).map { it.id })
         assertEquals(listOf("c", "a"), filterTasksNeedingExecution(listOf(open, done, late)).map { it.id })
         val filtered = WorkUiState(
             tasks = listOf(open, done, late),
-            mineTab = WorkListTab.Incomplete,
-            needsExecutionOnly = true,
+            mineTab = WorkListTab.Todo,
         )
-        assertEquals(listOf("c", "a"), filtered.visibleMine.map { it.id })
-        assertEquals(2, filtered.incompleteMineCount)
+        assertEquals(listOf("a"), filtered.visibleMine.map { it.id })
+        assertEquals(1, filtered.mineTabCounts[WorkListTab.Todo])
         assertEquals(
-            2,
-            WorkUiState(tasks = listOf(open, done, late), mineTab = WorkListTab.Completed).incompleteMineCount,
+            1,
+            WorkUiState(tasks = listOf(open, done, late)).mineTabCounts[WorkListTab.Overdue],
         )
     }
 

@@ -404,7 +404,7 @@ Nếu tài khoản có chức vụ cao hơn và được cấp quyền phù hợ
 
 Màn hình Công việc thay đổi theo nhiệm vụ và chức vụ của từng người. Một tài khoản có thể thấy một hoặc nhiều nội dung dưới đây.
 
-**Việc của tôi** và **Việc tôi tạo** dùng bốn tab: **Chưa hoàn thành**, **Đã hoàn thành**, **Chưa đến hạn**, **Đã quá hạn**. Việc quá hạn vẫn nằm ở **Chưa hoàn thành** cho đến khi được duyệt xong; **Đã quá hạn** chỉ việc chưa xong mà hạn đã qua, **Chưa đến hạn** là việc chưa xong còn hạn. Tab **Chưa hoàn thành** hiện vòng tròn đỏ với số việc còn lại. Badge trên menu **Công việc** là tổng: task chờ duyệt hoàn thành + việc chưa hoàn thành của tôi + việc chưa hoàn thành tôi tạo.
+**Việc của tôi** và **Việc tôi tạo** dùng bốn tab: **Việc cần làm**, **Đang chờ duyệt**, **Quá hạn**, **Đã duyệt hoàn thành**. Mỗi tab hiện số việc (ẩn khi bằng 0). **Việc cần làm** là việc chưa nộp, còn hạn. **Đang chờ duyệt** là đã nộp và đang chờ người tạo xác nhận. **Quá hạn** là việc chưa xong mà hạn đã qua (chưa nộp). **Đã duyệt hoàn thành** là việc người tạo đã duyệt. Badge trên menu **Công việc** là tổng: task chờ duyệt hoàn thành + việc chưa hoàn thành của tôi + việc chưa hoàn thành tôi tạo.
 
 ### Xử lý công văn cần duyệt
 

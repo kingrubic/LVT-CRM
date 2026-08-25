@@ -132,7 +132,7 @@ fun WorkScreen(
     LaunchedEffect(openFilterToken) {
         if (openFilterToken == 0) return@LaunchedEffect
         if (openFilter == null) {
-            viewModel.setMineTab(WorkListTab.Incomplete)
+            viewModel.setMineTab(WorkListTab.Todo)
         } else {
             viewModel.applyDashboardFilter(openFilter)
         }
@@ -306,7 +306,7 @@ fun WorkScreen(
                                 title = "Việc của tôi",
                                 tab = state.mineTab,
                                 onTab = viewModel::setMineTab,
-                                incompleteCount = state.incompleteMineCount,
+                                counts = state.mineTabCounts,
                             )
                         }
                         if (state.visibleMine.isEmpty()) {
@@ -654,7 +654,7 @@ private fun AdminWorkScreen(
                             title = "Việc của tôi",
                             tab = state.mineTab,
                             onTab = onMineTab,
-                            incompleteCount = state.incompleteMineCount,
+                            counts = state.mineTabCounts,
                         )
                     }
                     if (state.visibleMine.isEmpty()) {
@@ -683,7 +683,7 @@ private fun AdminWorkScreen(
                             title = "Việc tôi tạo",
                             tab = state.createdTab,
                             onTab = onCreatedTab,
-                            incompleteCount = state.incompleteCreatedCount,
+                            counts = state.createdTabCounts,
                         )
                     }
                     if (documents.isEmpty()) {
@@ -891,7 +891,7 @@ private fun WorkListSectionHeader(
     title: String,
     tab: WorkListTab,
     onTab: (WorkListTab) -> Unit,
-    incompleteCount: Int = 0,
+    counts: Map<WorkListTab, Int> = emptyMap(),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, style = MaterialTheme.typography.titleLarge)
@@ -900,6 +900,7 @@ private fun WorkListSectionHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             WorkListTab.entries.forEach { value ->
+                val count = counts[value] ?: 0
                 FilterChip(
                     selected = tab == value,
                     onClick = { onTab(value) },
@@ -909,8 +910,8 @@ private fun WorkListSectionHeader(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(value.title)
-                            if (value == WorkListTab.Incomplete && incompleteCount > 0) {
-                                WorkIncompleteBadge(incompleteCount)
+                            if (count > 0) {
+                                WorkIncompleteBadge(count)
                             }
                         }
                     },
@@ -949,10 +950,10 @@ private fun WorkListEmpty(
     val message = when {
         filtered -> "Không tìm thấy công việc phù hợp."
         needsExecutionOnly -> "Chưa có công việc cần thực hiện."
-        tab == WorkListTab.Completed -> if (created) "Chưa có công việc bạn tạo đã hoàn thành." else "Chưa có công việc đã hoàn thành."
-        tab == WorkListTab.Upcoming -> if (created) "Chưa có công việc bạn tạo chưa đến hạn." else "Chưa có công việc chưa đến hạn."
-        tab == WorkListTab.Overdue -> if (created) "Chưa có công việc bạn tạo đã quá hạn." else "Chưa có công việc quá hạn."
-        else -> if (created) "Bạn chưa tạo công việc nào" else "Bạn chưa có công việc nào cần xử lý"
+        tab == WorkListTab.Completed -> if (created) "Chưa có công việc bạn tạo đã duyệt hoàn thành." else "Chưa có công việc đã duyệt hoàn thành."
+        tab == WorkListTab.PendingReview -> if (created) "Không có công việc bạn tạo đang chờ duyệt." else "Không có công việc đang chờ duyệt."
+        tab == WorkListTab.Overdue -> if (created) "Chưa có công việc bạn tạo quá hạn." else "Chưa có công việc quá hạn."
+        else -> if (created) "Không có việc cần làm trong các công việc bạn tạo." else "Bạn chưa có việc cần làm."
     }
     StatePanel(
         icon = if (filtered) Icons.Outlined.Search else Icons.Outlined.TaskAlt,
