@@ -47,6 +47,13 @@ const NAV_ICONS = {
       <path d="m16.8 10.2.9 2.1h2.2l-1.8 1.4.7 2.2-2-1.4-2 1.4.7-2.2-1.8-1.4h2.2z" />
     </NavGlyph>
   ),
+  'staff-faults': () => (
+    <NavGlyph>
+      <circle cx="12" cy="12" r="8.2" />
+      <path d="M12 8.2v4.6" />
+      <path d="M12 16.6h.01" />
+    </NavGlyph>
+  ),
   profile: () => (
     <NavGlyph>
       <circle cx="12" cy="8" r="3.2" />

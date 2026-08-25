@@ -5,6 +5,7 @@ const MENU_PATHS = Object.freeze({
   work: '/cong-viec',
   homeroom: '/lop-chu-nhiem',
   'people-review': '/danh-gia-nhan-su',
+  'staff-faults': '/ghi-nhan-loi',
   profile: '/thong-tin-ca-nhan',
   'duties-management': '/quan-ly-cong-tac',
   boarding: '/quan-ly-ban-tru',

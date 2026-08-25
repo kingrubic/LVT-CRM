@@ -45,6 +45,7 @@ import type * as schoolYears from "../schoolYears.js";
 import type * as seed from "../seed.js";
 import type * as sessions from "../sessions.js";
 import type * as settings from "../settings.js";
+import type * as staffFaultsPolicy from "../staffFaultsPolicy.js";
 import type * as studentAttendance from "../studentAttendance.js";
 import type * as studentAttendancePolicy from "../studentAttendancePolicy.js";
 import type * as studentRosterImport from "../studentRosterImport.js";
@@ -105,6 +106,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   sessions: typeof sessions;
   settings: typeof settings;
+  staffFaultsPolicy: typeof staffFaultsPolicy;
   studentAttendance: typeof studentAttendance;
   studentAttendancePolicy: typeof studentAttendancePolicy;
   studentRosterImport: typeof studentRosterImport;

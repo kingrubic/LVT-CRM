@@ -7,6 +7,7 @@ export const SYSTEM_MENU_DEFS = [
   { id: "work", label: "Công việc" },
   { id: "homeroom", label: "Lớp chủ nhiệm" },
   { id: "people-review", label: "Đánh giá nhân sự" },
+  { id: "staff-faults", label: "Ghi nhận lỗi" },
 ] as const;
 
 export type MenuId = (typeof SYSTEM_MENU_DEFS)[number]["id"];
