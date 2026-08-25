@@ -18,6 +18,7 @@ import {
   registerDriveUploadStage,
   releaseDriveUploadCleanup,
 } from "./driveUploadStages";
+import { canAddStaffFault, canSeeStaffFaultRecord, STAFF_FAULTS_MENU_ID } from "./staffFaultsPolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SCHOOL_YEAR_RE = /^\d{4}-\d{4}$/;
@@ -115,14 +116,11 @@ type ActorCtx = {
   menuAccess: Record<string, string>;
 };
 
-async function requirePeopleReviewAccess(ctx: any): Promise<ActorCtx> {
+async function loadPeopleReviewActor(ctx: any): Promise<ActorCtx> {
   const user = await currentUserOrThrow(ctx);
   if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
   if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
   const menuAccess = await resolveUserMenuAccess(ctx, user);
-  if (!isOperationalManagerRole(user.role) && menuAccess["people-review"] === "hidden") {
-    throw new Error("FORBIDDEN: people-review menu hidden");
-  }
   const positions = await ctx.db.query("positions").collect();
   const isOps = isOperationalManagerRole(user.role);
   return {
@@ -132,6 +130,41 @@ async function requirePeopleReviewAccess(ctx: any): Promise<ActorCtx> {
     positions,
     menuAccess,
   };
+}
+
+function hasMenu(access: ActorCtx, menuId: string) {
+  return access.isOps || access.menuAccess[menuId] !== "hidden";
+}
+
+async function requirePeopleReviewAccess(ctx: any): Promise<ActorCtx> {
+  const access = await loadPeopleReviewActor(ctx);
+  if (!hasMenu(access, "people-review")) {
+    throw new Error("FORBIDDEN: people-review menu hidden");
+  }
+  return access;
+}
+
+async function requireStaffFaultsAccess(ctx: any): Promise<ActorCtx> {
+  const access = await loadPeopleReviewActor(ctx);
+  if (!hasMenu(access, STAFF_FAULTS_MENU_ID)) {
+    throw new Error("FORBIDDEN: staff-faults menu hidden");
+  }
+  return access;
+}
+
+function staffFaultsAccessLevel(access: ActorCtx) {
+  if (access.isOps) return "view_all";
+  return access.menuAccess[STAFF_FAULTS_MENU_ID];
+}
+
+function actorSeesStaffFault(access: ActorCtx, fault: { targetUserId: string; recordedByUserId: string }) {
+  return canSeeStaffFaultRecord({
+    isOps: access.isOps,
+    access: staffFaultsAccessLevel(access),
+    actorUserId: String(access.user._id),
+    targetUserId: String(fault.targetUserId),
+    recordedByUserId: String(fault.recordedByUserId),
+  });
 }
 
 function personLabel(user: any) {
@@ -451,20 +484,16 @@ async function loadEvaluationBundle(ctx: any, targetUserId: string) {
 export const authorizeFileUpload = query({
   args: {},
   handler: async (ctx) => {
-    const access = await requirePeopleReviewAccess(ctx);
-    const canUpload =
-      access.isOps ||
-      access.level === 2 ||
-      access.level === 3 ||
-      access.level === 4 ||
-      access.level === 5;
-    if (!canUpload) throw new Error("PEOPLE_REVIEW_UPLOAD_FORBIDDEN");
+    const access = await uploadActor(ctx);
     return { userId: String(access.user._id) };
   },
 });
 
 async function uploadActor(ctx: any) {
-  const access = await requirePeopleReviewAccess(ctx);
+  const access = await loadPeopleReviewActor(ctx);
+  if (!hasMenu(access, "people-review") && !hasMenu(access, STAFF_FAULTS_MENU_ID)) {
+    throw new Error("FORBIDDEN: people-review menu hidden");
+  }
   const canUpload = access.isOps || [2, 3, 4, 5].includes(access.level);
   if (!canUpload) throw new Error("PEOPLE_REVIEW_UPLOAD_FORBIDDEN");
   return access;
@@ -513,7 +542,7 @@ export const releaseStagedUploadCleanup = mutation({
 export const isDriveFileReferenced = query({
   args: { driveFileId: v.string() },
   handler: async (ctx, args) => {
-    await requirePeopleReviewAccess(ctx);
+    await uploadActor(ctx);
     const [faults, evaluations] = await Promise.all([
       ctx.db
         .query("personnelFaults")
@@ -538,17 +567,27 @@ export const authorizeFileDownload = query({
     kind: v.union(v.literal("fault"), v.literal("evaluation")),
   },
   handler: async (ctx, args) => {
-    const access = await requirePeopleReviewAccess(ctx);
+    const access = await loadPeopleReviewActor(ctx);
+    const peopleReviewVisible = hasMenu(access, "people-review");
+    const staffFaultsVisible = hasMenu(access, STAFF_FAULTS_MENU_ID);
     if (args.kind === "fault") {
+      if (!peopleReviewVisible && !staffFaultsVisible) {
+        throw new Error("FORBIDDEN: people-review menu hidden");
+      }
       const fault = await ctx.db.get(args.fileId as Id<"personnelFaults">);
       if (!fault?.active || !fault.driveFileId) throw new Error("PEOPLE_REVIEW_FILE_NOT_FOUND");
       const target = await ctx.db.get(fault.targetUserId as Id<"users">);
-      if (!target || !canViewTarget(access, target)) throw new Error("PEOPLE_REVIEW_FILE_FORBIDDEN");
+      const viaPeopleReview = peopleReviewVisible && target && canViewTarget(access, target);
+      const viaStaffFaults = staffFaultsVisible && actorSeesStaffFault(access, fault);
+      if (!viaPeopleReview && !viaStaffFaults) throw new Error("PEOPLE_REVIEW_FILE_FORBIDDEN");
       return {
         driveFileId: fault.driveFileId,
         fileName: fault.fileName,
         fileType: fault.fileType,
       };
+    }
+    if (!peopleReviewVisible) {
+      throw new Error("FORBIDDEN: people-review menu hidden");
     }
     const file = await ctx.db.get(args.fileId as Id<"personnelEvaluationFiles">);
     if (!file?.active || !file.driveFileId) throw new Error("PEOPLE_REVIEW_FILE_NOT_FOUND");
@@ -775,6 +814,124 @@ export const personDetail = query({
   },
 });
 
+function mapStaffFaultRow(fault: any, usersById: Map<string, any>, departments: any[], actorId: string) {
+  const target = usersById.get(String(fault.targetUserId));
+  const recorder = usersById.get(String(fault.recordedByUserId));
+  return {
+    _id: fault._id,
+    violationDate: fault.violationDate,
+    reason: fault.reason,
+    fileName: fault.fileName,
+    fileType: fault.fileType,
+    targetUserId: String(fault.targetUserId),
+    targetName: personLabel(target),
+    departmentName: departmentNameOf(target, departments),
+    recordedByUserId: String(fault.recordedByUserId),
+    recordedByName: personLabel(recorder),
+    isSelfTarget: String(fault.targetUserId) === actorId,
+    isRecordedByMe: String(fault.recordedByUserId) === actorId,
+    createdAt: fault.createdAt,
+  };
+}
+
+export const staffFaultLog = query({
+  args: {
+    faultFrom: v.optional(v.string()),
+    faultTo: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireStaffFaultsAccess(ctx);
+    const today = todayInVietnam();
+    const faultTo = assertDate(args.faultTo || today);
+    const faultFrom = assertDate(args.faultFrom || addDaysIso(faultTo, -29));
+    const actorId = String(access.user._id);
+    const viewAll = staffFaultsAccessLevel(access) === "view_all" || access.isOps;
+
+    const [users, departments, collected] = await Promise.all([
+      ctx.db.query("users").collect(),
+      ctx.db.query("departments").collect(),
+      viewAll
+        ? ctx.db
+            .query("personnelFaults")
+            .withIndex("by_violation_date", (q: any) =>
+              q.eq("active", true).gte("violationDate", faultFrom).lte("violationDate", faultTo),
+            )
+            .collect()
+        : Promise.all([
+            ctx.db
+              .query("personnelFaults")
+              .withIndex("by_target", (q: any) => q.eq("targetUserId", actorId).eq("active", true))
+              .collect(),
+            ctx.db
+              .query("personnelFaults")
+              .withIndex("by_recorder", (q: any) => q.eq("recordedByUserId", actorId).eq("active", true))
+              .collect(),
+          ]).then((parts) => {
+            const seen = new Set<string>();
+            const merged: any[] = [];
+            for (const row of parts.flat()) {
+              const id = String(row._id);
+              if (seen.has(id)) continue;
+              seen.add(id);
+              merged.push(row);
+            }
+            return merged;
+          }),
+    ]);
+
+    const usersById = new Map(users.map((user: any) => [String(user._id), user]));
+    const faults = collected
+      .filter((fault: any) => fault.active && fault.violationDate >= faultFrom && fault.violationDate <= faultTo)
+      .filter((fault: any) => actorSeesStaffFault(access, fault))
+      .sort((a: any, b: any) => b.violationDate.localeCompare(a.violationDate) || b.createdAt - a.createdAt)
+      .map((fault: any) => mapStaffFaultRow(fault, usersById, departments, actorId));
+
+    return {
+      faultFrom,
+      faultTo,
+      access: viewAll ? "view_all" : "view",
+      canAdd: canAddStaffFault(access),
+      faults,
+    };
+  },
+});
+
+export const staffFaultTargets = query({
+  args: {},
+  handler: async (ctx) => {
+    const access = await requireStaffFaultsAccess(ctx);
+    if (!canAddStaffFault(access)) {
+      return { canAdd: false, people: [] as any[] };
+    }
+    const [users, departments] = await Promise.all([
+      ctx.db.query("users").collect(),
+      ctx.db.query("departments").collect(),
+    ]);
+    const people = users
+      .filter((user: any) => user.status === "active" && canRecordFault(access, user))
+      .map((user: any) => {
+        const isOps = isOperationalManagerRole(user.role);
+        return {
+          _id: user._id,
+          name: personLabel(user),
+          email: user.email || "",
+          departmentName: departmentNameOf(user, departments),
+          positionName:
+            access.positions.find((row: any) => String(row._id) === String(user.positionId))?.name ||
+            (isOps ? (user.role === "admin" ? "Administrator" : "Moderator") : "—"),
+          positionLevel: isOps ? null : activePositionLevel(user, access.positions),
+          isOps,
+        };
+      })
+      .sort(
+        (a, b) =>
+          a.departmentName.localeCompare(b.departmentName, "vi") ||
+          a.name.localeCompare(b.name, "vi"),
+      );
+    return { canAdd: true, people };
+  },
+});
+
 export const recordFault = mutation({
   args: {
     targetUserId: v.id("users"),
@@ -788,7 +945,8 @@ export const recordFault = mutation({
     fileSize: v.number(),
   },
   handler: async (ctx, args) => {
-    const access = await requirePeopleReviewAccess(ctx);
+    const access = await requireStaffFaultsAccess(ctx);
+    if (!canAddStaffFault(access)) throw new Error("PEOPLE_REVIEW_FAULT_FORBIDDEN");
     const target = await ctx.db.get(args.targetUserId);
     if (!target || target.status !== "active") throw new Error("USER_NOT_FOUND");
     if (!canRecordFault(access, target)) throw new Error("PEOPLE_REVIEW_FAULT_FORBIDDEN");

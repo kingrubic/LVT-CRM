@@ -397,6 +397,7 @@ export default defineSchema({
     ...timestamps,
   })
     .index("by_target", ["targetUserId", "active"])
+    .index("by_recorder", ["recordedByUserId", "active"])
     .index("by_violation_date", ["active", "violationDate"])
     .index("by_drive_file", ["driveFileId"]),
   /**

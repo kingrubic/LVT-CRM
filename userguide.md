@@ -482,7 +482,7 @@ Trang **Đánh giá nhân sự** có thể hiển thị hồ sơ của cá nhân
 
 Người dùng có thể:
 
-- Xem các ghi nhận lỗi trong khoảng ngày đã chọn.
+- Xem các ghi nhận lỗi trong khoảng ngày đã chọn (tạo mới nằm ở menu **Ghi nhận lỗi**).
 - Xem số công việc đúng hạn, trễ hạn và chưa hoàn thành.
 - Xem tệp đánh giá theo quý.
 - Xem tệp đánh giá viên chức theo năm học.
@@ -501,16 +501,9 @@ Nếu nút **Thêm đánh giá** xuất hiện:
 
 Khi tệp đã có nhận xét của Ban Giám hiệu, hệ thống không cho thay tệp khác trong cùng kỳ.
 
-### Ghi nhận lỗi hoặc đánh giá người khác
+### Đánh giá người khác
 
-Các nút **Ghi lỗi** và **Đánh giá** chỉ xuất hiện khi tài khoản được phép theo chức vụ và phạm vi quản lý.
-
-Khi ghi nhận lỗi:
-
-1. Chọn ngày vi phạm.
-2. Nhập lý do.
-3. Đính kèm ảnh hoặc PDF làm căn cứ, tối đa 20 MB.
-4. Chọn **Ghi nhận**.
+Nút **Đánh giá** chỉ xuất hiện khi tài khoản được phép theo chức vụ và phạm vi quản lý. Tạo ghi nhận lỗi nằm ở menu **Ghi nhận lỗi**, không còn trên trang này.
 
 Khi thêm đánh giá:
 
@@ -530,6 +523,22 @@ Menu **Lớp chủ nhiệm** chỉ hiện khi nhóm quyền cho phép **Xem**, *
 5. Tab **Báo cáo** xem tổng hợp và xuất XLSX/PDF trong đúng phạm vi.
 
 Chưa dùng ảnh học sinh. Lịch ngày học/cảnh báo 08:30 chỉ chạy khi nhà trường đã cấu hình ngày học — không tự hiểu thứ bảy/chủ nhật.
+
+## 5C. Ghi nhận lỗi
+
+Menu **Ghi nhận lỗi** hiện theo nhóm quyền (**Ẩn** / **Xem** / **Xem tối cao**), độc lập với **Đánh giá nhân sự**.
+
+- **Xem:** danh sách gồm lỗi của chính mình và các lần do mình ghi nhận. Lọc theo ngày vi phạm và tìm theo tên người.
+- **Xem tối cao** (và admin/mod): xem thêm lỗi của người khác trên toàn trường.
+- Nút **Thêm ghi nhận lỗi** chỉ hiện với admin/mod và nhân sự từ 2★ trở lên. Nhân viên 1★ không có nút này dù đang Xem tối cao.
+
+Khi thêm:
+
+1. Chọn nhân sự được phép ghi nhận (theo chức vụ và phạm vi quản lý hiện tại).
+2. Chọn ngày vi phạm.
+3. Nhập lý do.
+4. Đính kèm ảnh hoặc PDF làm căn cứ, tối đa 20 MB.
+5. Chọn **Ghi nhận**.
 
 ## 6. Thông tin cá nhân
 

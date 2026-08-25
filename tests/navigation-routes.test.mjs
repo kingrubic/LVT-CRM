@@ -72,3 +72,9 @@ test('Thông báo vẫn có đường dẫn nhưng không nằm trên sidebar', 
   assert.equal(isSidebarPrimaryMenu('work'), true);
   assert.equal(isSidebarPrimaryMenu('reports'), true);
 });
+
+test('Ghi nhận lỗi có đường dẫn riêng trên sidebar', () => {
+  assert.equal(pathnameForMenu('staff-faults'), '/ghi-nhan-loi');
+  assert.deepEqual(routeForPathname('/ghi-nhan-loi'), { menu: 'staff-faults', reportSection: undefined });
+  assert.equal(isSidebarPrimaryMenu('staff-faults'), true);
+});

@@ -35,6 +35,7 @@ test('normalizeMenuAccess điền menu thiếu: Thông báo view, còn lại hid
   assert.equal(normalized.notifications, 'view');
   assert.equal(normalized.work, 'hidden');
   assert.equal(normalized.homeroom, 'hidden');
+  assert.equal(normalized['staff-faults'], 'hidden');
 });
 
 test('canOperateMenu true cho view, view_all và legacy edit; false cho hidden và supervisor', () => {

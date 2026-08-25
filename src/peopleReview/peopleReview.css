@@ -66,6 +66,97 @@
   z-index: 1;
 }
 
+.pr-hero .pr-primary-button {
+  position: relative;
+  z-index: 1;
+  color: var(--pr-navy);
+  background: #fff;
+  border-color: #fff;
+}
+
+.pr-fault-toolbar {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.pr-search-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pr-search-field input,
+.pr-picker-list {
+  font: inherit;
+}
+
+.pr-search-field input {
+  max-width: 420px;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--pr-line);
+  border-radius: 10px;
+}
+
+.pr-fault-person {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.45rem;
+}
+
+.pr-fault-person small {
+  color: var(--pr-muted);
+}
+
+.pr-fault-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.pr-tag {
+  display: inline-flex;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: var(--pr-navy);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.pr-tag.is-recorded {
+  background: #eefaf6;
+  color: #0f5f58;
+}
+
+.pr-picker-list {
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  display: grid;
+  gap: 0.65rem;
+  padding-right: 0.15rem;
+}
+
+.pr-picker-person {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--pr-line);
+  border-radius: 12px;
+  background: var(--pr-paper);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.pr-picker-person small {
+  color: var(--pr-muted);
+}
+
 .pr-kicker {
   display: inline-flex;
   margin-bottom: 10px;
