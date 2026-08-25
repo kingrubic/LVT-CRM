@@ -31,6 +31,9 @@ export function messageFor(error) {
   if (/ArgumentValidationError|extraneous field|extra field/i.test(raw)) {
     return 'Máy chủ chưa nhận cấu hình mới. Vui lòng tải lại trang sau khi hệ thống cập nhật, rồi thử lại.';
   }
+  if (/Could not find public function|not found: peopleReview:staffFaultLog/i.test(raw)) {
+    return 'Máy chủ chưa cập nhật chức năng Ghi nhận lỗi. Vui lòng tải lại trang sau khi hệ thống cập nhật, rồi thử lại.';
+  }
   if (/does not match the schema/i.test(raw)) {
     return 'Dữ liệu không khớp schema máy chủ. Vui lòng liên hệ quản trị viên để triển khai lại Convex.';
   }

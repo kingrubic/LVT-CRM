@@ -49,7 +49,7 @@ Chỉ Administrator thấy **Thiết lập tối cao**. Moderator thấy **Chứ
 
 ### Nhóm quyền (`permissionGroups`)
 
-Mỗi nhóm quy định quyền trên **6** menu **Chức năng chính**:
+Mỗi nhóm quy định quyền trên **7** menu **Chức năng chính**:
 
 | Menu id | Nhãn |
 |---------|------|
@@ -59,8 +59,9 @@ Mỗi nhóm quy định quyền trên **6** menu **Chức năng chính**:
 | `work` | Công việc |
 | `homeroom` | Lớp chủ nhiệm |
 | `people-review` | Đánh giá nhân sự |
+| `staff-faults` | Ghi nhận lỗi |
 
-Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (thao tác nghiệp vụ trong phạm vi của mình) · **`view_all`** (thao tác nghiệp vụ trên phạm vi toàn trường, nơi module hỗ trợ) · **`supervisor`** (**Giám thị**, chỉ menu `homeroom`). Mức legacy **`edit`** vẫn đọc được nhưng chuẩn hóa thành `view` khi lưu; không dùng `edit` để biểu diễn Giám thị. **Giám thị** không phải vai trò hệ thống (`users.role` vẫn là `user`), không thỏa `view_all`, và không được `canOperateMenu`. Phạm vi lớp/toàn trường của Giám thị đến từ phân công riêng, không từ riêng mức menu. Tạo công việc/công tác toàn trường vẫn theo role/cấp, không theo mức menu.
+Mỗi menu có một mức: **`hidden`** (ẩn) · **`view`** (thao tác nghiệp vụ trong phạm vi của mình) · **`view_all`** (thao tác nghiệp vụ trên phạm vi toàn trường, nơi module hỗ trợ) · **`supervisor`** (**Giám thị**, chỉ menu `homeroom`). Mức legacy **`edit`** vẫn đọc được nhưng chuẩn hóa thành `view` khi lưu; không dùng `edit` để biểu diễn Giám thị. **Giám thị** không phải vai trò hệ thống (`users.role` vẫn là `user`), không thỏa `view_all`, và không được `canOperateMenu`. Phạm vi lớp/toàn trường của Giám thị đến từ phân công riêng, không từ riêng mức menu. Tạo công việc/công tác toàn trường vẫn theo role/cấp, không theo mức menu. Menu **Ghi nhận lỗi**: hai mục **Lỗi của tôi** / **Lỗi do tôi ghi nhận**; **Xem** chỉ thấy hai mục đó; **Xem tối cao** vẫn theo cùng hai mục (lỗi của người khác hiện nếu mình là đối tượng hoặc người ghi); nút thêm chỉ admin/mod và cấp 2–5★.
 
 - Mỗi nhóm có **mã** (`code`): tối đa **20** ký tự, chỉ `A–Z 0–9 _ -`, luôn lưu/hiển thị **IN HOA**; dùng trong file import user (`ma_nhom_quyen`).
 - Nhóm cũ thiếu mã được backfill tự động (`permissionGroups.ensureCodes`): chữ cái đầu mỗi từ tên (bỏ dấu), nếu trùng thì 3 rồi 4 ký tự đầu, rồi thêm số.
@@ -96,7 +97,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Công tác (nút **Tạo công tác** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**.
+1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Công tác (nút **Tạo công tác** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**.
 2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
 3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 

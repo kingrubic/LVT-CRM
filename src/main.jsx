@@ -18,6 +18,7 @@ import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
 import { isPublicAccountDeletionPath, isPublicPrivacyPath } from './privacy/privacyPolicy';
 import PeopleReviewView from './peopleReview/PeopleReviewView';
+import StaffFaultsView from './peopleReview/StaffFaultsView';
 import HomeroomRouter from './homeroom/HomeroomRouter';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
@@ -65,6 +66,7 @@ const PRIMARY_MENUS = [
   ['work', 'Công việc'],
   ['homeroom', 'Lớp chủ nhiệm'],
   ['people-review', 'Đánh giá nhân sự'],
+  ['staff-faults', 'Ghi nhận lỗi'],
 ];
 const SYSTEM_MANAGEMENT_MENUS = [];
 const SUPREME_SETTINGS = [
@@ -407,6 +409,8 @@ function AppShell({ session }) {
           <WorkUserView focusTarget={activeFocusTarget} />
         ) : active === 'people-review' ? (
           <PeopleReviewView />
+        ) : active === 'staff-faults' ? (
+          <StaffFaultsView />
         ) : active === 'reports' ? (
           reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
         ) : active === 'homeroom' ? (

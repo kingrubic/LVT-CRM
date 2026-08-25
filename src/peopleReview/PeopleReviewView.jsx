@@ -6,18 +6,18 @@ import './peopleReview.css';
 
 const ACCEPTED = ['pdf', 'png', 'jpg', 'jpeg'];
 
-function todayIso() {
+export function todayIso() {
   return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-function addDays(iso, days) {
+export function addDays(iso, days) {
   const [y, m, d] = iso.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-function formatDate(iso) {
+export function formatDate(iso) {
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
@@ -98,7 +98,7 @@ async function runCleanupJob(fetchAccessToken, cleanupJobId) {
   }
 }
 
-function PrivateFileButton({ kind, fileId, fileName, className = 'pr-file-link' }) {
+export function PrivateFileButton({ kind, fileId, fileName, className = 'pr-file-link' }) {
   const { fetchAccessToken } = useConvexAuth();
   const [opening, setOpening] = useState(false);
   const open = async () => {
@@ -134,7 +134,7 @@ function PrivateFileButton({ kind, fileId, fileName, className = 'pr-file-link' 
   );
 }
 
-function DateRangeFilter({ from, to, onChange, label }) {
+export function DateRangeFilter({ from, to, onChange, label }) {
   return (
     <div className="pr-date-filter">
       <span>{label}</span>
@@ -278,7 +278,7 @@ function EvaluationViewer({ evaluations, boardingOptions }) {
   );
 }
 
-function FaultModal({ person, onClose, onSaved }) {
+export function FaultModal({ person, onClose, onSaved }) {
   const { fetchAccessToken } = useConvexAuth();
   const recordFault = useMutation(anyApi.peopleReview.recordFault);
   const [violationDate, setViolationDate] = useState(todayIso());
@@ -681,7 +681,6 @@ function PersonDashboard({ userId, permissions, showActions }) {
   const defaultFrom = addDays(defaultTo, -29);
   const [faultRange, setFaultRange] = useState({ from: defaultFrom, to: defaultTo });
   const [workRange, setWorkRange] = useState({ from: defaultFrom, to: defaultTo });
-  const [faultOpen, setFaultOpen] = useState(false);
   const [evalOpen, setEvalOpen] = useState(false);
   const data = useQuery(anyApi.peopleReview.personDetail, {
     userId,
@@ -702,35 +701,38 @@ function PersonDashboard({ userId, permissions, showActions }) {
 
   return (
     <div className="pr-person-dashboard">
-      {showActions ? (
+      {showActions && (person.canUpload || person.canWriteText) ? (
         <div className="pr-person-actions">
-          {person.canRecordFault ? (
-            <button type="button" className="pr-outline-button" onClick={() => setFaultOpen(true)}>＋ Ghi nhận lỗi</button>
-          ) : null}
-          {person.canUpload || person.canWriteText ? (
-            <button type="button" className="pr-primary-button" onClick={() => setEvalOpen(true)}>＋ Thêm đánh giá</button>
-          ) : null}
+          <button type="button" className="pr-primary-button" onClick={() => setEvalOpen(true)}>＋ Thêm đánh giá</button>
         </div>
       ) : null}
 
-      <div className="pr-section">
-        <header className="pr-section-head"><div><span>GHI NHẬN LỖI</span><h3>Các lần vi phạm</h3></div></header>
+      <section className="pr-section pr-section--faults">
+        <header className="pr-section-head">
+          <h3>Ghi nhận lỗi</h3>
+          <p>Các lần vi phạm đã ghi</p>
+        </header>
         <DateRangeFilter from={faultRange.from} to={faultRange.to} onChange={setFaultRange} label="Lọc lỗi" />
         <FaultList faults={data.faults} />
-      </div>
+      </section>
 
-      <div className="pr-section">
-        <header className="pr-section-head"><div><span>CÔNG VIỆC</span><h3>Mức độ hoàn thành</h3></div></header>
+      <section className="pr-section pr-section--work">
+        <header className="pr-section-head">
+          <h3>Công việc</h3>
+          <p>Mức độ hoàn thành</p>
+        </header>
         <DateRangeFilter from={workRange.from} to={workRange.to} onChange={setWorkRange} label="Lọc công việc" />
         <WorkKpiPanel workKpi={data.workKpi} />
-      </div>
+      </section>
 
-      <div className="pr-section">
-        <header className="pr-section-head"><div><span>HỒ SƠ ĐÁNH GIÁ</span><h3>File và nhận xét theo kỳ</h3></div></header>
+      <section className="pr-section pr-section--eval">
+        <header className="pr-section-head">
+          <h3>Kỳ đánh giá</h3>
+          <p>File và nhận xét theo từng kỳ</p>
+        </header>
         <EvaluationViewer evaluations={data.evaluations} boardingOptions={data.boardingOptions} />
-      </div>
+      </section>
 
-      {faultOpen ? <FaultModal person={person} onClose={() => setFaultOpen(false)} onSaved={() => {}} /> : null}
       {evalOpen ? (
         <EvaluationModal
           person={person}
@@ -767,7 +769,6 @@ function EvalTargetModal({ person, onClose }) {
 export default function PeopleReviewView() {
   const overview = useQuery(anyApi.peopleReview.overview);
   const [selectedId, setSelectedId] = useState('');
-  const [faultTarget, setFaultTarget] = useState(null);
   const [evalTarget, setEvalTarget] = useState(null);
 
   const groups = useMemo(() => {
@@ -822,9 +823,6 @@ export default function PeopleReviewView() {
                       </small>
                     </button>
                     <div className="pr-row-actions">
-                      {person.canRecordFault ? (
-                        <button type="button" className="pr-mini-button" onClick={() => setFaultTarget(person)} title="Ghi nhận lỗi / vi phạm">Ghi lỗi</button>
-                      ) : null}
                       {person.canUpload || person.canWriteText ? (
                         <button type="button" className="pr-mini-button primary" onClick={() => setEvalTarget(person)} title="Thêm đánh giá">Đánh giá</button>
                       ) : null}
@@ -860,9 +858,6 @@ export default function PeopleReviewView() {
         </div>
       )}
 
-      {faultTarget ? (
-        <FaultModal person={faultTarget} onClose={() => setFaultTarget(null)} onSaved={() => setFaultTarget(null)} />
-      ) : null}
       {evalTarget ? <EvalTargetModal person={evalTarget} onClose={() => setEvalTarget(null)} /> : null}
     </section>
   );
