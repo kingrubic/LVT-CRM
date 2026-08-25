@@ -482,6 +482,7 @@ Trang **Đánh giá nhân sự** có thể hiển thị hồ sơ của cá nhân
 
 Người dùng có thể:
 
+- Xem hồ sơ theo ba ô màu: **Ghi nhận lỗi**, **Công việc**, **Kỳ đánh giá**.
 - Xem các ghi nhận lỗi trong khoảng ngày đã chọn (tạo mới nằm ở menu **Ghi nhận lỗi**).
 - Xem số công việc đúng hạn, trễ hạn và chưa hoàn thành.
 - Xem tệp đánh giá theo quý.

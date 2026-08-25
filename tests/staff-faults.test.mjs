@@ -61,6 +61,10 @@ test('Đánh giá nhân sự không còn nút tạo ghi nhận lỗi; menu mới
   const css = readFileSync(new URL('../src/peopleReview/peopleReview.css', import.meta.url), 'utf8');
   assert.doesNotMatch(peopleReview, /＋ Ghi nhận lỗi/);
   assert.doesNotMatch(peopleReview, /Ghi lỗi/);
+  assert.match(peopleReview, /pr-section--faults/);
+  assert.match(peopleReview, /pr-section--work/);
+  assert.match(peopleReview, /pr-section--eval/);
+  assert.match(peopleReview, />Kỳ đánh giá</);
   assert.match(staffFaults, /Thêm ghi nhận lỗi/);
   assert.match(staffFaults, /Lỗi của tôi/);
   assert.match(staffFaults, /Lỗi do tôi ghi nhận/);

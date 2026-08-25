@@ -707,22 +707,31 @@ function PersonDashboard({ userId, permissions, showActions }) {
         </div>
       ) : null}
 
-      <div className="pr-section">
-        <header className="pr-section-head"><div><span>GHI NHẬN LỖI</span><h3>Các lần vi phạm</h3></div></header>
+      <section className="pr-section pr-section--faults">
+        <header className="pr-section-head">
+          <h3>Ghi nhận lỗi</h3>
+          <p>Các lần vi phạm đã ghi</p>
+        </header>
         <DateRangeFilter from={faultRange.from} to={faultRange.to} onChange={setFaultRange} label="Lọc lỗi" />
         <FaultList faults={data.faults} />
-      </div>
+      </section>
 
-      <div className="pr-section">
-        <header className="pr-section-head"><div><span>CÔNG VIỆC</span><h3>Mức độ hoàn thành</h3></div></header>
+      <section className="pr-section pr-section--work">
+        <header className="pr-section-head">
+          <h3>Công việc</h3>
+          <p>Mức độ hoàn thành</p>
+        </header>
         <DateRangeFilter from={workRange.from} to={workRange.to} onChange={setWorkRange} label="Lọc công việc" />
         <WorkKpiPanel workKpi={data.workKpi} />
-      </div>
+      </section>
 
-      <div className="pr-section">
-        <header className="pr-section-head"><div><span>HỒ SƠ ĐÁNH GIÁ</span><h3>File và nhận xét theo kỳ</h3></div></header>
+      <section className="pr-section pr-section--eval">
+        <header className="pr-section-head">
+          <h3>Kỳ đánh giá</h3>
+          <p>File và nhận xét theo từng kỳ</p>
+        </header>
         <EvaluationViewer evaluations={data.evaluations} boardingOptions={data.boardingOptions} />
-      </div>
+      </section>
 
       {evalOpen ? (
         <EvaluationModal
