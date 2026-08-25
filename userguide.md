@@ -528,9 +528,9 @@ Chưa dùng ảnh học sinh. Lịch ngày học/cảnh báo 08:30 chỉ chạy 
 
 Menu **Ghi nhận lỗi** hiện theo nhóm quyền (**Ẩn** / **Xem** / **Xem tối cao**), độc lập với **Đánh giá nhân sự**.
 
-- **Xem:** danh sách gồm lỗi của chính mình và các lần do mình ghi nhận. Lọc theo ngày vi phạm và tìm theo tên người.
-- **Xem tối cao** (và admin/mod): xem thêm lỗi của người khác trên toàn trường.
-- Nút **Thêm ghi nhận lỗi** chỉ hiện với admin/mod và nhân sự từ 2★ trở lên. Nhân viên 1★ không có nút này dù đang Xem tối cao.
+- **Xem:** hai danh sách **Lỗi của tôi** và **Lỗi do tôi ghi nhận**. Lọc theo ngày vi phạm và tìm theo tên người.
+- **Xem tối cao** (và admin/mod): cùng hai danh sách; xem được cả lỗi của người khác nếu mình là người bị ghi hoặc người ghi nhận.
+- Nút **Thêm ghi nhận lỗi** nằm ở mục **Lỗi do tôi ghi nhận**, chỉ hiện với admin/mod và nhân sự từ 2★ trở lên. Nhân viên 1★ không có nút này dù đang Xem tối cao.
 
 Khi thêm:
 

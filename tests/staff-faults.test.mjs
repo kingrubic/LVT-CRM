@@ -61,6 +61,9 @@ test('Đánh giá nhân sự không còn nút tạo ghi nhận lỗi; menu mới
   assert.doesNotMatch(peopleReview, /＋ Ghi nhận lỗi/);
   assert.doesNotMatch(peopleReview, /Ghi lỗi/);
   assert.match(staffFaults, /Thêm ghi nhận lỗi/);
+  assert.match(staffFaults, /Lỗi của tôi/);
+  assert.match(staffFaults, /Lỗi do tôi ghi nhận/);
+  assert.doesNotMatch(staffFaults, /pr-hero/);
   assert.match(staffFaults, /Chọn nhân sự/);
   assert.match(shell, /staff-faults/);
   assert.match(shell, /StaffFaultsView/);

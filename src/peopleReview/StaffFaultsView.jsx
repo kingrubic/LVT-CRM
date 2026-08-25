@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
+import { DutyListHeading } from '../duties/DutyListFilters';
 import { messageFor } from '../lib/appErrorMessage';
+import '../duties/duties.css';
+import '../work/work.css';
 import './peopleReview.css';
 import {
   DateRangeFilter,
@@ -89,6 +92,38 @@ function FaultPersonPicker({ people, onSelect, onClose }) {
   );
 }
 
+function FaultEmpty({ tone = 'mine', filtered = false }) {
+  if (filtered) {
+    return <div className="pr-empty">Không tìm thấy ghi nhận lỗi phù hợp.</div>;
+  }
+  return (
+    <div className="pr-empty">
+      {tone === 'recorded'
+        ? 'Bạn chưa ghi nhận lỗi nào trong khoảng thời gian này.'
+        : 'Không có lỗi nào được ghi nhận cho bạn trong khoảng thời gian này.'}
+    </div>
+  );
+}
+
+function FaultCard({ fault, showTarget = false }) {
+  return (
+    <article className="pr-fault-card">
+      <header>
+        <strong>{formatDate(fault.violationDate)}</strong>
+        {showTarget ? null : <span>Ghi bởi {fault.recordedByName}</span>}
+      </header>
+      {showTarget ? (
+        <div className="pr-fault-person">
+          <strong>{fault.targetName}</strong>
+          <small>{fault.departmentName}</small>
+        </div>
+      ) : null}
+      <p>{fault.reason}</p>
+      <PrivateFileButton kind="fault" fileId={fault._id} fileName={fault.fileName} />
+    </article>
+  );
+}
+
 class StaffFaultsErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -134,76 +169,65 @@ function StaffFaultsPage() {
       return haystack.includes(needle);
     });
   }, [log, search]);
+  const mine = useMemo(() => faults.filter((fault) => fault.isSelfTarget), [faults]);
+  const recorded = useMemo(() => faults.filter((fault) => fault.isRecordedByMe), [faults]);
+  const searchActive = Boolean(normalizeSearch(search));
+  const showRecordedSection = Boolean(
+    log?.canAdd
+    || recorded.length
+    || (searchActive && (log?.faults || []).some((fault) => fault.isRecordedByMe)),
+  );
 
   if (log === undefined) return <div className="pr-loading">Đang tải ghi nhận lỗi…</div>;
 
   return (
-    <section className="pr-view">
-      <div className="pr-hero">
-        <div>
-          <span className="pr-kicker">Nhân sự</span>
-          <h2>Ghi nhận lỗi</h2>
-          <p>
-            {log.access === 'view_all'
-              ? 'Danh sách toàn trường. Lọc ngày hoặc tìm người để xem nhanh.'
-              : 'Bạn đang xem lỗi của mình và các lần do mình ghi nhận.'}
-          </p>
-        </div>
-        {log.canAdd ? (
-          <button type="button" className="pr-primary-button" onClick={() => setPicking(true)}>
-            ＋ Thêm ghi nhận lỗi
-          </button>
-        ) : null}
+    <section className="pr-view duty-workspace">
+      <div className="pr-fault-toolbar">
+        <DateRangeFilter from={range.from} to={range.to} onChange={setRange} label="Lọc ngày vi phạm" />
+        <label className="pr-search-field">
+          Tìm người
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Tên nhân sự hoặc người ghi nhận…"
+          />
+        </label>
       </div>
 
-      <div className="pr-section">
-        <header className="pr-section-head">
-          <div>
-            <span>DANH SÁCH</span>
-            <h3>{faults.length} lần ghi nhận</h3>
-          </div>
-        </header>
-        <div className="pr-fault-toolbar">
-          <DateRangeFilter from={range.from} to={range.to} onChange={setRange} label="Lọc ngày vi phạm" />
-          <label className="pr-search-field">
-            Tìm người
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Tên nhân sự hoặc người ghi nhận…"
-            />
-          </label>
-        </div>
-        {faults.length ? (
+      <div className="duty-list-section">
+        <DutyListHeading>Lỗi của tôi</DutyListHeading>
+        {mine.length ? (
           <div className="pr-fault-list">
-            {faults.map((fault) => (
-              <article className="pr-fault-card" key={fault._id}>
-                <header>
-                  <strong>{formatDate(fault.violationDate)}</strong>
-                  <span>Ghi bởi {fault.recordedByName}</span>
-                </header>
-                <div className="pr-fault-person">
-                  <strong>{fault.targetName}</strong>
-                  <small>{fault.departmentName}</small>
-                </div>
-                <div className="pr-fault-tags">
-                  {fault.isSelfTarget ? <span className="pr-tag">Lỗi của tôi</span> : null}
-                  {fault.isRecordedByMe ? <span className="pr-tag is-recorded">Do tôi ghi nhận</span> : null}
-                </div>
-                <p>{fault.reason}</p>
-                <PrivateFileButton kind="fault" fileId={fault._id} fileName={fault.fileName} />
-              </article>
-            ))}
+            {mine.map((fault) => <FaultCard key={fault._id} fault={fault} />)}
           </div>
         ) : (
-          <div className="pr-empty">
-            {log.faults.length
-              ? 'Không có ghi nhận lỗi khớp với từ khóa tìm kiếm.'
-              : 'Không có ghi nhận lỗi trong khoảng thời gian này.'}
-          </div>
+          <FaultEmpty filtered={searchActive && (log.faults || []).some((fault) => fault.isSelfTarget)} />
         )}
       </div>
+
+      {showRecordedSection ? (
+      <div className="duty-list-section">
+        <DutyListHeading>Lỗi do tôi ghi nhận</DutyListHeading>
+        {log.canAdd ? (
+          <div className="duty-list-toolbar">
+            <button type="button" className="work-primary-button" onClick={() => setPicking(true)}>
+              <span>+</span> Thêm ghi nhận lỗi
+            </button>
+          </div>
+        ) : null}
+        {recorded.length ? (
+          <div className="pr-fault-list">
+            {recorded.map((fault) => <FaultCard key={fault._id} fault={fault} showTarget />)}
+          </div>
+        ) : (
+          <FaultEmpty
+            tone="recorded"
+            filtered={searchActive && (log.faults || []).some((fault) => fault.isRecordedByMe)}
+          />
+        )}
+      </div>
+      ) : null}
 
       {picking ? (
         targets === undefined ? (
