@@ -18,12 +18,16 @@ enum class WorkDashboardFilter {
 enum class WorkListTab {
     Incomplete,
     Completed,
+    Upcoming,
+    Overdue,
     ;
 
     val title: String
         get() = when (this) {
             Incomplete -> "Chưa hoàn thành"
             Completed -> "Đã hoàn thành"
+            Upcoming -> "Chưa đến hạn"
+            Overdue -> "Đã quá hạn"
         }
 }
 
@@ -46,25 +50,36 @@ fun isDocumentCompleted(document: WorkApprovalItem): Boolean {
     return assignmentStatuses.isNotEmpty() && assignmentStatuses.all { it in completedStatuses }
 }
 
-fun isTaskPast(task: WorkTaskItem, today: String = vietnamToday()): Boolean {
-    if (isTaskCompleted(task)) return true
+fun isTaskOverdue(task: WorkTaskItem, today: String = vietnamToday()): Boolean {
+    if (isTaskCompleted(task)) return false
     if (task.deadline.isBlank()) return false
     return task.deadline < today
 }
 
-fun isDocumentPast(document: WorkApprovalItem, today: String = vietnamToday()): Boolean {
-    if (isDocumentCompleted(document)) return true
+fun isDocumentOverdue(document: WorkApprovalItem, today: String = vietnamToday()): Boolean {
+    if (isDocumentCompleted(document)) return false
     val deadlines = document.assignments.map { it.deadline }.filter { it.isNotBlank() }
         .ifEmpty { listOfNotNull(document.deadline.takeIf { it.isNotBlank() }) }
     if (deadlines.isEmpty()) return false
     return deadlines.all { it < today }
 }
 
+fun isTaskPast(task: WorkTaskItem, today: String = vietnamToday()): Boolean {
+    if (isTaskCompleted(task)) return true
+    return isTaskOverdue(task, today)
+}
+
+fun isDocumentPast(document: WorkApprovalItem, today: String = vietnamToday()): Boolean {
+    if (isDocumentCompleted(document)) return true
+    return isDocumentOverdue(document, today)
+}
+
 fun filterTasksByTab(list: List<WorkTaskItem>, tab: WorkListTab, today: String = vietnamToday()): List<WorkTaskItem> {
-    val filtered = if (tab == WorkListTab.Completed) {
-        list.filter { isTaskCompleted(it) }
-    } else {
-        list.filter { !isTaskCompleted(it) }
+    val filtered = when (tab) {
+        WorkListTab.Completed -> list.filter { isTaskCompleted(it) }
+        WorkListTab.Overdue -> list.filter { isTaskOverdue(it, today) }
+        WorkListTab.Upcoming -> list.filter { !isTaskCompleted(it) && !isTaskOverdue(it, today) }
+        WorkListTab.Incomplete -> list.filter { !isTaskCompleted(it) }
     }
     return filtered.sortedBy { it.deadline }
 }
@@ -74,10 +89,11 @@ fun filterDocumentsByTab(
     tab: WorkListTab,
     today: String = vietnamToday(),
 ): List<WorkApprovalItem> {
-    val filtered = if (tab == WorkListTab.Completed) {
-        list.filter { isDocumentCompleted(it) }
-    } else {
-        list.filter { !isDocumentCompleted(it) }
+    val filtered = when (tab) {
+        WorkListTab.Completed -> list.filter { isDocumentCompleted(it) }
+        WorkListTab.Overdue -> list.filter { isDocumentOverdue(it, today) }
+        WorkListTab.Upcoming -> list.filter { !isDocumentCompleted(it) && !isDocumentOverdue(it, today) }
+        WorkListTab.Incomplete -> list.filter { !isDocumentCompleted(it) }
     }
     return filtered.sortedBy { document ->
         document.assignments.map { it.deadline }.filter { it.isNotBlank() }.minOrNull()
@@ -89,10 +105,18 @@ fun filterTasksNeedingExecution(list: List<WorkTaskItem>): List<WorkTaskItem> =
     list.filter { needsCompletion(it.status) }.sortedBy { it.deadline }
 
 fun tabForTask(task: WorkTaskItem, today: String = vietnamToday()): WorkListTab =
-    if (isTaskCompleted(task)) WorkListTab.Completed else WorkListTab.Incomplete
+    when {
+        isTaskCompleted(task) -> WorkListTab.Completed
+        isTaskOverdue(task, today) -> WorkListTab.Overdue
+        else -> WorkListTab.Incomplete
+    }
 
 fun tabForDocument(document: WorkApprovalItem, today: String = vietnamToday()): WorkListTab =
-    if (isDocumentCompleted(document)) WorkListTab.Completed else WorkListTab.Incomplete
+    when {
+        isDocumentCompleted(document) -> WorkListTab.Completed
+        isDocumentOverdue(document, today) -> WorkListTab.Overdue
+        else -> WorkListTab.Incomplete
+    }
 
 fun filterTasksBySearch(list: List<WorkTaskItem>, search: ListSearchState): List<WorkTaskItem> {
     val query = normalizeListSearchText(search.query)

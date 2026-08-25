@@ -18,6 +18,8 @@ class WorkListRulesTest {
         val late = task("c", "2026-08-10", "overdue")
         assertEquals(listOf("c", "a"), filterTasksByTab(listOf(open, done, late), WorkListTab.Incomplete, today).map { it.id })
         assertEquals(listOf("b"), filterTasksByTab(listOf(open, done, late), WorkListTab.Completed, today).map { it.id })
+        assertEquals(listOf("a"), filterTasksByTab(listOf(open, done, late), WorkListTab.Upcoming, today).map { it.id })
+        assertEquals(listOf("c"), filterTasksByTab(listOf(open, done, late), WorkListTab.Overdue, today).map { it.id })
         assertEquals(listOf("c", "a"), filterTasksNeedingExecution(listOf(open, done, late)).map { it.id })
         val filtered = WorkUiState(
             tasks = listOf(open, done, late),

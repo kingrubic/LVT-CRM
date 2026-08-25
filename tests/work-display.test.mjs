@@ -18,6 +18,8 @@ import {
   workDeadlineKey,
   WORK_LIST_TAB_COMPLETED,
   WORK_LIST_TAB_INCOMPLETE,
+  WORK_LIST_TAB_OVERDUE,
+  WORK_LIST_TAB_UPCOMING,
   workListTitle,
 } from '../src/work/workDisplay.js';
 
@@ -73,10 +75,14 @@ test('tab chưa hoàn thành gồm việc quá hạn; đã hoàn thành chỉ vi
   assert.equal(isWorkCompleted(overdue), false);
   assert.equal(isWorkCompleted(done), true);
   assert.equal(workDeadlineKey(later), '2026-08-19');
-  const open = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_INCOMPLETE);
+  const open = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_INCOMPLETE, today);
   assert.deepEqual(open.map((item) => item._id), ['b', 'd', 'a']);
-  const completed = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_COMPLETED);
+  const completed = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_COMPLETED, today);
   assert.deepEqual(completed.map((item) => item._id), ['c']);
+  const notDue = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_UPCOMING, today);
+  assert.deepEqual(notDue.map((item) => item._id), ['d', 'a']);
+  const pastDue = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_OVERDUE, today);
+  assert.deepEqual(pastDue.map((item) => item._id), ['b']);
 });
 
 test('preview tạo công việc gom nhãn đối tượng', () => {
@@ -167,6 +173,8 @@ test('tab Chưa hoàn thành hiện badge số khi còn việc chưa xong', () =
   assert.match(source, /incompleteCount/);
   assert.match(source, /nav-badge duty-list-tab-badge/);
   assert.match(source, /99\+/);
+  assert.match(source, /Chưa đến hạn/);
+  assert.match(source, /Đã quá hạn/);
 });
 
 test('query work.badge cộng chờ duyệt với hai tab chưa hoàn thành', () => {
