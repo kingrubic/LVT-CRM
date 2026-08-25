@@ -7,12 +7,9 @@ import '../duties/duties.css';
 import '../work/work.css';
 import './peopleReview.css';
 import {
-  DateRangeFilter,
   FaultModal,
   PrivateFileButton,
-  addDays,
   formatDate,
-  todayIso,
 } from './PeopleReviewView';
 
 function normalizeSearch(value) {
@@ -92,15 +89,108 @@ function FaultPersonPicker({ people, onSelect, onClose }) {
   );
 }
 
-function FaultEmpty({ tone = 'mine', filtered = false }) {
+function emptyFaultSearch() {
+  return { query: '', dateFrom: '', dateTo: '' };
+}
+
+function countFaultAdvanced(search) {
+  return [search?.dateFrom, search?.dateTo].filter(Boolean).length;
+}
+
+function faultMatchesSearch(fault, search) {
+  const needle = normalizeSearch(search?.query);
+  if (needle) {
+    const haystack = normalizeSearch(`${fault.targetName} ${fault.recordedByName} ${fault.departmentName}`);
+    if (!haystack.includes(needle)) return false;
+  }
+  if (search?.dateFrom && fault.violationDate < search.dateFrom) return false;
+  if (search?.dateTo && fault.violationDate > search.dateTo) return false;
+  return true;
+}
+
+function FaultListSearch({ value, onChange }) {
+  const search = value || emptyFaultSearch();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const advancedCount = countFaultAdvanced(search);
+  const setField = (field, nextValue) => onChange({ ...search, [field]: nextValue });
+  return (
+    <div className="duty-list-search">
+      <div className="duty-list-search-row">
+        <label className="duty-list-search-field">
+          <span className="sr-only">Tìm người</span>
+          <input
+            type="search"
+            value={search.query}
+            onChange={(event) => setField('query', event.target.value)}
+            placeholder="Tên nhân sự hoặc người ghi nhận…"
+            autoComplete="off"
+          />
+        </label>
+        <button
+          type="button"
+          className={`duty-list-search-advanced-toggle${advancedOpen || advancedCount ? ' is-active' : ''}`}
+          aria-expanded={advancedOpen}
+          onClick={() => setAdvancedOpen((open) => !open)}
+        >
+          Tìm kiếm nâng cao
+          {advancedCount ? <span className="duty-list-search-badge">{advancedCount}</span> : null}
+        </button>
+      </div>
+      {advancedOpen ? (
+        <div className="duty-list-search-advanced">
+          <label>
+            Ngày vi phạm từ
+            <input
+              type="date"
+              value={search.dateFrom}
+              onChange={(event) => setField('dateFrom', event.target.value)}
+            />
+          </label>
+          <label>
+            Ngày vi phạm đến
+            <input
+              type="date"
+              value={search.dateTo}
+              onChange={(event) => setField('dateTo', event.target.value)}
+            />
+          </label>
+          {advancedCount ? (
+            <button
+              type="button"
+              className="duty-list-search-clear"
+              onClick={() => onChange({ ...search, dateFrom: '', dateTo: '' })}
+            >
+              Xóa bộ lọc
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FaultEmpty({ filtered = false }) {
   if (filtered) {
-    return <div className="pr-empty">Không tìm thấy ghi nhận lỗi phù hợp.</div>;
+    return (
+      <div className="work-empty duty-list-empty">
+        <span aria-hidden="true">⌕</span>
+        <p>Không tìm thấy ghi nhận lỗi phù hợp.</p>
+      </div>
+    );
   }
   return (
-    <div className="pr-empty">
-      {tone === 'recorded'
-        ? 'Bạn chưa ghi nhận lỗi nào trong khoảng thời gian này.'
-        : 'Không có lỗi nào được ghi nhận cho bạn trong khoảng thời gian này.'}
+    <div className="work-empty duty-list-empty duty-empty-upcoming">
+      <span className="duty-empty-smile" aria-hidden="true">
+        <svg viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r="30" />
+          <circle className="duty-empty-blush" cx="20.5" cy="40" r="5" />
+          <circle className="duty-empty-blush" cx="51.5" cy="40" r="5" />
+          <circle className="duty-empty-eye" cx="26" cy="31" r="3.2" />
+          <circle className="duty-empty-eye" cx="46" cy="31" r="3.2" />
+          <path d="M25 44c3.4 6 18.6 6 22 0" />
+        </svg>
+      </span>
+      <p>Không có lỗi nào được ghi nhận</p>
     </div>
   );
 }
@@ -148,61 +238,41 @@ class StaffFaultsErrorBoundary extends React.Component {
 }
 
 function StaffFaultsPage() {
-  const defaultTo = todayIso();
-  const defaultFrom = addDays(defaultTo, -29);
-  const [range, setRange] = useState({ from: defaultFrom, to: defaultTo });
-  const [search, setSearch] = useState('');
+  const [mineSearch, setMineSearch] = useState(emptyFaultSearch);
+  const [recordedSearch, setRecordedSearch] = useState(emptyFaultSearch);
   const [picking, setPicking] = useState(false);
   const [target, setTarget] = useState(null);
-  const log = useQuery(anyApi.peopleReview.staffFaultLog, {
-    faultFrom: range.from,
-    faultTo: range.to,
-  });
+  const log = useQuery(anyApi.peopleReview.staffFaultLog, {});
   const targets = useQuery(anyApi.peopleReview.staffFaultTargets, picking || target ? {} : 'skip');
 
-  const faults = useMemo(() => {
-    const rows = log?.faults || [];
-    const needle = normalizeSearch(search);
-    if (!needle) return rows;
-    return rows.filter((fault) => {
-      const haystack = normalizeSearch(`${fault.targetName} ${fault.recordedByName} ${fault.departmentName}`);
-      return haystack.includes(needle);
-    });
-  }, [log, search]);
-  const mine = useMemo(() => faults.filter((fault) => fault.isSelfTarget), [faults]);
-  const recorded = useMemo(() => faults.filter((fault) => fault.isRecordedByMe), [faults]);
-  const searchActive = Boolean(normalizeSearch(search));
-  const showRecordedSection = Boolean(
-    log?.canAdd
-    || recorded.length
-    || (searchActive && (log?.faults || []).some((fault) => fault.isRecordedByMe)),
+  const mineAll = useMemo(
+    () => (log?.faults || []).filter((fault) => fault.isSelfTarget),
+    [log],
   );
+  const recordedAll = useMemo(
+    () => (log?.faults || []).filter((fault) => fault.isRecordedByMe),
+    [log],
+  );
+  const mine = useMemo(() => mineAll.filter((fault) => faultMatchesSearch(fault, mineSearch)), [mineAll, mineSearch]);
+  const recorded = useMemo(
+    () => recordedAll.filter((fault) => faultMatchesSearch(fault, recordedSearch)),
+    [recordedAll, recordedSearch],
+  );
+  const showRecordedSection = Boolean(log?.canAdd || recordedAll.length);
 
   if (log === undefined) return <div className="pr-loading">Đang tải ghi nhận lỗi…</div>;
 
   return (
     <section className="pr-view duty-workspace">
-      <div className="pr-fault-toolbar">
-        <DateRangeFilter from={range.from} to={range.to} onChange={setRange} label="Lọc ngày vi phạm" />
-        <label className="pr-search-field">
-          Tìm người
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Tên nhân sự hoặc người ghi nhận…"
-          />
-        </label>
-      </div>
-
       <div className="duty-list-section">
         <DutyListHeading>Lỗi của tôi</DutyListHeading>
+        <FaultListSearch value={mineSearch} onChange={setMineSearch} />
         {mine.length ? (
           <div className="pr-fault-list">
             {mine.map((fault) => <FaultCard key={fault._id} fault={fault} />)}
           </div>
         ) : (
-          <FaultEmpty filtered={searchActive && (log.faults || []).some((fault) => fault.isSelfTarget)} />
+          <FaultEmpty filtered={mineAll.length > 0} />
         )}
       </div>
 
@@ -216,15 +286,13 @@ function StaffFaultsPage() {
             </button>
           </div>
         ) : null}
+        <FaultListSearch value={recordedSearch} onChange={setRecordedSearch} />
         {recorded.length ? (
           <div className="pr-fault-list">
             {recorded.map((fault) => <FaultCard key={fault._id} fault={fault} showTarget />)}
           </div>
         ) : (
-          <FaultEmpty
-            tone="recorded"
-            filtered={searchActive && (log.faults || []).some((fault) => fault.isRecordedByMe)}
-          />
+          <FaultEmpty filtered={recordedAll.length > 0} />
         )}
       </div>
       ) : null}

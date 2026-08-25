@@ -841,11 +841,10 @@ export const staffFaultLog = query({
   },
   handler: async (ctx, args) => {
     const access = await requireStaffFaultsAccess(ctx);
-    const today = todayInVietnam();
-    const faultTo = assertDate(args.faultTo || today);
-    const faultFrom = assertDate(args.faultFrom || addDaysIso(faultTo, -29));
     const actorId = String(access.user._id);
     const viewAll = staffFaultsAccessLevel(access) === "view_all" || access.isOps;
+    const faultFrom = args.faultFrom ? assertDate(args.faultFrom) : "";
+    const faultTo = args.faultTo ? assertDate(args.faultTo) : "";
 
     const [users, departments, collected] = await Promise.all([
       ctx.db.query("users").collect(),
@@ -858,14 +857,18 @@ export const staffFaultLog = query({
 
     const usersById = new Map(users.map((user: any) => [String(user._id), user]));
     const faults = collected
-      .filter((fault: any) => fault.active && fault.violationDate >= faultFrom && fault.violationDate <= faultTo)
-      .filter((fault: any) => actorSeesStaffFault(access, fault))
+      .filter((fault: any) => {
+        if (!fault.active) return false;
+        if (faultFrom && fault.violationDate < faultFrom) return false;
+        if (faultTo && fault.violationDate > faultTo) return false;
+        return actorSeesStaffFault(access, fault);
+      })
       .sort((a: any, b: any) => b.violationDate.localeCompare(a.violationDate) || b.createdAt - a.createdAt)
       .map((fault: any) => mapStaffFaultRow(fault, usersById, departments, actorId));
 
     return {
-      faultFrom,
-      faultTo,
+      faultFrom: faultFrom || null,
+      faultTo: faultTo || null,
       access: viewAll ? "view_all" : "view",
       canAdd: canAddStaffFault(access),
       faults,

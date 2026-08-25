@@ -67,6 +67,11 @@ test('Đánh giá nhân sự không còn nút tạo ghi nhận lỗi; menu mới
   assert.doesNotMatch(staffFaults, /pr-hero/);
   assert.match(staffFaults, /work-primary-button/);
   assert.match(css, /--work-navy/);
+  assert.match(staffFaults, /Tìm kiếm nâng cao/);
+  assert.match(staffFaults, /Không có lỗi nào được ghi nhận/);
+  assert.match(staffFaults, /duty-empty-smile/);
+  assert.doesNotMatch(staffFaults, /DateRangeFilter/);
+  assert.doesNotMatch(staffFaults, /pr-fault-toolbar/);
   assert.match(staffFaults, /Chọn nhân sự/);
   assert.match(shell, /staff-faults/);
   assert.match(shell, /StaffFaultsView/);
