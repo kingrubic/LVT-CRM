@@ -3,11 +3,15 @@ import Foundation
 enum WorkListTab: Int, CaseIterable, Equatable {
     case incomplete
     case completed
+    case upcoming
+    case overdue
 
     var title: String {
         switch self {
         case .incomplete: return "Chưa hoàn thành"
         case .completed: return "Đã hoàn thành"
+        case .upcoming: return "Chưa đến hạn"
+        case .overdue: return "Đã quá hạn"
         }
     }
 }
@@ -37,38 +41,72 @@ enum WorkListRules {
         return !assignmentStatuses.isEmpty && assignmentStatuses.allSatisfy { completed.contains($0) }
     }
 
-    static func isTaskPast(_ task: WorkTaskItem, today: String = vietnamToday()) -> Bool {
-        if isTaskCompleted(task) { return true }
+    static func isTaskOverdue(_ task: WorkTaskItem, today: String = vietnamToday()) -> Bool {
+        if isTaskCompleted(task) { return false }
         guard !task.deadline.isEmpty else { return false }
         return task.deadline < today
     }
 
-    static func isDocumentPast(_ document: WorkApprovalItem, today: String = vietnamToday()) -> Bool {
-        if isDocumentCompleted(document) { return true }
+    static func isDocumentOverdue(_ document: WorkApprovalItem, today: String = vietnamToday()) -> Bool {
+        if isDocumentCompleted(document) { return false }
         var deadlines = document.assignments.map(\.deadline).filter { !$0.isEmpty }
         if deadlines.isEmpty, !document.deadline.isEmpty { deadlines = [document.deadline] }
         guard !deadlines.isEmpty else { return false }
         return deadlines.allSatisfy { $0 < today }
     }
 
+    static func isTaskPast(_ task: WorkTaskItem, today: String = vietnamToday()) -> Bool {
+        if isTaskCompleted(task) { return true }
+        return isTaskOverdue(task, today: today)
+    }
+
+    static func isDocumentPast(_ document: WorkApprovalItem, today: String = vietnamToday()) -> Bool {
+        if isDocumentCompleted(document) { return true }
+        return isDocumentOverdue(document, today: today)
+    }
+
     static func filterTasks(_ list: [WorkTaskItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkTaskItem] {
-        let filtered = tab == .completed ? list.filter { isTaskCompleted($0) } : list.filter { !isTaskCompleted($0) }
+        let filtered: [WorkTaskItem]
+        switch tab {
+        case .completed:
+            filtered = list.filter { isTaskCompleted($0) }
+        case .overdue:
+            filtered = list.filter { isTaskOverdue($0, today: today) }
+        case .upcoming:
+            filtered = list.filter { !isTaskCompleted($0) && !isTaskOverdue($0, today: today) }
+        case .incomplete:
+            filtered = list.filter { !isTaskCompleted($0) }
+        }
         return filtered.sorted { $0.deadline < $1.deadline }
     }
 
     static func filterDocuments(_ list: [WorkApprovalItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkApprovalItem] {
-        let filtered = tab == .completed ? list.filter { isDocumentCompleted($0) } : list.filter { !isDocumentCompleted($0) }
+        let filtered: [WorkApprovalItem]
+        switch tab {
+        case .completed:
+            filtered = list.filter { isDocumentCompleted($0) }
+        case .overdue:
+            filtered = list.filter { isDocumentOverdue($0, today: today) }
+        case .upcoming:
+            filtered = list.filter { !isDocumentCompleted($0) && !isDocumentOverdue($0, today: today) }
+        case .incomplete:
+            filtered = list.filter { !isDocumentCompleted($0) }
+        }
         return filtered.sorted {
             deadlineKey($0) < deadlineKey($1)
         }
     }
 
-    static func tab(for task: WorkTaskItem) -> WorkListTab {
-        isTaskCompleted(task) ? .completed : .incomplete
+    static func tab(for task: WorkTaskItem, today: String = vietnamToday()) -> WorkListTab {
+        if isTaskCompleted(task) { return .completed }
+        if isTaskOverdue(task, today: today) { return .overdue }
+        return .incomplete
     }
 
-    static func tab(for document: WorkApprovalItem) -> WorkListTab {
-        isDocumentCompleted(document) ? .completed : .incomplete
+    static func tab(for document: WorkApprovalItem, today: String = vietnamToday()) -> WorkListTab {
+        if isDocumentCompleted(document) { return .completed }
+        if isDocumentOverdue(document, today: today) { return .overdue }
+        return .incomplete
     }
 
     static func filterTasksBySearch(_ list: [WorkTaskItem], search: ListSearchValues) -> [WorkTaskItem] {

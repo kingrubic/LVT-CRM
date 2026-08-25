@@ -119,7 +119,7 @@ final class WorkViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         switch sectionKinds[section] {
-        case .tasks, .approvals: return 88
+        case .tasks, .approvals: return 96
         default: return UITableView.automaticDimension
         }
     }
@@ -127,6 +127,19 @@ final class WorkViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
         if case .tasks = sectionKinds[section], viewModel.isAdmin { return 36 }
         return 8
+    }
+
+    private func emptyCopy(tab: WorkListTab, created: Bool) -> String {
+        switch tab {
+        case .completed:
+            return created ? "Chưa có công việc bạn tạo đã hoàn thành." : "Chưa có công việc đã hoàn thành."
+        case .upcoming:
+            return created ? "Chưa có công việc bạn tạo chưa đến hạn." : "Chưa có công việc chưa đến hạn."
+        case .overdue:
+            return created ? "Chưa có công việc bạn tạo đã quá hạn." : "Chưa có công việc quá hạn."
+        case .incomplete:
+            return created ? "Bạn chưa tạo công việc nào" : "Bạn chưa có công việc nào cần xử lý"
+        }
     }
 
     private func workSectionHeader(
@@ -177,9 +190,7 @@ final class WorkViewController: UITableViewController {
             guard !items.isEmpty else {
                 let detail = viewModel.createdSearchEmpty
                     ? "Không tìm thấy công việc phù hợp."
-                    : (viewModel.createdTab == .completed
-                        ? "Chưa có công việc bạn tạo đã hoàn thành."
-                        : "Bạn chưa tạo công việc nào")
+                    : emptyCopy(tab: viewModel.createdTab, created: true)
                 return emptyCell(indexPath, "Việc tôi tạo", detail)
             }
             let item = items[indexPath.row]
@@ -202,10 +213,8 @@ final class WorkViewController: UITableViewController {
                     detail = "Không tìm thấy công việc phù hợp."
                 } else if viewModel.showNeedsCompletionOnly {
                     detail = "Chưa có công việc cần thực hiện."
-                } else if viewModel.mineTab == .completed {
-                    detail = "Chưa có công việc đã hoàn thành."
                 } else {
-                    detail = "Bạn chưa có công việc nào cần xử lý"
+                    detail = emptyCopy(tab: viewModel.mineTab, created: false)
                 }
                 return emptyCell(indexPath, "Việc của tôi", detail)
             }
@@ -1179,6 +1188,10 @@ private final class WorkTabsHeaderView: UIView {
             guard let self else { return }
             self.onChange?(WorkListTab(rawValue: self.control.selectedSegmentIndex) ?? .incomplete)
         }, for: .valueChanged)
+        let tabFont = UIFont.systemFont(ofSize: 11, weight: .semibold)
+        let tabFontSelected = UIFont.systemFont(ofSize: 11, weight: .bold)
+        control.setTitleTextAttributes([.font: tabFont], for: .normal)
+        control.setTitleTextAttributes([.font: tabFontSelected], for: .selected)
         badgeLabel.font = .systemFont(ofSize: 10, weight: .heavy)
         badgeLabel.textColor = .white
         badgeLabel.textAlignment = .center

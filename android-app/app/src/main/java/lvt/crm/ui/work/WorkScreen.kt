@@ -10,6 +10,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -893,7 +895,10 @@ private fun WorkListSectionHeader(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, style = MaterialTheme.typography.titleLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             WorkListTab.entries.forEach { value ->
                 FilterChip(
                     selected = tab == value,
@@ -945,6 +950,8 @@ private fun WorkListEmpty(
         filtered -> "Không tìm thấy công việc phù hợp."
         needsExecutionOnly -> "Chưa có công việc cần thực hiện."
         tab == WorkListTab.Completed -> if (created) "Chưa có công việc bạn tạo đã hoàn thành." else "Chưa có công việc đã hoàn thành."
+        tab == WorkListTab.Upcoming -> if (created) "Chưa có công việc bạn tạo chưa đến hạn." else "Chưa có công việc chưa đến hạn."
+        tab == WorkListTab.Overdue -> if (created) "Chưa có công việc bạn tạo đã quá hạn." else "Chưa có công việc quá hạn."
         else -> if (created) "Bạn chưa tạo công việc nào" else "Bạn chưa có công việc nào cần xử lý"
     }
     StatePanel(

@@ -1,5 +1,7 @@
 export const WORK_LIST_TAB_INCOMPLETE = 'incomplete';
 export const WORK_LIST_TAB_COMPLETED = 'completed';
+export const WORK_LIST_TAB_UPCOMING = 'upcoming';
+export const WORK_LIST_TAB_OVERDUE = 'overdue';
 /** Keep in sync with WORK_COMPLETION_NOTE_MAX_LENGTH in convex/assignmentPolicy.ts */
 export const WORK_COMPLETION_NOTE_MAX_LENGTH = 500;
 
@@ -67,11 +69,18 @@ export function isWorkCompleted(item) {
   return COMPLETED_STATUSES.has(item?.workStatus || item?.status);
 }
 
-export function isWorkPast(item, today = vietnamToday()) {
-  if (isWorkCompleted(item)) return true;
+function allWorkDeadlinesPassed(item, today) {
   const deadlines = workDeadlines(item);
   if (!deadlines.length) return false;
   return deadlines.every((deadline) => deadline < today);
+}
+
+export function isWorkOverdue(item, today = vietnamToday()) {
+  return !isWorkCompleted(item) && allWorkDeadlinesPassed(item, today);
+}
+
+export function isWorkPast(item, today = vietnamToday()) {
+  return isWorkCompleted(item) || allWorkDeadlinesPassed(item, today);
 }
 
 export function workDeadlineKey(item) {
@@ -80,11 +89,17 @@ export function workDeadlineKey(item) {
   return [...deadlines].sort()[0];
 }
 
-export function filterWorksByTab(list, tab = WORK_LIST_TAB_INCOMPLETE) {
+export function filterWorksByTab(list, tab = WORK_LIST_TAB_INCOMPLETE, today = vietnamToday()) {
   const items = Array.isArray(list) ? list : [];
   const compare = (a, b) => workDeadlineKey(a).localeCompare(workDeadlineKey(b));
   if (tab === WORK_LIST_TAB_COMPLETED) {
     return items.filter((item) => isWorkCompleted(item)).sort(compare);
+  }
+  if (tab === WORK_LIST_TAB_OVERDUE) {
+    return items.filter((item) => isWorkOverdue(item, today)).sort(compare);
+  }
+  if (tab === WORK_LIST_TAB_UPCOMING) {
+    return items.filter((item) => !isWorkCompleted(item) && !isWorkOverdue(item, today)).sort(compare);
   }
   return items.filter((item) => !isWorkCompleted(item)).sort(compare);
 }

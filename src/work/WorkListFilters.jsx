@@ -1,33 +1,39 @@
-import { WORK_LIST_TAB_COMPLETED, WORK_LIST_TAB_INCOMPLETE } from './workDisplay';
+import {
+  WORK_LIST_TAB_COMPLETED,
+  WORK_LIST_TAB_INCOMPLETE,
+  WORK_LIST_TAB_OVERDUE,
+  WORK_LIST_TAB_UPCOMING,
+} from './workDisplay';
 import { DutyListSearch } from '../duties/DutyListFilters';
+
+const WORK_LIST_TABS = [
+  { id: WORK_LIST_TAB_INCOMPLETE, label: 'Chưa hoàn thành' },
+  { id: WORK_LIST_TAB_COMPLETED, label: 'Đã hoàn thành' },
+  { id: WORK_LIST_TAB_UPCOMING, label: 'Chưa đến hạn' },
+  { id: WORK_LIST_TAB_OVERDUE, label: 'Đã quá hạn' },
+];
 
 export function WorkListTabs({ tab, onChange, incompleteCount = 0 }) {
   const badgeLabel = incompleteCount > 99 ? '99+' : String(incompleteCount);
   return (
-    <div className="duty-list-tabs" role="tablist" aria-label="Lọc danh sách công việc">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === WORK_LIST_TAB_INCOMPLETE}
-        className={tab === WORK_LIST_TAB_INCOMPLETE ? 'is-active' : undefined}
-        onClick={() => onChange(WORK_LIST_TAB_INCOMPLETE)}
-      >
-        Chưa hoàn thành
-        {incompleteCount > 0 ? (
-          <b className="nav-badge duty-list-tab-badge" aria-label={`${incompleteCount} công việc chưa hoàn thành`}>
-            {badgeLabel}
-          </b>
-        ) : null}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === WORK_LIST_TAB_COMPLETED}
-        className={tab === WORK_LIST_TAB_COMPLETED ? 'is-active' : undefined}
-        onClick={() => onChange(WORK_LIST_TAB_COMPLETED)}
-      >
-        Đã hoàn thành
-      </button>
+    <div className="duty-list-tabs work-list-tabs" role="tablist" aria-label="Lọc danh sách công việc">
+      {WORK_LIST_TABS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="tab"
+          aria-selected={tab === item.id}
+          className={tab === item.id ? 'is-active' : undefined}
+          onClick={() => onChange(item.id)}
+        >
+          {item.label}
+          {item.id === WORK_LIST_TAB_INCOMPLETE && incompleteCount > 0 ? (
+            <b className="nav-badge duty-list-tab-badge" aria-label={`${incompleteCount} công việc chưa hoàn thành`}>
+              {badgeLabel}
+            </b>
+          ) : null}
+        </button>
+      ))}
     </div>
   );
 }
@@ -44,6 +50,20 @@ export function WorkListSearch({ value, onChange }) {
   );
 }
 
+function workListEmptyCopy(tab, tone) {
+  const created = tone === 'created';
+  if (tab === WORK_LIST_TAB_COMPLETED) {
+    return created ? 'Chưa có công việc bạn tạo đã hoàn thành.' : 'Chưa có công việc đã hoàn thành.';
+  }
+  if (tab === WORK_LIST_TAB_UPCOMING) {
+    return created ? 'Chưa có công việc bạn tạo chưa đến hạn.' : 'Chưa có công việc chưa đến hạn.';
+  }
+  if (tab === WORK_LIST_TAB_OVERDUE) {
+    return created ? 'Chưa có công việc bạn tạo đã quá hạn.' : 'Chưa có công việc quá hạn.';
+  }
+  return created ? 'Bạn chưa tạo công việc nào' : 'Bạn chưa có công việc nào cần xử lý';
+}
+
 export function WorkListEmpty({ tab = WORK_LIST_TAB_INCOMPLETE, tone = 'mine', filtered = false }) {
   if (filtered) {
     return (
@@ -57,7 +77,15 @@ export function WorkListEmpty({ tab = WORK_LIST_TAB_INCOMPLETE, tone = 'mine', f
     return (
       <div className="work-empty duty-list-empty">
         <span aria-hidden="true">✓</span>
-        <p>{tone === 'created' ? 'Chưa có công việc bạn tạo đã hoàn thành.' : 'Chưa có công việc đã hoàn thành.'}</p>
+        <p>{workListEmptyCopy(tab, tone)}</p>
+      </div>
+    );
+  }
+  if (tab === WORK_LIST_TAB_OVERDUE) {
+    return (
+      <div className="work-empty duty-list-empty">
+        <span aria-hidden="true">!</span>
+        <p>{workListEmptyCopy(tab, tone)}</p>
       </div>
     );
   }
@@ -73,7 +101,7 @@ export function WorkListEmpty({ tab = WORK_LIST_TAB_INCOMPLETE, tone = 'mine', f
           <path d="M25 44c3.4 6 18.6 6 22 0" />
         </svg>
       </span>
-      <p>{tone === 'created' ? 'Bạn chưa tạo công việc nào' : 'Bạn chưa có công việc nào cần xử lý'}</p>
+      <p>{workListEmptyCopy(tab, tone)}</p>
     </div>
   );
 }

@@ -473,6 +473,19 @@
   box-shadow: 0 5px 14px rgba(27, 61, 91, .08);
 }
 
+.duty-list-toolbar .work-list-tabs,
+.work-list-tabs {
+  width: min(760px, 100%);
+  flex-wrap: wrap;
+}
+
+.work-list-tabs button {
+  flex: 1 1 9.25rem;
+  font-size: 13px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
 .duty-list-tab-badge {
   margin-left: 0;
 }
