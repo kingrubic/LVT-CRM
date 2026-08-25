@@ -137,7 +137,7 @@ final class WorkViewController: UITableViewController {
         let control = UISegmentedControl(items: WorkListTab.allCases.map(\.title))
         control.selectedSegmentIndex = tab.rawValue
         control.addAction(UIAction { _ in
-            onChange(WorkListTab(rawValue: control.selectedSegmentIndex) ?? .upcoming)
+            onChange(WorkListTab(rawValue: control.selectedSegmentIndex) ?? .incomplete)
         }, for: .valueChanged)
         let stack = UIStackView(arrangedSubviews: [titleLabel, control])
         stack.axis = .vertical
@@ -190,7 +190,9 @@ final class WorkViewController: UITableViewController {
             guard !items.isEmpty else {
                 let detail = viewModel.createdSearchEmpty
                     ? "Không tìm thấy công việc phù hợp."
-                    : "Bạn chưa tạo công việc nào"
+                    : (viewModel.createdTab == .completed
+                        ? "Chưa có công việc bạn tạo đã hoàn thành."
+                        : "Bạn chưa tạo công việc nào")
                 return emptyCell(indexPath, "Việc tôi tạo", detail)
             }
             let item = items[indexPath.row]
@@ -213,6 +215,8 @@ final class WorkViewController: UITableViewController {
                     detail = "Không tìm thấy công việc phù hợp."
                 } else if viewModel.showNeedsCompletionOnly {
                     detail = "Chưa có công việc cần thực hiện."
+                } else if viewModel.mineTab == .completed {
+                    detail = "Chưa có công việc đã hoàn thành."
                 } else {
                     detail = "Bạn chưa có công việc nào cần xử lý"
                 }
@@ -343,7 +347,7 @@ final class WorkViewController: UITableViewController {
     private func processPendingFocusIfPossible() {
         guard let focusId = pendingFocusId, !viewModel.loading, viewModel.error == nil else { return }
         if let item = viewModel.approval(focusId: focusId) {
-            viewModel.createdTab = WorkListRules.isDocumentPast(item) ? .past : .upcoming
+            viewModel.createdTab = WorkListRules.tab(for: item)
             scrollToApproval(item)
             pendingFocusId = nil
             DispatchQueue.main.async { [weak self] in self?.showDocument(item) }

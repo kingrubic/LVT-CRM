@@ -404,6 +404,8 @@ Nếu tài khoản có chức vụ cao hơn và được cấp quyền phù hợ
 
 Màn hình Công việc thay đổi theo nhiệm vụ và chức vụ của từng người. Một tài khoản có thể thấy một hoặc nhiều nội dung dưới đây.
 
+**Việc của tôi** và **Việc tôi tạo** dùng hai tab **Chưa hoàn thành** / **Đã hoàn thành**. Việc quá hạn vẫn nằm ở **Chưa hoàn thành** cho đến khi được duyệt xong.
+
 ### Xử lý công văn cần duyệt
 
 Nếu được chọn làm người duyệt:

@@ -37,8 +37,8 @@ data class WorkUiState(
     val evidencePromptTask: WorkTaskItem? = null,
     val evidenceNote: String = "",
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
-    val mineTab: WorkListTab = WorkListTab.Upcoming,
-    val createdTab: WorkListTab = WorkListTab.Upcoming,
+    val mineTab: WorkListTab = WorkListTab.Incomplete,
+    val createdTab: WorkListTab = WorkListTab.Incomplete,
     val needsExecutionOnly: Boolean = false,
     val search: ListSearchState = ListSearchState(),
 ) {
@@ -125,12 +125,12 @@ class WorkViewModel(
         _uiState.update { state ->
             when (filter) {
                 WorkDashboardFilter.PendingApproval -> state.copy(
-                    mineTab = WorkListTab.Upcoming,
-                    createdTab = WorkListTab.Upcoming,
+                    mineTab = WorkListTab.Incomplete,
+                    createdTab = WorkListTab.Incomplete,
                     needsExecutionOnly = false,
                 )
                 WorkDashboardFilter.NeedsExecution -> state.copy(
-                    mineTab = WorkListTab.Upcoming,
+                    mineTab = WorkListTab.Incomplete,
                     needsExecutionOnly = true,
                 )
             }

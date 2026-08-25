@@ -1,13 +1,13 @@
 import Foundation
 
 enum WorkListTab: Int, CaseIterable, Equatable {
-    case upcoming
-    case past
+    case incomplete
+    case completed
 
     var title: String {
         switch self {
-        case .upcoming: return "Chưa diễn ra"
-        case .past: return "Đã diễn ra"
+        case .incomplete: return "Chưa hoàn thành"
+        case .completed: return "Đã hoàn thành"
         }
     }
 }
@@ -27,14 +27,24 @@ enum WorkListRules {
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
+    static func isTaskCompleted(_ task: WorkTaskItem) -> Bool {
+        completed.contains(task.status)
+    }
+
+    static func isDocumentCompleted(_ document: WorkApprovalItem) -> Bool {
+        if completed.contains(document.status) { return true }
+        let assignmentStatuses = document.assignments.map(\.status)
+        return !assignmentStatuses.isEmpty && assignmentStatuses.allSatisfy { completed.contains($0) }
+    }
+
     static func isTaskPast(_ task: WorkTaskItem, today: String = vietnamToday()) -> Bool {
-        if completed.contains(task.status) { return true }
+        if isTaskCompleted(task) { return true }
         guard !task.deadline.isEmpty else { return false }
         return task.deadline < today
     }
 
     static func isDocumentPast(_ document: WorkApprovalItem, today: String = vietnamToday()) -> Bool {
-        if completed.contains(document.status) { return true }
+        if isDocumentCompleted(document) { return true }
         var deadlines = document.assignments.map(\.deadline).filter { !$0.isEmpty }
         if deadlines.isEmpty, !document.deadline.isEmpty { deadlines = [document.deadline] }
         guard !deadlines.isEmpty else { return false }
@@ -42,19 +52,23 @@ enum WorkListRules {
     }
 
     static func filterTasks(_ list: [WorkTaskItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkTaskItem] {
-        let filtered = tab == .past ? list.filter { isTaskPast($0, today: today) } : list.filter { !isTaskPast($0, today: today) }
+        let filtered = tab == .completed ? list.filter { isTaskCompleted($0) } : list.filter { !isTaskCompleted($0) }
         return filtered.sorted { $0.deadline < $1.deadline }
     }
 
     static func filterDocuments(_ list: [WorkApprovalItem], tab: WorkListTab, today: String = vietnamToday()) -> [WorkApprovalItem] {
-        let filtered = tab == .past ? list.filter { isDocumentPast($0, today: today) } : list.filter { !isDocumentPast($0, today: today) }
+        let filtered = tab == .completed ? list.filter { isDocumentCompleted($0) } : list.filter { !isDocumentCompleted($0) }
         return filtered.sorted {
             deadlineKey($0) < deadlineKey($1)
         }
     }
 
     static func tab(for task: WorkTaskItem) -> WorkListTab {
-        isTaskPast(task) ? .past : .upcoming
+        isTaskCompleted(task) ? .completed : .incomplete
+    }
+
+    static func tab(for document: WorkApprovalItem) -> WorkListTab {
+        isDocumentCompleted(document) ? .completed : .incomplete
     }
 
     static func filterTasksBySearch(_ list: [WorkTaskItem], search: ListSearchValues) -> [WorkTaskItem] {
@@ -116,8 +130,8 @@ final class WorkViewModel {
     private(set) var busyTaskId: String?
     private(set) var busyApprovalId: String?
     private(set) var busyReviewId: String?
-    var mineTab: WorkListTab = .upcoming { didSet { if mineTab != oldValue { notifyChange() } } }
-    var createdTab: WorkListTab = .upcoming { didSet { if createdTab != oldValue { notifyChange() } } }
+    var mineTab: WorkListTab = .incomplete { didSet { if mineTab != oldValue { notifyChange() } } }
+    var createdTab: WorkListTab = .incomplete { didSet { if createdTab != oldValue { notifyChange() } } }
     var showNeedsCompletionOnly = false
     var search = ListSearchValues() { didSet { if search != oldValue { notifyChange() } } }
     var onChange: (() -> Void)?
@@ -203,18 +217,18 @@ final class WorkViewModel {
         switch filter {
         case .pendingApproval:
             showNeedsCompletionOnly = false
-            mineTab = .upcoming
-            createdTab = .upcoming
+            mineTab = .incomplete
+            createdTab = .incomplete
         case .needsExecution:
             showNeedsCompletionOnly = true
-            mineTab = .upcoming
+            mineTab = .incomplete
         }
         notifyChange()
     }
 
     func clearDashboardFilter() {
         showNeedsCompletionOnly = false
-        mineTab = .upcoming
+        mineTab = .incomplete
         notifyChange()
     }
 

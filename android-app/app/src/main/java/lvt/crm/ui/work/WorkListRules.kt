@@ -16,14 +16,14 @@ enum class WorkDashboardFilter {
 }
 
 enum class WorkListTab {
-    Upcoming,
-    Past,
+    Incomplete,
+    Completed,
     ;
 
     val title: String
         get() = when (this) {
-            Upcoming -> "Chưa diễn ra"
-            Past -> "Đã diễn ra"
+            Incomplete -> "Chưa hoàn thành"
+            Completed -> "Đã hoàn thành"
         }
 }
 
@@ -38,14 +38,22 @@ fun vietnamToday(nowMillis: Long = System.currentTimeMillis()): String {
     return "%04d-%02d-%02d".format(year, month, day)
 }
 
+fun isTaskCompleted(task: WorkTaskItem): Boolean = task.status in completedStatuses
+
+fun isDocumentCompleted(document: WorkApprovalItem): Boolean {
+    if (document.status in completedStatuses) return true
+    val assignmentStatuses = document.assignments.map { it.status }
+    return assignmentStatuses.isNotEmpty() && assignmentStatuses.all { it in completedStatuses }
+}
+
 fun isTaskPast(task: WorkTaskItem, today: String = vietnamToday()): Boolean {
-    if (task.status in completedStatuses) return true
+    if (isTaskCompleted(task)) return true
     if (task.deadline.isBlank()) return false
     return task.deadline < today
 }
 
 fun isDocumentPast(document: WorkApprovalItem, today: String = vietnamToday()): Boolean {
-    if (document.status in completedStatuses) return true
+    if (isDocumentCompleted(document)) return true
     val deadlines = document.assignments.map { it.deadline }.filter { it.isNotBlank() }
         .ifEmpty { listOfNotNull(document.deadline.takeIf { it.isNotBlank() }) }
     if (deadlines.isEmpty()) return false
@@ -53,7 +61,11 @@ fun isDocumentPast(document: WorkApprovalItem, today: String = vietnamToday()): 
 }
 
 fun filterTasksByTab(list: List<WorkTaskItem>, tab: WorkListTab, today: String = vietnamToday()): List<WorkTaskItem> {
-    val filtered = if (tab == WorkListTab.Past) list.filter { isTaskPast(it, today) } else list.filter { !isTaskPast(it, today) }
+    val filtered = if (tab == WorkListTab.Completed) {
+        list.filter { isTaskCompleted(it) }
+    } else {
+        list.filter { !isTaskCompleted(it) }
+    }
     return filtered.sortedBy { it.deadline }
 }
 
@@ -62,10 +74,10 @@ fun filterDocumentsByTab(
     tab: WorkListTab,
     today: String = vietnamToday(),
 ): List<WorkApprovalItem> {
-    val filtered = if (tab == WorkListTab.Past) {
-        list.filter { isDocumentPast(it, today) }
+    val filtered = if (tab == WorkListTab.Completed) {
+        list.filter { isDocumentCompleted(it) }
     } else {
-        list.filter { !isDocumentPast(it, today) }
+        list.filter { !isDocumentCompleted(it) }
     }
     return filtered.sortedBy { document ->
         document.assignments.map { it.deadline }.filter { it.isNotBlank() }.minOrNull()
@@ -77,10 +89,10 @@ fun filterTasksNeedingExecution(list: List<WorkTaskItem>): List<WorkTaskItem> =
     list.filter { needsCompletion(it.status) }.sortedBy { it.deadline }
 
 fun tabForTask(task: WorkTaskItem, today: String = vietnamToday()): WorkListTab =
-    if (isTaskPast(task, today)) WorkListTab.Past else WorkListTab.Upcoming
+    if (isTaskCompleted(task)) WorkListTab.Completed else WorkListTab.Incomplete
 
 fun tabForDocument(document: WorkApprovalItem, today: String = vietnamToday()): WorkListTab =
-    if (isDocumentPast(document, today)) WorkListTab.Past else WorkListTab.Upcoming
+    if (isDocumentCompleted(document)) WorkListTab.Completed else WorkListTab.Incomplete
 
 fun filterTasksBySearch(list: List<WorkTaskItem>, search: ListSearchState): List<WorkTaskItem> {
     val query = normalizeListSearchText(search.query)

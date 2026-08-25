@@ -1,5 +1,5 @@
-export const WORK_LIST_TAB_UPCOMING = 'upcoming';
-export const WORK_LIST_TAB_PAST = 'past';
+export const WORK_LIST_TAB_INCOMPLETE = 'incomplete';
+export const WORK_LIST_TAB_COMPLETED = 'completed';
 /** Keep in sync with WORK_COMPLETION_NOTE_MAX_LENGTH in convex/assignmentPolicy.ts */
 export const WORK_COMPLETION_NOTE_MAX_LENGTH = 500;
 
@@ -80,13 +80,13 @@ export function workDeadlineKey(item) {
   return [...deadlines].sort()[0];
 }
 
-export function filterWorksByTab(list, tab = WORK_LIST_TAB_UPCOMING, today = vietnamToday()) {
+export function filterWorksByTab(list, tab = WORK_LIST_TAB_INCOMPLETE) {
   const items = Array.isArray(list) ? list : [];
   const compare = (a, b) => workDeadlineKey(a).localeCompare(workDeadlineKey(b));
-  if (tab === WORK_LIST_TAB_PAST) {
-    return items.filter((item) => isWorkPast(item, today)).sort(compare);
+  if (tab === WORK_LIST_TAB_COMPLETED) {
+    return items.filter((item) => isWorkCompleted(item)).sort(compare);
   }
-  return items.filter((item) => !isWorkPast(item, today)).sort(compare);
+  return items.filter((item) => !isWorkCompleted(item)).sort(compare);
 }
 
 export function emptyWorkSearch() {

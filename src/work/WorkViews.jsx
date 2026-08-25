@@ -16,7 +16,7 @@ import {
   filterWorksBySearch,
   filterWorksByTab,
   formatWorkDate,
-  WORK_LIST_TAB_UPCOMING,
+  WORK_LIST_TAB_INCOMPLETE,
   WORK_COMPLETION_NOTE_MAX_LENGTH,
   workAssignmentPayload,
 } from './workDisplay';
@@ -537,7 +537,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const [assignments, setAssignments] = useState([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editConfirm, setEditConfirm] = useState(null);
-  const [listTab, setListTab] = useState(WORK_LIST_TAB_UPCOMING);
+  const [listTab, setListTab] = useState(WORK_LIST_TAB_INCOMPLETE);
   const [listSearch, setListSearch] = useState(emptyWorkSearch);
   const [expanded, setExpanded] = useState(null);
   const [approverIds, setApproverIds] = useState([]);
@@ -1059,7 +1059,7 @@ export function WorkUserView({ focusTarget = null }) {
   const [reviewSaving, setReviewSaving] = useState(false);
   const [decidingId, setDecidingId] = useState(null);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
-  const [listTab, setListTab] = useState(WORK_LIST_TAB_UPCOMING);
+  const [listTab, setListTab] = useState(WORK_LIST_TAB_INCOMPLETE);
   const [listSearch, setListSearch] = useState(emptyWorkSearch);
   const [expanded, setExpanded] = useState(null);
   const isApprover = (data?.level || 0) >= 4;

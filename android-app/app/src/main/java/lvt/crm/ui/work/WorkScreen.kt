@@ -126,7 +126,7 @@ fun WorkScreen(
     LaunchedEffect(openFilterToken) {
         if (openFilterToken == 0) return@LaunchedEffect
         if (openFilter == null) {
-            viewModel.setMineTab(WorkListTab.Upcoming)
+            viewModel.setMineTab(WorkListTab.Incomplete)
         } else {
             viewModel.applyDashboardFilter(openFilter)
         }
@@ -907,7 +907,7 @@ private fun WorkListEmpty(
     val message = when {
         filtered -> "Không tìm thấy công việc phù hợp."
         needsExecutionOnly -> "Chưa có công việc cần thực hiện."
-        tab == WorkListTab.Past -> if (created) "Chưa có công việc bạn tạo đã diễn ra." else "Chưa có công việc đã diễn ra."
+        tab == WorkListTab.Completed -> if (created) "Chưa có công việc bạn tạo đã hoàn thành." else "Chưa có công việc đã hoàn thành."
         else -> if (created) "Bạn chưa tạo công việc nào" else "Bạn chưa có công việc nào cần xử lý"
     }
     StatePanel(
