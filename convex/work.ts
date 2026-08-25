@@ -21,6 +21,8 @@ import {
   cleanCompletionNote,
   isWorkItemArchived,
   isWorkReleased,
+  isWorkStatusCompleted,
+  workMenuBadgeCount,
   shouldBypassWorkCompletionReview,
   workAssignmentPushUserIds,
   workListTitle,
@@ -469,6 +471,70 @@ function overallCompletionStatus(statuses: string[]) {
   if (statuses.some((status) => status === "pending_completion")) return "pending_completion";
   if (statuses.some((status) => status === "not_completed" || status === "overdue")) return "not_completed";
   return "in_progress";
+}
+
+function workItemsForDocument(workItems: any[], documentId: string) {
+  return workItems.filter((workItem: any) => String(workItem.documentId) === String(documentId));
+}
+
+function isWorkManagementListVisible(args: {
+  document: any;
+  items: any[];
+  actorUserId: string;
+  actorRole: string;
+  actorLevel: number;
+  actorDepartmentId: string;
+  visibilityMode: "creator" | "school";
+  usersById: Map<string, { status?: string }>;
+}) {
+  const archived = args.items.some((item: any) => isWorkItemArchived(args.document, item, args.usersById))
+    || isWorkItemArchived(args.document, { assignmentType: "department" }, args.usersById);
+  if (archived) return canSeeArchivedWork(args.actorRole);
+  const isAssignee = args.items.some((item: any) => {
+    if (assignmentTypeOf(item) === "individual") {
+      return (item.assigneeUserIds || []).some((id: string) => String(id) === String(args.actorUserId));
+    }
+    return String(item.departmentId || "") === String(args.actorDepartmentId || "");
+  });
+  return canSeeLiveWork({
+    actorUserId: args.actorUserId,
+    actorRole: args.actorRole,
+    actorLevel: args.actorLevel,
+    createdBy: String(args.document.createdBy),
+    isAssignee,
+    visibilityMode: args.visibilityMode,
+  });
+}
+
+function managementDocumentWorkStatus(document: any, items: any[], catalogData: any) {
+  const excludedIndividuals = individualAssigneeIdsForDocument(items, document._id);
+  const statuses = items.map((item: any) => {
+    const type = assignmentTypeOf(item);
+    const members = type === "individual"
+      ? (item.assigneeUserIds || [])
+          .map((id: string) =>
+            catalogData.activeUsers.find((user: any) => String(user._id) === String(id)),
+          )
+          .filter(Boolean)
+      : departmentRosterMembers(item, document, catalogData, excludedIndividuals);
+    return adminModItemStatus(item, members);
+  });
+  return overallCompletionStatus(statuses);
+}
+
+function isActorAssignedToWorkItem(
+  item: any,
+  document: any,
+  actorUserId: string,
+  catalogData: any,
+  excludedIndividuals: Set<string>,
+) {
+  const type = assignmentTypeOf(item);
+  if (type === "individual") {
+    return (item.assigneeUserIds || []).some((id: string) => String(id) === String(actorUserId));
+  }
+  const members = departmentRosterMembers(item, document, catalogData, excludedIndividuals);
+  return members.some((member: any) => String(member._id) === String(actorUserId));
 }
 
 async function catalog(ctx: any) {
@@ -1197,26 +1263,18 @@ export const listAdmin = query({
     const usersById = new Map<string, { status?: string }>(
       catalogData.users.map((user: any) => [String(user._id), user]),
     );
-    const visibleDocuments = activeDocuments.filter((document: any) => {
-      const items = activeWorkItems.filter((workItem: any) => String(workItem.documentId) === String(document._id));
-      const archived = items.some((item: any) => isWorkItemArchived(document, item, usersById))
-        || isWorkItemArchived(document, { assignmentType: "department" }, usersById);
-      if (archived) return canSeeArchivedWork(actor.user.role);
-      const isAssignee = items.some((item: any) => {
-        if (assignmentTypeOf(item) === "individual") {
-          return (item.assigneeUserIds || []).some((id: string) => String(id) === String(actor.user._id));
-        }
-        return String(item.departmentId || "") === String(actor.user.departmentId || "");
-      });
-      return canSeeLiveWork({
+    const visibleDocuments = activeDocuments.filter((document: any) =>
+      isWorkManagementListVisible({
+        document,
+        items: workItemsForDocument(activeWorkItems, document._id),
         actorUserId: String(actor.user._id),
         actorRole: actor.user.role,
         actorLevel: actor.level,
-        createdBy: String(document.createdBy),
-        isAssignee,
+        actorDepartmentId: String(actor.user.departmentId || ""),
         visibilityMode,
-      });
-    });
+        usersById,
+      }),
+    );
     const views = await Promise.all(
       visibleDocuments.map(async (document: any) => {
         const items = activeWorkItems.filter(
@@ -1259,9 +1317,7 @@ export const listAdmin = query({
         return {
           ...(await documentView(ctx, document, catalogData, items)),
           assignments: assignmentViews,
-          workStatus: overallCompletionStatus(
-            assignmentViews.map((assignment: any) => assignment.status),
-          ),
+          workStatus: managementDocumentWorkStatus(document, items, catalogData),
           taskCount: assignmentViews.reduce(
             (total: number, assignment: any) => total + assignment.taskCount,
             0,
@@ -2095,6 +2151,9 @@ export const badge = query({
   handler: async (ctx) => {
     const access = await requireWorkAccess(ctx);
     const assignerMode = await getWorkAssignerMode(ctx);
+    const visibilityMode = await getWorkVisibilityMode(ctx);
+    const canCreate =
+      canCreateAssignments(access.user.role, access.isAdmin ? 0 : access.level) || access.isAdmin;
     const [documents, workItems, personalTasks] = await Promise.all([
       ctx.db.query("officeDocuments").collect(),
       ctx.db.query("workItems").collect(),
@@ -2104,6 +2163,9 @@ export const badge = query({
     const activeDocuments = documents.filter((document: any) => document.active);
     const activeWorkItems = workItems.filter((item: any) => item.active);
     const docsById = new Map(activeDocuments.map((document: any) => [String(document._id), document]));
+    const usersById = new Map<string, { status?: string }>(
+      catalogData.users.map((user: any) => [String(user._id), user]),
+    );
     const tasksByItem = new Map<string, any[]>();
     for (const task of personalTasks.filter((item: any) => item.active)) {
       const list = tasksByItem.get(String(task.workItemId)) || [];
@@ -2111,65 +2173,107 @@ export const badge = query({
       tasksByItem.set(String(task.workItemId), list);
     }
 
-    let count = 0;
-    for (const item of activeWorkItems) {
-      const document = docsById.get(String(item.documentId));
-      if (!document || !isWorkReleased(document)) continue;
-      if (!canReviewWorkCompletion({
-        actorUserId: String(access.user._id),
-        createdBy: String(document.createdBy),
-      })) continue;
-      count += completionsOf(item).filter((row: any) => row.status === "pending_approval").length;
-    }
-
+    let pendingApprovalCount = 0;
     if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
       for (const item of activeWorkItems) {
         const document = docsById.get(String(item.documentId));
         if (!document || !isWorkReleased(document)) continue;
-        const siblings = activeWorkItems.filter(
-          (row: any) => String(row.documentId) === String(item.documentId),
-        );
-        const excludedIndividuals = individualAssigneeIdsForDocument(siblings, item.documentId);
-        const type = assignmentTypeOf(item);
-        let isMine = false;
-        if (type === "individual") {
-          isMine = (item.assigneeUserIds || []).some(
-            (id: string) => String(id) === String(access.user._id),
+        if (!canReviewWorkCompletion({
+          actorUserId: String(access.user._id),
+          createdBy: String(document.createdBy),
+        })) continue;
+        pendingApprovalCount += completionsOf(item).filter(
+          (row: any) => row.status === "pending_approval",
+        ).length;
+      }
+    } else {
+      for (const task of personalTasks.filter((item: any) => item.active)) {
+        for (const row of completionsOf(task)) {
+          if (row.status !== "pending_approval") continue;
+          const target = catalogData.activeUsers.find(
+            (user: any) => String(user._id) === String(row.userId),
           );
-        } else {
-          const members = departmentRosterMembers(item, document, catalogData, excludedIndividuals);
-          isMine = members.some((member: any) => String(member._id) === String(access.user._id));
-        }
-        if (isMine) {
-          const status = userItemStatus(item, String(access.user._id));
-          if (status !== "completed" && status !== "completed_late" && status !== "pending_completion") {
-            count += 1;
-          }
+          const targetLevel = target ? activePositionLevel(target, catalogData.positions) : 0;
+          const canReview = access.isAdmin
+            || (
+              (access.level === 2 || access.level === 3) &&
+              targetLevel > 0 &&
+              targetLevel < access.level &&
+              String(target?.departmentId || "") === String(access.user.departmentId || "")
+            );
+          if (!canReview) continue;
+          if (!access.isAdmin && targetLevel >= 2) continue;
+          pendingApprovalCount += 1;
         }
       }
-      return { count, level: access.level, assignerMode };
     }
 
-    if (access.level === 2 || access.level === 3) {
-      count += activeWorkItems.filter((item: any) => {
+    let incompleteMineCount = 0;
+    if (assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
+      for (const item of activeWorkItems) {
+        const document = docsById.get(String(item.documentId));
+        if (!document || !isWorkReleased(document)) continue;
+        const siblings = workItemsForDocument(activeWorkItems, item.documentId);
+        const excludedIndividuals = individualAssigneeIdsForDocument(siblings, item.documentId);
+        if (!isActorAssignedToWorkItem(
+          item,
+          document,
+          String(access.user._id),
+          catalogData,
+          excludedIndividuals,
+        )) continue;
+        if (!isWorkStatusCompleted(userItemStatus(item, String(access.user._id)))) {
+          incompleteMineCount += 1;
+        }
+      }
+    } else if (access.level === 2 || access.level === 3) {
+      incompleteMineCount = activeWorkItems.filter((item: any) => {
         const document = docsById.get(String(item.documentId));
         return (
           document?.status === "approved" &&
           assignmentTypeOf(item) === "department" &&
           String(item.departmentId) === String(access.user.departmentId || "") &&
-          completionStatus(tasksByItem.get(String(item._id)) || []) !== "completed"
+          !isWorkStatusCompleted(completionStatus(tasksByItem.get(String(item._id)) || []))
         );
       }).length;
     } else {
-      count += personalTasks.filter((task: any) => {
+      incompleteMineCount = personalTasks.filter((task: any) => {
         if (!task.active) return false;
         if (!task.assigneeUserIds.some((id: string) => String(id) === String(access.user._id))) {
           return false;
         }
-        const status = taskStatus(task, String(access.user._id));
-        return status !== "completed" && status !== "completed_late" && status !== "pending_completion";
+        return !isWorkStatusCompleted(taskStatus(task, String(access.user._id)));
       }).length;
     }
-    return { count, level: access.level, assignerMode };
+
+    let incompleteCreatedCount = 0;
+    if (canCreate) {
+      for (const document of activeDocuments) {
+        const items = workItemsForDocument(activeWorkItems, document._id);
+        if (!isWorkManagementListVisible({
+          document,
+          items,
+          actorUserId: String(access.user._id),
+          actorRole: access.user.role,
+          actorLevel: access.level,
+          actorDepartmentId: String(access.user.departmentId || ""),
+          visibilityMode,
+          usersById,
+        })) continue;
+        if (!isWorkStatusCompleted(managementDocumentWorkStatus(document, items, catalogData))) {
+          incompleteCreatedCount += 1;
+        }
+      }
+    }
+
+    return {
+      count: workMenuBadgeCount({
+        pendingApprovalCount,
+        incompleteMineCount,
+        incompleteCreatedCount,
+      }),
+      level: access.level,
+      assignerMode,
+    };
   },
 });

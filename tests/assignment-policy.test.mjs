@@ -21,8 +21,10 @@ import {
   isWorkItemArchived,
   isWorkNotificationAssignee,
   isWorkReleased,
+  isWorkStatusCompleted,
   workAssignmentPushUserIds,
   workListTitle,
+  workMenuBadgeCount,
 } from '../convex/assignmentPolicy.ts';
 
 test('chỉ admin/mod và tổ trưởng/tổ phó (2/3 sao) được tạo công tác/công việc', () => {
@@ -138,6 +140,22 @@ test('người được giao luôn thấy việc của mình; chế độ creato
   );
   assert.equal(canSeeArchivedWork('admin'), true);
   assert.equal(canSeeArchivedWork('user'), false);
+});
+
+test('badge menu Công việc = chờ duyệt + việc chưa xong của tôi + việc chưa xong tôi tạo', () => {
+  assert.equal(
+    workMenuBadgeCount({
+      pendingApprovalCount: 3,
+      incompleteMineCount: 1,
+      incompleteCreatedCount: 10,
+    }),
+    14,
+  );
+  assert.equal(isWorkStatusCompleted('completed'), true);
+  assert.equal(isWorkStatusCompleted('completed_late'), true);
+  assert.equal(isWorkStatusCompleted('pending_completion'), false);
+  assert.equal(isWorkStatusCompleted('overdue'), false);
+  assert.equal(isWorkStatusCompleted('in_progress'), false);
 });
 
 test('nội dung nộp hoàn thành là tùy chọn và tối đa 500 ký tự', () => {
