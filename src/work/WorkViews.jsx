@@ -16,7 +16,8 @@ import {
   filterWorksBySearch,
   filterWorksByTab,
   formatWorkDate,
-  WORK_LIST_TAB_INCOMPLETE,
+  workListTabCounts,
+  WORK_LIST_TAB_TODO,
   WORK_COMPLETION_NOTE_MAX_LENGTH,
   workAssignmentPayload,
 } from './workDisplay';
@@ -537,7 +538,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const [assignments, setAssignments] = useState([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editConfirm, setEditConfirm] = useState(null);
-  const [listTab, setListTab] = useState(WORK_LIST_TAB_INCOMPLETE);
+  const [listTab, setListTab] = useState(WORK_LIST_TAB_TODO);
   const [listSearch, setListSearch] = useState(emptyWorkSearch);
   const [expanded, setExpanded] = useState(null);
   const [approverIds, setApproverIds] = useState([]);
@@ -554,10 +555,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const documents = listData?.documents || [];
   const pendingCompletionReviews = listData?.pendingCompletionReviews || [];
   const visibleDocuments = useMemo(() => filterWorksByTab(documents, listTab), [documents, listTab]);
-  const incompleteCreatedCount = useMemo(
-    () => filterWorksByTab(documents, WORK_LIST_TAB_INCOMPLETE).length,
-    [documents],
-  );
+  const createdTabCounts = useMemo(() => workListTabCounts(documents), [documents]);
   const filteredDocuments = useMemo(
     () => filterWorksBySearch(visibleDocuments, listSearch),
     [visibleDocuments, listSearch],
@@ -909,7 +907,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
       <div className="duty-list-section">
         <DutyListHeading>Việc tôi tạo</DutyListHeading>
         <div className="duty-list-toolbar">
-          <WorkListTabs tab={listTab} onChange={setListTab} incompleteCount={incompleteCreatedCount} />
+          <WorkListTabs tab={listTab} onChange={setListTab} counts={createdTabCounts} />
           {allowCreate && !open ? (
             <button type="button" className="work-primary-button" onClick={() => setOpen(true)}>
               <span>+</span> Tạo công việc
@@ -1063,7 +1061,7 @@ export function WorkUserView({ focusTarget = null }) {
   const [reviewSaving, setReviewSaving] = useState(false);
   const [decidingId, setDecidingId] = useState(null);
   const [feedback, setFeedback] = useState({ type: '', text: '' });
-  const [listTab, setListTab] = useState(WORK_LIST_TAB_INCOMPLETE);
+  const [listTab, setListTab] = useState(WORK_LIST_TAB_TODO);
   const [listSearch, setListSearch] = useState(emptyWorkSearch);
   const [expanded, setExpanded] = useState(null);
   const isApprover = (data?.level || 0) >= 4;
@@ -1096,13 +1094,13 @@ export function WorkUserView({ focusTarget = null }) {
     () => filterWorksBySearch(visiblePersonalTasks, listSearch),
     [visiblePersonalTasks, listSearch],
   );
-  const incompleteMineCount = useMemo(() => {
+  const mineTabCounts = useMemo(() => {
     const source = isAdminMod
       ? (data?.myTasks || [])
       : isAssigner
         ? (data?.departmentWorks || [])
         : (data?.personalTasks || []);
-    return filterWorksByTab(source, WORK_LIST_TAB_INCOMPLETE).length;
+    return workListTabCounts(source);
   }, [data, isAdminMod, isAssigner]);
 
   if (data === undefined) return <div className="work-loading">Đang tải công việc của bạn…</div>;
@@ -1323,7 +1321,7 @@ export function WorkUserView({ focusTarget = null }) {
         <div className="duty-list-section">
           <DutyListHeading>Việc của tôi</DutyListHeading>
           <div className="duty-list-toolbar">
-            <WorkListTabs tab={listTab} onChange={setListTab} incompleteCount={incompleteMineCount} />
+            <WorkListTabs tab={listTab} onChange={setListTab} counts={mineTabCounts} />
           </div>
           <WorkListSearch value={listSearch} onChange={setListSearch} />
           {isAdminMod ? (
