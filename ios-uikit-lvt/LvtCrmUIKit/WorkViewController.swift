@@ -99,6 +99,7 @@ final class WorkViewController: UITableViewController {
             return workSectionHeader(
                 title: "Việc của tôi",
                 tab: viewModel.mineTab,
+                incompleteCount: viewModel.incompleteMineCount,
                 onChange: { [weak self] tab in
                     self?.viewModel.showNeedsCompletionOnly = false
                     self?.viewModel.mineTab = tab
@@ -108,6 +109,7 @@ final class WorkViewController: UITableViewController {
             return workSectionHeader(
                 title: "Việc tôi tạo",
                 tab: viewModel.createdTab,
+                incompleteCount: viewModel.incompleteCreatedCount,
                 onChange: { [weak self] tab in self?.viewModel.createdTab = tab }
             )
         default:
@@ -127,30 +129,15 @@ final class WorkViewController: UITableViewController {
         return 8
     }
 
-    private func workSectionHeader(title: String, tab: WorkListTab, onChange: @escaping (WorkListTab) -> Void) -> UIView {
-        let container = UIView()
-        let titleLabel = UILabel()
-        titleLabel.text = title
-        titleLabel.font = .preferredFont(forTextStyle: .title3)
-        titleLabel.adjustsFontForContentSizeCategory = true
-        titleLabel.textColor = UIColor(red: 20 / 255, green: 53 / 255, blue: 95 / 255, alpha: 1)
-        let control = UISegmentedControl(items: WorkListTab.allCases.map(\.title))
-        control.selectedSegmentIndex = tab.rawValue
-        control.addAction(UIAction { _ in
-            onChange(WorkListTab(rawValue: control.selectedSegmentIndex) ?? .upcoming)
-        }, for: .valueChanged)
-        let stack = UIStackView(arrangedSubviews: [titleLabel, control])
-        stack.axis = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: container.layoutMarginsGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: container.layoutMarginsGuide.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
-        ])
-        return container
+    private func workSectionHeader(
+        title: String,
+        tab: WorkListTab,
+        incompleteCount: Int,
+        onChange: @escaping (WorkListTab) -> Void
+    ) -> UIView {
+        let header = WorkTabsHeaderView()
+        header.configure(title: title, tab: tab, incompleteCount: incompleteCount, onChange: onChange)
+        return header
     }
 
     override func tableView(
@@ -190,7 +177,9 @@ final class WorkViewController: UITableViewController {
             guard !items.isEmpty else {
                 let detail = viewModel.createdSearchEmpty
                     ? "Không tìm thấy công việc phù hợp."
-                    : "Bạn chưa tạo công việc nào"
+                    : (viewModel.createdTab == .completed
+                        ? "Chưa có công việc bạn tạo đã hoàn thành."
+                        : "Bạn chưa tạo công việc nào")
                 return emptyCell(indexPath, "Việc tôi tạo", detail)
             }
             let item = items[indexPath.row]
@@ -213,6 +202,8 @@ final class WorkViewController: UITableViewController {
                     detail = "Không tìm thấy công việc phù hợp."
                 } else if viewModel.showNeedsCompletionOnly {
                     detail = "Chưa có công việc cần thực hiện."
+                } else if viewModel.mineTab == .completed {
+                    detail = "Chưa có công việc đã hoàn thành."
                 } else {
                     detail = "Bạn chưa có công việc nào cần xử lý"
                 }
@@ -343,7 +334,7 @@ final class WorkViewController: UITableViewController {
     private func processPendingFocusIfPossible() {
         guard let focusId = pendingFocusId, !viewModel.loading, viewModel.error == nil else { return }
         if let item = viewModel.approval(focusId: focusId) {
-            viewModel.createdTab = WorkListRules.isDocumentPast(item) ? .past : .upcoming
+            viewModel.createdTab = WorkListRules.tab(for: item)
             scrollToApproval(item)
             pendingFocusId = nil
             DispatchQueue.main.async { [weak self] in self?.showDocument(item) }
@@ -1169,5 +1160,74 @@ extension WorkViewController: UIImagePickerControllerDelegate, UINavigationContr
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         clearPendingUpload()
         picker.dismiss(animated: true)
+    }
+}
+
+private final class WorkTabsHeaderView: UIView {
+    private let titleLabel = UILabel()
+    private let control = UISegmentedControl(items: WorkListTab.allCases.map(\.title))
+    private let badgeLabel = UILabel()
+    private var onChange: ((WorkListTab) -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        directionalLayoutMargins = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        titleLabel.font = .preferredFont(forTextStyle: .title3)
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.textColor = UIColor(red: 20 / 255, green: 53 / 255, blue: 95 / 255, alpha: 1)
+        control.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.onChange?(WorkListTab(rawValue: self.control.selectedSegmentIndex) ?? .incomplete)
+        }, for: .valueChanged)
+        badgeLabel.font = .systemFont(ofSize: 10, weight: .heavy)
+        badgeLabel.textColor = .white
+        badgeLabel.textAlignment = .center
+        badgeLabel.backgroundColor = UIColor(red: 227 / 255, green: 109 / 255, blue: 85 / 255, alpha: 1)
+        badgeLabel.layer.cornerRadius = 10
+        badgeLabel.clipsToBounds = true
+        badgeLabel.isHidden = true
+        let stack = UIStackView(arrangedSubviews: [titleLabel, control])
+        stack.axis = .vertical
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        addSubview(badgeLabel)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(title: String, tab: WorkListTab, incompleteCount: Int, onChange: @escaping (WorkListTab) -> Void) {
+        titleLabel.text = title
+        control.selectedSegmentIndex = tab.rawValue
+        self.onChange = onChange
+        badgeLabel.isHidden = incompleteCount <= 0
+        badgeLabel.text = incompleteCount > 99 ? "99+" : "\(incompleteCount)"
+        badgeLabel.accessibilityLabel = "\(incompleteCount) công việc chưa hoàn thành"
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !badgeLabel.isHidden, control.numberOfSegments > 0 else { return }
+        let segmentWidth = control.bounds.width / CGFloat(control.numberOfSegments)
+        let text = (badgeLabel.text as NSString?) ?? ""
+        let textWidth = text.size(withAttributes: [.font: badgeLabel.font as Any]).width
+        let width = max(20, textWidth + 10)
+        let height: CGFloat = 20
+        let local = CGRect(
+            x: segmentWidth - width - 6,
+            y: (control.bounds.height - height) / 2,
+            width: width,
+            height: height
+        )
+        badgeLabel.frame = control.convert(local, to: self)
+        badgeLabel.layer.cornerRadius = height / 2
     }
 }

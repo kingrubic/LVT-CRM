@@ -11,20 +11,25 @@ import org.junit.Test
 
 class WorkListRulesTest {
     @Test
-    fun upcomingTabDropsCompletedAndExpiredTasks() {
+    fun incompleteTabKeepsOverdueAndDropsCompletedTasks() {
         val today = "2026-08-17"
         val open = task("a", "2026-08-20", "pending_task")
         val done = task("b", "2026-08-20", "completed")
         val late = task("c", "2026-08-10", "overdue")
-        assertEquals(listOf("a"), filterTasksByTab(listOf(open, done, late), WorkListTab.Upcoming, today).map { it.id })
-        assertEquals(listOf("c", "b"), filterTasksByTab(listOf(open, done, late), WorkListTab.Past, today).map { it.id })
+        assertEquals(listOf("c", "a"), filterTasksByTab(listOf(open, done, late), WorkListTab.Incomplete, today).map { it.id })
+        assertEquals(listOf("b"), filterTasksByTab(listOf(open, done, late), WorkListTab.Completed, today).map { it.id })
         assertEquals(listOf("c", "a"), filterTasksNeedingExecution(listOf(open, done, late)).map { it.id })
         val filtered = WorkUiState(
             tasks = listOf(open, done, late),
-            mineTab = WorkListTab.Upcoming,
+            mineTab = WorkListTab.Incomplete,
             needsExecutionOnly = true,
         )
         assertEquals(listOf("c", "a"), filtered.visibleMine.map { it.id })
+        assertEquals(2, filtered.incompleteMineCount)
+        assertEquals(
+            2,
+            WorkUiState(tasks = listOf(open, done, late), mineTab = WorkListTab.Completed).incompleteMineCount,
+        )
     }
 
     @Test

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -10,12 +11,13 @@ import {
   filterWorksBySearch,
   filterWorksByTab,
   formatWorkDate,
+  isWorkCompleted,
   isWorkPast,
   workAssignmentPayload,
   workContentSummary,
   workDeadlineKey,
-  WORK_LIST_TAB_PAST,
-  WORK_LIST_TAB_UPCOMING,
+  WORK_LIST_TAB_COMPLETED,
+  WORK_LIST_TAB_INCOMPLETE,
   workListTitle,
 } from '../src/work/workDisplay.js';
 
@@ -46,7 +48,7 @@ test('sửa công việc tách cá nhân thành một người mỗi row', () =>
   });
 });
 
-test('tab chưa diễn ra loại việc đã xong hoặc hết hạn', () => {
+test('tab chưa hoàn thành gồm việc quá hạn; đã hoàn thành chỉ việc xong', () => {
   const today = '2026-08-17';
   const upcoming = {
     _id: 'a',
@@ -68,11 +70,13 @@ test('tab chưa diễn ra loại việc đã xong hoặc hết hạn', () => {
   assert.equal(isWorkPast(overdue, today), true);
   assert.equal(isWorkPast(done, today), true);
   assert.equal(isWorkPast(upcoming, today), false);
+  assert.equal(isWorkCompleted(overdue), false);
+  assert.equal(isWorkCompleted(done), true);
   assert.equal(workDeadlineKey(later), '2026-08-19');
-  const open = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_UPCOMING, today);
-  assert.deepEqual(open.map((item) => item._id), ['d', 'a']);
-  const past = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_PAST, today);
-  assert.deepEqual(past.map((item) => item._id), ['b', 'c']);
+  const open = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_INCOMPLETE);
+  assert.deepEqual(open.map((item) => item._id), ['b', 'd', 'a']);
+  const completed = filterWorksByTab([later, overdue, done, upcoming], WORK_LIST_TAB_COMPLETED);
+  assert.deepEqual(completed.map((item) => item._id), ['c']);
 });
 
 test('preview tạo công việc gom nhãn đối tượng', () => {
@@ -156,4 +160,11 @@ test('tìm kiếm nâng cao công việc theo phòng ban, cá nhân và hạn ch
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, person: 'anh vu' }).map((item) => item._id), ['a']);
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, dateFrom: '2026-08-22', dateTo: '2026-08-22' }).map((item) => item._id), ['b']);
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, query: 'hop', department: 'to chuc' }).map((item) => item._id), []);
+});
+
+test('tab Chưa hoàn thành hiện badge số khi còn việc chưa xong', () => {
+  const source = readFileSync(new URL('../src/work/WorkListFilters.jsx', import.meta.url), 'utf8');
+  assert.match(source, /incompleteCount/);
+  assert.match(source, /nav-badge duty-list-tab-badge/);
+  assert.match(source, /99\+/);
 });
