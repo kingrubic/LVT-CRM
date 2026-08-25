@@ -23,6 +23,13 @@ const REPORT_PATHS = Object.freeze({
   boarding: '/bao-cao/ban-tru',
 });
 
+/** Primary menus kept off the left sidebar; still reachable (e.g. header bell). */
+const SIDEBAR_HIDDEN_MENUS = Object.freeze(['notifications']);
+
+export function isSidebarPrimaryMenu(menuId) {
+  return !SIDEBAR_HIDDEN_MENUS.includes(menuId);
+}
+
 const HIDDEN_MENU_ALIASES = Object.freeze({
   '/quan-ly-cong-tac': { menu: 'duties' },
   '/quan-ly-cong-viec': { menu: 'work' },

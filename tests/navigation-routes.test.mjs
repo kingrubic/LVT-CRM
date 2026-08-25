@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   MENU_PATHS,
+  isSidebarPrimaryMenu,
   pathnameForMenu,
   pathnameForReportSection,
   REPORT_PATHS,
@@ -62,4 +63,12 @@ test('trang xóa tài khoản là đường dẫn công khai cho Play Console', 
   assert.equal(isPublicAccountDeletionPath('/account-deletion/'), true);
   assert.equal(isPublicPrivacyPath(ACCOUNT_DELETION_CANONICAL_PATH), false);
   assert.equal(routeForPathname(ACCOUNT_DELETION_CANONICAL_PATH), null);
+});
+
+test('Thông báo vẫn có đường dẫn nhưng không nằm trên sidebar', () => {
+  assert.equal(pathnameForMenu('notifications'), '/thong-bao');
+  assert.deepEqual(routeForPathname('/thong-bao'), { menu: 'notifications', reportSection: undefined });
+  assert.equal(isSidebarPrimaryMenu('notifications'), false);
+  assert.equal(isSidebarPrimaryMenu('work'), true);
+  assert.equal(isSidebarPrimaryMenu('reports'), true);
 });
