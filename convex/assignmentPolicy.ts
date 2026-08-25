@@ -202,6 +202,26 @@ export function canSeeArchivedWork(actorRole: string) {
   return isOperationalManagerRole(actorRole);
 }
 
+const WORK_COMPLETED_STATUSES = new Set(["completed", "completed_late"]);
+
+/** Matches web tab filter: only fully approved work counts as done. */
+export function isWorkStatusCompleted(status: string | null | undefined) {
+  return WORK_COMPLETED_STATUSES.has(String(status || ""));
+}
+
+/** Sidebar Công việc badge = chờ duyệt + việc chưa xong của tôi + việc chưa xong tôi tạo. */
+export function workMenuBadgeCount(parts: {
+  pendingApprovalCount: number;
+  incompleteMineCount: number;
+  incompleteCreatedCount: number;
+}) {
+  return (
+    Math.max(0, Number(parts.pendingApprovalCount) || 0) +
+    Math.max(0, Number(parts.incompleteMineCount) || 0) +
+    Math.max(0, Number(parts.incompleteCreatedCount) || 0)
+  );
+}
+
 export function canReviewWorkCompletion(args: {
   actorUserId: string;
   createdBy: string;

@@ -168,3 +168,9 @@ test('tab Chưa hoàn thành hiện badge số khi còn việc chưa xong', () =
   assert.match(source, /nav-badge duty-list-tab-badge/);
   assert.match(source, /99\+/);
 });
+
+test('query work.badge cộng chờ duyệt với hai tab chưa hoàn thành', () => {
+  const source = readFileSync(new URL('../convex/work.ts', import.meta.url), 'utf8');
+  assert.match(source, /incompleteCreatedCount/);
+  assert.match(source, /workMenuBadgeCount/);
+});
