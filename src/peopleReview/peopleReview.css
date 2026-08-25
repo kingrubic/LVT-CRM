@@ -16,6 +16,10 @@
   font-family: "Montserrat Variable", "Montserrat", sans-serif;
 }
 
+.pr-view.duty-workspace {
+  --work-navy: var(--lvt-navy, #14355f);
+}
+
 .pr-loading,
 .pr-empty,
 .pr-muted {

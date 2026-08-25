@@ -58,12 +58,15 @@ test('Đánh giá nhân sự không còn nút tạo ghi nhận lỗi; menu mới
   const peopleReview = readFileSync(new URL('../src/peopleReview/PeopleReviewView.jsx', import.meta.url), 'utf8');
   const staffFaults = readFileSync(new URL('../src/peopleReview/StaffFaultsView.jsx', import.meta.url), 'utf8');
   const shell = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/peopleReview/peopleReview.css', import.meta.url), 'utf8');
   assert.doesNotMatch(peopleReview, /＋ Ghi nhận lỗi/);
   assert.doesNotMatch(peopleReview, /Ghi lỗi/);
   assert.match(staffFaults, /Thêm ghi nhận lỗi/);
   assert.match(staffFaults, /Lỗi của tôi/);
   assert.match(staffFaults, /Lỗi do tôi ghi nhận/);
   assert.doesNotMatch(staffFaults, /pr-hero/);
+  assert.match(staffFaults, /work-primary-button/);
+  assert.match(css, /--work-navy/);
   assert.match(staffFaults, /Chọn nhân sự/);
   assert.match(shell, /staff-faults/);
   assert.match(shell, /StaffFaultsView/);
