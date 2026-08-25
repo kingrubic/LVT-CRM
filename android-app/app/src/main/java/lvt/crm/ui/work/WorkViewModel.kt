@@ -58,6 +58,14 @@ data class WorkUiState(
         get() = tabMine.isNotEmpty() && visibleMine.isEmpty()
     val createdSearchEmpty: Boolean
         get() = tabCreated.isNotEmpty() && visibleCreated.isEmpty()
+    val incompleteMineCount: Int
+        get() = if (needsExecutionOnly) {
+            filterTasksNeedingExecution(tasks).size
+        } else {
+            filterTasksByTab(tasks, WorkListTab.Incomplete).size
+        }
+    val incompleteCreatedCount: Int
+        get() = filterDocumentsByTab(approvals, WorkListTab.Incomplete).size
 }
 
 class WorkViewModel(

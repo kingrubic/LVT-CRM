@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -159,4 +160,11 @@ test('tìm kiếm nâng cao công việc theo phòng ban, cá nhân và hạn ch
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, person: 'anh vu' }).map((item) => item._id), ['a']);
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, dateFrom: '2026-08-22', dateTo: '2026-08-22' }).map((item) => item._id), ['b']);
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, query: 'hop', department: 'to chuc' }).map((item) => item._id), []);
+});
+
+test('tab Chưa hoàn thành hiện badge số khi còn việc chưa xong', () => {
+  const source = readFileSync(new URL('../src/work/WorkListFilters.jsx', import.meta.url), 'utf8');
+  assert.match(source, /incompleteCount/);
+  assert.match(source, /nav-badge duty-list-tab-badge/);
+  assert.match(source, /99\+/);
 });

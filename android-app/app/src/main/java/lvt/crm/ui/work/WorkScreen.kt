@@ -73,7 +73,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -300,6 +304,7 @@ fun WorkScreen(
                                 title = "Việc của tôi",
                                 tab = state.mineTab,
                                 onTab = viewModel::setMineTab,
+                                incompleteCount = state.incompleteMineCount,
                             )
                         }
                         if (state.visibleMine.isEmpty()) {
@@ -647,6 +652,7 @@ private fun AdminWorkScreen(
                             title = "Việc của tôi",
                             tab = state.mineTab,
                             onTab = onMineTab,
+                            incompleteCount = state.incompleteMineCount,
                         )
                     }
                     if (state.visibleMine.isEmpty()) {
@@ -675,6 +681,7 @@ private fun AdminWorkScreen(
                             title = "Việc tôi tạo",
                             tab = state.createdTab,
                             onTab = onCreatedTab,
+                            incompleteCount = state.incompleteCreatedCount,
                         )
                     }
                     if (documents.isEmpty()) {
@@ -882,6 +889,7 @@ private fun WorkListSectionHeader(
     title: String,
     tab: WorkListTab,
     onTab: (WorkListTab) -> Unit,
+    incompleteCount: Int = 0,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, style = MaterialTheme.typography.titleLarge)
@@ -890,10 +898,39 @@ private fun WorkListSectionHeader(
                 FilterChip(
                     selected = tab == value,
                     onClick = { onTab(value) },
-                    label = { Text(value.title) },
+                    label = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(value.title)
+                            if (value == WorkListTab.Incomplete && incompleteCount > 0) {
+                                WorkIncompleteBadge(incompleteCount)
+                            }
+                        }
+                    },
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun WorkIncompleteBadge(count: Int) {
+    Box(
+        modifier = Modifier
+            .sizeIn(minWidth = 20.dp, minHeight = 20.dp)
+            .background(Color(0xFFE36D55), CircleShape)
+            .padding(horizontal = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (count > 99) "99+" else count.toString(),
+            color = Color.White,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            lineHeight = 9.sp,
+        )
     }
 }
 

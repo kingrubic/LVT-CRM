@@ -25,6 +25,11 @@ class WorkListRulesTest {
             needsExecutionOnly = true,
         )
         assertEquals(listOf("c", "a"), filtered.visibleMine.map { it.id })
+        assertEquals(2, filtered.incompleteMineCount)
+        assertEquals(
+            2,
+            WorkUiState(tasks = listOf(open, done, late), mineTab = WorkListTab.Completed).incompleteMineCount,
+        )
     }
 
     @Test

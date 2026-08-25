@@ -450,6 +450,10 @@
 }
 
 .duty-list-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   flex: 1;
   min-height: 38px;
   padding: 0 12px;
@@ -467,6 +471,10 @@
   color: var(--duty-navy);
   background: #fff;
   box-shadow: 0 5px 14px rgba(27, 61, 91, .08);
+}
+
+.duty-list-tab-badge {
+  margin-left: 0;
 }
 
 .duty-list-empty {

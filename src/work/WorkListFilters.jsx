@@ -1,7 +1,8 @@
 import { WORK_LIST_TAB_COMPLETED, WORK_LIST_TAB_INCOMPLETE } from './workDisplay';
 import { DutyListSearch } from '../duties/DutyListFilters';
 
-export function WorkListTabs({ tab, onChange }) {
+export function WorkListTabs({ tab, onChange, incompleteCount = 0 }) {
+  const badgeLabel = incompleteCount > 99 ? '99+' : String(incompleteCount);
   return (
     <div className="duty-list-tabs" role="tablist" aria-label="Lọc danh sách công việc">
       <button
@@ -12,6 +13,11 @@ export function WorkListTabs({ tab, onChange }) {
         onClick={() => onChange(WORK_LIST_TAB_INCOMPLETE)}
       >
         Chưa hoàn thành
+        {incompleteCount > 0 ? (
+          <b className="nav-badge duty-list-tab-badge" aria-label={`${incompleteCount} công việc chưa hoàn thành`}>
+            {badgeLabel}
+          </b>
+        ) : null}
       </button>
       <button
         type="button"

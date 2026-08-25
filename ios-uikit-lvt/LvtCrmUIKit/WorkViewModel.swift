@@ -159,6 +159,15 @@ final class WorkViewModel {
 
     var mineSearchEmpty: Bool { !tabMine.isEmpty && visibleMine.isEmpty }
     var createdSearchEmpty: Bool { !tabCreated.isEmpty && visibleCreated.isEmpty }
+    var incompleteMineCount: Int {
+        if showNeedsCompletionOnly {
+            return tasks.filter { WorkHelpers.needsCompletion($0.status) }.count
+        }
+        return tasks.filter { !WorkListRules.isTaskCompleted($0) }.count
+    }
+    var incompleteCreatedCount: Int {
+        approvals.filter { !WorkListRules.isDocumentCompleted($0) }.count
+    }
 
     var visibleApprovals: [WorkApprovalItem] { visibleCreated }
     var visibleTasks: [WorkTaskItem] { visibleMine }
