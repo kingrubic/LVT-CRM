@@ -73,6 +73,8 @@ Output: `app/build/outputs/bundle/release/lvt-crm-<versionName>-<versionCode>.aa
 
 Keep the keystore and passwords in a password manager. Losing them means you cannot update the Play listing.
 
+Release builds installed from Play (internal / closed / production) check for a newer Play version on every resume and start an **immediate** in-app update. The user cannot keep using the old build once Play has the new one. Play Store itself does not show an in-app banner; this check is what prompts them. Sideloaded / debug APKs are unchanged. Users still need the internal-testing opt-in once; after that, opening the app is enough.
+
 ## Backend
 
 Mirrors web:
