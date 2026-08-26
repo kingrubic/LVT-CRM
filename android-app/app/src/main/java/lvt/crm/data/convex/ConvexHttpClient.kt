@@ -223,6 +223,21 @@ class ConvexHttpClient(
                 code == "ATTENDANCE_CONFIRMATION_DISABLED" -> "Hệ thống đang tắt xác nhận tham dự."
                 code == "NOT_A_PARTICIPANT" -> "Bạn không nằm trong danh sách tham dự."
                 code == "QUALITY_PERCENT_REQUIRED" -> "Cần nhập phần trăm chất lượng."
+                code == "ASSIGNMENT_CREATE_FORBIDDEN" ->
+                    "Bạn không có quyền tạo công tác hoặc công việc."
+                code == "INVALID_WORK_TITLE" -> "Vui lòng nhập tên công việc (tối đa 200 ký tự)."
+                code == "INVALID_WORK_CONTENT" -> "Nội dung công việc bắt buộc và tối đa 2.000 ký tự."
+                code == "INVALID_WORK_DEADLINE" -> "Hạn chót công việc không hợp lệ."
+                code == "INVALID_WORK_ASSIGNEE" ->
+                    "Người thực hiện phải cùng phòng ban và có cấp sao thấp hơn bạn."
+                code == "INVALID_WORK_FILE" -> "Tệp công văn không đúng định dạng được hỗ trợ."
+                code == "WORK_ASSIGNMENTS_REQUIRED" -> "Vui lòng thêm ít nhất một phân công."
+                code == "WORK_DEPARTMENT_FORBIDDEN" ->
+                    "Tổ trưởng/tổ phó chỉ được giao công việc cho cấp dưới, không chọn cả phòng ban."
+                code == "WORK_DEPARTMENT_DUPLICATE" ->
+                    "Mỗi phòng ban chỉ được nhận một đầu việc trong cùng công văn."
+                code == "NOT_A_SUBORDINATE" ->
+                    "Chỉ được giao hoặc cập nhật cấp dưới trong cùng phòng ban."
                 code.contains("FORBIDDEN", ignoreCase = true) -> "Bạn không có quyền thực hiện thao tác này."
                 else -> code.take(180)
             }

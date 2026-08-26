@@ -169,6 +169,8 @@ final class WorkViewModel {
     private(set) var error: String?
     private(set) var actionError: String?
     private(set) var isAdmin = false
+    private(set) var canCreate = false
+    private(set) var isOps = false
     private(set) var accessLevel = 0
     private(set) var tasks: [WorkTaskItem] = []
     private(set) var approvals: [WorkApprovalItem] = []
@@ -279,6 +281,28 @@ final class WorkViewModel {
         showNeedsCompletionOnly = false
         mineTab = .todo
         notifyChange()
+    }
+
+    func loadFormOptions() async throws -> WorkFormOptions {
+        try await repository.formOptions()
+    }
+
+    func submitCreate(
+        title: String,
+        assignments: [WorkCreateAssignment],
+        fileData: Data?,
+        fileName: String?,
+        mimeType: String?
+    ) async throws {
+        if let message = WorkCreatePolicy.validate(title: title, assignments: assignments) {
+            throw ConvexException(code: "VALIDATION", message: message)
+        }
+        var evidence: WorkUploadedEvidence?
+        if let fileData, let fileName, let mimeType {
+            evidence = try await repository.uploadEvidence(fileData: fileData, fileName: fileName, mimeType: mimeType)
+        }
+        _ = try await repository.createDocument(title: title, assignments: assignments, evidence: evidence)
+        try await loadSnapshot()
     }
 
     func complete(
@@ -392,6 +416,8 @@ final class WorkViewModel {
     private func loadSnapshot() async throws {
         let snapshot = try await repository.listMine()
         isAdmin = snapshot.isAdmin
+        canCreate = snapshot.canCreate
+        isOps = snapshot.isOps
         accessLevel = snapshot.accessLevel
         tasks = snapshot.tasks
         approvals = snapshot.approvals

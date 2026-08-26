@@ -18,6 +18,9 @@ import lvt.crm.data.work.WorkOperations
 import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkTaskItem
+import lvt.crm.data.work.WorkCreateAssignment
+import lvt.crm.data.work.WorkCreatePolicy
+import lvt.crm.data.work.WorkFormOptions
 import lvt.crm.ui.components.ListSearchState
 
 data class WorkUiState(
@@ -37,6 +40,11 @@ data class WorkUiState(
     val evidencePromptTask: WorkTaskItem? = null,
     val evidenceNote: String = "",
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
+    val canCreate: Boolean = false,
+    val isOps: Boolean = false,
+    val formOptions: WorkFormOptions? = null,
+    val formOptionsLoading: Boolean = false,
+    val creating: Boolean = false,
     val mineTab: WorkListTab = WorkListTab.Todo,
     val createdTab: WorkListTab = WorkListTab.Todo,
     val needsExecutionOnly: Boolean = false,
@@ -72,6 +80,70 @@ class WorkViewModel(
         refresh(initial = true)
     }
 
+    fun loadFormOptions() {
+        _uiState.update { it.copy(formOptionsLoading = true, actionError = null) }
+        viewModelScope.launch {
+            try {
+                val options = repository.formOptions()
+                _uiState.update {
+                    it.copy(
+                        formOptions = options,
+                        formOptionsLoading = false,
+                        isOps = options.isOps,
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        formOptionsLoading = false,
+                        actionError = (e as? ConvexException)?.message
+                            ?: ConvexHttpClient.humanize(e.message ?: "LOAD_FAILED"),
+                    )
+                }
+            }
+        }
+    }
+
+    fun createDocument(
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        fileBytes: ByteArray? = null,
+        fileName: String? = null,
+        mimeType: String? = null,
+        onSuccess: () -> Unit,
+    ) {
+        val validationError = WorkCreatePolicy.validate(title, assignments)
+        if (validationError != null) {
+            _uiState.update { it.copy(actionError = validationError) }
+            return
+        }
+        _uiState.update { it.copy(creating = true, actionError = null) }
+        viewModelScope.launch {
+            operationMutex.withLock {
+                try {
+                    val evidence = if (fileBytes != null && fileName != null && mimeType != null) {
+                        repository.uploadEvidence(fileBytes, fileName, mimeType)
+                    } else {
+                        null
+                    }
+                    repository.createDocument(title, assignments, evidence)
+                    reloadAfterCommittedMutation()
+                    onSuccess()
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            actionError = (e as? ConvexException)?.message
+                                ?: ConvexHttpClient.humanize(e.message ?: "CREATE_FAILED"),
+                        )
+                    }
+                } finally {
+                    _uiState.update { it.copy(creating = false) }
+                }
+            }
+            runPendingRefresh()
+        }
+    }
+
     fun refresh(initial: Boolean = false) {
         if (!operationMutex.tryLock()) {
             refreshPending.set(true)
@@ -89,6 +161,8 @@ class WorkViewModel(
                         refreshing = false,
                         isAdmin = snap.isAdmin,
                         accessLevel = snap.accessLevel,
+                        canCreate = snap.canCreate,
+                        isOps = snap.isOps,
                         tasks = snap.tasks,
                         approvals = snap.approvals,
                         completionReviews = snap.completionReviews,
@@ -316,6 +390,8 @@ class WorkViewModel(
                 it.copy(
                     isAdmin = snap.isAdmin,
                     accessLevel = snap.accessLevel,
+                    canCreate = snap.canCreate,
+                    isOps = snap.isOps,
                     tasks = snap.tasks,
                     approvals = snap.approvals,
                     completionReviews = snap.completionReviews,

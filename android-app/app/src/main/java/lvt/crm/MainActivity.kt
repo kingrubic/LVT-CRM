@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import lvt.crm.push.NotificationDestination
 import lvt.crm.ui.LvtRoot
 import lvt.crm.ui.theme.LvtCrmTheme
+import lvt.crm.update.PlayStoreUpdater
 
 class MainActivity : ComponentActivity() {
     private data class PendingDestination(val id: Long, val destination: NotificationDestination)
@@ -21,9 +23,14 @@ class MainActivity : ComponentActivity() {
     private val destinationQueue = ArrayDeque<PendingDestination>()
     private val pendingDestination = MutableStateFlow<PendingDestination?>(null)
     private var nextDestinationId = 1L
+    private val playUpdateLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { /* Immediate update: retry on the next resume if the user backs out. */ }
+    private lateinit var playStoreUpdater: PlayStoreUpdater
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        playStoreUpdater = PlayStoreUpdater(this, playUpdateLauncher)
         enableEdgeToEdge()
         restorePendingDestinations(savedInstanceState).forEach(::enqueueDestination)
         if (savedInstanceState == null) {
@@ -45,6 +52,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        playStoreUpdater.checkOnResume()
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -72,6 +73,7 @@ fun ProfileScreen(
 ) {
     var changingPassword by rememberSaveable { mutableStateOf(false) }
     var showingDevices by rememberSaveable { mutableStateOf(false) }
+    var showingChangelog by rememberSaveable { mutableStateOf(false) }
     var confirmSignOut by rememberSaveable { mutableStateOf(false) }
     var pickingAppearance by rememberSaveable { mutableStateOf(false) }
     val appearance by appearanceStore.mode.collectAsState()
@@ -95,6 +97,15 @@ fun ProfileScreen(
         DevicesScreen(
             sessionsRepository = sessionsRepository,
             onBack = { showingDevices = false },
+        )
+        return
+    }
+
+    if (showingChangelog) {
+        BackHandler { showingChangelog = false }
+        ChangelogScreen(
+            currentVersion = appVersion,
+            onBack = { showingChangelog = false },
         )
         return
     }
@@ -203,6 +214,13 @@ fun ProfileScreen(
                 supportingContent = { Text(appearance.title) },
                 leadingContent = { Icon(Icons.Outlined.Brightness6, contentDescription = null) },
                 modifier = Modifier.clickable { pickingAppearance = true },
+            )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.changelog)) },
+                supportingContent = { Text("Xem từng phiên bản đã thêm gì") },
+                leadingContent = { Icon(Icons.Outlined.History, contentDescription = null) },
+                modifier = Modifier.clickable { showingChangelog = true },
             )
         }
         Spacer(modifier = Modifier.height(16.dp))

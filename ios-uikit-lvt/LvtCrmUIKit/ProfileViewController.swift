@@ -29,6 +29,7 @@ final class ProfileViewController: UITableViewController {
         case work
         case account
         case appearance
+        case changelog
         case signOut
     }
 
@@ -68,6 +69,7 @@ final class ProfileViewController: UITableViewController {
         case .work: return 3
         case .account: return 2
         case .appearance: return 1
+        case .changelog: return 1
         case .signOut: return 2
         case nil: return 0
         }
@@ -79,6 +81,7 @@ final class ProfileViewController: UITableViewController {
         case .work: return "Thông tin công việc"
         case .account: return "Bảo mật"
         case .appearance: return "Giao diện"
+        case .changelog: return "Ứng dụng"
         case .signOut, nil: return nil
         }
     }
@@ -141,6 +144,16 @@ final class ProfileViewController: UITableViewController {
             cell.accessibilityTraits = .button
             cell.accessibilityLabel = "Chế độ hiển thị, \(currentAppearance.title)"
             cell.accessibilityHint = "Chọn giao diện sáng, tối hoặc theo hệ thống"
+        case .changelog:
+            content.text = "Lịch sử thay đổi"
+            content.secondaryText = "Xem từng phiên bản đã thêm gì"
+            content.image = UIImage(systemName: "clock.arrow.circlepath")
+            content.imageProperties.tintColor = .systemIndigo
+            cell.accessoryType = .disclosureIndicator
+            cell.selectionStyle = .default
+            cell.accessibilityTraits = .button
+            cell.accessibilityLabel = "Lịch sử thay đổi"
+            cell.accessibilityHint = "Mở danh sách thay đổi theo phiên bản"
         case .signOut:
             if indexPath.row == 0 {
                 content.text = "Đăng xuất"
@@ -177,6 +190,8 @@ final class ProfileViewController: UITableViewController {
             showChangePassword()
         case .appearance:
             showAppearancePicker()
+        case .changelog:
+            navigationController?.pushViewController(ChangelogViewController(), animated: true)
         case .signOut where indexPath.row == 0:
             confirmSignOut()
         default:

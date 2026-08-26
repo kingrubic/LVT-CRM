@@ -106,6 +106,7 @@ fun WorkScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var showingCreate by rememberSaveable { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -138,7 +139,16 @@ fun WorkScreen(
         }
     }
 
-    if (state.isAdmin) {
+    if (state.canCreate && showingCreate) {
+        WorkCreateScreen(
+            viewModel = viewModel,
+            onBack = { showingCreate = false },
+            onCreated = { showingCreate = false },
+        )
+        return
+    }
+
+    if (state.canCreate) {
         AdminWorkScreen(
             state = state,
             focusId = focusId,
@@ -149,6 +159,7 @@ fun WorkScreen(
             onCreatedTab = viewModel::setCreatedTab,
             onSearchChange = viewModel::updateSearch,
             onCompleteTask = { task -> viewModel.requestComplete(task) },
+            onCreate = { showingCreate = true },
         )
     } else {
         val listState = rememberLazyListState()
@@ -483,30 +494,45 @@ private fun handleSelectedUri(
     task: WorkTaskItem,
     viewModel: WorkViewModel,
 ) {
-    try {
-        var fileName = "bang_chung"
-        var fileSize = -1L
+    val picked = readWorkAttachment(context, uri)
+    if (picked.error != null) {
+        viewModel.setActionError(picked.error)
+        return
+    }
+    val file = picked.file ?: return
+    viewModel.completeWithEvidence(task, file.bytes, file.fileName, file.mimeType)
+}
+
+internal data class WorkPickedFile(
+    val bytes: ByteArray,
+    val fileName: String,
+    val mimeType: String,
+)
+
+internal data class WorkPickedFileResult(
+    val file: WorkPickedFile? = null,
+    val error: String? = null,
+)
+
+internal fun readWorkAttachment(context: Context, uri: Uri): WorkPickedFileResult {
+    return try {
+        var fileName = "tep_dinh_kem"
         context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
             if (cursor.moveToFirst()) {
                 if (nameIndex != -1) cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let { fileName = it }
-                if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
             }
         }
         val ext = fileName.substringAfterLast('.', "").lowercase()
         if (ext !in ALLOWED_EXTENSIONS) {
-            viewModel.setActionError("Chỉ chấp nhận tệp PDF, DOCX, Excel, PNG hoặc JPG.")
-            return
+            return WorkPickedFileResult(error = "Chỉ chấp nhận tệp PDF, DOCX, Excel, PNG hoặc JPG.")
         }
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         if (bytes == null || bytes.isEmpty()) {
-            viewModel.setActionError("Tệp rỗng hoặc không đọc được. Vui lòng thử lại.")
-            return
+            return WorkPickedFileResult(error = "Tệp rỗng hoặc không đọc được. Vui lòng thử lại.")
         }
         if (bytes.size > MAX_FILE_SIZE) {
-            viewModel.setActionError("Dung lượng tệp tối đa là 20MB.")
-            return
+            return WorkPickedFileResult(error = "Dung lượng tệp tối đa là 20MB.")
         }
         val mimeType = context.contentResolver.getType(uri)?.takeIf { it.isNotBlank() }
             ?: when (ext) {
@@ -518,9 +544,9 @@ private fun handleSelectedUri(
                 "jpg", "jpeg" -> "image/jpeg"
                 else -> "application/octet-stream"
             }
-        viewModel.completeWithEvidence(task, bytes, fileName, mimeType)
-    } catch (e: Exception) {
-        viewModel.setActionError("Không thể đọc tệp đã chọn. Vui lòng thử lại.")
+        WorkPickedFileResult(file = WorkPickedFile(bytes, fileName, mimeType))
+    } catch (_: Exception) {
+        WorkPickedFileResult(error = "Không thể đọc tệp đã chọn. Vui lòng thử lại.")
     }
 }
 
@@ -537,6 +563,7 @@ private fun AdminWorkScreen(
     onCreatedTab: (WorkListTab) -> Unit,
     onSearchChange: (ListSearchState) -> Unit,
     onCompleteTask: (WorkTaskItem) -> Unit,
+    onCreate: () -> Unit,
 ) {
     var selectedDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedDocument = currentAdminDocument(state.approvals, selectedDocumentId)
@@ -587,6 +614,11 @@ private fun AdminWorkScreen(
                 }
             } else {
                 null
+            },
+            actions = {
+                if (selectedDocument == null && selectedTask == null) {
+                    TextButton(onClick = onCreate) { Text("Tạo") }
+                }
             },
         ) {
             Column(

@@ -190,6 +190,21 @@ actor ConvexHttpClient {
         case code == "MAIL_NOT_CONFIGURED", code == "MAIL_AUTH_FAILED":
             return "Hệ thống chưa gửi được email. Liên hệ quản trị viên."
         case code == "INVALID_EMAIL": return "Email không hợp lệ."
+        case code == "ASSIGNMENT_CREATE_FORBIDDEN":
+            return "Bạn không có quyền tạo công tác hoặc công việc."
+        case code == "INVALID_WORK_TITLE": return "Vui lòng nhập tên công việc (tối đa 200 ký tự)."
+        case code == "INVALID_WORK_CONTENT": return "Nội dung công việc bắt buộc và tối đa 2.000 ký tự."
+        case code == "INVALID_WORK_DEADLINE": return "Hạn chót công việc không hợp lệ."
+        case code == "INVALID_WORK_ASSIGNEE":
+            return "Người thực hiện phải cùng phòng ban và có cấp sao thấp hơn bạn."
+        case code == "INVALID_WORK_FILE": return "Tệp công văn không đúng định dạng được hỗ trợ."
+        case code == "WORK_ASSIGNMENTS_REQUIRED": return "Vui lòng thêm ít nhất một phân công."
+        case code == "WORK_DEPARTMENT_FORBIDDEN":
+            return "Tổ trưởng/tổ phó chỉ được giao công việc cho cấp dưới, không chọn cả phòng ban."
+        case code == "WORK_DEPARTMENT_DUPLICATE":
+            return "Mỗi phòng ban chỉ được nhận một đầu việc trong cùng công văn."
+        case code == "NOT_A_SUBORDINATE":
+            return "Chỉ được giao hoặc cập nhật cấp dưới trong cùng phòng ban."
         case code.localizedCaseInsensitiveContains("FORBIDDEN"):
             return "Bạn không có quyền thực hiện thao tác này."
         default: return String(code.prefix(180))

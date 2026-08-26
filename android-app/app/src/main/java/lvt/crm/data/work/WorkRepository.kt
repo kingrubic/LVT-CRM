@@ -89,6 +89,8 @@ data class WorkSnapshot(
     val tasks: List<WorkTaskItem>,
     val approvals: List<WorkApprovalItem>,
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
+    val canCreate: Boolean = false,
+    val isOps: Boolean = false,
 )
 
 internal data class ApprovalDecision(
@@ -123,6 +125,12 @@ interface WorkOperations {
         qualityPercent: Int? = null,
         rejectionReason: String? = null,
     )
+    suspend fun formOptions(): WorkFormOptions = throw UnsupportedOperationException()
+    suspend fun createDocument(
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        evidence: WorkUploadedEvidence? = null,
+    ): String = throw UnsupportedOperationException()
 }
 
 class WorkRepository(
@@ -141,11 +149,13 @@ class WorkRepository(
     override suspend fun listMine(): WorkSnapshot {
         val result = convex.query("work:listMine")
         val isAdmin = result.optBoolean("isAdmin", false)
+        val canCreate = result.optBoolean("canCreate", false)
         val accessLevel = result.optInt("level", 0)
         val assignerMode = result.optString("assignerMode", "")
         val currentUserId = result.optString("userId")
         val tasks = mutableListOf<WorkTaskItem>()
         val approvals = mutableListOf<WorkApprovalItem>()
+        var isOps = isAdmin
 
         val approvalArray = result.optJSONArray("approvals")
         if (approvalArray != null) {
@@ -179,8 +189,9 @@ class WorkRepository(
         }
 
         var completionReviews = emptyList<WorkCompletionReviewItem>()
-        if (isAdmin) {
+        if (isAdmin || canCreate) {
             val adminResult = convex.query("work:listAdmin")
+            isOps = adminResult.optBoolean("isOps", isAdmin)
             approvals.clear()
             val documents = adminResult.optJSONArray("documents") ?: org.json.JSONArray()
             for (i in 0 until documents.length()) {
@@ -257,7 +268,80 @@ class WorkRepository(
             tasks = orderedWorkTasks(tasks),
             approvals = approvals.sortedWith(compareBy<WorkApprovalItem>({ it.status != "pending" }, { it.deadline })),
             completionReviews = completionReviews,
+            canCreate = canCreate,
+            isOps = isOps,
         )
+    }
+
+    override suspend fun formOptions(): WorkFormOptions {
+        val result = convex.query("work:formOptions")
+        val departments = result.optJSONArray("departments") ?: org.json.JSONArray()
+        val users = result.optJSONArray("users") ?: org.json.JSONArray()
+        return WorkFormOptions(
+            canCreate = result.optBoolean("canCreate", false),
+            isOps = result.optBoolean("isOps", false),
+            departments = List(departments.length()) { index ->
+                val item = departments.getJSONObject(index)
+                WorkFormDepartment(
+                    id = item.optString("_id"),
+                    name = item.optString("name"),
+                )
+            },
+            users = List(users.length()) { index ->
+                val item = users.getJSONObject(index)
+                WorkFormUser(
+                    id = item.optString("_id"),
+                    name = item.optString("name").ifBlank { item.optString("email") },
+                    departmentName = item.optString("departmentName"),
+                    level = item.optInt("level", 0),
+                )
+            },
+        )
+    }
+
+    override suspend fun createDocument(
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        evidence: WorkUploadedEvidence?,
+    ): String {
+        val args = org.json.JSONObject()
+            .put("title", title.trim())
+            .put("assignments", org.json.JSONArray().apply {
+                assignments.forEach { row ->
+                    put(
+                        org.json.JSONObject().apply {
+                            put("type", row.type)
+                            put("content", row.content.trim())
+                            put("deadline", row.deadline.trim())
+                            if (row.isIndividual) {
+                                put("userIds", org.json.JSONArray(row.userIds.filter { it.isNotBlank() }))
+                            } else {
+                                put("departmentId", row.departmentId)
+                            }
+                        },
+                    )
+                }
+            })
+        if (evidence != null) {
+            args.put("driveFileId", evidence.driveFileId)
+            args.put("driveChecksum", evidence.driveChecksum)
+            args.put("cleanupToken", evidence.cleanupToken)
+            args.put("fileName", evidence.fileName)
+            args.put("fileType", evidence.fileType)
+            args.put("fileSize", evidence.fileSize)
+        }
+        return try {
+            val result = convex.mutation("work:createDocument", args)
+            if (evidence != null && evidence.cleanupToken.isNotBlank()) {
+                settleUploadedFile(evidence.cleanupToken, finalize = true)
+            }
+            result.optString("value").ifBlank { result.optString("_id") }
+        } catch (error: Exception) {
+            if (evidence != null && evidence.cleanupToken.isNotBlank()) {
+                settleUploadedFile(evidence.cleanupToken, finalize = false)
+            }
+            throw error
+        }
     }
 
     override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: WorkUploadedEvidence?, note: String?) {

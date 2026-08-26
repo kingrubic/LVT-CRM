@@ -75,6 +75,8 @@ struct WorkSnapshot: Equatable, Sendable {
     let tasks: [WorkTaskItem]
     let approvals: [WorkApprovalItem]
     let completionReviews: [WorkCompletionReviewItem]
+    let canCreate: Bool
+    let isOps: Bool
 }
 
 enum WorkHelpers {
@@ -115,14 +117,17 @@ final class WorkRepository: Sendable {
     func listMine() async throws -> WorkSnapshot {
         let result = try await convex.query("work:listMine")
         let isAdmin = (result["isAdmin"] as? Bool) ?? false
+        let canCreate = (result["canCreate"] as? Bool) ?? false
         let accessLevel = (result["level"] as? Int) ?? 0
         let assignerMode = (result["assignerMode"] as? String) ?? ""
         let currentUserId = (result["userId"] as? String) ?? ""
 
         var approvals: [WorkApprovalItem] = []
         var completionReviews: [WorkCompletionReviewItem] = []
-        if isAdmin {
+        var isOps = isAdmin
+        if isAdmin || canCreate {
             let adminResult = try await convex.query("work:listAdmin")
+            isOps = (adminResult["isOps"] as? Bool) ?? isAdmin
             approvals = (adminResult["documents"] as? [[String: Any]] ?? []).map { document in
                 WorkApprovalItem(
                     id: (document["_id"] as? String) ?? "",
@@ -218,8 +223,79 @@ final class WorkRepository: Sendable {
             accessLevel: accessLevel,
             tasks: WorkHelpers.orderedTasks(tasks),
             approvals: sortedApprovals,
-            completionReviews: completionReviews
+            completionReviews: completionReviews,
+            canCreate: canCreate,
+            isOps: isOps
         )
+    }
+
+    func formOptions() async throws -> WorkFormOptions {
+        let result = try await convex.query("work:formOptions")
+        let departments = (result["departments"] as? [[String: Any]] ?? []).map { item in
+            WorkFormDepartment(
+                id: (item["_id"] as? String) ?? "",
+                name: (item["name"] as? String) ?? ""
+            )
+        }
+        let users = (result["users"] as? [[String: Any]] ?? []).map { item in
+            WorkFormUser(
+                id: (item["_id"] as? String) ?? "",
+                name: ((item["name"] as? String)?.nilIfBlank) ?? (item["email"] as? String) ?? "",
+                departmentName: (item["departmentName"] as? String) ?? "",
+                level: (item["level"] as? Int) ?? 0
+            )
+        }
+        return WorkFormOptions(
+            canCreate: (result["canCreate"] as? Bool) ?? false,
+            isOps: (result["isOps"] as? Bool) ?? false,
+            departments: departments,
+            users: users
+        )
+    }
+
+    func createDocument(
+        title: String,
+        assignments: [WorkCreateAssignment],
+        evidence: WorkUploadedEvidence?
+    ) async throws -> String {
+        var payload: [[String: Any]] = []
+        for row in assignments {
+            var item: [String: Any] = [
+                "type": row.type,
+                "content": row.content.trimmingCharacters(in: .whitespacesAndNewlines),
+                "deadline": row.deadline.trimmingCharacters(in: .whitespacesAndNewlines),
+            ]
+            if row.isIndividual {
+                item["userIds"] = row.userIds.filter { !$0.isEmpty }
+            } else {
+                item["departmentId"] = row.departmentId
+            }
+            payload.append(item)
+        }
+        var args: [String: Any] = [
+            "title": title.trimmingCharacters(in: .whitespacesAndNewlines),
+            "assignments": payload,
+        ]
+        if let evidence {
+            args["driveFileId"] = evidence.driveFileId
+            args["driveChecksum"] = evidence.driveChecksum
+            args["cleanupToken"] = evidence.cleanupToken
+            args["fileName"] = evidence.fileName
+            args["fileType"] = evidence.fileType
+            args["fileSize"] = evidence.fileSize
+        }
+        do {
+            let result = try await convex.mutation("work:createDocument", args: args)
+            if let token = evidence?.cleanupToken, !token.isEmpty {
+                await settleUploadedFile(cleanupToken: token, finalize: true)
+            }
+            return (result["value"] as? String) ?? (result["_id"] as? String) ?? ""
+        } catch {
+            if let token = evidence?.cleanupToken, !token.isEmpty {
+                await settleUploadedFile(cleanupToken: token, finalize: false)
+            }
+            throw error
+        }
     }
 
     func complete(item: WorkTaskItem, qualityPercent: Int? = nil, evidence: WorkUploadedEvidence? = nil, note: String? = nil) async throws {
