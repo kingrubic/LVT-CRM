@@ -7,10 +7,10 @@ import org.junit.Test
 class AppChangelogTest {
     @Test
     fun visibleEntriesHideNewerThanInstalledVersion() {
-        val visible = AppChangelog.visibleEntries("0.11.0").map { it.version }
+        val visible = AppChangelog.visibleEntries("0.12.0").map { it.version }
+        assertTrue(visible.contains("0.12.0"))
         assertTrue(visible.contains("0.11.0"))
-        assertTrue(visible.contains("0.10.0"))
-        assertTrue(!visible.contains("0.12.0"))
+        assertTrue(!visible.contains("0.13.0"))
     }
 
     @Test
@@ -23,6 +23,7 @@ class AppChangelogTest {
 
     @Test
     fun compareVersionsOrdersSemver() {
+        assertTrue(compareVersions("0.13.0", "0.12.0") > 0)
         assertTrue(compareVersions("0.12.0", "0.11.0") > 0)
         assertTrue(compareVersions("1.0", "1.0.0") == 0)
         assertTrue(compareVersions("0.8.2", "0.9.0") < 0)

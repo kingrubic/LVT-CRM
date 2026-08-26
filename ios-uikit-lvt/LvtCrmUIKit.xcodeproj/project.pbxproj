@@ -41,6 +41,8 @@
 		200000000000000000000022 /* ListSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000022 /* ListSearch.swift */; };
 		200000000000000000000025 /* AppChangelog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000025 /* AppChangelog.swift */; };
 		200000000000000000000026 /* ChangelogViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000026 /* ChangelogViewController.swift */; };
+		200000000000000000000027 /* WorkCreate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000027 /* WorkCreate.swift */; };
+		200000000000000000000028 /* WorkCreateViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000028 /* WorkCreateViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,6 +84,8 @@
 		300000000000000000000024 /* LvtCrmUIKitRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LvtCrmUIKitRelease.entitlements; sourceTree = "<group>"; };
 		300000000000000000000025 /* AppChangelog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppChangelog.swift; sourceTree = "<group>"; };
 		300000000000000000000026 /* ChangelogViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogViewController.swift; sourceTree = "<group>"; };
+		300000000000000000000027 /* WorkCreate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkCreate.swift; sourceTree = "<group>"; };
+		300000000000000000000028 /* WorkCreateViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkCreateViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,8 +134,10 @@
 				300000000000000000000017 /* DutiesRepository.swift */,
 				300000000000000000000022 /* ListSearch.swift */,
 				30000000000000000000001C /* WorkViewController.swift */,
+				300000000000000000000028 /* WorkCreateViewController.swift */,
 				30000000000000000000001B /* WorkViewModel.swift */,
 				30000000000000000000001A /* WorkRepository.swift */,
+				300000000000000000000027 /* WorkCreate.swift */,
 				300000000000000000000006 /* AuthModels.swift */,
 				30000000000000000000000B /* AuthRepository.swift */,
 				300000000000000000000010 /* SessionsRepository.swift */,
@@ -248,6 +254,8 @@
 				20000000000000000000001A /* WorkRepository.swift in Sources */,
 				20000000000000000000001B /* WorkViewModel.swift in Sources */,
 				20000000000000000000001C /* WorkViewController.swift in Sources */,
+				200000000000000000000027 /* WorkCreate.swift in Sources */,
+				200000000000000000000028 /* WorkCreateViewController.swift in Sources */,
 				20000000000000000000001D /* APNsTokenRegistrar.swift in Sources */,
 				20000000000000000000001E /* NotificationCenterService.swift in Sources */,
 				20000000000000000000001F /* NotificationSyncService.swift in Sources */,
@@ -302,7 +310,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -310,7 +318,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4.0;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -327,7 +335,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKitRelease.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -335,7 +343,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.4.0;
+				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

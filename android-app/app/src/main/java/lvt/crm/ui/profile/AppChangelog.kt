@@ -8,6 +8,10 @@ data class AppChangelogEntry(
 object AppChangelog {
     val entries: List<AppChangelogEntry> = listOf(
         AppChangelogEntry(
+            "0.13.0",
+            listOf("Tạo công việc ngay trên ứng dụng, giống trên web."),
+        ),
+        AppChangelogEntry(
             "0.12.0",
             listOf("Thêm mục Lịch sử thay đổi trong tab Cá nhân."),
         ),

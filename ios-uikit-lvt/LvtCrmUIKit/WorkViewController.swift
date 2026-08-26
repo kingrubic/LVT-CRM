@@ -125,7 +125,7 @@ final class WorkViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-        if case .tasks = sectionKinds[section], viewModel.isAdmin { return 36 }
+        if case .tasks = sectionKinds[section], viewModel.canCreate { return 36 }
         return 8
     }
 
@@ -294,18 +294,20 @@ final class WorkViewController: UITableViewController {
         if let actionError = viewModel.actionError { sections.append(.feedback(actionError)) }
         if let error = viewModel.error { return sections + [.error(error)] }
         if viewModel.loading { return sections + [.loading] }
-        if viewModel.isAdmin, !viewModel.completionReviews.isEmpty {
+        if viewModel.canCreate, !viewModel.completionReviews.isEmpty {
             sections.append(.reviews(viewModel.completionReviews))
         }
         sections.append(.tasks(viewModel.visibleMine))
-        if viewModel.isAdmin {
+        if viewModel.canCreate {
             sections.append(.approvals(viewModel.visibleCreated))
         }
         return sections
     }
 
     private func render() {
-        navigationItem.rightBarButtonItem = nil
+        navigationItem.rightBarButtonItem = viewModel.canCreate
+            ? UIBarButtonItem(title: "Tạo", style: .done, target: self, action: #selector(openCreate))
+            : nil
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
         searchHeader.configure(
             values: viewModel.search,
@@ -316,6 +318,13 @@ final class WorkViewController: UITableViewController {
         sizeSearchHeader()
         tableView.reloadData()
         processPendingFocusIfPossible()
+    }
+
+    @objc private func openCreate() {
+        let controller = WorkCreateViewController(viewModel: viewModel) { [weak self] in
+            self?.viewModel.refresh()
+        }
+        navigationController?.pushViewController(controller, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     override func viewDidLayoutSubviews() {
