@@ -7,7 +7,9 @@ Canonical plan: `docs/plans/2026-08-15-homeroom-attendance-three-phase-plan.md`.
 - Giám thị is `{ menu: "homeroom", access: "supervisor" }`, not `users.role`.
 - Reject `supervisor` on every other menu (`INVALID_MENU_ACCESS`).
 - Legacy `edit` normalizes to `view`; do not reuse `edit` as Giám thị.
-- `supervisor` is not `view_all`. Class/whole-school scope comes from explicit `homeroomAssignments`.
+- `supervisor` is not `view_all`. Teacher overview and generic class/student read come from effective `homeroom_teacher` class assignments only.
+- Giám thị (`homeroom` menu access `supervisor`) and admin/mod may upload/validate/publish attendance for any **active** class without a class assignment. Historical `supervisor` / whole-school assignment rows do not grant scope.
+- Admin/mod catalog management is a separate surface. Do not mix all classes into the teacher overview.
 
 ## Data
 

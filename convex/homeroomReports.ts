@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { homeroomActorOrThrow, loadAssignments } from "./homeroomContext";
-import { classVisibleInScope, resolveClassScope } from "./homeroomPolicy";
+import { classVisibleInScope, resolveTeacherOverviewScope } from "./homeroomPolicy";
 import {
   authorizeAttendanceSummaryRows,
   buildAttendanceExportPayload,
@@ -90,7 +90,7 @@ export const overview = query({
     const { actor } = await homeroomActorOrThrow(ctx);
     const date = args.date || vietnamDateFromUtcMs(Date.now());
     const assignments = await loadAssignments(ctx, args.schoolYearId);
-    const scope = resolveClassScope(actor, assignments, { date, schoolYearId: args.schoolYearId });
+    const scope = resolveTeacherOverviewScope(actor, assignments, { date, schoolYearId: args.schoolYearId });
     const classes = (await ctx.db.query("homeroomClasses").collect()).filter((row) => {
       if (args.schoolYearId && row.schoolYearId !== args.schoolYearId) return false;
       if (row.status !== "active") return false;

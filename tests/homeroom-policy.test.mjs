@@ -4,12 +4,16 @@ import test from 'node:test';
 import {
   actorAssignedToStudentClass,
   assertCanCorrectDisposition,
+  assertCanListAttendanceImportClasses,
   assertCanMaintainAssignedRoster,
   assertCanReadClass,
   assertCanSupervisorImport,
   assertGuardianBelongsToStudent,
+  assertHomeroomTeacherAssignmentInput,
   authorizeAccessibleEnrollments,
+  canBulkImportRoster,
   canCorrectDisposition,
+  canImportAttendanceWithoutClassAssignment,
   canMaintainAssignedRoster,
   canReadClass,
   canSeeSensitiveContacts,
@@ -22,7 +26,12 @@ import {
   classVisibleInScope,
   filterStudentAttendanceHistory,
   HOMEROOM_SCOPE_FORBIDDEN,
+  INVALID_ASSIGNMENT_SCOPE,
+  INVALID_ASSIGNMENT_TYPE,
+  resolveAttendanceImportClassScope,
+  resolveCatalogScope,
   resolveClassScope,
+  resolveTeacherOverviewScope,
   SUPERVISOR_REQUIRED,
 } from '../convex/homeroomPolicy.ts';
 import {
@@ -126,37 +135,52 @@ test('class scope is fail-closed for no, removed, or expired assignment', () => 
   assert.equal(canReadClass(teacher, [expired], 'class-6a1', date), false);
 });
 
-test('managers, view_all, and explicit whole-school supervisor get all classes', () => {
+test('managers, view_all, and supervisor assignments never populate teacher overview', () => {
   const date = '2026-09-01';
-  assert.deepEqual(resolveClassScope(admin, [], { date }), { kind: 'all' });
-  assert.deepEqual(resolveClassScope(viewAll, [], { date }), { kind: 'all' });
+  assert.deepEqual(resolveClassScope(admin, [], { date }), { kind: 'none' });
+  assert.deepEqual(resolveTeacherOverviewScope(admin, [teacherAssignment], { date, schoolYearId: 'year-1' }), {
+    kind: 'none',
+  });
+  assert.deepEqual(resolveClassScope(viewAll, [], { date }), { kind: 'none' });
   const wholeSchool = {
     ...supervisorAssignment,
     classId: '',
     scopeKind: 'whole_school',
   };
-  assert.deepEqual(resolveClassScope(supervisor, [wholeSchool], { date, schoolYearId: 'year-1' }), { kind: 'all' });
-  assert.equal(classVisibleInScope('class-6a2', { kind: 'all' }), true);
+  assert.deepEqual(resolveClassScope(supervisor, [wholeSchool], { date, schoolYearId: 'year-1' }), { kind: 'none' });
   assert.deepEqual(resolveClassScope(supervisor, [supervisorAssignment], { date, schoolYearId: 'year-1' }), {
-    kind: 'ids',
-    classIds: ['class-6a1'],
+    kind: 'none',
   });
+  assert.equal(canReadClass(supervisor, [supervisorAssignment], 'class-6a1', date), false);
+  assert.equal(canReadClass(supervisor, [wholeSchool], 'class-6a2', date), false);
+  assert.equal(canReadClass(admin, [], 'class-6a2', date), true);
+  assert.equal(canReadClass(viewAll, [], 'class-6a2', date), true);
+  assert.deepEqual(resolveCatalogScope(admin), { kind: 'all' });
+  assert.deepEqual(resolveCatalogScope(supervisor), { kind: 'none' });
+  assert.deepEqual(resolveAttendanceImportClassScope(supervisor), { kind: 'all' });
+  assert.deepEqual(resolveAttendanceImportClassScope(admin), { kind: 'all' });
+  assert.deepEqual(resolveAttendanceImportClassScope(teacher), { kind: 'none' });
 });
 
-test('supervisor cannot import for an unassigned class unless whole-school scope exists', () => {
+test('supervisor can import for any class without an assignment; teachers cannot', () => {
   const date = '2026-09-01';
-  assert.equal(canUploadCamera(supervisor, [supervisorAssignment], 'class-6a1', date), true);
-  assert.equal(canUploadCamera(supervisor, [supervisorAssignment], 'class-6a2', date), false);
+  assert.equal(canUploadCamera(supervisor, [], 'class-6a2', date), true);
+  assert.equal(canCorrectDisposition(supervisor, [], 'class-6a2', date), false);
   assert.throws(
-    () => assertCanSupervisorImport(supervisor, [supervisorAssignment], 'class-6a2', date),
+    () => assertCanCorrectDisposition(supervisor, [], 'class-6a2', date),
     new RegExp(SUPERVISOR_REQUIRED),
   );
-  const wholeSchool = {
-    ...supervisorAssignment,
-    classId: '',
-    scopeKind: 'whole_school',
-  };
-  assert.equal(canUploadCamera(supervisor, [wholeSchool], 'class-6a2', date), true);
+  assert.equal(canImportAttendanceWithoutClassAssignment(supervisor), true);
+  assert.doesNotThrow(() => assertCanSupervisorImport(supervisor, [], 'class-6a2', date));
+  assert.doesNotThrow(() => assertCanListAttendanceImportClasses(supervisor));
+  assert.equal(canUploadCamera(teacher, [teacherAssignment], 'class-6a1', date), false);
+  assert.throws(
+    () => assertCanSupervisorImport(teacher, [teacherAssignment], 'class-6a1', date),
+    new RegExp(SUPERVISOR_REQUIRED),
+  );
+  assert.throws(() => assertCanListAttendanceImportClasses(teacher), new RegExp(SUPERVISOR_REQUIRED));
+  const ended = { ...supervisorAssignment, active: false, effectiveTo: '2026-08-31' };
+  assert.equal(canUploadCamera(supervisor, [ended], 'class-6a1', date), true);
 });
 
 test('view_all cannot run supervisor-only camera or disposition actions', () => {
@@ -170,12 +194,13 @@ test('view_all cannot run supervisor-only camera or disposition actions', () => 
   );
 });
 
-test('removing supervisor permission or assignment revokes specialized access', () => {
+test('removing supervisor permission revokes import; historical supervisor rows never grant scope', () => {
   const date = '2026-09-01';
   const lostPermission = { ...supervisor, menuAccess: { homeroom: 'view' } };
   assert.equal(canUploadCamera(lostPermission, [supervisorAssignment], 'class-6a1', date), false);
   const ended = { ...supervisorAssignment, active: false, effectiveTo: '2026-08-31' };
-  assert.equal(canUploadCamera(supervisor, [ended], 'class-6a1', date), false);
+  assert.equal(canReadClass(supervisor, [ended], 'class-6a1', date), false);
+  assert.equal(canReadClass(supervisor, [supervisorAssignment], 'class-6a1', date), false);
 });
 
 test('sensitive guardian contacts stay omitted unless policy grants them', () => {
@@ -219,6 +244,10 @@ test('guessed archived or no-enrollment student IDs fail closed and do not leak 
     { classId: 'class-6a1', schoolYearId: 'year-1', startDate: '2026-08-15' },
   ];
   assert.deepEqual(authorizeAccessibleEnrollments(teacher, [teacherAssignment], current), current);
+  assert.throws(
+    () => authorizeAccessibleEnrollments(supervisor, [supervisorAssignment], current),
+    new RegExp(HOMEROOM_SCOPE_FORBIDDEN),
+  );
   assert.equal(actorAssignedToStudentClass(supervisor, [supervisorAssignment], current), false);
   assert.equal(actorAssignedToStudentClass(viewAll, [], current), false);
   assert.equal(actorAssignedToStudentClass(teacher, [teacherAssignment], current), true);
@@ -514,11 +543,15 @@ test('replacement date authorizes only the new homeroom teacher', () => {
   assert.equal(canReadClass(teacher, [revoked, incomingAssignment], 'class-6a1', plan.close.effectiveTo), false);
 });
 
-test('only operational managers write school-year and class catalogs', () => {
+test('only operational managers write catalogs or bulk-import students', () => {
   assert.equal(canWriteHomeroomCatalog(admin), true);
   assert.equal(canWriteHomeroomCatalog({ ...admin, role: 'moderator' }), true);
   assert.equal(canWriteHomeroomCatalog(teacher), false);
   assert.equal(canWriteHomeroomCatalog(supervisor), false);
+  assert.equal(canBulkImportRoster(admin), true);
+  assert.equal(canBulkImportRoster(teacher), false);
+  assert.equal(canBulkImportRoster(supervisor), false);
+  assert.equal(canBulkImportRoster(viewAll), false);
 });
 
 test('includeArchived is catalog-manager only and scoped lists default to active classes', () => {
@@ -536,6 +569,23 @@ test('includeArchived is catalog-manager only and scoped lists default to active
 test('archived classes reject assignment, roster import, and camera use', () => {
   assert.throws(() => assertClassNotArchived({ status: 'archived' }), new RegExp(CLASS_ARCHIVED));
   assert.doesNotThrow(() => assertClassNotArchived({ status: 'active' }));
+});
+
+test('assignUser accepts only exact homeroom_teacher class assignments', () => {
+  assert.doesNotThrow(() => assertHomeroomTeacherAssignmentInput({ assignmentType: 'homeroom_teacher' }));
+  assert.doesNotThrow(() => assertHomeroomTeacherAssignmentInput({ assignmentType: 'homeroom_teacher', scopeKind: 'class' }));
+  assert.throws(
+    () => assertHomeroomTeacherAssignmentInput({ assignmentType: 'supervisor' }),
+    new RegExp(INVALID_ASSIGNMENT_TYPE),
+  );
+  assert.throws(
+    () => assertHomeroomTeacherAssignmentInput({ assignmentType: 'homeroom_teacher ', scopeKind: 'class' }),
+    new RegExp(INVALID_ASSIGNMENT_TYPE),
+  );
+  assert.throws(
+    () => assertHomeroomTeacherAssignmentInput({ assignmentType: 'homeroom_teacher', scopeKind: 'whole_school' }),
+    new RegExp(INVALID_ASSIGNMENT_SCOPE),
+  );
 });
 
 test('Vietnam school dates are deterministic under a UTC runtime', () => {

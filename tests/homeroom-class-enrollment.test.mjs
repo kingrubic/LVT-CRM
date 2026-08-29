@@ -219,5 +219,8 @@ test('assignUser replacement closes the outgoing GVCN row by date and leaves it 
   const assign = source.slice(source.indexOf('export const assignUser'), source.indexOf('export const transferStudent'));
   assert.match(assign, /planHomeroomTeacherReplacement/);
   assert.match(assign, /\.\.\.plan\.close/);
+  assert.match(assign, /assertHomeroomTeacherAssignmentInput/);
   assert.doesNotMatch(assign, /active:\s*false/);
+  assert.doesNotMatch(assign, /assignmentType === ["']supervisor["']/);
+  assert.doesNotMatch(assign, /args\.assignmentType === ["']supervisor["'] \? ["']supervisor["']/);
 });

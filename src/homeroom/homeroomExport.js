@@ -65,7 +65,7 @@ export function buildAttendanceReportVisibleMatrix(days) {
 export function buildAttendanceXlsxMatrix(payload) {
   const header = [
     payload.title,
-    `Lớp: ${payload.className || 'Theo phạm vi'}`,
+    `Lớp: ${payload.className || 'Theo lớp đang chủ nhiệm'}`,
     `Năm học: ${payload.schoolYearName || ''}`,
     `Từ ${payload.from} đến ${payload.to}`,
     `Tạo lúc: ${new Date(payload.generatedAt).toISOString()}`,

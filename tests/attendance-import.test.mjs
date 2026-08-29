@@ -455,3 +455,31 @@ test('supplement that changes zero rows still publishes the upload with a truthf
   assert.match(publishFn, /status:\s*['"]published['"]/);
   assert.doesNotMatch(publishFn, /count:\s*publishedDays\.days\.length/);
 });
+
+test('school attendance template matches inspect aliases and is not the roster template', async () => {
+  const {
+    ATTENDANCE_IMPORT_TEMPLATE_FILENAME,
+    ATTENDANCE_IMPORT_TEMPLATE_HEADERS,
+    ATTENDANCE_IMPORT_TEMPLATE_SHEET,
+    attendanceImportTemplateMatrix,
+  } = await import('../src/lib/attendanceImportExcel.js');
+  const { ROSTER_IMPORT_HEADERS } = await import('../src/lib/rosterImportExcel.js');
+  assert.equal(ATTENDANCE_IMPORT_TEMPLATE_FILENAME, 'mau_nhap_diem_danh.xlsx');
+  assert.notEqual(ATTENDANCE_IMPORT_TEMPLATE_FILENAME, 'mau_nhap_hoc_sinh.xlsx');
+  assert.notDeepEqual(ATTENDANCE_IMPORT_TEMPLATE_HEADERS, ROSTER_IMPORT_HEADERS);
+  const matrix = attendanceImportTemplateMatrix();
+  const inspected = inspectAttendanceWorkbook({
+    sheetNames: [ATTENDANCE_IMPORT_TEMPLATE_SHEET],
+    sheets: { [ATTENDANCE_IMPORT_TEMPLATE_SHEET]: matrix },
+  });
+  assert.equal(inspected.suggestedMapping.studentCode, 'ma_hoc_sinh');
+  assert.equal(inspected.suggestedMapping.studentName, 'ho_ten');
+  assert.equal(inspected.suggestedMapping.classCode, 'lop');
+  assert.equal(inspected.suggestedMapping.observedAt, 'thoi_gian');
+  assert.equal(inspected.suggestedMapping.sourceStatus, 'trang_thai');
+  assert.equal(inspected.mappingConfirmed, false);
+  const routerSource = readFileSync(new URL('../src/homeroom/HomeroomRouter.jsx', import.meta.url), 'utf8');
+  assert.match(routerSource, /downloadAttendanceImportTemplate/);
+  assert.match(routerSource, /DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION/);
+  assert.doesNotMatch(routerSource, /downloadRosterImportTemplate\(\).*Import file điểm danh/);
+});

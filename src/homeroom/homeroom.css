@@ -1,13 +1,13 @@
-/* Lớp chủ nhiệm — polished UI on top of the existing module structure.
-   Class names and component logic are unchanged; this only improves presentation. */
+/* Lớp chủ nhiệm — workspace layout matching the class-detail chrome.
+   Class names and component logic stay the same; this only improves presentation. */
 
 .homeroom-view {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
   max-width: 1480px;
   margin: 0 auto;
-  padding: 4px 0 40px;
+  padding: 20px 34px 40px;
   overflow-x: clip;
 }
 .homeroom-view h2, .homeroom-view h3, .homeroom-view h4 { margin: 0; color: var(--lvt-navy); letter-spacing: -.01em; }
@@ -21,7 +21,9 @@
   align-items: flex-end;
   min-width: 0;
 }
-.homeroom-toolbar { justify-content: space-between; align-items: center; }
+.homeroom-toolbar { justify-content: space-between; align-items: center; gap: 12px; }
+.homeroom-toolbar-main { justify-content: flex-start; }
+.homeroom-toolbar-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .homeroom-toolbar > label, .homeroom-filters > label {
   display: grid;
   gap: 6px;
@@ -30,6 +32,17 @@
   font-weight: 800;
   letter-spacing: .05em;
   text-transform: uppercase;
+}
+.homeroom-year-field {
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  color: var(--lvt-navy) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
 }
 .homeroom-toolbar select, .homeroom-filters select, .homeroom-filters input,
 .homeroom-toolbar input {
@@ -50,7 +63,35 @@
   border-color: var(--lvt-teal);
 }
 
+.homeroom-ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--lvt-navy);
+  border-radius: 10px;
+  color: var(--lvt-navy);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.homeroom-ghost-button:hover { background: #edf4fb; }
+.homeroom-view .primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 /* ---------- Panels ---------- */
+.homeroom-overview,
+.homeroom-class-workspace {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
 .homeroom-panel {
   background: #fff;
   border: 1px solid var(--lvt-line);
@@ -65,6 +106,31 @@
 .homeroom-panel > h2 { font-size: 20px; }
 .homeroom-panel > h3 { font-size: 15px; }
 .homeroom-panel .muted { color: var(--lvt-muted); font-size: 13px; line-height: 1.55; }
+.homeroom-class-panel { gap: 18px; }
+
+.homeroom-class-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.homeroom-class-header h2 { font-size: 22px; letter-spacing: -.02em; }
+.homeroom-class-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0 0;
+  color: var(--lvt-muted);
+  font-size: 13px;
+}
+.homeroom-class-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 
 /* ---------- KPI stat cards ---------- */
 .homeroom-cards {
@@ -92,7 +158,7 @@
   width: 4px;
   background: var(--lvt-blue);
 }
-.homeroom-card span { color: var(--lvt-muted); font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.homeroom-card > span { color: var(--lvt-muted); font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .homeroom-card strong, .homeroom-stat { display: block; font-size: 30px; line-height: 1; letter-spacing: -.02em; color: var(--lvt-navy); }
 .homeroom-card:nth-child(3)::before { background: var(--lvt-teal); }
 .homeroom-card:nth-child(4)::before { background: var(--lvt-gold); }
@@ -126,6 +192,19 @@
 }
 .homeroom-class-card h3 { font-size: 16px; color: var(--lvt-ink); }
 .homeroom-class-card p { margin: 0; color: var(--lvt-muted); font-size: 12px; }
+.homeroom-class-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.homeroom-class-card-meta span:not(.homeroom-status) {
+  color: var(--lvt-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .homeroom-class-card .homeroom-class-actions { margin-top: 6px; }
 .homeroom-catalog-panel .muted, .homeroom-manage-panel .muted { margin: 6px 0 0; }
 
@@ -211,28 +290,61 @@
 .homeroom-table-wrap {
   overflow: auto;
   max-width: 100%;
-  border: 1px solid var(--lvt-line);
+  border: 1px solid #eef2f5;
   border-radius: 12px;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(27, 61, 91, .04);
 }
 .homeroom-table { width: 100%; border-collapse: collapse; min-width: 720px; }
-.homeroom-table th, .homeroom-table td { padding: 11px 14px; text-align: left; border-bottom: 1px solid #eef2f5; font-size: 13px; }
+.homeroom-table th, .homeroom-table td { padding: 13px 16px; text-align: left; border-bottom: 1px solid #eef2f5; font-size: 13px; }
 .homeroom-table th {
   position: sticky;
   top: 0;
-  background: var(--lvt-paper);
+  background: #f7f9fb;
   z-index: 1;
   color: #8a9aa8;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: .06em;
+  letter-spacing: .04em;
   text-transform: uppercase;
 }
 .homeroom-table tbody tr:hover { background: #f7fafb; }
 .homeroom-table tbody tr:last-child td { border-bottom: 0; }
 .homeroom-table th:first-child, .homeroom-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 2; }
-.homeroom-table th:first-child { background: var(--lvt-paper); }
+.homeroom-table th:first-child { background: #f7f9fb; }
+.homeroom-student-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+.homeroom-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: var(--lvt-navy);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.homeroom-detail-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--lvt-navy);
+  background: #e8f1fb;
+  font-size: 12px;
+  font-weight: 700;
+}
+.homeroom-detail-button:hover { background: #d7e7f8; }
 
 /* ---------- Status chips ---------- */
 .homeroom-status {
@@ -246,8 +358,9 @@
   font-weight: 800;
   letter-spacing: .02em;
   white-space: nowrap;
+  text-transform: none;
 }
-.homeroom-status span { font-size: 8px; }
+.homeroom-status span { font-size: 8px; letter-spacing: 0; text-transform: none; }
 .homeroom-status.present { background: #e2f4ec; color: #126552; }
 .homeroom-status.late { background: #fff1c6; color: #85601b; }
 .homeroom-status.absent_pending { background: #fde8e8; color: #9b2c2c; }
@@ -256,51 +369,132 @@
 .homeroom-status.no_data, .homeroom-status.exempt { background: #edf0f2; color: #5a6b8a; }
 
 /* ---------- Tabs ---------- */
-.homeroom-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.homeroom-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 0 -22px;
+  padding: 0 22px;
+  border-bottom: 1px solid #e8eef2;
+}
 .homeroom-tabs button {
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--lvt-line);
-  border-radius: 999px;
-  background: #fff;
-  color: #546879;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #7a8b9a;
   font-size: 13px;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
-.homeroom-tabs button:hover { color: var(--lvt-navy); background: #edf8f5; }
-.homeroom-tabs button[aria-selected="true"], .homeroom-tabs button.active {
-  color: #fff;
-  border-color: var(--lvt-navy);
-  background: var(--lvt-navy);
-  box-shadow: 0 8px 18px rgba(20, 53, 95, .18);
+.homeroom-tabs button:hover { color: var(--lvt-navy); background: transparent; }
+.homeroom-tabs button[aria-current="page"], .homeroom-tabs button.active {
+  color: var(--lvt-navy);
+  border-bottom-color: var(--lvt-navy);
+  background: transparent;
+  box-shadow: none;
 }
+.homeroom-tabs .homeroom-overview-button {
+  margin-right: 8px;
+  border-right: 1px solid #e1e8ed;
+  border-bottom-color: transparent;
+}
+.homeroom-tabs + * { min-width: 0; }
 .homeroom-view button { min-height: 44px; }
+.homeroom-view .homeroom-detail-button { min-height: 36px; }
 
 /* ---------- Empty / disclosure / archived ---------- */
 .homeroom-empty { color: var(--lvt-muted); padding: 24px 0; font-size: 13px; }
 .homeroom-manage-disclosure {
   border: 1px solid var(--lvt-line);
-  border-radius: 12px;
-  padding: 8px 14px;
+  border-radius: 16px;
+  padding: 4px 18px;
   min-width: 0;
-  background: var(--lvt-paper);
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(27, 61, 91, .05);
 }
 .homeroom-manage-disclosure > summary {
   min-height: 44px;
   display: flex;
   align-items: center;
+  gap: 10px;
+  padding: 6px 0;
   font-weight: 700;
   color: var(--lvt-navy);
   cursor: pointer;
+  list-style: none;
+}
+.homeroom-manage-disclosure > summary::-webkit-details-marker { display: none; }
+.homeroom-manage-disclosure > summary::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3'/%3E%3Cpath d='M4 19.5c.9-3.2 2.8-4.8 5-4.8s4.1 1.6 5 4.8'/%3E%3Ccircle cx='16.5' cy='8.5' r='2.2'/%3E%3Cpath d='M15.4 14.6c2 0 3.6 1.1 4.4 3.4'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8' r='3'/%3E%3Cpath d='M4 19.5c.9-3.2 2.8-4.8 5-4.8s4.1 1.6 5 4.8'/%3E%3Ccircle cx='16.5' cy='8.5' r='2.2'/%3E%3Cpath d='M15.4 14.6c2 0 3.6 1.1 4.4 3.4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.homeroom-manage-disclosure > summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-right: 2px solid var(--lvt-navy);
+  border-bottom: 2px solid var(--lvt-navy);
+  transform: rotate(45deg);
+  transition: transform .18s ease;
 }
 .homeroom-manage-disclosure[open] > summary { margin-bottom: 12px; }
+.homeroom-manage-disclosure[open] > summary::after { transform: rotate(-135deg); }
 .homeroom-archived-catalog { display: grid; gap: 8px; margin-top: 12px; }
 .homeroom-archived-catalog h4 { font-size: 13px; color: var(--lvt-muted); }
 
+.homeroom-manage-class-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.homeroom-manage-class-row {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--lvt-line);
+  border-radius: 14px;
+  background: var(--lvt-paper);
+}
+.homeroom-manage-class-info { display: grid; gap: 8px; min-width: 0; }
+.homeroom-manage-class-info h4 { font-size: 15px; color: var(--lvt-ink); }
+.homeroom-quick-assign { margin: 0; }
+@media (min-width: 721px) {
+  .homeroom-manage-class-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: start;
+  }
+}
+
 @media (max-width: 720px) {
+  .homeroom-view { padding: 16px 16px 32px; }
   .homeroom-table { min-width: 560px; }
-  .homeroom-toolbar, .homeroom-filters, .homeroom-class-actions, .homeroom-tabs { flex-direction: column; align-items: stretch; }
-  .homeroom-cards, .homeroom-class-cards { grid-template-columns: 1fr; }
+  .homeroom-toolbar, .homeroom-filters, .homeroom-class-actions, .homeroom-class-header-actions, .homeroom-toolbar-nav, .homeroom-manage-class-row { flex-direction: column; align-items: stretch; }
+  .homeroom-cards, .homeroom-class-cards, .homeroom-manage-class-row { grid-template-columns: 1fr; }
   .homeroom-view button, .homeroom-manage-disclosure > summary { width: 100%; }
   .homeroom-panel { padding: 16px; }
+  .homeroom-tabs {
+    flex-wrap: nowrap;
+    margin: 0 -16px;
+    padding: 0 16px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .homeroom-tabs button { width: auto; flex: 0 0 auto; white-space: nowrap; }
+  .homeroom-tabs .homeroom-overview-button { margin-right: 4px; }
 }

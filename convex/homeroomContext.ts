@@ -1,6 +1,6 @@
 import { currentUserOrThrow, resolveUserMenuAccess } from "./lib";
 import {
-  assertCanMaintainAssignedRoster,
+  assertCanBulkImportRoster,
   assertCanReadClass,
   assertCanSupervisorImport,
   assertCanWriteHomeroomCatalog,
@@ -93,8 +93,7 @@ export async function assertClassRosterWritable(
 ) {
   const found = await assertClassReadable(ctx, actor, classId, date);
   assertClassNotArchived(found);
-  const assignments = await loadAssignments(ctx, found.schoolYearId);
-  assertCanMaintainAssignedRoster(actor, assignments, String(found._id), date);
+  assertCanBulkImportRoster(actor);
   return found;
 }
 

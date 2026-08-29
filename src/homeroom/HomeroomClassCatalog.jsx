@@ -17,6 +17,7 @@ import {
   buildClassCreatePayload,
   buildClassUpdatePayload,
   classStatusLabel,
+  filterHomeroomTeacherClassAssignments,
   groupAssignmentsByEffect,
   userRoleLabel,
 } from './classCatalog';
@@ -111,10 +112,12 @@ function ClassForm({
 export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
   const canManage = canManageCatalog(session);
   const classes = useQuery(
-    anyApi.homeroomClasses.listScoped,
+    anyApi.homeroomClasses.listCatalog,
     canManage && yearId ? { schoolYearId: yearId, includeArchived: true } : 'skip',
   );
+  const candidates = useQuery(anyApi.homeroomClasses.listAssignmentCandidates, canManage ? {} : 'skip');
   const createClass = useMutation(anyApi.homeroomClasses.create);
+  const assignUser = useMutation(anyApi.homeroomClasses.assignUser);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -123,6 +126,7 @@ export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
   if (!canManage) return null;
 
   const empty = classes !== undefined && !classes.length;
+  const active = (classes || []).filter((row) => row.status === 'active');
   const archived = (classes || []).filter((row) => row.status === 'archived');
 
   return (
@@ -132,8 +136,8 @@ export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
           <h3 id="homeroom-catalog-title">Quản lý lớp</h3>
           <p className="muted">
             {empty
-              ? 'Chưa có lớp trong năm học này. Tạo lớp để giáo viên và giám thị bắt đầu làm việc.'
-              : 'Tạo lớp mới cho năm học đang chọn. Sửa, lưu trữ và phân công nằm ở từng lớp.'}
+              ? 'Chưa có lớp trong năm học này. Tạo lớp rồi gán giáo viên chủ nhiệm ngay trên danh sách.'
+              : 'Tạo lớp, lưu trữ, và gán hoặc thay GVCN ngay trên danh sách — không cần mở chi tiết lớp.'}
           </p>
         </div>
         {!open ? (
@@ -186,6 +190,39 @@ export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
           }}
         />
       ) : null}
+      {active.length ? (
+        <ul className="homeroom-manage-class-list">
+          {active.map((item) => (
+            <li key={item._id} className="homeroom-manage-class-row">
+              <div className="homeroom-manage-class-info">
+                <h4>{item.code} — {item.name}</h4>
+                <p className="homeroom-class-card-meta">
+                  <span>Khối {item.gradeLevel}</span>
+                  <span className={`homeroom-status ${item.status === 'archived' ? 'no_data' : 'present'}`}>
+                    <span aria-hidden="true">●</span>
+                    {classStatusLabel(item.status)}
+                  </span>
+                  <span>Sĩ số: {item.rosterCount ?? 0}</span>
+                </p>
+                <p className="muted">
+                  GVCN hiện tại: {item.currentHomeroomTeacher?.user?.name || 'Chưa phân công'}
+                </p>
+                <div className="homeroom-class-actions">
+                  <button type="button" className="homeroom-ghost-button" onClick={() => onOpenClass(item._id)}>
+                    {OPEN_CLASS_ACTION}
+                  </button>
+                </div>
+              </div>
+              <QuickHomeroomTeacherAssign
+                classId={item._id}
+                candidates={candidates}
+                currentTeacherName={item.currentHomeroomTeacher?.user?.name}
+                assignUser={assignUser}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {archived.length ? (
         <div className="homeroom-archived-catalog">
           <h4>{ARCHIVED_CLASSES_TITLE}</h4>
@@ -199,7 +236,7 @@ export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
 export function ClassCards({ classes, canManage, onOpenClass }) {
   if (!classes.length) {
     if (canManage) return null;
-    return <p className="homeroom-empty">Không có lớp trong phạm vi của bạn.</p>;
+    return <p className="homeroom-empty">Không có lớp đang chủ nhiệm.</p>;
   }
 
   return (
@@ -208,8 +245,13 @@ export function ClassCards({ classes, canManage, onOpenClass }) {
         <li key={item._id} className="homeroom-card homeroom-class-card">
           <h3>{item.code} — {item.name}</h3>
           <p>Khối {item.gradeLevel}</p>
-          <p>{classStatusLabel(item.status)}</p>
-          <p>Sĩ số: {item.rosterCount ?? 0}</p>
+          <p className="homeroom-class-card-meta">
+            <span className={`homeroom-status ${item.status === 'archived' ? 'no_data' : 'present'}`}>
+              <span aria-hidden="true">●</span>
+              {classStatusLabel(item.status)}
+            </span>
+            <span>Sĩ số: {item.rosterCount ?? 0}</span>
+          </p>
           <div className="homeroom-class-actions">
             <button type="button" className="primary-button" onClick={() => onOpenClass(item._id)}>
               {OPEN_CLASS_ACTION}
@@ -218,6 +260,69 @@ export function ClassCards({ classes, canManage, onOpenClass }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function QuickHomeroomTeacherAssign({ classId, candidates, currentTeacherName, assignUser, disabled = false }) {
+  const [userId, setUserId] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState(() => vietnamTodayYmd());
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  return (
+    <form
+      className="homeroom-assignment-form homeroom-quick-assign"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (pending || disabled || !userId) return;
+        setPending(true);
+        setError('');
+        setSuccess('');
+        try {
+          await assignUser(buildClassAssignmentPayload({
+            classId,
+            userId,
+            assignmentType: 'homeroom_teacher',
+            effectiveFrom,
+          }));
+          setSuccess(currentTeacherName ? 'Đã thay giáo viên chủ nhiệm.' : 'Đã lưu phân công.');
+          setUserId('');
+        } catch (err) {
+          setError(messageFor(err));
+        } finally {
+          setPending(false);
+        }
+      }}
+    >
+      <h3>Gán giáo viên chủ nhiệm</h3>
+      <label>
+        Người được phân công
+        <select value={userId} onChange={(event) => setUserId(event.target.value)} required disabled={disabled || pending}>
+          <option value="">{candidates === undefined ? 'Đang tải người dùng…' : 'Chọn người dùng đang hoạt động'}</option>
+          {(candidates || []).map((user) => (
+            <option key={user._id} value={user._id}>
+              {user.name} — {userRoleLabel(user.role)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Hiệu lực từ
+        <input
+          type="date"
+          value={effectiveFrom}
+          onChange={(event) => setEffectiveFrom(event.target.value)}
+          required
+          disabled={disabled || pending}
+        />
+      </label>
+      <p className="homeroom-issue warn" role="note">{ASSIGNMENT_REPLACE_WARNING}</p>
+      <Feedback error={error} success={success} />
+      <button type="submit" className="primary-button" disabled={disabled || pending || !userId || candidates === undefined}>
+        {pending ? 'Đang lưu phân công…' : currentTeacherName ? 'Thay GVCN' : 'Gán GVCN'}
+      </button>
+    </form>
   );
 }
 
@@ -265,13 +370,12 @@ export function ClassManagePanel({ classId, yearId: _yearId, detail, session, ca
   const [assignSuccess, setAssignSuccess] = useState('');
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [userId, setUserId] = useState('');
-  const [assignmentType, setAssignmentType] = useState('homeroom_teacher');
   const [effectiveFrom, setEffectiveFrom] = useState(() => vietnamTodayYmd());
   const today = vietnamTodayYmd();
 
   const classAssignments = useMemo(() => {
-    return (detail?.assignments || [])
-      .filter((row) => row.classId === classId && row.scopeKind === 'class')
+    return filterHomeroomTeacherClassAssignments(detail?.assignments)
+      .filter((row) => row.classId === classId)
       .slice()
       .sort((a, b) => String(b.effectiveFrom).localeCompare(String(a.effectiveFrom)));
   }, [classId, detail?.assignments]);
@@ -357,7 +461,7 @@ export function ClassManagePanel({ classId, yearId: _yearId, detail, session, ca
             await assignUser(buildClassAssignmentPayload({
               classId,
               userId,
-              assignmentType,
+              assignmentType: 'homeroom_teacher',
               effectiveFrom,
             }));
             setAssignSuccess('Đã lưu phân công.');
@@ -369,8 +473,8 @@ export function ClassManagePanel({ classId, yearId: _yearId, detail, session, ca
           }
         }}
       >
-        <h3>Phân công giáo viên / giám thị</h3>
-        <p className="muted">Chỉ phân công theo từng lớp. Ngày hiệu lực dùng lịch Việt Nam.</p>
+        <h3>Phân công giáo viên chủ nhiệm</h3>
+        <p className="muted">Chỉ phân công GVCN theo từng lớp. Ngày hiệu lực dùng lịch Việt Nam.</p>
         <label>
           Người được phân công
           <select value={userId} onChange={(event) => setUserId(event.target.value)} required>
@@ -383,13 +487,6 @@ export function ClassManagePanel({ classId, yearId: _yearId, detail, session, ca
           </select>
         </label>
         <label>
-          Vai trò tại lớp
-          <select value={assignmentType} onChange={(event) => setAssignmentType(event.target.value)} required>
-            <option value="homeroom_teacher">Giáo viên chủ nhiệm</option>
-            <option value="supervisor">Giám thị</option>
-          </select>
-        </label>
-        <label>
           Hiệu lực từ
           <input
             type="date"
@@ -398,9 +495,7 @@ export function ClassManagePanel({ classId, yearId: _yearId, detail, session, ca
             required
           />
         </label>
-        {assignmentType === 'homeroom_teacher' ? (
-          <p className="homeroom-issue warn" role="note">{ASSIGNMENT_REPLACE_WARNING}</p>
-        ) : null}
+        <p className="homeroom-issue warn" role="note">{ASSIGNMENT_REPLACE_WARNING}</p>
         <Feedback error={assignError} success={assignSuccess} />
         <button type="submit" className="primary-button" disabled={pending || archived || !userId || candidates === undefined}>
           {pending ? 'Đang lưu phân công…' : 'Lưu phân công'}

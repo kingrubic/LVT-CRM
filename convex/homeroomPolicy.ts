@@ -15,6 +15,9 @@ export const SUPERVISOR_REQUIRED = "SUPERVISOR_REQUIRED";
 export const HOMEROOM_MENU_HIDDEN = "HOMEROOM_MENU_HIDDEN";
 export const SENSITIVE_CONTACTS_FORBIDDEN = "SENSITIVE_CONTACTS_FORBIDDEN";
 export const CLASS_ARCHIVED = "CLASS_ARCHIVED";
+export const INVALID_ASSIGNMENT_TYPE = "INVALID_ASSIGNMENT_TYPE";
+export const INVALID_ASSIGNMENT_SCOPE = "INVALID_ASSIGNMENT_SCOPE";
+export const HOMEROOM_TEACHER_ASSIGNMENT_TYPE = "homeroom_teacher";
 
 export type HomeroomActor = {
   userId: string;
@@ -67,6 +70,52 @@ export function classIncludedInScopedList(
   return row.status === "active";
 }
 
+/** Effective GVCN rows only. Historical supervisor / whole-school rows never grant teaching scope. */
+export function isHomeroomTeacherClassAssignment(assignment: HomeroomAssignment): boolean {
+  return (
+    assignment.assignmentType === HOMEROOM_TEACHER_ASSIGNMENT_TYPE
+    && assignment.scopeKind === "class"
+    && Boolean(assignment.classId)
+  );
+}
+
+export function assertHomeroomTeacherAssignmentInput(args: {
+  assignmentType: string;
+  scopeKind?: string;
+}) {
+  if (args.assignmentType !== HOMEROOM_TEACHER_ASSIGNMENT_TYPE) {
+    throw new Error(INVALID_ASSIGNMENT_TYPE);
+  }
+  if (args.scopeKind != null && args.scopeKind !== "class") {
+    throw new Error(INVALID_ASSIGNMENT_SCOPE);
+  }
+}
+
+export function teacherClassAssignmentsOnDate(
+  actor: HomeroomActor,
+  assignments: HomeroomAssignment[],
+  args: { date: string; schoolYearId?: string; classId?: string },
+): HomeroomAssignment[] {
+  return actorAssignmentsOnDate(actor, assignments, args).filter(isHomeroomTeacherClassAssignment);
+}
+
+export function findEffectiveHomeroomTeacherAssignment(
+  assignments: HomeroomAssignment[],
+  args: { classId: string; date: string },
+): HomeroomAssignment | undefined {
+  return assignments.find(
+    (row) => isHomeroomTeacherClassAssignment(row) && assignmentCovers(row, args),
+  );
+}
+
+export function canImportAttendanceWithoutClassAssignment(actor: HomeroomActor): boolean {
+  return isHomeroomOperationalManager(actor) || isHomeroomSupervisorUser(actor);
+}
+
+export function canBulkImportRoster(actor: HomeroomActor): boolean {
+  return canWriteHomeroomCatalog(actor);
+}
+
 export function assertCanIncludeArchivedClasses(actor: HomeroomActor) {
   if (!canWriteHomeroomCatalog(actor)) throw new Error(HOMEROOM_SCOPE_FORBIDDEN);
 }
@@ -102,16 +151,35 @@ export type HomeroomClassScope =
   | { kind: "none" }
   | { kind: "ids"; classIds: string[] };
 
+/** Teacher overview: effective homeroom_teacher class assignments only. */
+export function resolveTeacherOverviewScope(
+  actor: HomeroomActor,
+  assignments: HomeroomAssignment[],
+  args: { date: string; schoolYearId?: string },
+): HomeroomClassScope {
+  if (!hasHomeroomMenu(actor)) return { kind: "none" };
+  const classIds = [
+    ...new Set(teacherClassAssignmentsOnDate(actor, assignments, args).map((row) => row.classId)),
+  ];
+  return classIds.length ? { kind: "ids", classIds } : { kind: "none" };
+}
+
+/** Admin/mod catalog of every class in the year. */
+export function resolveCatalogScope(actor: HomeroomActor): HomeroomClassScope {
+  return canWriteHomeroomCatalog(actor) ? { kind: "all" } : { kind: "none" };
+}
+
+/** Supervisor menu or admin/mod may list active classes for attendance import. */
+export function resolveAttendanceImportClassScope(actor: HomeroomActor): HomeroomClassScope {
+  return canImportAttendanceWithoutClassAssignment(actor) ? { kind: "all" } : { kind: "none" };
+}
+
 export function resolveClassScope(
   actor: HomeroomActor,
   assignments: HomeroomAssignment[],
   args: { date: string; schoolYearId?: string },
 ): HomeroomClassScope {
-  if (isHomeroomOperationalManager(actor) || isHomeroomViewAllUser(actor)) return { kind: "all" };
-  const covered = actorAssignmentsOnDate(actor, assignments, args);
-  if (covered.some((row) => row.scopeKind === "whole_school")) return { kind: "all" };
-  const classIds = [...new Set(covered.map((row) => row.classId).filter(Boolean))];
-  return classIds.length ? { kind: "ids", classIds } : { kind: "none" };
+  return resolveTeacherOverviewScope(actor, assignments, args);
 }
 
 export function classVisibleInScope(classId: string, scope: HomeroomClassScope): boolean {
@@ -140,8 +208,9 @@ export function enrollmentAccessibleToActor(
   if (isHomeroomOperationalManager(actor) || isHomeroomViewAllUser(actor)) return true;
   return assignments.some((row) => {
     if (String(row.userId) !== String(actor.userId) || !row.active) return false;
+    if (!isHomeroomTeacherClassAssignment(row)) return false;
     if (enrollment.schoolYearId && row.schoolYearId !== enrollment.schoolYearId) return false;
-    if (row.scopeKind !== "whole_school" && row.classId !== enrollment.classId) return false;
+    if (row.classId !== enrollment.classId) return false;
     return rangesOverlap(row.effectiveFrom, row.effectiveTo, enrollment.startDate, enrollment.endDate);
   });
 }
@@ -216,14 +285,10 @@ export function filterStudentAttendanceHistory<
 
 export function hasWholeSchoolSupervisorScope(
   actor: HomeroomActor,
-  assignments: HomeroomAssignment[],
-  args: { date: string; schoolYearId?: string },
+  _assignments?: HomeroomAssignment[],
+  _args?: { date: string; schoolYearId?: string },
 ): boolean {
-  if (!isHomeroomSupervisorUser(actor) && !isHomeroomOperationalManager(actor)) return false;
-  if (isHomeroomOperationalManager(actor)) return true;
-  return actorAssignmentsOnDate(actor, assignments, args).some(
-    (row) => row.assignmentType === "supervisor" && row.scopeKind === "whole_school",
-  );
+  return isHomeroomOperationalManager(actor);
 }
 
 export function canReadClass(
@@ -234,7 +299,7 @@ export function canReadClass(
 ): boolean {
   if (!hasHomeroomMenu(actor)) return false;
   if (isHomeroomOperationalManager(actor) || isHomeroomViewAllUser(actor)) return true;
-  return actorAssignmentsOnDate(actor, assignments, { date, classId }).length > 0;
+  return teacherClassAssignmentsOnDate(actor, assignments, { date, classId }).length > 0;
 }
 
 export function canReadClassOnAnyDateInRange(
@@ -247,9 +312,9 @@ export function canReadClassOnAnyDateInRange(
   if (isHomeroomOperationalManager(actor) || isHomeroomViewAllUser(actor)) return true;
   return assignments.some((row) => {
     if (String(row.userId) !== String(actor.userId) || !row.active) return false;
+    if (!isHomeroomTeacherClassAssignment(row)) return false;
     if (args.schoolYearId && row.schoolYearId !== args.schoolYearId) return false;
-    if (row.scopeKind !== "whole_school" && classId && row.classId !== classId) return false;
-    if (row.scopeKind !== "whole_school" && !classId && !row.classId) return false;
+    if (classId && row.classId !== classId) return false;
     return rangesOverlap(row.effectiveFrom, row.effectiveTo, args.from, args.to);
   });
 }
@@ -268,24 +333,22 @@ export function canMaintainAssignedRoster(
 
 export function canUploadCamera(
   actor: HomeroomActor,
-  assignments: HomeroomAssignment[],
-  classId: string,
-  date: string,
+  _assignments?: HomeroomAssignment[],
+  _classId?: string,
+  _date?: string,
 ): boolean {
-  if (isHomeroomOperationalManager(actor)) return true;
-  if (!isHomeroomSupervisorUser(actor)) return false;
-  return actorAssignmentsOnDate(actor, assignments, { date, classId }).some(
-    (row) => row.assignmentType === "supervisor",
-  );
+  return canImportAttendanceWithoutClassAssignment(actor);
 }
 
 export function canCorrectDisposition(
   actor: HomeroomActor,
-  assignments: HomeroomAssignment[],
-  classId: string,
-  date: string,
+  _assignments: HomeroomAssignment[],
+  _classId: string,
+  _date: string,
 ): boolean {
-  return canUploadCamera(actor, assignments, classId, date);
+  // Whole-school access requested for Giám thị is limited to file import.
+  // Disposition changes remain an operational-manager action.
+  return isHomeroomOperationalManager(actor);
 }
 
 export function canSeeSensitiveContacts(
@@ -343,6 +406,17 @@ export function assertCanWriteHomeroomCatalog(actor: HomeroomActor) {
   if (actor.status && actor.status !== "active") throw new Error("USER_NOT_ACTIVE");
   if (actor.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
   if (!canWriteHomeroomCatalog(actor)) throw new Error(HOMEROOM_SCOPE_FORBIDDEN);
+}
+
+export function assertCanBulkImportRoster(actor: HomeroomActor) {
+  assertCanWriteHomeroomCatalog(actor);
+}
+
+export function assertCanListAttendanceImportClasses(actor: HomeroomActor) {
+  assertHomeroomActorReady(actor);
+  if (!canImportAttendanceWithoutClassAssignment(actor)) {
+    throw new Error(SUPERVISOR_REQUIRED);
+  }
 }
 
 export function assertCanMaintainAssignedRoster(

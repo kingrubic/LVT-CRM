@@ -1,5 +1,9 @@
 export const FIRST_CLASS_CTA = 'Tạo lớp đầu tiên';
 export const CLASS_CATALOG_TITLE = 'Quản lý lớp';
+export const TEACHER_OVERVIEW_TITLE = 'Lớp đang chủ nhiệm';
+export const MANAGE_CLASSES_ACTION = 'Quản lý lớp';
+export const IMPORT_ATTENDANCE_ACTION = 'Import file điểm danh';
+export const DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION = 'Tải file điểm danh mẫu';
 export const OPEN_CLASS_ACTION = 'Mở lớp';
 export const UPCOMING_ASSIGNMENT_TITLE = 'Sắp hiệu lực';
 export const CURRENT_ASSIGNMENT_TITLE = 'Phân công hiện tại';
@@ -41,14 +45,25 @@ export function buildClassArchivePayload(id) {
   return { id };
 }
 
-export function buildClassAssignmentPayload({ classId, userId, assignmentType, effectiveFrom }) {
+export function buildClassAssignmentPayload({ classId, userId, assignmentType = 'homeroom_teacher', effectiveFrom }) {
+  if (assignmentType !== 'homeroom_teacher') {
+    throw new Error('INVALID_ASSIGNMENT_TYPE');
+  }
   return {
     classId,
     userId,
-    assignmentType: assignmentType === 'supervisor' ? 'supervisor' : 'homeroom_teacher',
+    assignmentType: 'homeroom_teacher',
     scopeKind: 'class',
     effectiveFrom,
   };
+}
+
+export function isHomeroomTeacherClassAssignment(row) {
+  return row?.assignmentType === 'homeroom_teacher' && row?.scopeKind === 'class' && Boolean(row?.classId);
+}
+
+export function filterHomeroomTeacherClassAssignments(assignments) {
+  return (assignments || []).filter((row) => isHomeroomTeacherClassAssignment(row));
 }
 
 export function assignmentTypeLabel(type) {

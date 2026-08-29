@@ -23,9 +23,14 @@ import {
 } from "./homeroomContext";
 import {
   assertCanIncludeArchivedClasses,
+  assertCanListAttendanceImportClasses,
   assertClassNotArchived,
+  assertHomeroomTeacherAssignmentInput,
   classIncludedInScopedList,
   classVisibleInScope,
+  findEffectiveHomeroomTeacherAssignment,
+  resolveAttendanceImportClassScope,
+  resolveCatalogScope,
   resolveClassScope,
 } from "./homeroomPolicy";
 import { assertYmd, vietnamDateFromUtcMs } from "./homeroomTime";
@@ -56,6 +61,70 @@ export const listScoped = query({
   },
 });
 
+export const listCatalog = query({
+  args: {
+    schoolYearId: v.optional(v.string()),
+    date: v.optional(v.string()),
+    includeArchived: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { actor } = await homeroomCatalogWriterOrThrow(ctx);
+    if (args.includeArchived) assertCanIncludeArchivedClasses(actor);
+    const date = args.date || vietnamDateFromUtcMs(Date.now());
+    const scope = resolveCatalogScope(actor);
+    const classes = await ctx.db.query("homeroomClasses").collect();
+    const enrollments = await ctx.db.query("classEnrollments").collect();
+    const assignments = await loadAssignments(ctx, args.schoolYearId);
+    const users = await ctx.db.query("users").collect();
+    const usersById = new Map(users.map((row) => [String(row._id), row]));
+    return classes
+      .filter((row) => !args.schoolYearId || row.schoolYearId === args.schoolYearId)
+      .filter((row) => classIncludedInScopedList(row, { includeArchived: args.includeArchived }))
+      .filter((row) => classVisibleInScope(String(row._id), scope))
+      .sort((a, b) => a.code.localeCompare(b.code, "vi"))
+      .map((row) => {
+        const current = findEffectiveHomeroomTeacherAssignment(assignments, {
+          classId: String(row._id),
+          date,
+        });
+        return {
+          ...row,
+          rosterCount: enrollmentsCoveringDate(enrollments, { classId: String(row._id), date }).length,
+          currentHomeroomTeacher: current
+            ? {
+                ...current,
+                user: toSafeAssignmentUser(usersById.get(String(current.userId)), current.userId),
+              }
+            : null,
+        };
+      });
+  },
+});
+
+export const listForAttendanceImport = query({
+  args: {
+    schoolYearId: v.optional(v.string()),
+    date: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { actor } = await homeroomActorOrThrow(ctx);
+    assertCanListAttendanceImportClasses(actor);
+    const date = args.date || vietnamDateFromUtcMs(Date.now());
+    const scope = resolveAttendanceImportClassScope(actor);
+    const classes = await ctx.db.query("homeroomClasses").collect();
+    const enrollments = await ctx.db.query("classEnrollments").collect();
+    return classes
+      .filter((row) => !args.schoolYearId || row.schoolYearId === args.schoolYearId)
+      .filter((row) => classIncludedInScopedList(row))
+      .filter((row) => classVisibleInScope(String(row._id), scope))
+      .sort((a, b) => a.code.localeCompare(b.code, "vi"))
+      .map((row) => ({
+        ...row,
+        rosterCount: enrollmentsCoveringDate(enrollments, { classId: String(row._id), date }).length,
+      }));
+  },
+});
+
 export const getScoped = query({
   args: { classId: v.string(), date: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -63,7 +132,7 @@ export const getScoped = query({
     const date = args.date || vietnamDateFromUtcMs(Date.now());
     const klass = await assertClassReadable(ctx, actor, args.classId, date);
     const assignments = (await ctx.db.query("homeroomAssignments").collect()).filter(
-      (row) => row.classId === args.classId || row.scopeKind === "whole_school",
+      (row) => row.classId === args.classId && row.assignmentType === "homeroom_teacher" && row.scopeKind === "class",
     );
     const enrollments = enrollmentsCoveringDate(await ctx.db.query("classEnrollments").collect(), {
       classId: args.classId,
@@ -190,41 +259,40 @@ export const assignUser = mutation({
     assertClassNotArchived(klass);
     const target = await ctx.db.get(args.userId as Id<"users">);
     if (!target || target.status !== "active") throw new Error("USER_NOT_FOUND");
-    const assignmentType = args.assignmentType === "supervisor" ? "supervisor" : "homeroom_teacher";
-    const scopeKind = args.scopeKind === "whole_school" ? "whole_school" : "class";
-    if (scopeKind === "whole_school" && assignmentType !== "supervisor") {
-      throw new Error("INVALID_ASSIGNMENT_SCOPE");
-    }
+    assertHomeroomTeacherAssignmentInput({
+      assignmentType: args.assignmentType,
+      scopeKind: args.scopeKind,
+    });
+    const assignmentType = "homeroom_teacher";
+    const scopeKind = "class";
     const effectiveFrom = assertYmd(args.effectiveFrom);
     const current = await ctx.db.query("homeroomAssignments").collect();
-    if (assignmentType === "homeroom_teacher") {
-      const overlap = findOverlappingHomeroomTeacher(current, {
-        classId: args.classId,
-        effectiveFrom,
+    const overlap = findOverlappingHomeroomTeacher(current, {
+      classId: args.classId,
+      effectiveFrom,
+    });
+    if (overlap) {
+      const plan = planHomeroomTeacherReplacement({
+        assignment: overlap,
+        date: effectiveFrom,
       });
-      if (overlap) {
-        const plan = planHomeroomTeacherReplacement({
-          assignment: overlap,
-          date: effectiveFrom,
-        });
-        await ctx.db.patch(overlap._id as Id<"homeroomAssignments">, {
-          ...plan.close,
-          endedBy: String(user._id),
-          updatedAt: Date.now(),
-        });
-      }
-      if (
-        findOverlappingHomeroomTeacher(
-          current.filter((row) => String(row._id) !== String(overlap?._id)),
-          { classId: args.classId, effectiveFrom },
-        )
-      ) {
-        throw new Error(HOMEROOM_TEACHER_OVERLAP);
-      }
+      await ctx.db.patch(overlap._id as Id<"homeroomAssignments">, {
+        ...plan.close,
+        endedBy: String(user._id),
+        updatedAt: Date.now(),
+      });
+    }
+    if (
+      findOverlappingHomeroomTeacher(
+        current.filter((row) => String(row._id) !== String(overlap?._id)),
+        { classId: args.classId, effectiveFrom },
+      )
+    ) {
+      throw new Error(HOMEROOM_TEACHER_OVERLAP);
     }
     const now = Date.now();
     const id = await ctx.db.insert("homeroomAssignments", {
-      classId: scopeKind === "whole_school" ? "" : args.classId,
+      classId: args.classId,
       schoolYearId: klass.schoolYearId,
       userId: args.userId,
       assignmentType,

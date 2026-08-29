@@ -190,27 +190,30 @@ test('attendance summary authorizes every row by class and attendanceDate, not o
     effectiveFrom: '2026-08-01',
     active: true,
   };
-  assert.equal(
-    authorizeAttendanceSummaryRows({
-      actor: supervisor,
-      assignments: [wholeSchool],
-      days: rangeDays,
-      from: '2026-08-01',
-      to: '2026-09-30',
-      schoolYearId: 'year-1',
-    }).length,
-    3,
+  assert.throws(
+    () =>
+      authorizeAttendanceSummaryRows({
+        actor: supervisor,
+        assignments: [wholeSchool],
+        days: rangeDays,
+        from: '2026-08-01',
+        to: '2026-09-30',
+        schoolYearId: 'year-1',
+      }),
+    new RegExp(HOMEROOM_SCOPE_FORBIDDEN),
   );
-  assert.deepEqual(
-    authorizeAttendanceSummaryRows({
-      actor: supervisor,
-      assignments: [{ ...wholeSchool, effectiveTo: '2026-08-31' }],
-      days: rangeDays,
-      from: '2026-08-01',
-      to: '2026-09-30',
-      schoolYearId: 'year-1',
-    }).map((row) => `${row.classId}:${row.attendanceDate}`),
-    ['c1:2026-08-20', 'c2:2026-08-20'],
+  assert.throws(
+    () =>
+      authorizeAttendanceSummaryRows({
+        actor: supervisor,
+        assignments: [{ ...wholeSchool, classId: 'c1', scopeKind: 'class' }],
+        days: rangeDays,
+        classId: 'c1',
+        from: '2026-08-01',
+        to: '2026-09-30',
+        schoolYearId: 'year-1',
+      }),
+    new RegExp(HOMEROOM_SCOPE_FORBIDDEN),
   );
 
   const source = readFileSync(new URL('../convex/homeroomReports.ts', import.meta.url), 'utf8');
@@ -218,6 +221,7 @@ test('attendance summary authorizes every row by class and attendanceDate, not o
   assert.doesNotMatch(source, /assertClassReadable/);
   assert.doesNotMatch(source, /evaluateMissingUploadAlert\(/);
   assert.match(source, /evaluateScopedMissingUploadAlerts/);
+  assert.match(source, /resolveTeacherOverviewScope/);
 });
 
 const INTERNAL_STUDENT_ID = 'qn7abcinternalstudent01';

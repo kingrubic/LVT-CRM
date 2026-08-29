@@ -28,10 +28,15 @@ test('homeroom keeps /lop-chu-nhiem and supports deep subroutes for back/forward
     homeroomPath: '/lop-chu-nhiem',
   });
   assert.equal(homeroomPathname({ classId: 'c1', tab: 'diem-danh' }), '/lop-chu-nhiem/lop/c1/diem-danh');
+  assert.equal(homeroomPathname({ manageClasses: true }), '/lop-chu-nhiem/quan-ly-lop');
+  assert.equal(homeroomPathname({ importAttendance: true }), '/lop-chu-nhiem/import-diem-danh');
+  assert.equal(homeroomPathname({ importAttendance: true, classId: 'c1' }), '/lop-chu-nhiem/import-diem-danh/c1');
   const nested = routeForPathname('/lop-chu-nhiem/lop/c1/bao-cao');
   assert.equal(nested?.menu, 'homeroom');
   assert.equal(nested?.homeroomPath, '/lop-chu-nhiem/lop/c1/bao-cao');
   assert.equal(routeForPathname('/lop-chu-nhiem/hoc-sinh/st1')?.menu, 'homeroom');
+  assert.equal(routeForPathname('/lop-chu-nhiem/quan-ly-lop')?.menu, 'homeroom');
+  assert.equal(routeForPathname('/lop-chu-nhiem/import-diem-danh/c1')?.menu, 'homeroom');
 });
 
 test('homeroom frontend date defaults use Vietnam calendar, including UTC 18:00', () => {
@@ -51,6 +56,8 @@ test('empty school-year state is actionable and never renders an infinite overvi
   assert.match(source, /disabled=\{!years\?\.length\}/);
   assert.match(source, /!selectedYearId \? \(/);
   assert.match(source, /selectedYearId && \(session\?\.isOperationalManager/);
+  assert.match(source, /quan-ly-lop/);
+  assert.match(source, /view: 'manage'/);
 });
 
 test('student detail recovers from query errors without blanking the CRM', () => {

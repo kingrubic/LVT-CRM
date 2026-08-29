@@ -3,6 +3,7 @@ import { useAction, useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { homeroomPathname, routeForPathname } from '../navigationRoutes';
 import { downloadRosterImportTemplate } from '../lib/rosterImportExcel';
+import { downloadAttendanceImportTemplate } from '../lib/attendanceImportExcel';
 import {
   attendanceReplaceModeChoices,
   buildAttendancePublishArgs,
@@ -18,6 +19,10 @@ import { vietnamTodayYmd } from './homeroomTime';
 import { ClassCards, ClassCatalogPanel, ClassManagePanel } from './HomeroomClassCatalog';
 import {
   BACK_TO_OVERVIEW,
+  DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION,
+  IMPORT_ATTENDANCE_ACTION,
+  MANAGE_CLASSES_ACTION,
+  TEACHER_OVERVIEW_TITLE,
   filterActiveClasses,
   classStatusLabel,
 } from './classCatalog';
@@ -45,10 +50,28 @@ function statusChip(status) {
   );
 }
 
+function Glyph({ children, size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+
+function studentInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase();
+}
+
 function parseHomeroomPath(pathname) {
   const normalized = routeForPathname(pathname)?.homeroomPath || '/lop-chu-nhiem';
   const parts = normalized.split('/').filter(Boolean);
-  if (parts[1] === 'import-diem-danh') return { view: 'import' };
+  if (parts[1] === 'quan-ly-lop') return { view: 'manage' };
+  if (parts[1] === 'import-diem-danh') {
+    return { view: 'import', classId: parts[2] ? decodeURIComponent(parts[2]) : undefined };
+  }
   if (parts[1] === 'hoc-sinh' && parts[2]) return { view: 'student', studentId: decodeURIComponent(parts[2]) };
   if (parts[1] === 'lop' && parts[2]) {
     return { view: 'class', classId: decodeURIComponent(parts[2]), tab: parts[3] || 'danh-sach' };
@@ -80,8 +103,8 @@ export default function HomeroomRouter({ session }) {
 
   return (
     <section className="homeroom-view">
-      <div className="homeroom-toolbar">
-        <label>
+      <div className="homeroom-toolbar homeroom-toolbar-main">
+        <label className="homeroom-year-field">
           Năm học
           <select value={selectedYearId} onChange={(e) => setYearId(e.target.value)} disabled={!years?.length}>
             {!years?.length ? <option value="">Chưa có năm học</option> : null}
@@ -90,10 +113,17 @@ export default function HomeroomRouter({ session }) {
             ))}
           </select>
         </label>
-        <button type="button" className="primary-button" onClick={() => go(homeroomPathname())}>Tổng quan</button>
-        {selectedYearId && (session?.isOperationalManager || session?.menuAccess?.homeroom === 'supervisor') ? (
-          <button type="button" onClick={() => go(homeroomPathname({ importAttendance: true }))}>Nhập điểm danh camera</button>
-        ) : null}
+        <div className="homeroom-toolbar-nav">
+          <button type="button" className="primary-button" onClick={() => go(homeroomPathname())}>Tổng quan</button>
+          {session?.isOperationalManager ? (
+            <button type="button" className="homeroom-ghost-button" onClick={() => go(homeroomPathname({ manageClasses: true }))}>
+              {MANAGE_CLASSES_ACTION}
+            </button>
+          ) : null}
+          {selectedYearId && (session?.isOperationalManager || session?.menuAccess?.homeroom === 'supervisor') ? (
+            <button type="button" className="homeroom-ghost-button" onClick={() => go(homeroomPathname({ importAttendance: true }))}>Nhập điểm danh camera</button>
+          ) : null}
+        </div>
       </div>
       {!selectedYearId ? (
         <EmptySchoolYearState canCreate={Boolean(session?.isOperationalManager)} onCreate={createSchoolYear} />
@@ -103,7 +133,18 @@ export default function HomeroomRouter({ session }) {
           yearId={selectedYearId}
           session={session}
           onOpenClass={(id) => go(homeroomPathname({ classId: id }))}
+          onImportClass={(id) => go(homeroomPathname({ importAttendance: true, classId: id }))}
         />
+      ) : route.view === 'manage' ? (
+        session?.isOperationalManager ? (
+          <ClassCatalogPanel
+            session={session}
+            yearId={selectedYearId}
+            onOpenClass={(id) => go(homeroomPathname({ classId: id }))}
+          />
+        ) : (
+          <p className="homeroom-issue" role="alert">Chỉ quản trị viên mới được quản lý lớp.</p>
+        )
       ) : route.view === 'class' ? (
         <ClassDetail
           classId={route.classId}
@@ -113,13 +154,14 @@ export default function HomeroomRouter({ session }) {
           onTab={(tab) => go(homeroomPathname({ classId: route.classId, tab }))}
           onOpenStudent={(id) => go(homeroomPathname({ studentId: id }))}
           onBack={() => go(homeroomPathname())}
+          onImportAttendance={() => go(homeroomPathname({ importAttendance: true, classId: route.classId }))}
         />
       ) : route.view === 'student' ? (
         <HomeroomStudentQueryErrorBoundary onBack={() => go(homeroomPathname())}>
           <StudentDetail studentId={route.studentId} />
         </HomeroomStudentQueryErrorBoundary>
       ) : route.view === 'import' ? (
-        <AttendanceImportView yearId={selectedYearId} />
+        <AttendanceImportView yearId={selectedYearId} classId={route.classId} session={session} />
       ) : null}
     </section>
   );
@@ -172,24 +214,30 @@ function EmptySchoolYearState({ canCreate, onCreate }) {
   );
 }
 
-function HomeroomOverview({ overview, yearId, session, onOpenClass }) {
+function HomeroomOverview({ overview, yearId, session, onOpenClass, onImportClass }) {
   if (overview === undefined) return <p className="homeroom-empty">Đang tải tổng quan…</p>;
   const counts = overview.summary?.counts || {};
-  const canManage = Boolean(session?.isOperationalManager);
+  const showSupervisorImportPicker = session?.menuAccess?.homeroom === 'supervisor' && !session?.isOperationalManager;
   return (
-    <>
+    <div className="homeroom-overview">
       <div className="homeroom-cards">
-        <article className="homeroom-card"><span>Lớp đang hoạt động</span><strong>{overview.classes.length}</strong></article>
+        <article className="homeroom-card"><span>Lớp đang chủ nhiệm</span><strong>{overview.classes.length}</strong></article>
         <article className="homeroom-card"><span>Học sinh</span><strong>{overview.studentCount}</strong></article>
         <article className="homeroom-card"><span>Có mặt hôm nay</span><strong>{counts.present || 0}</strong></article>
         <article className="homeroom-card"><span>Trễ</span><strong>{counts.late || 0}</strong></article>
         <article className="homeroom-card"><span>Vắng chờ xử lý</span><strong>{counts.absent_pending || 0}</strong></article>
       </div>
-      <ClassCatalogPanel session={session} yearId={yearId} onOpenClass={onOpenClass} />
+      <div className="homeroom-panel">
+        <h3>{TEACHER_OVERVIEW_TITLE}</h3>
+        <ClassCards classes={overview.classes} canManage={false} onOpenClass={onOpenClass} />
+      </div>
+      {showSupervisorImportPicker ? (
+        <AttendanceImportClassPicker yearId={yearId} onImportClass={onImportClass} />
+      ) : null}
       <div className="homeroom-panel">
         <h3>Cảnh báo</h3>
         {overview.missingUpload?.scopeEmpty ? (
-          <p className="muted">Không có lớp trong phạm vi — không có cảnh báo toàn trường.</p>
+          <p className="muted">Không có lớp đang chủ nhiệm — không có cảnh báo toàn trường.</p>
         ) : overview.missingUpload?.shouldAlert ? (
           <div>
             <p className="homeroom-issue">Chưa có file điểm danh đã công bố sau {overview.missingUpload.cutoffTime}.</p>
@@ -208,45 +256,158 @@ function HomeroomOverview({ overview, yearId, session, onOpenClass }) {
           <p className="homeroom-issue">Còn {overview.unresolvedAbsences.length} buổi vắng chờ phân loại.</p>
         ) : null}
       </div>
-      {overview.classes.length || !canManage ? (
-        <div className="homeroom-panel">
-          <h3>Lớp trong phạm vi</h3>
-          <ClassCards classes={overview.classes} canManage={canManage} onOpenClass={onOpenClass} />
-        </div>
-      ) : null}
-    </>
+    </div>
   );
 }
 
-function ClassDetail({ classId, tab, yearId, session, onTab, onOpenStudent, onBack }) {
-  const detail = useQuery(anyApi.homeroomClasses.getScoped, { classId });
-  const roster = useQuery(anyApi.students.listByClass, { classId });
-  if (detail === undefined) return <p className="homeroom-empty">Đang tải lớp…</p>;
-  const archived = detail.class.status === 'archived';
+function AttendanceImportClassPicker({ yearId, onImportClass }) {
+  const classes = useQuery(
+    anyApi.homeroomClasses.listForAttendanceImport,
+    yearId ? { schoolYearId: yearId } : 'skip',
+  );
+  const active = filterActiveClasses(classes);
   return (
     <div className="homeroom-panel">
-      <h2>{detail.class.code} — {detail.class.name}</h2>
-      {archived ? (
-        <p className="homeroom-issue warn" role="status">
-          {classStatusLabel('archived')}. Không thể phân công, nhập danh sách hoặc dùng camera.
-        </p>
+      <h3>Nhập điểm danh theo lớp</h3>
+      <p className="muted">Giám thị và quản trị có thể nhập file điểm danh cho mọi lớp đang hoạt động — không cần phân công chủ nhiệm.</p>
+      {classes === undefined ? <p className="homeroom-empty">Đang tải lớp để nhập điểm danh…</p> : null}
+      {classes !== undefined && !active.length ? (
+        <p className="homeroom-empty">Chưa có lớp đang hoạt động để nhập điểm danh.</p>
       ) : null}
-      <p className="muted">Sĩ số hiện tại: {detail.rosterCount} · {classStatusLabel(detail.class.status)}</p>
-      <div className="homeroom-class-actions">
-        <button type="button" onClick={onBack}>{BACK_TO_OVERVIEW}</button>
+      {active.length ? (
+        <ul className="homeroom-class-cards">
+          {active.map((item) => (
+            <li key={item._id} className="homeroom-card homeroom-class-card">
+              <h3>{item.code} — {item.name}</h3>
+              <p>Khối {item.gradeLevel}</p>
+              <div className="homeroom-class-actions">
+                <button type="button" className="primary-button" onClick={() => onImportClass(item._id)}>
+                  {IMPORT_ATTENDANCE_ACTION}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function ClassDetail({ classId, tab, yearId, session, onTab, onOpenStudent, onBack, onImportAttendance }) {
+  const detail = useQuery(anyApi.homeroomClasses.getScoped, { classId });
+  const roster = useQuery(anyApi.students.listByClass, { classId });
+  const [importOpen, setImportOpen] = useState(false);
+  if (detail === undefined) return <p className="homeroom-empty">Đang tải lớp…</p>;
+  const archived = detail.class.status === 'archived';
+  const rosterTab = tab !== 'diem-danh' && tab !== 'bao-cao';
+  const canImportRoster = !archived && Boolean(session?.isOperationalManager);
+  const canImportAttendance = !archived && Boolean(session?.isOperationalManager || session?.menuAccess?.homeroom === 'supervisor');
+  return (
+    <div className="homeroom-class-workspace">
+      <div className="homeroom-panel homeroom-class-panel">
+        <div className="homeroom-class-header">
+          <div>
+            <h2>{detail.class.code} — {detail.class.name}</h2>
+            <p className="homeroom-class-meta">
+              <span>Sĩ số hiện tại: {detail.rosterCount}</span>
+              <span className={`homeroom-status ${archived ? 'no_data' : 'present'}`}>
+                <span aria-hidden="true">●</span>
+                {classStatusLabel(detail.class.status)}
+              </span>
+            </p>
+          </div>
+          {rosterTab ? (
+            <div className="homeroom-class-header-actions">
+              {canImportRoster ? (
+                <button type="button" className="homeroom-ghost-button" onClick={() => downloadRosterImportTemplate()}>
+                  <Glyph>
+                    <path d="M12 3v12" />
+                    <path d="m8 11 4 4 4-4" />
+                    <path d="M5 21h14" />
+                  </Glyph>
+                  Tải mẫu Excel
+                </button>
+              ) : null}
+              {canImportRoster ? (
+                <button type="button" className="primary-button" onClick={() => setImportOpen(true)}>
+                  <Glyph>
+                    <path d="M12 21V9" />
+                    <path d="m8 13 4-4 4 4" />
+                    <path d="M5 3h14" />
+                  </Glyph>
+                  Nhập danh sách
+                </button>
+              ) : null}
+              {canImportAttendance ? (
+                <button type="button" className="homeroom-ghost-button" onClick={() => downloadAttendanceImportTemplate()}>
+                  {DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION}
+                </button>
+              ) : null}
+              {canImportAttendance ? (
+                <button type="button" className="primary-button" onClick={onImportAttendance}>
+                  {IMPORT_ATTENDANCE_ACTION}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {archived ? (
+          <p className="homeroom-issue warn" role="status">
+            {classStatusLabel('archived')}. Không thể phân công, nhập danh sách hoặc dùng camera.
+          </p>
+        ) : null}
+        <nav className="homeroom-tabs" aria-label="Điều hướng lớp">
+          <button type="button" className="homeroom-overview-button" aria-label={BACK_TO_OVERVIEW} onClick={onBack}>
+            <Glyph>
+              <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" />
+              <rect x="13.5" y="3.5" width="7" height="7" rx="1.2" />
+              <rect x="3.5" y="13.5" width="7" height="7" rx="1.2" />
+              <rect x="13.5" y="13.5" width="7" height="7" rx="1.2" />
+            </Glyph>
+            Tổng quan
+          </button>
+          <button type="button" aria-current={rosterTab ? 'page' : undefined} onClick={() => onTab('danh-sach')}>
+            <Glyph>
+              <circle cx="9" cy="8" r="3" />
+              <path d="M4 19.5c.9-3.2 2.8-4.8 5-4.8s4.1 1.6 5 4.8" />
+              <circle cx="16.5" cy="8.5" r="2.2" />
+              <path d="M15.4 14.6c2 0 3.6 1.1 4.4 3.4" />
+            </Glyph>
+            Danh sách học sinh
+          </button>
+          <button type="button" aria-current={tab === 'diem-danh' ? 'page' : undefined} onClick={() => onTab('diem-danh')}>
+            <Glyph>
+              <rect x="4" y="5" width="16" height="15" rx="2" />
+              <path d="M8 3.5v3M16 3.5v3M4 10h16" />
+            </Glyph>
+            Điểm danh
+          </button>
+          <button type="button" aria-current={tab === 'bao-cao' ? 'page' : undefined} onClick={() => onTab('bao-cao')}>
+            <Glyph>
+              <path d="M4 19.5V10.5" />
+              <path d="M10 19.5V5.5" />
+              <path d="M16 19.5v-6" />
+              <path d="M22 19.5H2" />
+            </Glyph>
+            Báo cáo
+          </button>
+        </nav>
+        {tab === 'diem-danh' ? (
+          <DailyAttendanceRegister classId={classId} session={session} onOpenStudent={onOpenStudent} />
+        ) : tab === 'bao-cao' ? (
+          <AttendanceReports classId={classId} yearId={yearId} />
+        ) : (
+          <StudentRoster
+            classId={classId}
+            roster={roster}
+            session={session}
+            onOpenStudent={onOpenStudent}
+            archived={archived}
+            importOpen={importOpen}
+            onImportClose={() => setImportOpen(false)}
+          />
+        )}
       </div>
-      <div className="homeroom-tabs" role="tablist">
-        <button type="button" onClick={() => onTab('danh-sach')}>Danh sách học sinh</button>
-        <button type="button" onClick={() => onTab('diem-danh')}>Điểm danh</button>
-        <button type="button" onClick={() => onTab('bao-cao')}>Báo cáo</button>
-      </div>
-      {tab === 'diem-danh' ? (
-        <DailyAttendanceRegister classId={classId} session={session} onOpenStudent={onOpenStudent} />
-      ) : tab === 'bao-cao' ? (
-        <AttendanceReports classId={classId} yearId={yearId} />
-      ) : (
-        <StudentRoster classId={classId} roster={roster} session={session} onOpenStudent={onOpenStudent} archived={archived} />
-      )}
       {session?.isOperationalManager ? (
         <details className="homeroom-manage-disclosure">
           <summary>Quản lý lớp</summary>
@@ -257,31 +418,39 @@ function ClassDetail({ classId, tab, yearId, session, onTab, onOpenStudent, onBa
   );
 }
 
-function StudentRoster({ classId, roster, session, onOpenStudent, archived = false }) {
-  const [open, setOpen] = useState(false);
-  const canImport = !archived && (session?.isOperationalManager || session?.menuAccess?.homeroom === 'view' || session?.menuAccess?.homeroom === 'view_all');
+function StudentRoster({ classId, roster, session, onOpenStudent, archived = false, importOpen = false, onImportClose }) {
+  const canImport = !archived && Boolean(session?.isOperationalManager);
   return (
     <div>
-      <div className="homeroom-toolbar">
-        <button type="button" onClick={() => downloadRosterImportTemplate()}>Tải mẫu Excel</button>
-        {canImport ? <button type="button" className="primary-button" onClick={() => setOpen(true)}>Nhập danh sách</button> : null}
-      </div>
-      {open ? <StudentRosterImportDialog classId={classId} onClose={() => setOpen(false)} /> : null}
+      {importOpen && canImport ? <StudentRosterImportDialog classId={classId} onClose={onImportClose} /> : null}
       {!roster ? <p className="homeroom-empty">Đang tải danh sách…</p> : !roster.length ? (
         <p className="homeroom-empty">Chưa có học sinh trong lớp.</p>
       ) : (
         <div className="homeroom-table-wrap">
           <table className="homeroom-table">
             <thead>
-              <tr><th>STT</th><th>Mã</th><th>Họ tên</th><th></th></tr>
+              <tr><th>STT</th><th>Mã học sinh</th><th>Họ tên</th><th>Thao tác</th></tr>
             </thead>
             <tbody>
               {roster.map((row) => (
                 <tr key={row.student._id}>
                   <td>{row.enrollment.rosterNumber || '—'}</td>
-                  <td>{row.student.studentCode}</td>
+                  <td>
+                    <span className="homeroom-student-id">
+                      <span className="homeroom-avatar" aria-hidden="true">{studentInitials(row.student.fullName)}</span>
+                      {row.student.studentCode}
+                    </span>
+                  </td>
                   <td>{row.student.fullName}</td>
-                  <td><button type="button" onClick={() => onOpenStudent(row.student._id)}>Chi tiết</button></td>
+                  <td>
+                    <button type="button" className="homeroom-detail-button" onClick={() => onOpenStudent(row.student._id)}>
+                      <Glyph size={15}>
+                        <path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z" />
+                        <circle cx="12" cy="12" r="2.4" />
+                      </Glyph>
+                      Chi tiết
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -382,7 +551,7 @@ function DailyAttendanceRegister({ classId, session, onOpenStudent }) {
   const [filter, setFilter] = useState('all');
   const rows = useQuery(anyApi.studentAttendance.listDailyClass, { classId, attendanceDate: date });
   const setDisposition = useMutation(anyApi.studentAttendance.setDisposition);
-  const canCorrect = session?.isOperationalManager || session?.menuAccess?.homeroom === 'supervisor';
+  const canCorrect = Boolean(session?.isOperationalManager);
   const filtered = (rows || []).filter((row) => filter === 'all' || row.day?.effectiveStatus === filter);
   return (
     <div>
@@ -493,29 +662,47 @@ function AttendanceReports({ classId, yearId }) {
   );
 }
 
-function AttendanceImportView({ yearId }) {
-  const classes = useQuery(anyApi.homeroomClasses.listScoped, yearId ? { schoolYearId: yearId } : {});
+function AttendanceImportView({ yearId, classId: initialClassId, session }) {
+  const allowed = Boolean(session?.isOperationalManager || session?.menuAccess?.homeroom === 'supervisor');
+  const classes = useQuery(
+    anyApi.homeroomClasses.listForAttendanceImport,
+    allowed && yearId ? { schoolYearId: yearId } : 'skip',
+  );
   const generate = useMutation(anyApi.attendanceImport.generateUploadUrl);
   const register = useMutation(anyApi.attendanceImport.registerUpload);
   const inspectColumns = useAction(anyApi.attendanceImport.inspectColumns);
   const validateImport = useAction(anyApi.attendanceImport.validate);
   const publishImport = useMutation(anyApi.attendanceImport.publish);
-  const [classId, setClassId] = useState('');
+  const [classId, setClassId] = useState(initialClassId || '');
   const [date, setDate] = useState(() => vietnamTodayYmd());
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [replaceModeRequired, setReplaceModeRequired] = useState(false);
+
+  useEffect(() => {
+    if (initialClassId) setClassId(initialClassId);
+  }, [initialClassId]);
+
+  if (!allowed) {
+    return <p className="homeroom-issue" role="alert">Chỉ Giám thị hoặc quản trị được nhập điểm danh camera.</p>;
+  }
+
   return (
     <div className="homeroom-panel">
       <h2>Nhập file camera</h2>
       <p className="muted">Chưa có workbook camera nhà trường (IN-017/IN-018). Hệ thống chỉ đọc header trong giới hạn và yêu cầu xác nhận mapping.</p>
+      <div className="homeroom-class-actions">
+        <button type="button" className="homeroom-ghost-button" onClick={() => downloadAttendanceImportTemplate()}>
+          {DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION}
+        </button>
+      </div>
       <div className="homeroom-filters">
         <label>
           Lớp
           <select value={classId} onChange={(e) => setClassId(e.target.value)}>
             <option value="">Chọn lớp</option>
-            {filterActiveClasses(classes).map((item) => <option key={item._id} value={item._id}>{item.code}</option>)}
+            {filterActiveClasses(classes).map((item) => <option key={item._id} value={item._id}>{item.code} — {item.name}</option>)}
           </select>
         </label>
         <label>Ngày <input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>

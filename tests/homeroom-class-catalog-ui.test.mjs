@@ -12,9 +12,12 @@ import {
   BACK_TO_OVERVIEW,
   CLASS_CATALOG_TITLE,
   CURRENT_ASSIGNMENT_TITLE,
+  DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION,
   FIRST_CLASS_CTA,
   HISTORICAL_ASSIGNMENT_TITLE,
+  IMPORT_ATTENDANCE_ACTION,
   OPEN_CLASS_ACTION,
+  TEACHER_OVERVIEW_TITLE,
   UPCOMING_ASSIGNMENT_TITLE,
   assignmentDateRange,
   assignmentTypeLabel,
@@ -45,6 +48,7 @@ test('catalog and assignment controls are manager-only and ordinary users never 
   assert.match(catalogUiSource, /Quản lý lớp/);
   assert.match(routerSource, /ClassCatalogPanel/);
   assert.match(routerSource, /ClassManagePanel/);
+  assert.match(routerSource, /manageClasses:\s*true/);
   assert.match(catalogUiSource, /session\?\.isOperationalManager/);
   assert.match(catalogUiSource, /canManage/);
   assert.doesNotMatch(catalogUiSource, /menuAccess\?\.homeroom === ['"]supervisor['"]/);
@@ -59,8 +63,17 @@ test('catalog and assignment controls are manager-only and ordinary users never 
     routerSource.indexOf('<ClassManagePanel') + 280,
   );
   assert.match(manageCall, /isOperationalManager/);
+  const overview = routerSource.slice(
+    routerSource.indexOf('function HomeroomOverview'),
+    routerSource.indexOf('function AttendanceImportClassPicker'),
+  );
+  assert.match(overview, /TEACHER_OVERVIEW_TITLE/);
+  assert.doesNotMatch(overview, /ClassCatalogPanel/);
   assert.equal(FIRST_CLASS_CTA, 'Tạo lớp đầu tiên');
   assert.equal(CLASS_CATALOG_TITLE, 'Quản lý lớp');
+  assert.equal(TEACHER_OVERVIEW_TITLE, 'Lớp đang chủ nhiệm');
+  assert.equal(IMPORT_ATTENDANCE_ACTION, 'Import file điểm danh');
+  assert.equal(DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION, 'Tải file điểm danh mẫu');
 });
 
 test('create, update, archive, and assignment payloads match existing Convex contracts', () => {
@@ -125,20 +138,15 @@ test('create, update, archive, and assignment payloads match existing Convex con
       effectiveFrom: '2026-08-15',
     },
   );
-  assert.deepEqual(
-    buildClassAssignmentPayload({
-      classId: 'class-1',
-      userId: 'user-2',
-      assignmentType: 'supervisor',
-      effectiveFrom: '2026-09-01',
-    }),
-    {
-      classId: 'class-1',
-      userId: 'user-2',
-      assignmentType: 'supervisor',
-      scopeKind: 'class',
-      effectiveFrom: '2026-09-01',
-    },
+  assert.throws(
+    () =>
+      buildClassAssignmentPayload({
+        classId: 'class-1',
+        userId: 'user-2',
+        assignmentType: 'supervisor',
+        effectiveFrom: '2026-09-01',
+      }),
+    /INVALID_ASSIGNMENT_TYPE/,
   );
   assert.match(catalogUiSource, /buildClassCreatePayload/);
   assert.match(catalogUiSource, /buildClassUpdatePayload/);
@@ -159,6 +167,8 @@ test('assignment UI is class-scope only and warns that a new GVCN closes the old
   assert.doesNotMatch(catalogUiSource, /whole_school/);
   assert.doesNotMatch(catalogHelperSource, /whole_school/);
   assert.match(catalogHelperSource, /scopeKind:\s*['"]class['"]/);
+  assert.doesNotMatch(catalogUiSource, /option value="supervisor"/);
+  assert.match(catalogUiSource, /Phân công giáo viên chủ nhiệm/);
   assert.equal(assignmentTypeLabel('homeroom_teacher'), 'Giáo viên chủ nhiệm');
   assert.equal(assignmentTypeLabel('supervisor'), 'Giám thị');
   assert.equal(userRoleLabel('admin'), 'Administrator');
@@ -248,26 +258,56 @@ test('homeroom class catalog CSS stays one-column on mobile with visible focus a
   assert.match(mobile, /flex-direction:\s*column/);
   assert.match(mobile, /grid-template-columns:\s*1fr/);
   assert.match(cssSource, /\.homeroom-class-cards/);
+  assert.match(cssSource, /\.homeroom-manage-class-list/);
+  assert.match(cssSource, /\.homeroom-quick-assign/);
   assert.match(cssSource, /\.homeroom-manage-disclosure\s*>\s*summary\s*\{[^}]*min-height:\s*44px/);
 });
 
-test('listScoped defaults to active classes and only catalog managers may include archived', () => {
+test('class workspace navigation exposes the current route and usable mobile overflow', () => {
+  const detail = routerSource.slice(
+    routerSource.indexOf('function ClassDetail'),
+    routerSource.indexOf('function StudentRoster'),
+  );
+  assert.match(detail, /className="homeroom-overview-button"/);
+  assert.match(detail, /className="homeroom-tabs"\s+aria-label="Điều hướng lớp"/);
+  assert.doesNotMatch(detail, /role="tab"/);
+  assert.match(detail, /aria-current=\{rosterTab \? 'page' : undefined\}/);
+  assert.match(detail, /aria-current=\{tab === 'diem-danh' \? 'page' : undefined\}/);
+  assert.doesNotMatch(detail, /role="tabpanel"/);
+  assert.match(cssSource, /@media\s*\(max-width:\s*720px\)[\s\S]*\.homeroom-tabs\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(cssSource, /@media\s*\(max-width:\s*720px\)[\s\S]*\.homeroom-tabs button\s*\{[^}]*width:\s*auto/);
+});
+
+test('listScoped is teacher overview; catalog and attendance import use separate queries', () => {
   const query = classesSource.slice(
     classesSource.indexOf('export const listScoped'),
-    classesSource.indexOf('export const getScoped'),
+    classesSource.indexOf('export const listCatalog'),
   );
   assert.match(query, /includeArchived:\s*v\.optional\(v\.boolean\(\)\)/);
   assert.match(query, /assertCanIncludeArchivedClasses/);
   assert.match(query, /classIncludedInScopedList/);
+  assert.match(query, /resolveClassScope/);
+  const catalogQuery = classesSource.slice(
+    classesSource.indexOf('export const listCatalog'),
+    classesSource.indexOf('export const listForAttendanceImport'),
+  );
+  assert.match(catalogQuery, /homeroomCatalogWriterOrThrow/);
+  assert.match(catalogQuery, /resolveCatalogScope/);
+  assert.match(catalogQuery, /includeArchived/);
+  assert.match(catalogQuery, /currentHomeroomTeacher/);
+  assert.match(catalogUiSource, /listCatalog/);
   assert.match(catalogUiSource, /includeArchived:\s*true/);
+  assert.match(catalogUiSource, /QuickHomeroomTeacherAssign/);
   assert.match(reportsSource, /row\.status !== ["']active["']/);
   const importView = routerSource.slice(
     routerSource.indexOf('function AttendanceImportView'),
     routerSource.indexOf('function AttendanceImportPreview'),
   );
-  assert.match(importView, /listScoped/);
+  assert.match(importView, /listForAttendanceImport/);
+  assert.doesNotMatch(importView, /listScoped/);
   assert.doesNotMatch(importView, /includeArchived:\s*true/);
   assert.match(importView, /filterActiveClasses/);
+  assert.match(importView, /DOWNLOAD_ATTENDANCE_TEMPLATE_ACTION/);
   assert.deepEqual(
     filterActiveClasses([
       { _id: 'a', status: 'active', code: '6A1' },
@@ -287,9 +327,13 @@ test('archived class detail names the status, disables writes, and returns to ov
   assert.match(detail, /archived=\{archived\}/);
   assert.equal(BACK_TO_OVERVIEW, 'Về tổng quan');
   assert.match(catalogUiSource, /không thể thêm phân công/);
-  assert.match(routerSource, /canImport = !archived &&/);
+  assert.match(routerSource, /canImportRoster = !archived && Boolean\(session\?\.isOperationalManager\)/);
+  assert.match(routerSource, /canImport = !archived && Boolean\(session\?\.isOperationalManager\)/);
+  assert.match(detail, /IMPORT_ATTENDANCE_ACTION/);
+  assert.doesNotMatch(detail, /menuAccess\?\.homeroom === ['"]view['"]/);
   assert.match(classesSource, /assertClassNotArchived/);
   assert.match(contextSource, /assertClassNotArchived/);
+  assert.match(contextSource, /assertCanBulkImportRoster/);
 });
 
 test('assignment candidate query is homeroom-scoped, manager-guarded, and returns only safe fields', () => {
