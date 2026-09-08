@@ -99,7 +99,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Công tác (nút **Tạo công tác** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**.
+1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Công tác (nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**.
 2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
 3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 
@@ -124,6 +124,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `attendanceImportUploads`, `attendanceImportRows`, `studentAttendanceDays`, `studentAttendanceCorrections` | Import camera, sổ ngày, nhật ký phân loại |
 | `positions` | Chức vụ + `code` + `level` 1–5 |
 | `userImportUploads` | File Excel import user tạm (Convex Storage, TTL 1 giờ) |
+| `dutyImportUploads` | File Excel import công tác tạm (Convex Storage, TTL 1 giờ) |
 | `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |
 | `boardingPeriods` | Kỳ bán trú (menu đang ẩn) |
 | `officeDocuments` | Công việc đã giao, tên, tệp đính kèm tùy chọn |
@@ -135,7 +136,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
 
 Cấu trúc frontend gợi ý:
 
@@ -274,6 +275,34 @@ npx convex run internal.users.provisionFirstAdmin \
 7. Remove → soft-delete giống disable (kèm dọn push/device). Không xóa auth tables trực tiếp. Cấm tự xóa active account. Cấm khóa/xóa/hạ quyền **admin đang hoạt động cuối cùng** (`LAST_ACTIVE_ADMIN`).
 8. Public `signUp` / `reset` / email verification bị từ chối trong `convex/auth.ts`.
 9. Quên mật khẩu: gửi email trước; thất bại mail **không** xoay credential. Không rate-limit IP.
+
+### Import Excel công tác
+
+UI: trang **Công tác** — nút *Import Excel* cạnh *Tạo công tác* (`src/duties/DutyBulkImport.jsx`).
+
+**Phạm vi**
+
+- Cùng quyền với **Tạo công tác**: admin/mod + tổ trưởng/tổ phó (2/3★). Tổ trưởng **không** được điền `ma_phong_ban`; chỉ email cấp dưới cùng phòng.
+- Chỉ file **`.xlsx`**, tối đa **2 MB**, tối đa **200** dòng. Không CSV.
+- All-or-nothing: một dòng lỗi → không commit; báo lỗi theo dòng.
+- Chỉ khi **mọi dòng hợp lệ** mới hiện xem trước → xác nhận mới tạo công tác.
+- Mỗi dòng tạo một `duties` (không unique lịch). Push thông báo từng dòng giống tạo tay.
+
+**Cột file mẫu (không dấu)**
+
+`ten_cong_tac`, `noi_dung`, `dia_diem`, `ngay_bat_dau`, `gio_bat_dau`, `ngay_ket_thuc`, `gio_ket_thuc`, `ca_ngay`, `ma_phong_ban`, `email_tham_gia`
+
+- Ngày: `YYYY-MM-DD` hoặc `dd/mm/yyyy`.
+- `ca_ngay`: `1`/`0`, `có`/`không`, `true`/`false`; trống = không cả ngày. Khi cả ngày: ngày kết thúc = ngày bắt đầu, giờ mặc định `08:00`–`17:00`.
+- `ma_phong_ban` / `email_tham_gia`: nhiều giá trị cách nhau dấu phẩy; được để trống một cột; **phải có ít nhất một** phòng hoặc một email.
+
+**Flow server-first**
+
+1. Client chỉ kiểm tra extension/size, rồi upload Convex Storage + `dutyImport.registerUpload` (TTL **1 giờ**).
+2. `dutyImport.validateUpload({ uploadId })` — server đọc lại file, chặn nếu quá hạn hoặc blob > 2 MiB.
+3. `dutyImport.commit({ uploadId })` — đọc lại cùng file, validate lần nữa, claim một lần, insert atomic. **Không tin rows từ client.**
+
+**Code chính:** `convex/dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`; test `tests/duty-import.test.mjs`.
 
 ### Import user hàng loạt (SYS-011 · chỉ Administrator)
 

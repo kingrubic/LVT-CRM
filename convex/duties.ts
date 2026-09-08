@@ -16,72 +16,11 @@ import {
 } from "./lib";
 import {
   canCreateAssignments,
-  cleanDutyContent,
-  cleanDutyLocationText,
-  cleanDutyTitle,
   dutyListTitle,
   dutyLocationLabel,
   dutyPushRecipientIds,
-  normalizeDutyClock,
 } from "./assignmentPolicy";
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^\d{2}:\d{2}$/;
-
-/** School CRM wall-clock is Vietnam time (UTC+7, no DST). Docker/Convex often runs UTC. */
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-/**
- * Parse YYYY-MM-DD + HH:mm as Asia/Ho_Chi_Minh local time → epoch ms.
- * Do not use `new Date(y, m, d, h, min)` — that uses the server process timezone (UTC in Docker).
- */
-function parseLocalMs(date: string, time: string): number {
-  const [y, m, d] = date.split("-").map(Number);
-  const [hh, mm] = time.split(":").map(Number);
-  // Components are Vietnam local; convert to UTC epoch.
-  return Date.UTC(y, m - 1, d, hh, mm, 0, 0) - VN_OFFSET_MS;
-}
-
-function cleanDutyInput(args: {
-  startDate: string;
-  endDate: string;
-  startTime: string;
-  endTime: string;
-  allDay: boolean;
-  title: string;
-  content: string;
-  locationText: string;
-  departmentIds: string[];
-  participantUserIds: string[];
-}) {
-  const startDate = args.startDate.trim();
-  const endDate = args.endDate.trim();
-  const startTime = normalizeDutyClock(args.startTime);
-  const endTime = normalizeDutyClock(args.endTime);
-  const title = cleanDutyTitle(args.title);
-  const content = cleanDutyContent(args.content);
-  if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate)) throw new Error("INVALID_DATE");
-  if (!TIME_RE.test(startTime) || !TIME_RE.test(endTime)) throw new Error("INVALID_TIME");
-  const startMs = parseLocalMs(startDate, startTime);
-  const endMs = parseLocalMs(endDate, endTime);
-  if (Number.isNaN(startMs) || Number.isNaN(endMs)) throw new Error("INVALID_DATE");
-  if (endMs < startMs) throw new Error("END_BEFORE_START");
-
-  const uniq = (ids: string[]) => [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
-  return {
-    startDate,
-    endDate,
-    startTime,
-    endTime,
-    allDay: Boolean(args.allDay),
-    title,
-    content,
-    locationText: cleanDutyLocationText(args.locationText),
-    locationIds: [] as string[],
-    departmentIds: uniq(args.departmentIds || []),
-    participantUserIds: uniq(args.participantUserIds || []),
-  };
-}
+import { cleanDutyInput, evaluateDutyRefs, parseLocalMs } from "./dutyWritePolicy";
 
 async function assertRefs(
   ctx: { db: any },
@@ -91,32 +30,13 @@ async function assertRefs(
   },
   actor: { user: any; isOps: boolean; positions: any[] },
 ) {
-  if (!actor.isOps && input.departmentIds.length) {
-    throw new Error("DUTY_DEPARTMENT_FORBIDDEN");
-  }
-  if (input.departmentIds.length) {
-    const departments = await ctx.db.query("departments").collect();
-    for (const id of input.departmentIds) {
-      const row = departments.find((d: any) => String(d._id) === String(id));
-      if (!row?.active) throw new Error("INVALID_DEPARTMENT");
-    }
-  }
-  if (input.participantUserIds.length) {
-    const users = await ctx.db.query("users").collect();
-    for (const id of input.participantUserIds) {
-      const user = users.find((row: any) => String(row._id) === String(id));
-      if (!user || user.status !== "active") throw new Error("INVALID_PARTICIPANT");
-      if (!actor.isOps && !isSameDepartmentSubordinate(actor.user, user, actor.positions)) {
-        throw new Error("NOT_A_SUBORDINATE");
-      }
-    }
-  }
-  if (!input.departmentIds.length && !input.participantUserIds.length) {
-    throw new Error("DUTY_PARTICIPANTS_REQUIRED");
-  }
+  const departments = input.departmentIds.length ? await ctx.db.query("departments").collect() : [];
+  const users = input.participantUserIds.length ? await ctx.db.query("users").collect() : [];
+  const error = evaluateDutyRefs(input, actor, { departments, users });
+  if (error) throw new Error(error);
 }
 
-async function requireDutyWrite(ctx: any) {
+export async function requireDutyWrite(ctx: any) {
   const actor = await assignmentCreatorOrThrow(ctx);
   if (actor.isOps) return actor;
   const menuAccess = await resolveUserMenuAccess(ctx, actor.user);
@@ -124,6 +44,48 @@ async function requireDutyWrite(ctx: any) {
     throw new Error("FORBIDDEN: duties menu hidden");
   }
   return actor;
+}
+
+export async function insertCreatedDuty(
+  ctx: any,
+  actor: { user: { _id: string } },
+  input: {
+    startDate: string;
+    endDate: string;
+    startTime: string;
+    endTime: string;
+    allDay: boolean;
+    title: string;
+    content: string;
+    locationText: string;
+    locationIds: string[];
+    departmentIds: string[];
+    participantUserIds: string[];
+  },
+) {
+  const now = Date.now();
+  const id = await ctx.db.insert("duties", {
+    ...input,
+    active: true,
+    createdBy: actor.user._id,
+    updatedBy: actor.user._id,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await ctx.db.insert("auditLogs", {
+    actorUserId: actor.user._id,
+    action: "duty.create",
+    details: JSON.stringify({ id, title: input.title, content: input.content }),
+    at: now,
+  });
+  await scheduleDutyPush(ctx, {
+    dutyId: String(id),
+    title: "Công tác mới",
+    body: dutyListTitle(input),
+    departmentIds: input.departmentIds,
+    participantUserIds: input.participantUserIds,
+  });
+  return id;
 }
 
 async function scheduleDutyPush(
@@ -468,29 +430,7 @@ export const create = mutation({
     const actor = await requireDutyWrite(ctx);
     const input = cleanDutyInput(args);
     await assertRefs(ctx, input, actor);
-    const now = Date.now();
-    const id = await ctx.db.insert("duties", {
-      ...input,
-      active: true,
-      createdBy: actor.user._id,
-      updatedBy: actor.user._id,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await ctx.db.insert("auditLogs", {
-      actorUserId: actor.user._id,
-      action: "duty.create",
-      details: JSON.stringify({ id, title: input.title, content: input.content }),
-      at: now,
-    });
-    await scheduleDutyPush(ctx, {
-      dutyId: String(id),
-      title: "Công tác mới",
-      body: dutyListTitle(input),
-      departmentIds: input.departmentIds,
-      participantUserIds: input.participantUserIds,
-    });
-    return id;
+    return await insertCreatedDuty(ctx, actor, input);
   },
 });
 

@@ -117,6 +117,19 @@ export default defineSchema({
     expiresAt: v.number(),
   }).index("by_expiresAt", ["expiresAt"]),
   /**
+   * Temporary duty-import Excel uploads retained for 1 hour (even after commit).
+   */
+  dutyImportUploads: defineTable({
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    fileSize: v.number(),
+    uploadedBy: v.id("users"),
+    status: v.string(), // uploaded | committing | committed | expired
+    rowCount: v.optional(v.number()),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  }).index("by_expiresAt", ["expiresAt"]),
+  /**
    * Job positions (Chức vụ) with approval rank 1–5 (gold stars).
    * Higher rank may approve for lower ranks; full workflow uses this later.
    */

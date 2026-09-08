@@ -25,6 +25,7 @@ import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
 import './management/managementTheme.css';
 import './duties/duties.css';
+import DutyBulkImport, { DutyCreateToolbarActions } from './duties/DutyBulkImport';
 import DutyCreatePreview from './duties/DutyCreatePreview';
 import { EditActionConfirm } from './lib/ConfirmActionModal';
 import DutyEditorFields from './duties/DutyEditorFields';
@@ -616,6 +617,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [mineSearch, setMineSearch] = useState(emptyDutySearch);
@@ -655,6 +657,7 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     setEditing(item);
     setExpanded(item._id);
     setEditorOpen(true);
+    setImportOpen(false);
     setPreviewOpen(false);
     setForm(dutyFormFromItem(item));
   };
@@ -665,6 +668,16 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     setEditConfirm(null);
     setForm(emptyDutyForm());
     setEditorOpen(false);
+  };
+
+  const openCreateEditor = () => {
+    setImportOpen(false);
+    setEditorOpen(true);
+  };
+
+  const openImportPanel = () => {
+    closeEditor();
+    setImportOpen(true);
   };
 
   const persistDuty = async () => {
@@ -815,6 +828,10 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         </div>
       ) : null}
 
+      {allowManage && importOpen ? (
+        <DutyBulkImport onClose={() => setImportOpen(false)} />
+      ) : null}
+
       {allowManage && editorOpen ? <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
         <div className="work-editor-title">
           <div>
@@ -916,10 +933,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         <DutyListHeading>Công tác tôi tạo</DutyListHeading>
         <div className="duty-list-toolbar">
           <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
-          {allowManage && !editorOpen ? (
-            <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-              <span>+</span> Tạo công tác
-            </button>
+          {allowManage && !editorOpen && !importOpen ? (
+            <DutyCreateToolbarActions onCreate={openCreateEditor} onImport={openImportPanel} />
           ) : null}
         </div>
         <DutyListSearch value={createdSearch} onChange={setCreatedSearch} />
@@ -1008,6 +1023,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [mineSearch, setMineSearch] = useState(emptyDutySearch);
@@ -1047,6 +1063,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const startEdit = (item) => {
     setEditing(item);
     setEditorOpen(true);
+    setImportOpen(false);
     setPreviewOpen(false);
     setForm(dutyFormFromItem(item));
   };
@@ -1057,6 +1074,16 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     setEditConfirm(null);
     setForm(emptyDutyForm());
     setEditorOpen(false);
+  };
+
+  const openCreateEditor = () => {
+    setImportOpen(false);
+    setEditorOpen(true);
+  };
+
+  const openImportPanel = () => {
+    closeEditor();
+    setImportOpen(true);
   };
 
   const persistDuty = async () => {
@@ -1246,6 +1273,10 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   return (
     <section className="work-user-view duty-workspace">
 
+      {canCreate && importOpen ? (
+        <DutyBulkImport onClose={() => setImportOpen(false)} />
+      ) : null}
+
       {canCreate && editorOpen ? (
         <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
           <div className="work-editor-title">
@@ -1333,10 +1364,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
           <DutyListHeading>Công tác tôi tạo</DutyListHeading>
           <div className="duty-list-toolbar">
             <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
-            {canCreate && !editorOpen ? (
-              <button type="button" className="work-primary-button" onClick={() => setEditorOpen(true)}>
-                <span>+</span> Tạo công tác
-              </button>
+            {canCreate && !editorOpen && !importOpen ? (
+              <DutyCreateToolbarActions onCreate={openCreateEditor} onImport={openImportPanel} />
             ) : null}
           </div>
           <DutyListSearch value={createdSearch} onChange={setCreatedSearch} />
