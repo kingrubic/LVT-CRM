@@ -279,6 +279,75 @@
   margin-left: auto;
 }
 
+.duty-list-create-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.duty-list-toolbar .duty-list-create-actions .work-primary-button {
+  margin-left: 0;
+}
+
+.duty-bulk-import {
+  margin-bottom: 22px;
+}
+
+.duty-bulk-import-help,
+.duty-bulk-import-file {
+  margin: 0;
+  color: #496275;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.duty-bulk-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.duty-bulk-import-errors,
+.duty-bulk-import-preview,
+.duty-bulk-import-result {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #dce6ea;
+  border-radius: 12px;
+  background: #f8faf9;
+}
+
+.duty-bulk-import-errors ul,
+.duty-bulk-import-preview ul,
+.duty-bulk-import-result ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.duty-bulk-import-errors li,
+.duty-bulk-import-preview li,
+.duty-bulk-import-result li {
+  display: grid;
+  gap: 2px;
+}
+
+.duty-bulk-import-errors small,
+.duty-bulk-import-preview small {
+  color: #5b7386;
+}
+
+.duty-bulk-import-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .duty-list-search {
   display: grid;
   gap: 10px;
