@@ -2021,7 +2021,12 @@ export const listMine = query({
             title: task.title,
             deadline: task.deadline,
             status: taskStatus(task, String(access.user._id)),
+            documentId: document?._id ?? null,
+            documentTitle: document ? workListTitle(document) : "",
             documentContent: document?.content || "",
+            fileName: document?.fileName || "",
+            fileUrl: null,
+            privateFile: Boolean(document?.driveFileId || document?.fileId),
             departmentName: item
               ? String((catalogData.departmentMap.get(String(item.departmentId)) as any)?.name || "")
               : "",

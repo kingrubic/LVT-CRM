@@ -37,6 +37,9 @@ data class WorkTaskItem(
     val isAdmin: Boolean,
     val documentTitle: String = "",
     val fileName: String = "",
+    val documentId: String = "",
+    val fileUrl: String = "",
+    val privateFile: Boolean = false,
     val memberNames: List<String> = emptyList(),
     val note: String = "",
 ) {
@@ -80,6 +83,7 @@ data class WorkApprovalItem(
     val assignments: List<WorkDocumentAssignment> = emptyList(),
     val fileUrl: String = "",
     val privateFile: Boolean = false,
+    val title: String = "",
 )
 
 data class WorkSnapshot(
@@ -184,6 +188,7 @@ class WorkRepository(
                     assignments = parseAssignments(document.optJSONArray("assignments")),
                     fileUrl = document.optString("fileUrl"),
                     privateFile = document.optBoolean("privateFile", false),
+                    title = document.optString("title"),
                 )
             }
         }
@@ -208,6 +213,7 @@ class WorkRepository(
                     assignments = parseAssignments(document.optJSONArray("assignments")),
                     fileUrl = document.optString("fileUrl"),
                     privateFile = document.optBoolean("privateFile", false),
+                    title = document.optString("title"),
                 )
             }
             completionReviews = parseCompletionReviews(adminResult.optJSONArray("pendingCompletionReviews"))
@@ -232,6 +238,9 @@ class WorkRepository(
                     isAdmin = isAdmin,
                     documentTitle = t.optString("documentTitle"),
                     fileName = t.optString("fileName"),
+                    documentId = t.optString("documentId"),
+                    fileUrl = t.optString("fileUrl"),
+                    privateFile = t.optBoolean("privateFile", false),
                     memberNames = t.optJSONArray("members").toMemberNames(),
                     note = t.optWorkNote(),
                 )
@@ -255,6 +264,9 @@ class WorkRepository(
                     isAdmin = isAdmin,
                     documentTitle = t.optString("documentTitle"),
                     fileName = t.optString("fileName"),
+                    documentId = t.optString("documentId"),
+                    fileUrl = t.optString("fileUrl"),
+                    privateFile = t.optBoolean("privateFile", false),
                     memberNames = t.optJSONArray("assignees").toMemberNames(),
                     note = t.optWorkNote(),
                 )

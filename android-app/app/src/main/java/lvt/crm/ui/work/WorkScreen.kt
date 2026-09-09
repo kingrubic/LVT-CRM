@@ -241,6 +241,11 @@ fun WorkScreen(
                 busy = state.busyTaskId != null,
                 onBack = { selectedTaskId = null },
                 onComplete = { viewModel.requestComplete(task) },
+                onOpenFile = if (task.hasAttachedFile()) {
+                    { onOpenDocument(task.toAttachedDocument()) }
+                } else {
+                    null
+                },
             )
         } ?: LvtScreen(
             title = "Công việc",
@@ -635,6 +640,11 @@ private fun AdminWorkScreen(
                     busy = state.busyTaskId != null,
                     onBack = { selectedTaskId = null },
                     onComplete = { onCompleteTask(selectedTask) },
+                    onOpenFile = if (selectedTask.hasAttachedFile()) {
+                        { onOpenDocument(selectedTask.toAttachedDocument()) }
+                    } else {
+                        null
+                    },
                 )
             }
             selectedDocument == null -> {
@@ -860,7 +870,9 @@ private fun WorkLoadError(message: String, onRefresh: () -> Unit) {
 
 @Composable
 private fun AdminDocumentCard(document: WorkApprovalItem, onOpen: () -> Unit) {
-    val extension = document.fileName.substringAfterLast('.', "CV").uppercase().take(4)
+    val displayTitle = workListTitle(document)
+    val extension = document.fileName.substringAfterLast('.', "").uppercase().filter { it.isLetterOrDigit() }.take(4)
+        .ifBlank { displayTitle.take(2).uppercase().ifBlank { "CV" } }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -894,7 +906,7 @@ private fun AdminDocumentCard(document: WorkApprovalItem, onOpen: () -> Unit) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        document.fileName.ifBlank { "Công văn" },
+                        displayTitle,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f),
                         maxLines = 2,
@@ -904,8 +916,8 @@ private fun AdminDocumentCard(document: WorkApprovalItem, onOpen: () -> Unit) {
                         tone = if (document.status == "approved") StatusTone.Positive else StatusTone.Warning,
                     )
                 }
-                if (document.content.isNotBlank()) {
-                    Text(document.content, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                workListSubtitle(document)?.let { subtitle ->
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                 }
                 Text(
                     "Hạn ${document.deadline}  ·  ${document.assignments.size} đầu mục",
@@ -1088,10 +1100,10 @@ private fun DocumentSummaryCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Text(document.fileName.ifBlank { "Công văn" }, style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                if (document.content.isNotBlank()) {
+                Text(workListTitle(document), style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                workListSubtitle(document)?.let { subtitle ->
                     Text(
-                        document.content,
+                        subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -1431,7 +1443,7 @@ private fun ApprovalCard(
                                 )
                             }
                             Text(
-                                approval.fileName.ifBlank { "Công văn" },
+                                workListTitle(approval),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                         }
@@ -1440,10 +1452,10 @@ private fun ApprovalCard(
                             tone = StatusTone.Warning,
                         )
                     }
-                    if (approval.content.isNotBlank()) {
+                    workListSubtitle(approval)?.let { subtitle ->
                         DetailLine(
                             icon = Icons.Outlined.Description,
-                            text = approval.content,
+                            text = subtitle,
                             modifier = Modifier.padding(top = 10.dp),
                         )
                     }

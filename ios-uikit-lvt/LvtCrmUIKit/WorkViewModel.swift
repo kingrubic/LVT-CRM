@@ -145,7 +145,7 @@ enum WorkListRules {
             return list
         }
         return list.filter { document in
-            let queryText = ([document.fileName, document.content] + document.assignments.map(\.content)).joined(separator: " ")
+            let queryText = ([document.title, document.fileName, document.content] + document.assignments.map(\.content)).joined(separator: " ")
             let departmentText = document.assignments.map(\.departmentName).joined(separator: " ")
             let personText = document.assignments.flatMap { $0.members.map(\.name) }.joined(separator: " ")
             var deadlines = document.assignments.map(\.deadline).filter { !$0.isEmpty }

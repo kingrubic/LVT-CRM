@@ -15,6 +15,9 @@ struct WorkTaskItem: Identifiable, Equatable, Sendable {
     let isAdmin: Bool
     let documentTitle: String
     let fileName: String
+    let documentId: String
+    let fileURL: String
+    let privateFile: Bool
     let memberNames: [String]
     let note: String
 }
@@ -47,6 +50,7 @@ struct WorkCompletionReviewItem: Identifiable, Equatable, Sendable {
 
 struct WorkApprovalItem: Identifiable, Equatable, Sendable {
     let id: String
+    let title: String
     let fileName: String
     let fileURL: String
     let privateFile: Bool
@@ -80,6 +84,43 @@ struct WorkSnapshot: Equatable, Sendable {
 }
 
 enum WorkHelpers {
+    static func listTitle(_ document: WorkApprovalItem) -> String {
+        let title = document.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        let fileName = document.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !fileName.isEmpty { return fileName }
+        let content = document.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return content.isEmpty ? "Công việc" : content
+    }
+
+    static func listSubtitle(_ document: WorkApprovalItem) -> String? {
+        let title = listTitle(document)
+        let content = document.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty, content != title else { return nil }
+        return content
+    }
+
+    static func hasAttachedFile(_ task: WorkTaskItem) -> Bool {
+        !task.documentId.isEmpty && task.privateFile
+    }
+
+    static func attachedDocument(_ task: WorkTaskItem) -> WorkApprovalItem {
+        WorkApprovalItem(
+            id: task.documentId,
+            title: task.documentTitle.isEmpty ? task.title : task.documentTitle,
+            fileName: task.fileName,
+            fileURL: task.fileURL,
+            privateFile: task.privateFile,
+            content: task.documentContent,
+            deadline: task.deadline,
+            status: task.status,
+            approvalCount: 0,
+            approvalTotal: 0,
+            myDecision: "",
+            assignments: []
+        )
+    }
+
     static func needsCompletion(_ status: String) -> Bool {
         ["pending_task", "pending", "overdue", "rejected", "rejected_completion"].contains(status)
     }
@@ -131,6 +172,7 @@ final class WorkRepository: Sendable {
             approvals = (adminResult["documents"] as? [[String: Any]] ?? []).map { document in
                 WorkApprovalItem(
                     id: (document["_id"] as? String) ?? "",
+                    title: (document["title"] as? String) ?? "",
                     fileName: (document["fileName"] as? String) ?? "",
                     fileURL: (document["fileUrl"] as? String) ?? "",
                     privateFile: (document["privateFile"] as? Bool) ?? false,
@@ -150,6 +192,7 @@ final class WorkRepository: Sendable {
             approvals = (result["approvals"] as? [[String: Any]] ?? []).map { document in
                 WorkApprovalItem(
                     id: (document["_id"] as? String) ?? "",
+                    title: (document["title"] as? String) ?? "",
                     fileName: (document["fileName"] as? String) ?? "",
                     fileURL: (document["fileUrl"] as? String) ?? "",
                     privateFile: (document["privateFile"] as? Bool) ?? false,
@@ -185,6 +228,9 @@ final class WorkRepository: Sendable {
                 isAdmin: isAdmin,
                 documentTitle: (task["documentTitle"] as? String) ?? "",
                 fileName: (task["fileName"] as? String) ?? "",
+                documentId: (task["documentId"] as? String) ?? "",
+                fileURL: (task["fileUrl"] as? String) ?? "",
+                privateFile: (task["privateFile"] as? Bool) ?? false,
                 memberNames: Self.memberNames(from: task),
                 note: Self.completionNote(from: task)
             ))
@@ -206,6 +252,9 @@ final class WorkRepository: Sendable {
                 isAdmin: isAdmin,
                 documentTitle: (task["documentTitle"] as? String) ?? "",
                 fileName: (task["fileName"] as? String) ?? "",
+                documentId: (task["documentId"] as? String) ?? "",
+                fileURL: (task["fileUrl"] as? String) ?? "",
+                privateFile: (task["privateFile"] as? Bool) ?? false,
                 memberNames: Self.memberNames(from: task, key: "assignees"),
                 note: Self.completionNote(from: task)
             ))
