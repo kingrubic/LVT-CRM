@@ -21,6 +21,7 @@ import {
   WORK_COMPLETION_NOTE_MAX_LENGTH,
   workAssignmentPayload,
 } from './workDisplay';
+import { canPreviewWorkFile, spreadsheetPreviewFromArrayBuffer, workFilePreviewKind } from './workFilePreview';
 import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
@@ -106,19 +107,20 @@ function PrivateFileLink({
 }) {
   const { fetchAccessToken } = useConvexAuth();
   const [busyAction, setBusyAction] = useState('');
-  const [previewUrl, setPreviewUrl] = useState('');
+  const [preview, setPreview] = useState(null);
   const closeButtonRef = useRef(null);
-  const extension = fileName?.toLowerCase().split('.').pop() || '';
-  const canPreview = ['pdf', 'png', 'jpg', 'jpeg'].includes(extension);
+  const kind = workFilePreviewKind(fileName);
+  const canPreview = canPreviewWorkFile(fileName);
+  const previewUrl = preview?.url || '';
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
   useEffect(() => {
-    if (!previewUrl) return undefined;
+    if (!preview) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setPreviewUrl('');
+      if (event.key === 'Escape') setPreview(null);
     };
     const previousOverflow = window.document.body.style.overflow;
     window.document.body.style.overflow = 'hidden';
@@ -128,7 +130,7 @@ function PrivateFileLink({
       window.document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [previewUrl]);
+  }, [preview]);
 
   if (!documentId || !privateFile) return null;
 
@@ -173,11 +175,22 @@ function PrivateFileLink({
     if (busyAction) return;
     setBusyAction(action);
     try {
-      const objectUrl = URL.createObjectURL(await fetchFileBlob());
+      const blob = await fetchFileBlob();
+      const objectUrl = URL.createObjectURL(blob);
       if (action === 'preview') {
-        setPreviewUrl((current) => {
-          if (current) URL.revokeObjectURL(current);
-          return objectUrl;
+        let nextPreview = { kind, url: objectUrl };
+        if (kind === 'spreadsheet') {
+          nextPreview = {
+            ...nextPreview,
+            sheets: spreadsheetPreviewFromArrayBuffer(await blob.arrayBuffer()),
+            sheetIndex: 0,
+          };
+        } else if (kind === 'docx') {
+          nextPreview = { ...nextPreview, buffer: await blob.arrayBuffer() };
+        }
+        setPreview((current) => {
+          if (current?.url) URL.revokeObjectURL(current.url);
+          return nextPreview;
         });
       } else {
         const anchor = window.document.createElement('a');
@@ -194,7 +207,12 @@ function PrivateFileLink({
     }
   };
 
-  const closePreview = () => setPreviewUrl('');
+  const closePreview = () => {
+    setPreview((current) => {
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  };
 
   return (
     <>
@@ -224,7 +242,7 @@ function PrivateFileLink({
         </button>
         {busyAction ? <span className="work-file-busy" role="status">Đang tải…</span> : null}
       </span>
-      {previewUrl ? createPortal((
+      {preview ? createPortal((
         <div className="work-file-preview-backdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) closePreview();
         }}>
@@ -247,17 +265,118 @@ function PrivateFileLink({
                 </button>
               </div>
             </header>
-            <div className="work-file-preview-content">
-              {extension === 'pdf' ? (
-                <iframe src={previewUrl} title={`Nội dung ${fileName}`} />
-              ) : (
-                <img src={previewUrl} alt={`Xem trước ${fileName}`} />
-              )}
+            <div className={`work-file-preview-content${preview.kind === 'docx' || preview.kind === 'spreadsheet' ? ' is-office' : ''}`}>
+              {preview.kind === 'pdf' ? (
+                <iframe src={preview.url} title={`Nội dung ${fileName}`} />
+              ) : null}
+              {preview.kind === 'image' ? (
+                <img src={preview.url} alt={`Xem trước ${fileName}`} />
+              ) : null}
+              {preview.kind === 'docx' ? (
+                <DocxPreviewBody buffer={preview.buffer} fileName={fileName} />
+              ) : null}
+              {preview.kind === 'spreadsheet' ? (
+                <SpreadsheetPreviewBody
+                  sheets={preview.sheets || []}
+                  sheetIndex={preview.sheetIndex || 0}
+                  onSheetChange={(sheetIndex) => setPreview((current) => (
+                    current ? { ...current, sheetIndex } : current
+                  ))}
+                />
+              ) : null}
             </div>
           </section>
         </div>
       ), window.document.body) : null}
     </>
+  );
+}
+
+function DocxPreviewBody({ buffer, fileName }) {
+  const containerRef = useRef(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!buffer || !containerRef.current) return undefined;
+    let cancelled = false;
+    const container = containerRef.current;
+    container.replaceChildren();
+    (async () => {
+      try {
+        const { renderAsync } = await import('docx-preview');
+        if (cancelled) return;
+        await renderAsync(buffer, container, undefined, {
+          inWrapper: true,
+          ignoreWidth: false,
+          breakPages: true,
+        });
+      } catch (error) {
+        console.error('DOCX preview failed', error);
+        if (!cancelled) setError('Không xem trước được tệp Word này. Hãy tải xuống để mở bằng Microsoft Word.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [buffer]);
+
+  return (
+    <div className="work-office-preview">
+      <p className="work-office-preview-note">
+        Bản xem trước trên trình duyệt, có thể khác Microsoft Word. Tải xuống để xem bản gốc.
+      </p>
+      {error ? <p className="work-office-preview-error">{error}</p> : null}
+      <div ref={containerRef} className="work-docx-preview" aria-label={`Nội dung ${fileName}`} />
+    </div>
+  );
+}
+
+function SpreadsheetPreviewBody({ sheets, sheetIndex, onSheetChange }) {
+  const active = sheets[sheetIndex] || sheets[0];
+  if (!active) {
+    return <p className="work-office-preview-error">Không đọc được nội dung Excel.</p>;
+  }
+  const columnCount = active.rows.reduce((max, row) => Math.max(max, row.length), 0);
+  return (
+    <div className="work-office-preview">
+      <p className="work-office-preview-note">
+        Bản xem trước trên trình duyệt, có thể khác Microsoft Excel. Tải xuống để xem bản gốc.
+        {active.truncated ? ' Chỉ hiện một phần trang tính để máy không bị chậm.' : ''}
+      </p>
+      {sheets.length > 1 ? (
+        <div className="work-sheet-tabs" role="tablist" aria-label="Trang tính">
+          {sheets.map((sheet, index) => (
+            <button
+              key={`${sheet.name}-${index}`}
+              type="button"
+              role="tab"
+              aria-selected={index === sheetIndex}
+              className={`work-sheet-tab${index === sheetIndex ? ' is-active' : ''}`}
+              onClick={() => onSheetChange(index)}
+            >
+              {sheet.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="work-sheet-scroll">
+        <table className="work-sheet-table">
+          <tbody>
+            {active.rows.length === 0 ? (
+              <tr>
+                <td>Trang tính trống.</td>
+              </tr>
+            ) : active.rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {Array.from({ length: columnCount }, (_, columnIndex) => (
+                  <td key={columnIndex}>{row[columnIndex] || ''}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

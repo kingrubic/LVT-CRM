@@ -1209,6 +1209,90 @@
   object-fit: contain;
 }
 
+.work-file-preview-content.is-office {
+  background: #e8eef2;
+  align-content: start;
+}
+
+.work-office-preview {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px 14px 16px;
+  align-content: start;
+}
+
+.work-office-preview-note,
+.work-office-preview-error {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.work-office-preview-note {
+  color: #355064;
+}
+
+.work-office-preview-error {
+  color: #9b1c2c;
+}
+
+.work-sheet-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.work-sheet-tab {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #c5d3dc;
+  border-radius: 999px;
+  background: #fff;
+  color: #163447;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.work-sheet-tab.is-active {
+  background: #163447;
+  border-color: #163447;
+  color: #fff;
+}
+
+.work-sheet-scroll {
+  overflow: auto;
+  max-height: min(70vh, 720px);
+  background: #fff;
+  border: 1px solid #d3dee6;
+  border-radius: 10px;
+}
+
+.work-sheet-table {
+  border-collapse: collapse;
+  min-width: 100%;
+  font-size: 0.86rem;
+  background: #fff;
+  color: #12202b;
+}
+
+.work-sheet-table td {
+  border: 1px solid #dce6ec;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  vertical-align: top;
+}
+
+.work-docx-preview {
+  overflow: auto;
+  max-height: min(70vh, 720px);
+  background: #fff;
+  border: 1px solid #d3dee6;
+  border-radius: 10px;
+  padding: 12px;
+  color: #12202b;
+}
+
 @media (max-width: 640px) {
   .work-file-preview-dialog > header { padding-left: 14px; }
   .work-file-preview-action span { display: none; }
