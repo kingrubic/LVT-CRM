@@ -16,6 +16,15 @@
   margin: -6px 4px 18px;
 }
 
+.duty-workspace .duty-reports-view {
+  max-width: none;
+  padding: 0;
+}
+
+.duty-workspace .report-workspace {
+  min-height: min(72vh, 860px);
+}
+
 .duty-page-actions {
   margin-top: 0;
 }

@@ -392,7 +392,7 @@ Nếu tài khoản có quyền xóa thông báo, dấu `×` sẽ xuất hiện t
 
 Trang **Lịch công tác** có hai tab:
 
-- **Lịch công tác cá nhân:** lịch được giao cho cá nhân, phòng ban hoặc cấp dưới thuộc phạm vi được phép xem.
+- **Lịch công tác cá nhân:** lịch tuần/tháng/quý/năm theo người được chọn (cột nhân sự bên trái). Mỗi ô hiện công tác được giao cho người đó; bấm một mục để xem chi tiết, xác nhận tham gia, sửa hoặc xóa khi đủ quyền.
 - **Lịch công tác chung:** lịch toàn trường theo tuần hoặc tháng, trình bày như mẫu Word nhà trường (Ngày, Thời gian, Nội dung, Địa điểm, Thành phần). Có thể tải PDF.
 
 Mỗi công tác có:
@@ -408,7 +408,7 @@ Mỗi công tác có:
 Người được phép **Tạo công tác** (Administrator, Moderator, tổ trưởng/tổ phó) có thể nhập nhiều lịch cùng lúc:
 
 1. Mở **Lịch công tác** → tab **Lịch công tác cá nhân**.
-2. Chọn **Import Excel**.
+2. Chọn **Import Excel** trên thanh lịch.
 3. Tải **file nhập liệu mẫu** nếu chưa có.
 4. Điền mỗi dòng một công tác, rồi chọn **Import file nhập liệu**.
 5. Nếu có lỗi, hệ thống **không nhập dòng nào** và liệt kê từng dòng. Sửa file rồi tải lại.

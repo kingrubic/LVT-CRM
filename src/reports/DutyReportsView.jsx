@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery } from 'convex/react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
+import { DutyCreateToolbarActions } from '../duties/DutyBulkImport';
 import './dutyCalendar.css';
 
 const VIEW_OPTIONS = [
@@ -268,8 +269,24 @@ function PersonAvatar({ name }) {
   return <span className="report-person-avatar">{initials || '?'}</span>;
 }
 
-function EventDetail({ event, personName, onClose, showAttendance = true }) {
+function EventDetail({
+  event,
+  personName,
+  onClose,
+  showAttendance = true,
+  pending = '',
+  onEdit,
+  onDelete,
+  onMarkAttendance,
+  onMarkSubordinate,
+  canManageSubordinates = false,
+}) {
   if (!event) return null;
+  const attendanceHint = event.timing?.isUpcoming
+    ? 'Chưa đến giờ diễn ra — chưa thể xác nhận tham gia.'
+    : event.timing?.isOverdue
+      ? 'Đã kết thúc — không thể đổi trạng thái tham gia.'
+      : '';
   return (
     <aside className="report-event-detail">
       <button type="button" className="report-detail-close" onClick={onClose} aria-label="Đóng chi tiết">×</button>
@@ -284,18 +301,116 @@ function EventDetail({ event, personName, onClose, showAttendance = true }) {
         <div><dt>Thời gian</dt><dd>{eventTime(event)}</dd></div>
         <div><dt>Ngày</dt><dd>{event.startDate === event.endDate ? event.startDate : `${event.startDate} → ${event.endDate}`}</dd></div>
         <div><dt>Địa điểm</dt><dd>{event.locationNames?.length ? event.locationNames.join(', ') : 'Chưa chỉ định'}</dd></div>
+        {event.content ? <div><dt>Nội dung</dt><dd>{event.content}</dd></div> : null}
         <div><dt>Hình thức gán</dt><dd>{event.assignmentType === 'individual' ? 'Gán cá nhân' : 'Theo phòng ban'}</dd></div>
       </dl>
+      {showAttendance && onMarkAttendance ? (
+        <div className="report-detail-attendance">
+          <button
+            type="button"
+            className={`attend-btn ${event.attendanceStatus === 'attended' ? 'active' : ''}`}
+            disabled={Boolean(pending) || !event.canMarkAttendance}
+            title={!event.canMarkAttendance ? attendanceHint || 'Chỉ xác nhận trong thời gian diễn ra' : 'Xác nhận đã tham gia'}
+            onClick={() => onMarkAttendance(event, 'attended')}
+          >
+            Đã tham gia
+          </button>
+          <button
+            type="button"
+            className={`attend-btn absent ${event.attendanceStatus === 'absent' ? 'active' : ''}`}
+            disabled={Boolean(pending) || !event.canMarkAttendance}
+            title={!event.canMarkAttendance ? attendanceHint || 'Chỉ xác nhận trong thời gian diễn ra' : 'Xác nhận chưa tham gia'}
+            onClick={() => onMarkAttendance(event, 'absent')}
+          >
+            Chưa tham gia
+          </button>
+          {!event.canMarkAttendance && attendanceHint ? <small>{attendanceHint}</small> : null}
+        </div>
+      ) : null}
+      {showAttendance && event.subordinateParticipants?.length ? (
+        <div className="report-detail-people">
+          <strong>Cấp dưới cùng phòng ban</strong>
+          <ul>
+            {event.subordinateParticipants.map((participant) => (
+              <li key={participant._id}>
+                <span>{participant.name}</span>
+                <span className={`attendance-pill ${participant.status}`}>{statusLabel(participant.status)}</span>
+                {onMarkSubordinate ? (
+                  <span className="report-detail-inline-actions">
+                    <button
+                      type="button"
+                      className={`attend-btn ${participant.status === 'attended' ? 'active' : ''}`}
+                      disabled={Boolean(pending) || !event.canMarkAttendance || !canManageSubordinates}
+                      onClick={() => onMarkSubordinate(event, participant, 'attended')}
+                    >
+                      Đã tham gia
+                    </button>
+                    <button
+                      type="button"
+                      className={`attend-btn absent ${participant.status === 'absent' ? 'active' : ''}`}
+                      disabled={Boolean(pending) || !event.canMarkAttendance || !canManageSubordinates}
+                      onClick={() => onMarkSubordinate(event, participant, 'absent')}
+                    >
+                      Chưa tham gia
+                    </button>
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {event.visibleParticipants?.length ? (
+        <div className="report-detail-people">
+          <strong>Nhân sự tham gia</strong>
+          <ul>
+            {event.visibleParticipants.map((participant) => (
+              <li key={participant._id}>
+                <span>
+                  {participant.name}
+                  {participant.departmentName ? <small> · {participant.departmentName}</small> : null}
+                </span>
+                {showAttendance ? (
+                  <span className={`attendance-pill ${participant.status}`}>{statusLabel(participant.status)}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {event.canManage && (onEdit || onDelete) ? (
+        <div className="report-detail-actions">
+          {onEdit ? (
+            <button type="button" className="work-outline-button" disabled={Boolean(pending)} onClick={() => onEdit(event)}>
+              Sửa
+            </button>
+          ) : null}
+          {onDelete ? (
+            <button type="button" className="work-reject-button" disabled={Boolean(pending)} onClick={() => onDelete(event)}>
+              Xóa
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </aside>
   );
 }
 
-export default function DutyReportsView() {
+export default function DutyReportsView({
+  onCreate = null,
+  onImport = null,
+  onEdit = null,
+  focusDutyId = null,
+} = {}) {
   const [mode, setMode] = useState('month');
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [peopleCollapsed, setPeopleCollapsed] = useState(false);
+  const [pending, setPending] = useState('');
+  const setAttendance = useMutation(anyApi.duties.setAttendance);
+  const setAttendanceForUser = useMutation(anyApi.duties.setAttendanceForUser);
+  const removeDuty = useMutation(anyApi.duties.remove);
   const range = useMemo(() => viewRange(mode, anchor), [mode, anchor]);
   const queryArgs = {
     startDate: toIsoDate(range.start),
@@ -310,9 +425,41 @@ export default function DutyReportsView() {
     }
   }, [data?.selectedUserId, selectedUserId]);
 
+  const previousUserId = useRef(selectedUserId);
+  useEffect(() => {
+    if (previousUserId.current && previousUserId.current !== selectedUserId) {
+      setSelectedEvent(null);
+    }
+    previousUserId.current = selectedUserId;
+  }, [selectedUserId]);
+
   useEffect(() => {
     setSelectedEvent(null);
-  }, [mode, anchor, selectedUserId]);
+  }, [mode, anchor]);
+
+  useEffect(() => {
+    if (!focusDutyId || !data?.events?.length) return;
+    const focused = data.events.find((event) => String(event._id) === String(focusDutyId));
+    if (focused) setSelectedEvent(focused);
+  }, [focusDutyId, data?.events]);
+
+  useEffect(() => {
+    if (!selectedEvent?._id) return;
+    const next = data?.events?.find((event) => String(event._id) === String(selectedEvent._id));
+    if (next && next !== selectedEvent) setSelectedEvent(next);
+    if (data?.events && !next) setSelectedEvent(null);
+  }, [data?.events, selectedEvent?._id]);
+
+  const runMutation = async (name, operation) => {
+    setPending(name);
+    try {
+      await operation();
+    } catch (error) {
+      console.error('Duty calendar mutation failed', name, error);
+    } finally {
+      setPending('');
+    }
+  };
 
   const movePeriod = (direction) => {
     if (mode === 'week') setAnchor((current) => addDays(current, direction * 7));
@@ -358,9 +505,9 @@ export default function DutyReportsView() {
               <strong>{data.people.length}</strong>
             </div>
             <p>
-              {data.visibilityScope === 'all'
-                ? 'Toàn hệ thống · nhân sự được nhóm theo phòng ban.'
-                : 'Chọn một người để xem lịch công tác.'}
+              {data.people.length > 1
+                ? 'Chọn một người để xem lịch công tác.'
+                : 'Lịch công tác của bạn.'}
             </p>
             <div className="report-people-list">
               {peopleGroups.map((group) => (
@@ -407,10 +554,13 @@ export default function DutyReportsView() {
                 <small>{peopleCollapsed ? 'Nhân sự' : 'Ẩn nhân sự'}</small>
               </button>
               <div className="report-calendar-title">
-                <span>Lịch của {data.selectedUserName}</span>
+                <span>Lịch công tác của {data.selectedUserName}</span>
                 <h3>{range.title}</h3>
               </div>
               <div className="report-toolbar-actions">
+                {data.canCreate && onCreate && onImport ? (
+                  <DutyCreateToolbarActions onCreate={onCreate} onImport={onImport} />
+                ) : null}
                 <div className="report-period-nav">
                   <button type="button" onClick={() => movePeriod(-1)} aria-label="Kỳ trước">‹</button>
                   <button type="button" className="today-button" onClick={() => setAnchor(new Date())}>Hôm nay</button>
@@ -455,6 +605,35 @@ export default function DutyReportsView() {
             event={selectedEvent}
             personName={data.selectedUserName}
             showAttendance={attendanceEnabled}
+            pending={pending}
+            canManageSubordinates={Boolean(data.canManageSubordinates)}
+            onEdit={onEdit}
+            onDelete={(event) => {
+              if (!window.confirm('Xóa công tác này?')) return;
+              void runMutation(`del-${event._id}`, async () => {
+                await removeDuty({ id: event._id });
+                setSelectedEvent(null);
+              });
+            }}
+            onMarkAttendance={
+              attendanceEnabled && (data.isSelectedSelf ? data.canEdit : data.canManageSubordinates)
+                ? (event, status) => {
+                    const action = data.isSelectedSelf
+                      ? () => setAttendance({ dutyId: event._id, status })
+                      : () => setAttendanceForUser({ dutyId: event._id, userId: data.selectedUserId, status });
+                    void runMutation(`att-${event._id}-${status}`, action);
+                  }
+                : null
+            }
+            onMarkSubordinate={
+              attendanceEnabled && data.canManageSubordinates
+                ? (event, participant, status) => {
+                    void runMutation(`sub-${event._id}-${participant._id}-${status}`, () =>
+                      setAttendanceForUser({ dutyId: event._id, userId: participant._id, status }),
+                    );
+                  }
+                : null
+            }
             onClose={() => setSelectedEvent(null)}
           />
         </div>

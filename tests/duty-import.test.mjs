@@ -274,9 +274,10 @@ test('một dòng lỗi thì không có preview commit', () => {
 
 test('UI Công tác có nút Import Excel và gọi dutyImport', () => {
   const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const calendar = readFileSync(new URL('../src/reports/DutyReportsView.jsx', import.meta.url), 'utf8');
   const ui = readFileSync(new URL('../src/duties/DutyBulkImport.jsx', import.meta.url), 'utf8');
   assert.match(main, /DutyBulkImport/);
-  assert.match(main, /DutyCreateToolbarActions/);
+  assert.match(calendar, /DutyCreateToolbarActions/);
   assert.match(ui, /Import Excel/);
   assert.match(ui, /anyApi\.dutyImport\.generateUploadUrl/);
   assert.match(ui, /anyApi\.dutyImport\.validateUpload/);

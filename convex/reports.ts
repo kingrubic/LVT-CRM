@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import {
   activePositionLevel,
+  canOperateMenu,
   currentUserOrThrow,
   DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
   DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
@@ -12,7 +13,8 @@ import {
   resolveUserMenuAccess,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
-import { dutyListTitle, dutyLocationLabel } from "./assignmentPolicy";
+import { canCreateAssignments, dutyListTitle, dutyLocationLabel } from "./assignmentPolicy";
+import { dutyTiming, requireDutiesAccess } from "./duties";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -122,13 +124,7 @@ export const dutyCalendar = query({
       throw new Error("INVALID_DATE_RANGE");
     }
 
-    const actor = await currentUserOrThrow(ctx);
-    if (actor.status !== "active") throw new Error("USER_NOT_ACTIVE");
-    if (actor.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");
-    const menuAccess = await resolveUserMenuAccess(ctx, actor);
-    if (!isOperationalManagerRole(actor.role) && menuAccess.reports === "hidden") {
-      throw new Error("FORBIDDEN: reports menu hidden");
-    }
+    const { user: actor, access, isAdmin } = await requireDutiesAccess(ctx);
 
     const [users, positions, departments, locations, duties, attendanceConfirmationEnabled] = await Promise.all([
       ctx.db.query("users").collect(),
@@ -144,8 +140,12 @@ export const dutyCalendar = query({
     ]);
 
     const activeUsers = users.filter((user) => user.status === "active");
-    const canViewAll =
-      isOperationalManagerRole(actor.role) || menuAccess.reports === "view_all";
+    const canViewAll = isAdmin || access === "view_all";
+    const canEdit = isAdmin || canOperateMenu(access);
+    const actorLevel = activePositionLevel(actor, positions);
+    const canCreate = canCreateAssignments(actor.role, actorLevel);
+    const canManageSubordinates =
+      attendanceConfirmationEnabled && !isAdmin && canEdit && actorLevel > 0;
     const visibleUsers =
       canViewAll
         ? activeUsers
@@ -160,16 +160,30 @@ export const dutyCalendar = query({
     );
     if (!selectedUser) throw new Error("REPORT_USER_FORBIDDEN");
 
-    const attendances = await ctx.db
-      .query("dutyAttendances")
-      .withIndex("by_user", (q) => q.eq("userId", selectedUser._id))
-      .collect();
+    const attendances = await ctx.db.query("dutyAttendances").collect();
     const attendanceMap = new Map(
       attendances.map((attendance) => [
-        String(attendance.dutyId),
+        `${String(attendance.dutyId)}:${String(attendance.userId)}`,
         attendance.status,
       ]),
     );
+    const selectedAttendance = (dutyId: string, userId: string) =>
+      (attendanceMap.get(`${dutyId}:${userId}`) as string) ||
+      (attendanceConfirmationEnabled ? "pending" : "attended");
+    const subordinateIds = new Set(
+      users
+        .filter(
+          (user) =>
+            user.status === "active" && isSameDepartmentSubordinate(actor, user, positions),
+        )
+        .map((user) => String(user._id)),
+    );
+    const isSelectedSelf = String(selectedUser._id) === String(actor._id);
+    const canMarkSelectedUser =
+      attendanceConfirmationEnabled &&
+      ((isSelectedSelf && canEdit) ||
+        (canManageSubordinates &&
+          isSameDepartmentSubordinate(actor, selectedUser, positions)));
     const departmentMap = new Map(
       departments.map((department) => [String(department._id), department]),
     );
@@ -202,6 +216,7 @@ export const dutyCalendar = query({
           a.name.localeCompare(b.name, "vi"),
       );
 
+    const now = Date.now();
     const events = duties
       .filter(
         (duty) =>
@@ -210,26 +225,59 @@ export const dutyCalendar = query({
           duty.endDate >= startDate &&
           userIsParticipant(selectedUser, duty),
       )
-      .map((duty) => ({
-        _id: duty._id,
-        title: dutyListTitle(duty),
-        content: duty.content,
-        startDate: duty.startDate,
-        endDate: duty.endDate,
-        startTime: duty.startTime,
-        endTime: duty.endTime,
-        allDay: duty.allDay,
-        locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
-        departmentNames: mapNames(duty.departmentIds, departments),
-        assignmentType: duty.participantUserIds.some(
-          (id) => String(id) === selectedUserId,
-        )
-          ? "individual"
-          : "department",
-        attendanceStatus:
-          (attendanceMap.get(String(duty._id)) as string) ||
-          (attendanceConfirmationEnabled ? "pending" : "attended"),
-      }))
+      .map((duty) => {
+        const timing = dutyTiming(duty, now);
+        const participants = users.filter(
+          (user) => user.status === "active" && userIsParticipant(user, duty),
+        );
+        const subordinateParticipants = isSelectedSelf
+          ? participants
+              .filter((participant) => subordinateIds.has(String(participant._id)))
+              .map((participant) => ({
+                _id: participant._id,
+                name: participant.name || participant.email || "Chưa đặt tên",
+                status: selectedAttendance(String(duty._id), String(participant._id)),
+              }))
+          : [];
+        const visibleParticipants = canViewAll
+          ? participants.map((participant) => ({
+              _id: participant._id,
+              name: participant.name || participant.email || "Chưa đặt tên",
+              departmentName:
+                (participant.departmentId
+                  ? departmentMap.get(String(participant.departmentId))?.name
+                  : "") || "Chưa gán phòng ban",
+              status: selectedAttendance(String(duty._id), String(participant._id)),
+            }))
+          : [];
+        return {
+          _id: duty._id,
+          title: dutyListTitle(duty),
+          content: duty.content,
+          startDate: duty.startDate,
+          endDate: duty.endDate,
+          startTime: duty.startTime,
+          endTime: duty.endTime,
+          allDay: duty.allDay,
+          locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
+          departmentNames: mapNames(duty.departmentIds, departments),
+          assignmentType: duty.participantUserIds.some(
+            (id) => String(id) === selectedUserId,
+          )
+            ? "individual"
+            : "department",
+          attendanceStatus: selectedAttendance(String(duty._id), String(selectedUser._id)),
+          canManage: isAdmin || String(duty.createdBy || "") === String(actor._id),
+          canMarkAttendance: canMarkSelectedUser && timing.isOngoing,
+          timing: {
+            isOngoing: timing.isOngoing,
+            isUpcoming: timing.isUpcoming,
+            isOverdue: timing.isOverdue,
+          },
+          subordinateParticipants,
+          visibleParticipants,
+        };
+      })
       .sort(
         (a, b) =>
           a.startDate.localeCompare(b.startDate) ||
@@ -242,6 +290,11 @@ export const dutyCalendar = query({
       selectedUserId: selectedUser._id,
       selectedUserName:
         selectedUser.name || selectedUser.email || "Chưa đặt tên",
+      actorUserId: actor._id,
+      isSelectedSelf,
+      canCreate,
+      canEdit,
+      canManageSubordinates,
       attendanceConfirmationEnabled,
       events,
     };

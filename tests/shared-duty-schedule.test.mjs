@@ -137,17 +137,23 @@ test('PDF lịch chung nhúng font tiếng Việt và giữ tiêu đề/cột c�
   assert.match(visible, /Thứ Năm/);
 });
 
-test('UI Lịch công tác có 2 tab, trang tạo riêng, và gỡ Báo cáo Công tác', () => {
+test('UI Lịch công tác có 2 tab, lịch cá nhân dạng lịch, trang tạo riêng, và gỡ Báo cáo Công tác', () => {
   const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
   const tabs = readFileSync(new URL('../src/duties/DutyWorkspaceTabs.jsx', import.meta.url), 'utf8');
   const shared = readFileSync(new URL('../src/duties/SharedDutyScheduleView.jsx', import.meta.url), 'utf8');
+  const personal = readFileSync(new URL('../src/reports/DutyReportsView.jsx', import.meta.url), 'utf8');
   assert.match(main, /\['duties', 'Lịch công tác'\]/);
   assert.match(main, /chooseDutyView\('create'\)|onDutyNavigate\?\.\('create'\)|onDutyNavigate\('create'\)/);
   assert.match(main, /SharedDutyScheduleView/);
-  assert.doesNotMatch(main, /DutyReportsView/);
+  assert.match(main, /DutyReportsView/);
+  assert.doesNotMatch(main, /Công tác của tôi/);
+  assert.doesNotMatch(main, /Công tác tôi tạo/);
   assert.match(tabs, /Lịch công tác cá nhân/);
   assert.match(tabs, /Lịch công tác chung/);
   assert.match(shared, /Tải PDF/);
   assert.match(shared, /Tuần/);
   assert.match(shared, /Tháng/);
+  assert.match(personal, /reports\.dutyCalendar/);
+  assert.match(personal, /Chọn một người để xem lịch công tác/);
+  assert.match(personal, /Lịch công tác của/);
 });
