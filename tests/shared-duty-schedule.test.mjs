@@ -153,6 +153,10 @@ test('UI Lịch công tác có 2 tab, lịch cá nhân dạng lịch, trang tạ
   assert.match(shared, /Tải PDF/);
   assert.match(shared, /Tuần/);
   assert.match(shared, /Tháng/);
+  assert.match(shared, /lct-shared-toolbar-center/);
+  const tabCss = readFileSync(new URL('../src/duties/sharedDutySchedule.css', import.meta.url), 'utf8');
+  assert.match(tabCss, /margin:\s*50px auto 18px/);
+  assert.match(tabCss, /lct-shared-toolbar-center/);
   assert.match(personal, /reports\.dutyCalendar/);
   assert.match(personal, /Chọn một người để xem lịch công tác/);
   assert.match(personal, /Lịch công tác của/);
