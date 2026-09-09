@@ -466,9 +466,70 @@ final class WorkViewController: UITableViewController {
     }
 
     private func submitEvidence(item: WorkTaskItem, fileData: Data, fileName: String, mimeType: String) {
+        if item.kind == .workItem {
+            presentDocumentTypePicker(item: item, fileData: fileData, fileName: fileName, mimeType: mimeType)
+            return
+        }
+        finishEvidence(item: item, fileData: fileData, fileName: fileName, mimeType: mimeType, documentTypeId: nil)
+    }
+
+    private func presentDocumentTypePicker(
+        item: WorkTaskItem,
+        fileData: Data,
+        fileName: String,
+        mimeType: String
+    ) {
+        let types = viewModel.documentTypes
+        guard !types.isEmpty else {
+            clearPendingUpload()
+            presentValidation("Chưa có loại văn bản. Liên hệ quản trị viên.")
+            return
+        }
+        let alert = UIAlertController(
+            title: "Loại văn bản",
+            message: "Chọn loại cho tệp “\(fileName)”.",
+            preferredStyle: .actionSheet
+        )
+        for type in types {
+            alert.addAction(UIAlertAction(title: type.name, style: .default) { [weak self] _ in
+                self?.finishEvidence(
+                    item: item,
+                    fileData: fileData,
+                    fileName: fileName,
+                    mimeType: mimeType,
+                    documentTypeId: type.id
+                )
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Huỷ", style: .cancel) { [weak self] _ in
+            self?.clearPendingUpload()
+        })
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        presentFromVisibleController(alert)
+    }
+
+    private func finishEvidence(
+        item: WorkTaskItem,
+        fileData: Data,
+        fileName: String,
+        mimeType: String,
+        documentTypeId: String?
+    ) {
         let note = pendingUploadNote
         clearPendingUpload()
-        viewModel.complete(item, qualityPercent: nil, fileData: fileData, fileName: fileName, mimeType: mimeType, note: note.isEmpty ? nil : note)
+        viewModel.complete(
+            item,
+            qualityPercent: nil,
+            fileData: fileData,
+            fileName: fileName,
+            mimeType: mimeType,
+            note: note.isEmpty ? nil : note,
+            documentTypeId: documentTypeId
+        )
     }
 
     private func presentPhotoPicker() {

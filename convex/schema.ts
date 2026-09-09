@@ -140,6 +140,13 @@ export default defineSchema({
     active: v.boolean(),
     ...timestamps,
   }).index("by_code", ["code"]),
+  /** Catalog of work-file kinds (Kế hoạch / Biên bản / Báo cáo, plus admin-added rows). */
+  documentTypes: defineTable({
+    name: v.string(),
+    code: v.string(),
+    active: v.boolean(),
+    ...timestamps,
+  }).index("by_code", ["code"]),
   /** Boarding-school participation periods, configured once per semester/school year. */
   boardingPeriods: defineTable({
     semester: v.number(), // 1 | 2
@@ -275,6 +282,8 @@ export default defineSchema({
     fileName: v.string(),
     fileType: v.string(),
     fileSize: v.number(),
+    /** Required when the document has an attached file. */
+    documentTypeId: v.optional(v.string()),
     /** Display title; list views prefer this over fileName. */
     title: v.optional(v.string()),
     /** Legacy first assignment fields retained for existing rows. */
@@ -340,6 +349,7 @@ export default defineSchema({
           fileName: v.optional(v.string()),
           fileType: v.optional(v.string()),
           fileSize: v.optional(v.number()),
+          documentTypeId: v.optional(v.string()),
         }),
       ),
     ),
@@ -380,6 +390,7 @@ export default defineSchema({
           fileName: v.optional(v.string()),
           fileType: v.optional(v.string()),
           fileSize: v.optional(v.number()),
+          documentTypeId: v.optional(v.string()),
         }),
       ),
     ),

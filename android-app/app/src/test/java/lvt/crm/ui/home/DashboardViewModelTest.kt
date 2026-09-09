@@ -72,6 +72,7 @@ class DashboardViewModelTest {
                     qualityPercent: Int?,
                     evidence: lvt.crm.data.work.WorkUploadedEvidence?,
                     note: String?,
+                    documentTypeId: String?,
                 ) = Unit
                 override suspend fun decideApproval(documentId: String, approve: Boolean) = Unit
                 override suspend fun reviewCompletion(

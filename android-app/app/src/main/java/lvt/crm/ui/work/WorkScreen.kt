@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,10 +24,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -107,15 +111,21 @@ fun WorkScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var showingCreate by rememberSaveable { mutableStateOf(false) }
+    var evidenceFile by remember { mutableStateOf<WorkPickedFile?>(null) }
+    var evidenceTypeId by remember { mutableStateOf("") }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
         val task = state.evidencePromptTask
         if (uri != null && task != null) {
-            handleSelectedUri(context, uri, task, viewModel)
-        } else {
-            viewModel.dismissEvidencePrompt()
+            val picked = readWorkAttachment(context, uri)
+            if (picked.error != null) {
+                viewModel.setActionError(picked.error)
+            } else {
+                evidenceFile = picked.file
+                evidenceTypeId = ""
+            }
         }
     }
 
@@ -124,9 +134,20 @@ fun WorkScreen(
     ) { uri: Uri? ->
         val task = state.evidencePromptTask
         if (uri != null && task != null) {
-            handleSelectedUri(context, uri, task, viewModel)
-        } else {
-            viewModel.dismissEvidencePrompt()
+            val picked = readWorkAttachment(context, uri)
+            if (picked.error != null) {
+                viewModel.setActionError(picked.error)
+            } else {
+                evidenceFile = picked.file
+                evidenceTypeId = ""
+            }
+        }
+    }
+
+    LaunchedEffect(state.evidencePromptTask?.id) {
+        if (state.evidencePromptTask == null) {
+            evidenceFile = null
+            evidenceTypeId = ""
         }
     }
 
@@ -428,11 +449,18 @@ fun WorkScreen(
     }
 
     state.evidencePromptTask?.let { task ->
+        val requireType = task.kind == WorkTaskItem.Kind.WorkItem
         AlertDialog(
             onDismissRequest = viewModel::dismissEvidencePrompt,
             title = { Text("Nộp bằng chứng hoàn thành") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     Text(
                         "Chọn tài liệu hoặc hình ảnh bằng chứng hoàn thành công việc “${task.title}” (tối đa 20MB). Có thể gửi thêm nội dung cho người giao.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -477,9 +505,39 @@ fun WorkScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("Chọn từ Tệp (PDF, Word, Excel)")
                     }
+                    evidenceFile?.let { file ->
+                        Text(file.fileName, style = MaterialTheme.typography.bodyMedium)
+                        if (requireType) {
+                            WorkDocumentTypeField(
+                                types = state.documentTypes,
+                                selectedId = evidenceTypeId,
+                                onSelect = { evidenceTypeId = it },
+                            )
+                        }
+                    }
                 }
             },
-            confirmButton = {},
+            confirmButton = {
+                val file = evidenceFile
+                Button(
+                    onClick = {
+                        if (file == null) {
+                            viewModel.setActionError("Vui lòng đính kèm file bằng chứng hoàn thành.")
+                            return@Button
+                        }
+                        viewModel.completeWithEvidence(
+                            task,
+                            file.bytes,
+                            file.fileName,
+                            file.mimeType,
+                            evidenceTypeId,
+                        )
+                    },
+                    enabled = file != null && (!requireType || evidenceTypeId.isNotBlank()),
+                ) {
+                    Text("Nộp")
+                }
+            },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissEvidencePrompt) {
                     Text("Hủy")
@@ -492,21 +550,6 @@ fun WorkScreen(
 
 private val ALLOWED_EXTENSIONS = setOf("pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg")
 private const val MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
-
-private fun handleSelectedUri(
-    context: Context,
-    uri: Uri,
-    task: WorkTaskItem,
-    viewModel: WorkViewModel,
-) {
-    val picked = readWorkAttachment(context, uri)
-    if (picked.error != null) {
-        viewModel.setActionError(picked.error)
-        return
-    }
-    val file = picked.file ?: return
-    viewModel.completeWithEvidence(task, file.bytes, file.fileName, file.mimeType)
-}
 
 internal data class WorkPickedFile(
     val bytes: ByteArray,

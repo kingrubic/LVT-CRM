@@ -39,6 +39,11 @@ import {
   releaseDriveUploadCleanup,
 } from "./driveUploadStages";
 import { canMutateWorkDocument } from "./workDocumentPolicy";
+import {
+  assertActiveDocumentType,
+  listActiveDocumentTypes,
+} from "./documentTypes";
+import { requireDocumentTypeId } from "./documentTypePolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -70,6 +75,7 @@ type CompletionRow = {
   fileName?: string;
   fileType?: string;
   fileSize?: number;
+  documentTypeId?: string;
 };
 
 function completionsOf(item: any): CompletionRow[] {
@@ -538,10 +544,11 @@ function isActorAssignedToWorkItem(
 }
 
 async function catalog(ctx: any) {
-  const [users, departments, positions] = await Promise.all([
+  const [users, departments, positions, documentTypes] = await Promise.all([
     ctx.db.query("users").collect(),
     ctx.db.query("departments").collect(),
     ctx.db.query("positions").collect(),
+    ctx.db.query("documentTypes").collect(),
   ]);
   const activeUsers = users.filter((user: any) => user.status === "active");
   const departmentMap = new Map(
@@ -550,7 +557,21 @@ async function catalog(ctx: any) {
   const positionMap = new Map(
     positions.map((position: any) => [String(position._id), position]),
   );
-  return { users, activeUsers, departments, positions, departmentMap, positionMap };
+  const documentTypeMap = new Map(
+    documentTypes.map((item: any) => [String(item._id), item]),
+  );
+  return { users, activeUsers, departments, positions, documentTypes, departmentMap, positionMap, documentTypeMap };
+}
+
+async function resolveDocumentTypeForFile(
+  ctx: any,
+  hasFile: boolean,
+  documentTypeId?: string | null,
+) {
+  const id = requireDocumentTypeId(hasFile, documentTypeId);
+  if (!id) return undefined;
+  await assertActiveDocumentType(ctx, id);
+  return id;
 }
 
 function individualAssigneeIdsForDocument(workItems: any[], documentId: string) {
@@ -628,6 +649,11 @@ async function documentView(ctx: any, document: any, catalogData: any, items: an
     fileSize: document.fileSize,
     fileUrl: null,
     privateFile: Boolean(document.driveFileId || document.fileId),
+    documentTypeId: document.documentTypeId || "",
+    documentTypeName:
+      (document.documentTypeId
+        && catalogData.documentTypeMap?.get(String(document.documentTypeId))?.name)
+      || "",
     content: document.content,
     deadline: document.deadline,
     status: document.status,
@@ -926,6 +952,7 @@ export const formOptions = query({
           level: activePositionLevel(user, positions),
         }))
         .sort((a: any, b: any) => a.name.localeCompare(b.name, "vi")),
+      documentTypes: await listActiveDocumentTypes(ctx),
       approvers: [],
     };
   },
@@ -951,12 +978,14 @@ export const createDocument = mutation({
       }),
     ),
     approverUserIds: v.optional(v.array(v.string())),
+    documentTypeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const actor = await requireWorkWrite(ctx);
     await releasePendingWorkDocuments(ctx);
     const title = cleanWorkTitle(args.title);
     const hasFile = Boolean(args.driveFileId || args.fileId);
+    const documentTypeId = await resolveDocumentTypeForFile(ctx, hasFile, args.documentTypeId);
     const file = hasFile
       ? validateDocumentFile(args.fileName || "", args.fileSize || 0)
       : { fileName: "", fileType: "" };
@@ -981,6 +1010,7 @@ export const createDocument = mutation({
       fileName: file.fileName,
       fileType: file.fileType,
       fileSize: hasFile ? args.fileSize || 0 : 0,
+      documentTypeId,
       title,
       departmentId: firstAssignment.departmentId || "",
       content: firstAssignment.content,
@@ -1047,6 +1077,7 @@ export const updateDocument = mutation({
       }),
     ),
     approverUserIds: v.optional(v.array(v.string())),
+    documentTypeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const actor = await requireWorkWrite(ctx);
@@ -1103,6 +1134,12 @@ export const updateDocument = mutation({
     const now = Date.now();
     const firstAssignment = assignments[0];
     const title = args.title !== undefined ? cleanWorkTitle(args.title) : document.title;
+    const requestedType = args.documentTypeId !== undefined ? args.documentTypeId : document.documentTypeId;
+    const documentTypeId = await resolveDocumentTypeForFile(
+      ctx,
+      Boolean(replacement) || Boolean(requestedType),
+      requestedType,
+    );
     await ctx.db.patch(args.documentId, {
       ...(replacement
         ? {
@@ -1115,6 +1152,7 @@ export const updateDocument = mutation({
             fileSize: replacement.fileSize,
           }
         : {}),
+      ...(documentTypeId ? { documentTypeId } : {}),
       ...(title ? { title } : {}),
       departmentId: firstAssignment.departmentId || "",
       content: firstAssignment.content,
@@ -1366,6 +1404,7 @@ export const listAdmin = query({
       canCreate: true,
       isOps: actor.isOps,
       documents: views.sort((a, b) => b.createdAt - a.createdAt),
+      documentTypes: await listActiveDocumentTypes(ctx),
       pendingCompletionReviews: pendingCompletionReviews.sort(
         (a, b) => a.deadline.localeCompare(b.deadline) || a.submittedAt - b.submittedAt,
       ),
@@ -1532,6 +1571,7 @@ export const completeWorkItem = mutation({
     fileType: v.optional(v.string()),
     fileSize: v.optional(v.number()),
     note: v.optional(v.string()),
+    documentTypeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const access = await requireWorkAccess(ctx);
@@ -1560,6 +1600,7 @@ export const completeWorkItem = mutation({
     if (!existing && isUserApproved(item, String(access.user._id))) return;
 
     const hasEvidence = Boolean(args.driveFileId);
+    const documentTypeId = await resolveDocumentTypeForFile(ctx, hasEvidence, args.documentTypeId);
     const note = cleanCompletionNote(args.note);
     let evidence: {
       driveFileId?: string;
@@ -1567,6 +1608,7 @@ export const completeWorkItem = mutation({
       fileName?: string;
       fileType?: string;
       fileSize?: number;
+      documentTypeId?: string;
     } = {};
     if (hasEvidence) {
       if (!args.cleanupToken || args.fileName === undefined || args.fileSize === undefined) {
@@ -1585,6 +1627,7 @@ export const completeWorkItem = mutation({
         fileName: file.fileName,
         fileType: file.fileType,
         fileSize: args.fileSize,
+        documentTypeId,
       };
     }
 
@@ -1968,6 +2011,7 @@ export const listMine = query({
         departmentWorks: [],
         personalTasks: [],
         myTasks: myWorkItems.sort((a, b) => a.deadline.localeCompare(b.deadline)),
+        documentTypes: await listActiveDocumentTypes(ctx),
         pendingCompletionReviews: pendingCompletionReviews.sort(
           (a, b) => a.deadline.localeCompare(b.deadline) || a.submittedAt - b.submittedAt,
         ),
@@ -2107,6 +2151,7 @@ export const listMine = query({
         a.deadline.localeCompare(b.deadline),
       ),
       myTasks: [],
+      documentTypes: await listActiveDocumentTypes(ctx),
       pendingCompletionReviews: pendingCompletionReviews.sort(
         (a, b) => a.deadline.localeCompare(b.deadline) || a.submittedAt - b.submittedAt,
       ),

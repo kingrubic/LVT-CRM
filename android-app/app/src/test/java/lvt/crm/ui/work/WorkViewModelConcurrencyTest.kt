@@ -88,13 +88,14 @@ class WorkViewModelConcurrencyTest {
         assertEquals(task, viewModel.uiState.value.evidencePromptTask)
         viewModel.onEvidenceNoteChange("  Đã nộp báo cáo  ")
 
-        viewModel.completeWithEvidence(task, "hello".toByteArray(), "proof.pdf", "application/pdf")
+        viewModel.completeWithEvidence(task, "hello".toByteArray(), "proof.pdf", "application/pdf", "type-1")
         advanceUntilIdle()
 
         assertEquals(1, repository.completionCalls)
         assertEquals(1, repository.uploadCalls)
         assertEquals("proof.pdf", repository.lastUploadedEvidence?.fileName)
         assertEquals("Đã nộp báo cáo", repository.lastNote)
+        assertEquals("type-1", repository.lastDocumentTypeId)
         assertEquals(null, viewModel.uiState.value.evidencePromptTask)
     }
 
@@ -133,6 +134,7 @@ private class BlockingWorkOperations : WorkOperations {
     var lastQualityPercent: Int? = null
     var lastUploadedEvidence: lvt.crm.data.work.WorkUploadedEvidence? = null
     var lastNote: String? = null
+    var lastDocumentTypeId: String? = null
 
     override suspend fun listMine(): WorkSnapshot {
         if (listCalls++ == 0) {
@@ -162,11 +164,18 @@ private class BlockingWorkOperations : WorkOperations {
         return evidence
     }
 
-    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: lvt.crm.data.work.WorkUploadedEvidence?, note: String?) {
+    override suspend fun complete(
+        item: WorkTaskItem,
+        qualityPercent: Int?,
+        evidence: lvt.crm.data.work.WorkUploadedEvidence?,
+        note: String?,
+        documentTypeId: String?,
+    ) {
         completionCalls++
         lastQualityPercent = qualityPercent
         lastUploadedEvidence = evidence
         lastNote = note
+        lastDocumentTypeId = documentTypeId
     }
 
     override suspend fun decideApproval(documentId: String, approve: Boolean) {

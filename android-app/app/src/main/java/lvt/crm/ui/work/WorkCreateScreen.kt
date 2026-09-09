@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import lvt.crm.data.work.WorkCreateAssignment
+import lvt.crm.data.work.WorkDocumentType
 import lvt.crm.data.work.WorkFormDepartment
 import lvt.crm.data.work.WorkFormUser
 import lvt.crm.data.work.formatWorkDeadline
@@ -67,6 +68,7 @@ fun WorkCreateScreen(
     var fileName by remember { mutableStateOf("") }
     var fileBytes by remember { mutableStateOf<ByteArray?>(null) }
     var fileMime by remember { mutableStateOf<String?>(null) }
+    var documentTypeId by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
     var pickerIndex by remember { mutableStateOf<Int?>(null) }
     var dateIndex by remember { mutableStateOf<Int?>(null) }
@@ -183,6 +185,7 @@ fun WorkCreateScreen(
                     fileBytes = null
                     fileName = ""
                     fileMime = null
+                    documentTypeId = ""
                 }) { Text("Gỡ tệp") }
             }
             OutlinedButton(
@@ -215,6 +218,13 @@ fun WorkCreateScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("Chọn từ Tệp (PDF, Word, Excel)")
             }
+            if (fileBytes != null) {
+                WorkDocumentTypeField(
+                    types = options?.documentTypes.orEmpty(),
+                    selectedId = documentTypeId,
+                    onSelect = { documentTypeId = it },
+                )
+            }
             error?.let { message ->
                 Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
@@ -227,6 +237,7 @@ fun WorkCreateScreen(
                         fileBytes = fileBytes,
                         fileName = fileName.takeIf { it.isNotBlank() },
                         mimeType = fileMime,
+                        documentTypeId = documentTypeId,
                         onSuccess = onCreated,
                     )
                 },
@@ -296,6 +307,33 @@ fun WorkCreateScreen(
         ) {
             DatePicker(state = pickerState)
         }
+    }
+}
+
+@Composable
+internal fun WorkDocumentTypeField(
+    types: List<WorkDocumentType>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+) {
+    var picking by remember { mutableStateOf(false) }
+    val selectedName = types.firstOrNull { it.id == selectedId }?.name
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Loại văn bản", style = MaterialTheme.typography.titleSmall)
+        OutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(selectedName ?: "Chọn loại văn bản")
+        }
+    }
+    if (picking) {
+        WorkChoiceDialog(
+            title = "Chọn loại văn bản",
+            items = types.map { it.id to it.name },
+            onSelect = { id ->
+                onSelect(id)
+                picking = false
+            },
+            onDismiss = { picking = false },
+        )
     }
 }
 

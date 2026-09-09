@@ -231,6 +231,8 @@ class ConvexHttpClient(
                 code == "INVALID_WORK_ASSIGNEE" ->
                     "Người thực hiện phải cùng phòng ban và có cấp sao thấp hơn bạn."
                 code == "INVALID_WORK_FILE" -> "Tệp công văn không đúng định dạng được hỗ trợ."
+                code == "DOCUMENT_TYPE_REQUIRED" -> "Vui lòng chọn loại văn bản cho file đính kèm."
+                code == "INVALID_DOCUMENT_TYPE" -> "Loại văn bản không hợp lệ hoặc đã ngưng sử dụng."
                 code == "WORK_ASSIGNMENTS_REQUIRED" -> "Vui lòng thêm ít nhất một phân công."
                 code == "WORK_DEPARTMENT_FORBIDDEN" ->
                     "Tổ trưởng/tổ phó chỉ được giao công việc cho cấp dưới, không chọn cả phòng ban."

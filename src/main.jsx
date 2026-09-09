@@ -8,6 +8,7 @@ import './styles.css';
 import DutyReportsView from './reports/DutyReportsView';
 import WorkReportsView from './reports/WorkReportsView';
 import { WorkUserView } from './work/WorkViews';
+import DocumentTypeSettings from './settings/DocumentTypeSettings';
 import DisplaySettings from './settings/DisplaySettings';
 import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
@@ -75,6 +76,7 @@ const SUPREME_SETTINGS = [
   ['departments', 'Thiết lập phòng ban'],
   ['roles', 'Thiết lập nhóm quyền'],
   ['positions', 'Thiết lập chức vụ'],
+  ['document-types', 'Thiết lập loại văn bản'],
   ['display-settings', 'Thiết lập hiển thị'],
 ];
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
@@ -398,6 +400,8 @@ function AppShell({ session }) {
           <PermissionGroupManagement />
         ) : active === 'positions' && isAdmin ? (
           <PositionManagement />
+        ) : active === 'document-types' && isAdmin ? (
+          <DocumentTypeSettings />
         ) : active === 'display-settings' && isAdmin ? (
           <DisplaySettings />
         ) : active === 'notifications' ? (
