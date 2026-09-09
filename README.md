@@ -100,7 +100,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công việc; Bán trú đang ẩn), **Lịch công tác** (tab **cá nhân** / **chung**; nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★ — tạo mở trang riêng `/cong-tac/tao`), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**. `/bao-cao/cong-tac` chuyển vào tab lịch chung.
+1. **Chức năng chính**: Báo cáo (submenu: Công việc; Bán trú đang ẩn), **Lịch công tác** (tab **cá nhân** = lịch tuần/tháng/quý/năm kèm cột nhân sự như Báo cáo Công việc; tab **chung** = mẫu Word/PDF; nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★ — tạo mở trang riêng `/cong-tac/tao`), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**. `/bao-cao/cong-tac` chuyển vào tab lịch chung.
 2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
 3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **loại văn bản**, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 

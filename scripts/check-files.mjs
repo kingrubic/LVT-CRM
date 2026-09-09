@@ -133,6 +133,7 @@ for (const marker of [
   "DutiesAdminView",
   "DutiesUserView",
   "SharedDutyScheduleView",
+  "DutyReportsView",
   "ReportSubmenu",
   "PermissionGroupManagement",
   "PositionManagement",

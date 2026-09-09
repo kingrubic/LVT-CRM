@@ -149,7 +149,7 @@ function startMs(duty: { startDate: string; startTime: string }) {
   return parseLocalMs(duty.startDate, duty.startTime);
 }
 
-function dutyTiming(duty: { startDate: string; startTime: string; endDate: string; endTime: string }, now = Date.now()) {
+export function dutyTiming(duty: { startDate: string; startTime: string; endDate: string; endTime: string }, now = Date.now()) {
   const start = startMs(duty);
   const end = deadlineMs(duty);
   const isOngoing = now >= start && now <= end;
@@ -167,7 +167,7 @@ function mapNames(ids: string[], rows: { _id: string; name: string }[]) {
   return ids.map((id) => map.get(String(id))).filter((name): name is string => Boolean(name));
 }
 
-async function requireDutiesAccess(ctx: any) {
+export async function requireDutiesAccess(ctx: any) {
   const user = await currentUserOrThrow(ctx);
   if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
   if (user.mustChangePassword) throw new Error("PASSWORD_CHANGE_REQUIRED");

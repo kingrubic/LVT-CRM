@@ -941,6 +941,59 @@
   line-height: 1.35;
 }
 
+.report-detail-attendance,
+.report-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.report-detail-attendance small {
+  flex: 1 1 100%;
+  color: #8a6a2a;
+  font-size: 11px;
+}
+
+.report-detail-people {
+  margin-top: 14px;
+}
+
+.report-detail-people > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--report-navy);
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.report-detail-people ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-detail-people li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.report-detail-inline-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.report-toolbar-actions .duty-list-create-actions {
+  margin-left: 0;
+}
+
 .report-work-document-name {
   display: block;
   max-width: 100%;
