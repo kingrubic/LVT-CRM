@@ -31,7 +31,7 @@ Vận hành production:
   - `user` — **User**: các chức năng chính theo **nhóm quyền** do Administrator gán.
 - Administrator quản lý thông số tối cao; Administrator và Moderator cùng quản lý nghiệp vụ (công tác, công việc, …).
 - Mật khẩu băm bởi Convex Auth (Scrypt); plaintext không lưu / không ghi audit. Tài khoản tạo/reset có `mustChangePassword=true`.
-- **Đã có luồng dữ liệu:** Công tác (lịch + xác nhận tham gia, địa điểm nhập text), Công việc (tạo/giao ngay, nộp + duyệt hoàn thành), Báo cáo (Công tác · Công việc; Bán trú đang ẩn), Thông báo (mốc hạn + click mở đúng mục), Thiết lập hiển thị.
+- **Đã có luồng dữ liệu:** Lịch công tác (cá nhân + lịch chung dạng mẫu Word/PDF, xác nhận tham gia, địa điểm nhập text), Công việc (tạo/giao ngay, nộp + duyệt hoàn thành), Báo cáo (Công việc; Bán trú đang ẩn), Thông báo (mốc hạn + click mở đúng mục), Thiết lập hiển thị.
 - **Đã có nền tảng Lớp chủ nhiệm (Phase 1):** năm học, lớp, phân công GVCN/Giám thị, học sinh/phụ huynh, nhập danh sách Excel (atomic), nhập/công bố điểm danh camera có giới hạn, sổ điểm danh ngày, phân loại vắng, báo cáo/xuất cơ bản. Ngày chuyển lớp / thay GVCN thuộc lớp/GVCN mới; bản ghi cũ đóng ngày trước đó (`endDate`/`effectiveTo` inclusive). Chưa chốt workbook camera thật và lịch ngày học nhà trường.
 - **Vẫn placeholder:** Đánh giá nhân sự.
 
@@ -55,7 +55,7 @@ Mỗi nhóm quy định quyền trên **7** menu **Chức năng chính**:
 |---------|------|
 | `reports` | Báo cáo |
 | `notifications` | Thông báo |
-| `duties` | Công tác |
+| `duties` | Lịch công tác |
 | `work` | Công việc |
 | `homeroom` | Lớp chủ nhiệm |
 | `people-review` | Đánh giá nhân sự |
@@ -100,7 +100,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công tác · Công việc; Bán trú đang ẩn), Công tác (nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**.
+1. **Chức năng chính**: Báo cáo (submenu: Công việc; Bán trú đang ẩn), **Lịch công tác** (tab **cá nhân** / **chung**; nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★ — tạo mở trang riêng `/cong-tac/tao`), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**. `/bao-cao/cong-tac` chuyển vào tab lịch chung.
 2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
 3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **loại văn bản**, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 

@@ -413,6 +413,60 @@ export const listMine = query({
   },
 });
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** School-wide Lịch công tác sheet for anyone who can open the duties menu. */
+export const sharedSchedule = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const startDate = args.startDate.trim();
+    const endDate = args.endDate.trim();
+    if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate) {
+      throw new Error("INVALID_DATE_RANGE");
+    }
+    await requireDutiesAccess(ctx);
+    const [duties, locations, departments, users] = await Promise.all([
+      ctx.db.query("duties").collect(),
+      ctx.db.query("locations").collect(),
+      ctx.db.query("departments").collect(),
+      ctx.db.query("users").collect(),
+    ]);
+    const userNameMap = new Map(
+      users.map((user) => [String(user._id), String(user.name || user.email || "")]),
+    );
+    const events = duties
+      .filter(
+        (duty) =>
+          duty.active && duty.startDate <= endDate && duty.endDate >= startDate,
+      )
+      .map((duty) => ({
+        _id: duty._id,
+        title: dutyListTitle(duty),
+        content: duty.content,
+        startDate: duty.startDate,
+        endDate: duty.endDate,
+        startTime: duty.startTime,
+        endTime: duty.endTime,
+        allDay: duty.allDay,
+        location: dutyLocationLabel(duty, mapNames(duty.locationIds, locations)),
+        departmentNames: mapNames(duty.departmentIds, departments),
+        participantNames: duty.participantUserIds
+          .map((id) => userNameMap.get(String(id)))
+          .filter((name): name is string => Boolean(name)),
+      }))
+      .sort(
+        (a, b) =>
+          a.startDate.localeCompare(b.startDate) ||
+          a.startTime.localeCompare(b.startTime) ||
+          a.title.localeCompare(b.title, "vi"),
+      );
+    return { startDate, endDate, events };
+  },
+});
+
 export const create = mutation({
   args: {
     startDate: v.string(),

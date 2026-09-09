@@ -6,7 +6,6 @@ import {
   isSidebarPrimaryMenu,
   pathnameForMenu,
   pathnameForReportSection,
-  REPORT_PATHS,
   routeForPathname,
 } from '../src/navigationRoutes.js';
 import {
@@ -38,16 +37,32 @@ test('đường dẫn con mở đúng menu và chuẩn hóa dấu gạch cuối'
 test('đường dẫn menu đã ẩn được chuyển về menu đang dùng', () => {
   assert.deepEqual(routeForPathname('/quan-ly-cong-tac'), { menu: 'duties', reportSection: undefined });
   assert.deepEqual(routeForPathname('/quan-ly-cong-viec'), { menu: 'work', reportSection: undefined });
-  assert.deepEqual(routeForPathname('/bao-cao/ban-tru'), { menu: 'reports', reportSection: 'duties' });
+  assert.deepEqual(routeForPathname('/bao-cao/ban-tru'), { menu: 'reports', reportSection: 'work' });
   assert.deepEqual(routeForPathname('/thiet-lap-dia-diem'), { menu: 'departments', reportSection: undefined });
 });
 
 test('các tab báo cáo đang dùng có đường dẫn riêng', () => {
-  for (const reportSection of ['duties', 'work']) {
-    const pathname = REPORT_PATHS[reportSection];
-    assert.equal(pathnameForReportSection(reportSection), pathname);
-    assert.deepEqual(routeForPathname(pathname), { menu: 'reports', reportSection });
-  }
+  assert.equal(pathnameForReportSection('work'), '/bao-cao/cong-viec');
+  assert.deepEqual(routeForPathname('/bao-cao/cong-viec'), { menu: 'reports', reportSection: 'work' });
+  assert.equal(pathnameForMenu('reports'), '/bao-cao/cong-viec');
+});
+
+test('Báo cáo Công tác cũ chuyển vào Lịch công tác chung', () => {
+  assert.deepEqual(routeForPathname('/bao-cao/cong-tac'), {
+    menu: 'duties',
+    reportSection: undefined,
+    dutyPath: '/cong-tac/chung',
+  });
+  assert.deepEqual(routeForPathname('/cong-tac/chung'), {
+    menu: 'duties',
+    reportSection: undefined,
+    dutyPath: '/cong-tac/chung',
+  });
+  assert.deepEqual(routeForPathname('/cong-tac/tao'), {
+    menu: 'duties',
+    reportSection: undefined,
+    dutyPath: '/cong-tac/tao',
+  });
 });
 
 test('trang chính sách bảo mật là đường dẫn công khai, không phải menu CRM', () => {

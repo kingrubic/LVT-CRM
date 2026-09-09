@@ -132,7 +132,7 @@ for (const marker of [
   "LocationManagement",
   "DutiesAdminView",
   "DutiesUserView",
-  "DutyReportsView",
+  "SharedDutyScheduleView",
   "ReportSubmenu",
   "PermissionGroupManagement",
   "PositionManagement",
@@ -158,15 +158,20 @@ if (!boardingReports.includes("BoardingReportsView")) {
 const dutyUi = [
   readFileSync("src/duties/DutyEditorFields.jsx", "utf8"),
   readFileSync("src/duties/DutyListSummary.jsx", "utf8"),
-  readFileSync("src/reports/DutyReportsView.jsx", "utf8"),
+  readFileSync("src/duties/SharedDutyScheduleView.jsx", "utf8"),
 ].join("\n");
 for (const marker of ["Cả ngày", "Gần đến hạn"]) {
   if (!dutyUi.includes(marker)) throw new Error(`Duty UI marker missing: ${marker}`);
 }
 
-const reports = readFileSync("src/reports/DutyReportsView.jsx", "utf8");
-for (const marker of ["DutyReportsView", "Tuần", "Tháng", "Quý", "Năm"]) {
-  if (!reports.includes(marker)) throw new Error(`Reports UI marker missing: ${marker}`);
+const sharedSchedule = readFileSync("src/duties/SharedDutyScheduleView.jsx", "utf8");
+for (const marker of ["SharedDutyScheduleView", "Tuần", "Tháng", "Tải PDF"]) {
+  if (!sharedSchedule.includes(marker)) throw new Error(`Shared duty schedule UI marker missing: ${marker}`);
+}
+
+const workReports = readFileSync("src/reports/WorkReportsView.jsx", "utf8");
+for (const marker of ["WorkReportsView", "Tuần", "Tháng", "Quý", "Năm"]) {
+  if (!workReports.includes(marker)) throw new Error(`Work reports UI marker missing: ${marker}`);
 }
 
 const boarding = readFileSync("convex/boarding.ts", "utf8");

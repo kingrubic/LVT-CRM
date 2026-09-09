@@ -5,8 +5,9 @@ import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, us
 import { anyApi } from 'convex/server';
 import '@fontsource-variable/montserrat';
 import './styles.css';
-import DutyReportsView from './reports/DutyReportsView';
 import WorkReportsView from './reports/WorkReportsView';
+import SharedDutyScheduleView from './duties/SharedDutyScheduleView';
+import DutyWorkspaceTabs from './duties/DutyWorkspaceTabs';
 import { WorkUserView } from './work/WorkViews';
 import DocumentTypeSettings from './settings/DocumentTypeSettings';
 import DisplaySettings from './settings/DisplaySettings';
@@ -14,7 +15,8 @@ import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
-import { isSidebarPrimaryMenu, pathnameForMenu, pathnameForReportSection, routeForPathname } from './navigationRoutes';
+import { isSidebarPrimaryMenu, pathnameForMenu, pathnameForReportSection, routeForPathname, dutiesPathname } from './navigationRoutes';
+import { parseDutyPath } from './duties/dutyRoutes';
 import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
 import { isPublicAccountDeletionPath, isPublicPrivacyPath } from './privacy/privacyPolicy';
@@ -64,7 +66,7 @@ const convex = publicConvexUrl ? new ConvexReactClient(publicConvexUrl) : null;
 const PRIMARY_MENUS = [
   ['reports', 'Báo cáo'],
   ['notifications', 'Thông báo'],
-  ['duties', 'Công tác'],
+  ['duties', 'Lịch công tác'],
   ['work', 'Công việc'],
   ['homeroom', 'Lớp chủ nhiệm'],
   ['people-review', 'Đánh giá nhân sự'],
@@ -172,8 +174,21 @@ function AppShell({ session }) {
   const [active, setActive] = useState(initialRoute?.menu || defaultActive);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [reportSection, setReportSection] = useState(initialRoute?.reportSection || 'duties');
+  const [reportSection, setReportSection] = useState(initialRoute?.reportSection || 'work');
+  const [dutyPath, setDutyPath] = useState(
+    initialRoute && 'dutyPath' in initialRoute && initialRoute.dutyPath
+      ? initialRoute.dutyPath
+      : dutiesPathname(),
+  );
   const [focusTarget, setFocusTarget] = useState(null);
+  const dutyRoute = parseDutyPath(dutyPath) || { view: 'personal', dutyId: undefined };
+
+  useEffect(() => {
+    if (active !== 'duties' || !dutyPath) return;
+    if (window.location.pathname === '/bao-cao/cong-tac' && dutyPath !== window.location.pathname) {
+      window.history.replaceState({}, '', dutyPath);
+    }
+  }, [active, dutyPath]);
 
   const allowedMenus = useMemo(() => new Set([
     ...visiblePrimaryMenus.map(([id]) => id),
@@ -187,7 +202,7 @@ function AppShell({ session }) {
     const currentRoute = routeForPathname(window.location.pathname);
     if (!allowedMenus.has(active) || !currentRoute || !allowedMenus.has(currentRoute.menu)) {
       setActive(defaultActive);
-      setReportSection('duties');
+      setReportSection('work');
       window.history.replaceState({}, '', pathnameForMenu(defaultActive));
     }
   }, [active, allowedMenus, defaultActive]);
@@ -198,9 +213,10 @@ function AppShell({ session }) {
       if (route && allowedMenus.has(route.menu)) {
         setActive(route.menu);
         if (route.reportSection) setReportSection(route.reportSection);
+        if ('dutyPath' in route && route.dutyPath) setDutyPath(route.dutyPath);
       } else {
         setActive(defaultActive);
-        setReportSection('duties');
+        setReportSection('work');
         window.history.replaceState({}, '', pathnameForMenu(defaultActive));
       }
       setMobileOpen(false);
@@ -250,13 +266,19 @@ function AppShell({ session }) {
 
   const title = useMemo(() => {
     if (active === 'profile' || active === 'settings') return 'Thông tin cá nhân';
+    if (active === 'duties') {
+      if (dutyRoute.view === 'create') return 'Tạo lịch công tác';
+      if (dutyRoute.view === 'edit') return 'Sửa lịch công tác';
+      return 'Lịch công tác';
+    }
     const all = [...PRIMARY_MENUS, ...SYSTEM_MANAGEMENT_MENUS, ...SUPREME_SETTINGS];
     return all.find(([id]) => id === active)?.[1] || 'CRM Lê Văn Tám';
-  }, [active]);
+  }, [active, dutyRoute.view]);
 
   const choose = (id, { replace = false } = {}) => {
     setActive(id);
-    if (id === 'reports') setReportSection('duties');
+    if (id === 'reports') setReportSection('work');
+    if (id === 'duties') setDutyPath(dutiesPathname());
     const pathname = pathnameForMenu(id);
     if (window.location.pathname !== pathname) {
       window.history[replace ? 'replaceState' : 'pushState']({}, '', pathname);
@@ -265,9 +287,21 @@ function AppShell({ session }) {
   };
 
   const chooseReportSection = (section) => {
+    if (section === 'duties') {
+      chooseDutyView('shared');
+      return;
+    }
     setActive('reports');
     setReportSection(section);
     const pathname = pathnameForReportSection(section);
+    if (window.location.pathname !== pathname) window.history.pushState({}, '', pathname);
+    setMobileOpen(false);
+  };
+
+  const chooseDutyView = (view, extra = {}) => {
+    setActive('duties');
+    const pathname = dutiesPathname({ view, dutyId: extra.dutyId });
+    setDutyPath(pathname);
     if (window.location.pathname !== pathname) window.history.pushState({}, '', pathname);
     setMobileOpen(false);
   };
@@ -407,9 +441,27 @@ function AppShell({ session }) {
         ) : active === 'notifications' ? (
           <NotificationsView data={notificationFeed} onOpenItem={openFromNotification} />
         ) : active === 'duties' ? (
-          canManageOperations
-            ? <DutiesAdminView currentUserId={user._id} allowManage focusTarget={activeFocusTarget} />
-            : <DutiesUserView access={menuAccess?.duties || 'view'} currentUserId={user._id} focusTarget={activeFocusTarget} />
+          dutyRoute.view === 'shared' ? (
+            <SharedDutyScheduleView onChooseView={chooseDutyView} />
+          ) : canManageOperations ? (
+            <DutiesAdminView
+              currentUserId={user._id}
+              allowManage
+              focusTarget={activeFocusTarget}
+              dutyPage={dutyRoute.view}
+              editDutyId={dutyRoute.dutyId}
+              onDutyNavigate={chooseDutyView}
+            />
+          ) : (
+            <DutiesUserView
+              access={menuAccess?.duties || 'view'}
+              currentUserId={user._id}
+              focusTarget={activeFocusTarget}
+              dutyPage={dutyRoute.view}
+              editDutyId={dutyRoute.dutyId}
+              onDutyNavigate={chooseDutyView}
+            />
+          )
         ) : active === 'work' ? (
           <WorkUserView focusTarget={activeFocusTarget} />
         ) : active === 'people-review' ? (
@@ -417,7 +469,7 @@ function AppShell({ session }) {
         ) : active === 'staff-faults' ? (
           <StaffFaultsView />
         ) : active === 'reports' ? (
-          reportSection === 'work' ? <WorkReportsView /> : <DutyReportsView />
+          <WorkReportsView />
         ) : active === 'homeroom' ? (
           <HomeroomRouter session={session} />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
@@ -528,9 +580,6 @@ function NotificationBell({ data, onViewAll, onOpenItem }) {
 function ReportSubmenu({ active, onChoose }) {
   return (
     <div className="report-submenu" aria-label="Loại báo cáo">
-      <button type="button" className={active === 'duties' ? 'active' : ''} onClick={() => onChoose('duties')}>
-        <span className="nav-icon">{navIconFor('duties')}</span> Công tác
-      </button>
       <button type="button" className={active === 'work' ? 'active' : ''} onClick={() => onChoose('work')}>
         <span className="nav-icon">{navIconFor('work')}</span> Công việc
       </button>
@@ -609,7 +658,14 @@ function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel 
   );
 }
 
-function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null }) {
+function DutiesAdminView({
+  currentUserId,
+  allowManage = true,
+  focusTarget = null,
+  dutyPage = 'personal',
+  editDutyId = null,
+  onDutyNavigate,
+}) {
   const options = useQuery(anyApi.duties.formOptions, allowManage ? {} : 'skip');
   const listData = useQuery(anyApi.duties.listAdmin);
   const list = listData?.duties || [];
@@ -620,7 +676,6 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
   const [expanded, setExpanded] = useState(null);
-  const [editorOpen, setEditorOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
@@ -630,6 +685,9 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const { pending, feedback, setFeedback, run } = useFeedback();
+  const editorOpen = dutyPage === 'create' || dutyPage === 'edit';
+  const missingEdit = dutyPage === 'edit' && listData !== undefined &&
+    !list.some((item) => String(item._id) === String(editDutyId));
   const { mine, created } = useMemo(
     () => splitDutyLists(list, currentUserId, { includeManagedOthers: true }),
     [list, currentUserId],
@@ -658,9 +716,12 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
   };
 
   const startEdit = (item) => {
+    if (onDutyNavigate) {
+      onDutyNavigate('edit', { dutyId: item._id });
+      return;
+    }
     setEditing(item);
     setExpanded(item._id);
-    setEditorOpen(true);
     setImportOpen(false);
     setPreviewOpen(false);
     setForm(dutyFormFromItem(item));
@@ -671,28 +732,44 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
     setPreviewOpen(false);
     setEditConfirm(null);
     setForm(emptyDutyForm());
-    setEditorOpen(false);
+    onDutyNavigate?.('personal');
   };
 
   const openCreateEditor = () => {
     setImportOpen(false);
-    setEditorOpen(true);
+    if (onDutyNavigate) {
+      onDutyNavigate('create');
+      return;
+    }
   };
 
   const openImportPanel = () => {
-    closeEditor();
     setImportOpen(true);
+    onDutyNavigate?.('personal');
   };
+
+  useEffect(() => {
+    if (dutyPage === 'create') {
+      setEditing(null);
+      setForm(emptyDutyForm());
+      setImportOpen(false);
+      setPreviewOpen(false);
+      return;
+    }
+    if (dutyPage !== 'edit' || !editDutyId || listData === undefined) return;
+    const item = list.find((row) => String(row._id) === String(editDutyId));
+    if (!item) return;
+    setEditing(item);
+    setForm(dutyFormFromItem(item));
+    setImportOpen(false);
+  }, [dutyPage, editDutyId, listData === undefined]);
 
   const persistDuty = async () => {
     if (pending === 'save') return;
     const payload = dutyPayloadFromForm(form);
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
-      if (ok) {
-        setEditing(null);
-        setForm(emptyDutyForm());
-      }
+      if (ok) closeEditor();
       return;
     }
     setPreviewOpen(false);
@@ -826,17 +903,30 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
 
   return (
     <section className="work-management duty-workspace">
+      {editorOpen ? (
+        <div className="duty-editor-page-bar">
+          <button type="button" className="work-ghost-button" onClick={closeEditor}>
+            ← Quay lại lịch cá nhân
+          </button>
+        </div>
+      ) : (
+        <DutyWorkspaceTabs view="personal" onChoose={onDutyNavigate} />
+      )}
       {feedback.text && !editorOpen ? (
         <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
           {feedback.text}
         </div>
       ) : null}
 
-      {allowManage && importOpen ? (
+      {allowManage && importOpen && !editorOpen ? (
         <DutyBulkImport onClose={() => setImportOpen(false)} />
       ) : null}
 
-      {allowManage && editorOpen ? <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
+      {editorOpen && missingEdit ? (
+        <p className="work-feedback error" role="status">Công tác này không còn tồn tại hoặc bạn không có quyền sửa.</p>
+      ) : null}
+
+      {allowManage && editorOpen && !missingEdit ? <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
         <div className="work-editor-title">
           <div>
             <span>{editing ? 'CẬP NHẬT LỊCH' : 'LỊCH MỚI'}</span>
@@ -924,6 +1014,8 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         }}
       />
 
+      {!editorOpen ? (
+      <>
       <div className="duty-list-section">
         <DutyListHeading>Công tác của tôi</DutyListHeading>
         <div className="duty-list-toolbar">
@@ -937,13 +1029,15 @@ function DutiesAdminView({ currentUserId, allowManage = true, focusTarget = null
         <DutyListHeading>Công tác tôi tạo</DutyListHeading>
         <div className="duty-list-toolbar">
           <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
-          {allowManage && !editorOpen && !importOpen ? (
+          {allowManage && !importOpen ? (
             <DutyCreateToolbarActions onCreate={openCreateEditor} onImport={openImportPanel} />
           ) : null}
         </div>
         <DutyListSearch value={createdSearch} onChange={setCreatedSearch} />
         {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : filteredCreated.length === 0 ? <DutyListEmpty filtered /> : renderAdminDutyCards(filteredCreated)}
       </div>
+      </>
+      ) : null}
     </section>
   );
 }
@@ -1013,9 +1107,17 @@ function ViewAllDutyParticipants({ participants, showAttendance = true }) {
   );
 }
 
-function DutiesUserView({ access, currentUserId, focusTarget = null }) {
+function DutiesUserView({
+  access,
+  currentUserId,
+  focusTarget = null,
+  dutyPage = 'personal',
+  editDutyId = null,
+  onDutyNavigate,
+}) {
   const data = useQuery(anyApi.duties.listMine);
-  const options = useQuery(anyApi.duties.formOptions, data?.canCreate ? {} : 'skip');
+  const needFormOptions = Boolean(data?.canCreate) || dutyPage === 'create' || dutyPage === 'edit';
+  const options = useQuery(anyApi.duties.formOptions, needFormOptions ? {} : 'skip');
   const create = useMutation(anyApi.duties.create);
   const update = useMutation(anyApi.duties.update);
   const remove = useMutation(anyApi.duties.remove);
@@ -1026,7 +1128,6 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const canCreate = Boolean(data?.canCreate);
   const [form, setForm] = useState(emptyDutyForm);
   const [editing, setEditing] = useState(null);
-  const [editorOpen, setEditorOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [mineTab, setMineTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [createdTab, setCreatedTab] = useState(DUTY_LIST_TAB_UPCOMING);
@@ -1036,6 +1137,9 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const duties = data?.duties;
+  const editorOpen = dutyPage === 'create' || dutyPage === 'edit';
+  const missingEdit = dutyPage === 'edit' && data !== undefined &&
+    !(duties || []).some((item) => String(item._id) === String(editDutyId));
   const { mine, created } = useMemo(
     () => splitDutyLists(duties || [], currentUserId, {
       includeManagedOthers: true,
@@ -1065,8 +1169,11 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
   };
 
   const startEdit = (item) => {
+    if (onDutyNavigate) {
+      onDutyNavigate('edit', { dutyId: item._id });
+      return;
+    }
     setEditing(item);
-    setEditorOpen(true);
     setImportOpen(false);
     setPreviewOpen(false);
     setForm(dutyFormFromItem(item));
@@ -1077,18 +1184,38 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     setPreviewOpen(false);
     setEditConfirm(null);
     setForm(emptyDutyForm());
-    setEditorOpen(false);
+    onDutyNavigate?.('personal');
   };
 
   const openCreateEditor = () => {
     setImportOpen(false);
-    setEditorOpen(true);
+    onDutyNavigate?.('create');
   };
 
   const openImportPanel = () => {
-    closeEditor();
     setImportOpen(true);
+    onDutyNavigate?.('personal');
   };
+
+  useEffect(() => {
+    if (dutyPage === 'create') {
+      if (data && !canCreate) {
+        onDutyNavigate?.('personal');
+        return;
+      }
+      setEditing(null);
+      setForm(emptyDutyForm());
+      setImportOpen(false);
+      setPreviewOpen(false);
+      return;
+    }
+    if (dutyPage !== 'edit' || !editDutyId || data === undefined) return;
+    const item = (duties || []).find((row) => String(row._id) === String(editDutyId));
+    if (!item) return;
+    setEditing(item);
+    setForm(dutyFormFromItem(item));
+    setImportOpen(false);
+  }, [dutyPage, editDutyId, data === undefined, canCreate]);
 
   const persistDuty = async () => {
     if (pending === 'save') return;
@@ -1096,12 +1223,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     const payload = dutyPayloadFromForm(form, { includeDepartments });
     if (editing) {
       const ok = await run('save', () => update({ id: editing._id, ...payload }), 'Đã cập nhật công tác.');
-      if (ok) {
-        setEditing(null);
-        setPreviewOpen(false);
-        setForm(emptyDutyForm());
-        setEditorOpen(false);
-      }
+      if (ok) closeEditor();
       return;
     }
     setPreviewOpen(false);
@@ -1110,11 +1232,7 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
       return;
     }
     const ok = await run('save', () => create(payload), 'Đã tạo công tác.');
-    if (ok) {
-      setEditing(null);
-      setForm(emptyDutyForm());
-      setEditorOpen(false);
-    }
+    if (ok) closeEditor();
   };
 
   const submit = (event) => {
@@ -1271,17 +1389,30 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
     </div>
   );
 
-  if (data === undefined || (canCreate && options === undefined)) {
+  if (data === undefined || (needFormOptions && options === undefined)) {
     return <LoadingView label="Đang tải danh sách công tác…" />;
   }
   return (
     <section className="work-user-view duty-workspace">
+      {editorOpen ? (
+        <div className="duty-editor-page-bar">
+          <button type="button" className="work-ghost-button" onClick={closeEditor}>
+            ← Quay lại lịch cá nhân
+          </button>
+        </div>
+      ) : (
+        <DutyWorkspaceTabs view="personal" onChoose={onDutyNavigate} />
+      )}
 
-      {canCreate && importOpen ? (
+      {canCreate && importOpen && !editorOpen ? (
         <DutyBulkImport onClose={() => setImportOpen(false)} />
       ) : null}
 
-      {canCreate && editorOpen ? (
+      {editorOpen && missingEdit ? (
+        <p className="work-feedback error" role="status">Công tác này không còn tồn tại hoặc bạn không có quyền sửa.</p>
+      ) : null}
+
+      {editorOpen && !missingEdit && options ? (
         <form ref={editorRef} className="work-editor duty-modern-editor" onSubmit={submit}>
           <div className="work-editor-title">
             <div>
@@ -1354,6 +1485,8 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
         </div>
       ) : null}
 
+      {!editorOpen ? (
+      <>
       <div className="duty-list-section">
         <DutyListHeading>Công tác của tôi</DutyListHeading>
         <div className="duty-list-toolbar">
@@ -1368,13 +1501,15 @@ function DutiesUserView({ access, currentUserId, focusTarget = null }) {
           <DutyListHeading>Công tác tôi tạo</DutyListHeading>
           <div className="duty-list-toolbar">
             <DutyListTabs tab={createdTab} onChange={setCreatedTab} />
-            {canCreate && !editorOpen && !importOpen ? (
+            {canCreate && !importOpen ? (
               <DutyCreateToolbarActions onCreate={openCreateEditor} onImport={openImportPanel} />
             ) : null}
           </div>
           <DutyListSearch value={createdSearch} onChange={setCreatedSearch} />
           {visibleCreated.length === 0 ? <DutyListEmpty tab={createdTab} tone="created" /> : filteredCreated.length === 0 ? <DutyListEmpty filtered /> : renderUserDutyCards(filteredCreated)}
         </div>
+      ) : null}
+      </>
       ) : null}
     </section>
   );

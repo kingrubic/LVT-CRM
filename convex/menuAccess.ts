@@ -3,7 +3,7 @@
 export const SYSTEM_MENU_DEFS = [
   { id: "reports", label: "Báo cáo" },
   { id: "notifications", label: "Thông báo" },
-  { id: "duties", label: "Công tác" },
+  { id: "duties", label: "Lịch công tác" },
   { id: "work", label: "Công việc" },
   { id: "homeroom", label: "Lớp chủ nhiệm" },
   { id: "people-review", label: "Đánh giá nhân sự" },

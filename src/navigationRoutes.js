@@ -1,5 +1,7 @@
+import { DUTY_MENU_PATH, dutiesPathname, parseDutyPath } from './duties/dutyRoutes.js';
+
 const MENU_PATHS = Object.freeze({
-  reports: '/bao-cao/cong-tac',
+  reports: '/bao-cao/cong-viec',
   notifications: '/thong-bao',
   duties: '/cong-tac',
   work: '/cong-viec',
@@ -20,7 +22,6 @@ const MENU_PATHS = Object.freeze({
 });
 
 const REPORT_PATHS = Object.freeze({
-  duties: '/bao-cao/cong-tac',
   work: '/bao-cao/cong-viec',
   boarding: '/bao-cao/ban-tru',
 });
@@ -35,8 +36,9 @@ export function isSidebarPrimaryMenu(menuId) {
 const HIDDEN_MENU_ALIASES = Object.freeze({
   '/quan-ly-cong-tac': { menu: 'duties' },
   '/quan-ly-cong-viec': { menu: 'work' },
-  '/quan-ly-ban-tru': { menu: 'reports', reportSection: 'duties' },
-  '/bao-cao/ban-tru': { menu: 'reports', reportSection: 'duties' },
+  '/quan-ly-ban-tru': { menu: 'reports', reportSection: 'work' },
+  '/bao-cao/ban-tru': { menu: 'reports', reportSection: 'work' },
+  '/bao-cao/cong-tac': { menu: 'duties', dutyPath: '/cong-tac/chung' },
   '/thiet-lap-dia-diem': { menu: 'departments' },
 });
 
@@ -73,19 +75,34 @@ export function routeForPathname(pathname) {
   if (normalized === MENU_PATHS.homeroom || normalized.startsWith(`${MENU_PATHS.homeroom}/`)) {
     return { menu: 'homeroom', reportSection: undefined, homeroomPath: normalized };
   }
+  if (normalized === DUTY_MENU_PATH || normalized.startsWith(`${DUTY_MENU_PATH}/`)) {
+    const parsed = parseDutyPath(normalized);
+    return {
+      menu: 'duties',
+      reportSection: undefined,
+      dutyPath: parsed?.dutyPath || DUTY_MENU_PATH,
+    };
+  }
   const alias = HIDDEN_MENU_ALIASES[normalized];
-  if (alias) return { menu: alias.menu, reportSection: alias.reportSection };
+  if (alias) {
+    return {
+      menu: alias.menu,
+      reportSection: alias.reportSection,
+      ...(alias.dutyPath ? { dutyPath: alias.dutyPath } : {}),
+    };
+  }
   const route = PATH_ROUTES.get(normalized);
   return route ? { menu: route.menu, reportSection: route.reportSection } : null;
 }
 
-export function pathnameForMenu(menu, reportSection = 'duties') {
-  if (menu === 'reports') return REPORT_PATHS[reportSection] || REPORT_PATHS.duties;
+export function pathnameForMenu(menu, reportSection = 'work') {
+  if (menu === 'reports') return REPORT_PATHS[reportSection] || REPORT_PATHS.work;
   return MENU_PATHS[menu] || '/';
 }
 
 export function pathnameForReportSection(reportSection) {
-  return REPORT_PATHS[reportSection] || REPORT_PATHS.duties;
+  if (reportSection === 'duties') return dutiesPathname({ view: 'shared' });
+  return REPORT_PATHS[reportSection] || REPORT_PATHS.work;
 }
 
-export { MENU_PATHS, REPORT_PATHS, HIDDEN_MENU_ALIASES };
+export { MENU_PATHS, REPORT_PATHS, HIDDEN_MENU_ALIASES, dutiesPathname };
