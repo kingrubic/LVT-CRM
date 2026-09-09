@@ -7,6 +7,8 @@ import android.os.Build
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dashboard
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.outlined.WorkOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -66,6 +69,8 @@ import lvt.crm.ui.notifications.NotificationsViewModel
 import lvt.crm.ui.profile.ProfileScreen
 import lvt.crm.ui.work.WorkDashboardFilter
 import lvt.crm.ui.work.WorkFileOpener
+import lvt.crm.ui.work.WorkFilePreviewScreen
+import lvt.crm.ui.work.WorkFilePreviewState
 import lvt.crm.ui.work.WorkScreen
 import lvt.crm.ui.work.WorkViewModel
 import lvt.crm.data.convex.ConvexException
@@ -157,6 +162,8 @@ private fun MainShell(
     var workOpenFilter by remember { mutableStateOf<WorkDashboardFilter?>(null) }
     var workFilterToken by remember { mutableStateOf(0) }
     var fileError by remember { mutableStateOf<String?>(null) }
+    var filePreview by remember { mutableStateOf<WorkFilePreviewState?>(null) }
+    var openingFile by remember { mutableStateOf(false) }
 
     val tabs = listOf(
         Triple(Routes.Overview, R.string.nav_overview, Icons.Outlined.Dashboard),
@@ -167,13 +174,20 @@ private fun MainShell(
     )
 
     fun openDocument(document: WorkApprovalItem) {
+        if (openingFile) return
+        openingFile = true
+        fileError = null
         scope.launch {
-            runCatching { fileOpener.open(document) }
+            runCatching { fileOpener.download(document) }
+                .onSuccess { file ->
+                    filePreview = WorkFilePreviewState(document = document, file = file)
+                }
                 .onFailure { failure ->
                     fileError = (failure as? ConvexException)?.message
                         ?: failure.message
                         ?: "Không thể mở tệp công văn."
                 }
+            openingFile = false
         }
     }
 
@@ -209,6 +223,7 @@ private fun MainShell(
         onNotificationDestinationHandled()
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
@@ -354,6 +369,30 @@ private fun MainShell(
                     onSignOut = onSignOut,
                 )
             }
+        }
+    }
+
+        if (openingFile && filePreview == null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Đang tải tệp…") },
+                text = { CircularProgressIndicator() },
+                confirmButton = {},
+            )
+        }
+        filePreview?.let { preview ->
+            WorkFilePreviewScreen(
+                preview = preview,
+                onBack = { filePreview = null },
+                onOpenExternally = {
+                    runCatching { fileOpener.openExternally(preview.document, preview.file) }
+                        .onFailure { failure ->
+                            fileError = (failure as? ConvexException)?.message
+                                ?: failure.message
+                                ?: "Không có ứng dụng nào mở được tệp này."
+                        }
+                },
+            )
         }
     }
 }

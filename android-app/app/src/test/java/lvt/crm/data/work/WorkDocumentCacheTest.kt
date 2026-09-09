@@ -20,6 +20,16 @@ class WorkDocumentCacheTest {
     }
 
     @Test
+    fun expiredFileIsNotReused() {
+        val dir = createTempDirectory("lvt-work-cache-ttl").toFile()
+        val cache = WorkDocumentCache(dir, ttlMs = 1)
+        val source = File.createTempFile("src", ".pdf").apply { writeText("cong-van") }
+        cache.store(source, "private:doc-1:v1", "cong-van.pdf")
+        Thread.sleep(5)
+        assertEquals(null, cache.cachedFile("private:doc-1:v1"))
+    }
+
+    @Test
     fun cacheKeyIsStable() {
         assertEquals(
             WorkDocumentCache.cacheKey("private:doc:v1"),
