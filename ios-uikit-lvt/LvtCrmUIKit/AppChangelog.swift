@@ -8,6 +8,14 @@ struct AppChangelogEntry: Equatable {
 enum AppChangelog {
     static let entries: [AppChangelogEntry] = [
         AppChangelogEntry(
+            version: "1.5.2",
+            highlights: ["Chi tiết nhiệm vụ Công việc hiện tệp đính kèm và cho phép mở tệp."]
+        ),
+        AppChangelogEntry(
+            version: "1.5.1",
+            highlights: ["Danh sách Công việc hiện tên công việc, không lấy tên file hay chữ Công văn."]
+        ),
+        AppChangelogEntry(
             version: "1.5.0",
             highlights: ["Tạo công việc ngay trên ứng dụng, giống trên web."]
         ),

@@ -539,7 +539,11 @@ final class WorkViewController: UITableViewController {
     }
 
     private func showTask(_ item: WorkTaskItem) {
-        let detail = WorkTaskDetailViewController(task: item, busy: viewModel.busyTaskId == item.id) { [weak self] in
+        let detail = WorkTaskDetailViewController(
+            task: item,
+            busy: viewModel.busyTaskId == item.id,
+            downloadDocument: downloadDocument
+        ) { [weak self] in
             self?.confirmCompletion(item)
         }
         navigationController?.pushViewController(detail, animated: !UIAccessibility.isReduceMotionEnabled)
@@ -681,8 +685,8 @@ private final class WorkItemCell: UITableViewCell {
     ) {
         statusLabel.text = item.status == "pending" ? "Chờ duyệt · \(item.approvalCount)/\(item.approvalTotal)" : "\(item.status) · \(item.approvalCount)/\(item.approvalTotal)"
         statusLabel.textColor = item.status == "pending" ? .systemOrange : .systemGreen
-        titleLabel.text = item.fileName.isEmpty ? item.content : item.fileName
-        detailLabel.text = item.fileName.isEmpty ? nil : item.content
+        titleLabel.text = WorkHelpers.listTitle(item)
+        detailLabel.text = WorkHelpers.listSubtitle(item)
         detailLabel.isHidden = detailLabel.text?.isEmpty != false
         metaLabel.text = "Hạn: \(item.deadline)"
         reasonLabel.isHidden = true
@@ -786,14 +790,24 @@ enum WorkPresentation {
     }
 }
 
-private final class WorkTaskDetailViewController: UIViewController {
+private final class WorkTaskDetailViewController: UIViewController, QLPreviewControllerDataSource {
     private let task: WorkTaskItem
     private let busy: Bool
+    private let downloadDocument: (WorkApprovalItem) async throws -> URL
     private let onComplete: () -> Void
+    private var previewURL: URL?
+    private var openingFile = false
+    private weak var openFileButton: UIButton?
 
-    init(task: WorkTaskItem, busy: Bool, onComplete: @escaping () -> Void) {
+    init(
+        task: WorkTaskItem,
+        busy: Bool,
+        downloadDocument: @escaping (WorkApprovalItem) async throws -> URL,
+        onComplete: @escaping () -> Void
+    ) {
         self.task = task
         self.busy = busy
+        self.downloadDocument = downloadDocument
         self.onComplete = onComplete
         super.init(nibName: nil, bundle: nil)
         title = "Chi tiết nhiệm vụ"
@@ -818,6 +832,16 @@ private final class WorkTaskDetailViewController: UIViewController {
         let stack = UIStackView(arrangedSubviews: rows)
         stack.axis = .vertical
         stack.spacing = 14
+        if WorkHelpers.hasAttachedFile(task) {
+            let fileName = task.fileName.isEmpty ? "Công văn đính kèm" : task.fileName
+            stack.addArrangedSubview(label("Tệp đính kèm: \(fileName)", .body, .secondaryLabel))
+            let openButton = UIButton(type: .system)
+            openButton.configuration = .tinted()
+            openButton.configuration?.title = "Mở tệp đính kèm"
+            openButton.addAction(UIAction { [weak self] _ in self?.openAttachedFile() }, for: .touchUpInside)
+            openFileButton = openButton
+            stack.addArrangedSubview(openButton)
+        }
         if WorkHelpers.needsCompletion(task.status) {
             let button = UIButton(type: .system)
             button.configuration = .filled()
@@ -828,6 +852,43 @@ private final class WorkTaskDetailViewController: UIViewController {
             stack.addArrangedSubview(button)
         }
         embed(stack)
+    }
+
+    private func openAttachedFile() {
+        guard !openingFile else { return }
+        openingFile = true
+        openFileButton?.isEnabled = false
+        openFileButton?.configuration?.title = "Đang mở…"
+        Task { [weak self] in
+            guard let self else { return }
+            defer {
+                openingFile = false
+                openFileButton?.isEnabled = true
+                openFileButton?.configuration?.title = "Mở tệp đính kèm"
+            }
+            do {
+                previewURL = try await downloadDocument(WorkHelpers.attachedDocument(task))
+                let preview = QLPreviewController()
+                preview.dataSource = self
+                present(preview, animated: !UIAccessibility.isReduceMotionEnabled)
+            } catch {
+                let alert = UIAlertController(
+                    title: "Không thể mở tệp đính kèm",
+                    message: (error as? LocalizedError)?.errorDescription ?? "Hãy thử lại hoặc đăng nhập lại.",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "Đóng", style: .default))
+                present(alert, animated: true)
+            }
+        }
+    }
+
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+        previewURL == nil ? 0 : 1
+    }
+
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        previewURL! as NSURL
     }
 
     private func label(_ text: String, _ style: UIFont.TextStyle, _ color: UIColor) -> UILabel {
@@ -907,8 +968,8 @@ private final class WorkDocumentViewController: UITableViewController, QLPreview
         content.textProperties.numberOfLines = 0
         content.secondaryTextProperties.numberOfLines = 0
         if indexPath.section == 0 {
-            content.text = document.fileName.isEmpty ? document.content : document.fileName
-            let body = document.fileName.isEmpty ? "" : document.content
+            content.text = WorkHelpers.listTitle(document)
+            let body = WorkHelpers.listSubtitle(document) ?? ""
             content.secondaryText = [body, "Hạn: \(document.deadline)", "Phê duyệt: \(document.approvalCount)/\(document.approvalTotal)"].filter { !$0.isEmpty }.joined(separator: "\n")
             content.image = UIImage(systemName: document.fileName.isEmpty ? "doc.text" : "doc")
             if !document.fileName.isEmpty {

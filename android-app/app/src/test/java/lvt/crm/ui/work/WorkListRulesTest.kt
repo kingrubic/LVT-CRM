@@ -65,6 +65,13 @@ class WorkListRulesTest {
         assertEquals(listOf("a"), filterTasksBySearch(listOf(mine), ListSearchState(query = "hop to")).map { it.id })
         assertEquals(listOf("a"), filterTasksBySearch(listOf(mine), ListSearchState(query = "bao cao")).map { it.id })
         assertEquals(listOf("b"), filterDocumentsBySearch(listOf(created), ListSearchState(query = "thực tế")).map { it.id })
+        assertEquals(
+            listOf("b"),
+            filterDocumentsBySearch(
+                listOf(created.copy(title = "Họp tổ chuyên môn", content = "nội dung", fileName = "scan.pdf")),
+                ListSearchState(query = "hop to"),
+            ).map { it.id },
+        )
         assertEquals(listOf("a"), filterTasksBySearch(listOf(mine), ListSearchState(department = "to toan")).map { it.id })
         assertEquals(listOf("a"), filterTasksBySearch(listOf(mine), ListSearchState(person = "anh vu")).map { it.id })
         assertEquals(
@@ -78,6 +85,48 @@ class WorkListRulesTest {
         val filtered = WorkUiState(tasks = listOf(mine), search = ListSearchState(query = "khong co"))
         assertTrue(filtered.mineSearchEmpty)
         assertTrue(filtered.visibleMine.isEmpty())
+    }
+
+    @Test
+    fun attachedFileRequiresDocumentIdAndPrivateFlag() {
+        val withFile = task("a", "2099-01-01", "completed").copy(
+            documentId = "doc-1",
+            fileName = "ke-hoach.pdf",
+            privateFile = true,
+        )
+        assertTrue(withFile.hasAttachedFile())
+        assertEquals("doc-1", withFile.toAttachedDocument().id)
+        assertEquals("ke-hoach.pdf", withFile.toAttachedDocument().fileName)
+        assertTrue(!withFile.copy(privateFile = false).hasAttachedFile())
+        assertTrue(!withFile.copy(documentId = "").hasAttachedFile())
+    }
+
+    @Test
+    fun listTitlePrefersWorkNameOverFileNameAndCongVanFallback() {
+        val named = document("named", listOf("2026-08-22"), title = "Họp tổ chuyên môn").copy(
+            fileName = "scan.pdf",
+            content = "nội dung công việc",
+        )
+        val fileOnly = document("file", listOf("2026-08-22"), title = "").copy(
+            fileName = "ke-hoach.pdf",
+            content = "nội dung",
+        )
+        val contentOnly = document("content", listOf("2026-08-22"), title = "").copy(
+            fileName = "",
+            content = "test",
+        )
+        val empty = document("empty", listOf("2026-08-22"), title = "").copy(
+            fileName = "",
+            content = "",
+        )
+        assertEquals("Họp tổ chuyên môn", workListTitle(named))
+        assertEquals("nội dung công việc", workListSubtitle(named))
+        assertEquals("ke-hoach.pdf", workListTitle(fileOnly))
+        assertEquals("nội dung", workListSubtitle(fileOnly))
+        assertEquals("test", workListTitle(contentOnly))
+        assertEquals(null, workListSubtitle(contentOnly))
+        assertEquals("Công việc", workListTitle(empty))
+        assertEquals(null, workListSubtitle(empty))
     }
 
     private fun task(
@@ -130,5 +179,6 @@ class WorkListRulesTest {
                 ),
             )
         },
+        title = title,
     )
 }

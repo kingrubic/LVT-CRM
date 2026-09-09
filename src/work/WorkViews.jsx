@@ -1487,6 +1487,15 @@ export function WorkUserView({ focusTarget = null }) {
                             </div>
                           ) : null}
                           <SubmitterNote note={task.completion?.note} label="Nội dung đã gửi người giao" />
+                          <PrivateFileLink
+                            className="work-file-link"
+                            documentId={task.documentId}
+                            fileName={task.fileName}
+                            fileUrl={task.fileUrl}
+                            privateFile={task.privateFile}
+                          >
+                            {task.fileName || 'Công văn đính kèm'}
+                          </PrivateFileLink>
                           {task.status === 'pending_completion' ? (
                             <small className="work-overdue-note">Đang chờ cấp trên duyệt hoàn thành.</small>
                           ) : null}

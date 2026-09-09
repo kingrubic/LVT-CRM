@@ -153,6 +153,34 @@ fun filterTasksBySearch(list: List<WorkTaskItem>, search: ListSearchState): List
     }
 }
 
+fun workListTitle(document: WorkApprovalItem): String {
+    document.title.trim().takeIf { it.isNotEmpty() }?.let { return it }
+    document.fileName.trim().takeIf { it.isNotEmpty() }?.let { return it }
+    return document.content.trim().ifBlank { "Công việc" }
+}
+
+fun workListSubtitle(document: WorkApprovalItem): String? {
+    val title = workListTitle(document)
+    val content = document.content.trim()
+    return content.takeIf { it.isNotEmpty() && it != title }
+}
+
+fun WorkTaskItem.hasAttachedFile(): Boolean = documentId.isNotBlank() && privateFile
+
+fun WorkTaskItem.toAttachedDocument(): WorkApprovalItem = WorkApprovalItem(
+    id = documentId,
+    fileName = fileName,
+    content = documentContent,
+    deadline = deadline,
+    status = status,
+    approvalCount = 0,
+    approvalTotal = 0,
+    myDecision = "",
+    fileUrl = fileUrl,
+    privateFile = privateFile,
+    title = documentTitle.ifBlank { title },
+)
+
 fun filterDocumentsBySearch(list: List<WorkApprovalItem>, search: ListSearchState): List<WorkApprovalItem> {
     val query = normalizeListSearchText(search.query)
     val department = normalizeListSearchText(search.department)
@@ -164,6 +192,7 @@ fun filterDocumentsBySearch(list: List<WorkApprovalItem>, search: ListSearchStat
     }
     return list.filter { document ->
         val queryText = buildList {
+            add(document.title)
             add(document.fileName)
             add(document.content)
             document.assignments.forEach { add(it.content) }

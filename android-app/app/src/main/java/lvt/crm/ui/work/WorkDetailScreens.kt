@@ -57,13 +57,11 @@ fun WorkDocumentDetailScreen(
         ) {
             ListItem(
                 headlineContent = {
-                    Text(document.fileName.ifBlank { document.content.ifBlank { "Công văn" } })
+                    Text(workListTitle(document))
                 },
                 supportingContent = {
                     val body = buildList {
-                        if (document.fileName.isNotBlank() && document.content.isNotBlank()) {
-                            add(document.content)
-                        }
+                        workListSubtitle(document)?.let(::add)
                         add("Hạn: ${document.deadline}")
                         add("Phê duyệt: ${document.approvalCount}/${document.approvalTotal}")
                     }
@@ -123,6 +121,7 @@ fun WorkTaskDetailScreen(
     busy: Boolean,
     onBack: () -> Unit,
     onComplete: () -> Unit,
+    onOpenFile: (() -> Unit)? = null,
 ) {
     BackHandler(onBack = onBack)
     LvtScreen(
@@ -157,6 +156,19 @@ fun WorkTaskDetailScreen(
                 Text("Đơn vị: ${task.departmentName}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text("Hạn: ${task.deadline}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (task.hasAttachedFile()) {
+                Text(
+                    "Tệp đính kèm: ${task.fileName.ifBlank { "Công văn đính kèm" }}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = { onOpenFile?.invoke() },
+                    enabled = onOpenFile != null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Mở tệp đính kèm")
+                }
+            }
             task.qualityPercent?.let {
                 Text("Chất lượng: $it%", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
