@@ -31,24 +31,26 @@ export default function SharedDutyScheduleView({ onChooseView }) {
     <section className="duty-workspace lct-shared-view">
       <DutyWorkspaceTabs view="shared" onChoose={onChooseView} />
       <div className="lct-shared-toolbar">
-        <div className="lct-period-nav" role="group" aria-label="Chọn kỳ">
-          <button type="button" onClick={() => setAnchorIso((current) => shiftScheduleAnchor(mode, current, -1))} aria-label="Kỳ trước">
-            ‹
-          </button>
-          <button type="button" className="lct-today" onClick={() => setAnchorIso(toIsoDate(new Date()))}>
-            Hôm nay
-          </button>
-          <button type="button" onClick={() => setAnchorIso((current) => shiftScheduleAnchor(mode, current, 1))} aria-label="Kỳ sau">
-            ›
-          </button>
-        </div>
-        <div className="lct-mode-switch" role="group" aria-label="Kiểu hiển thị">
-          <button type="button" className={mode === 'week' ? 'is-active' : undefined} onClick={() => setMode('week')}>
-            Tuần
-          </button>
-          <button type="button" className={mode === 'month' ? 'is-active' : undefined} onClick={() => setMode('month')}>
-            Tháng
-          </button>
+        <div className="lct-shared-toolbar-center">
+          <div className="lct-period-nav" role="group" aria-label="Chọn kỳ">
+            <button type="button" onClick={() => setAnchorIso((current) => shiftScheduleAnchor(mode, current, -1))} aria-label="Kỳ trước">
+              ‹
+            </button>
+            <button type="button" className="lct-today" onClick={() => setAnchorIso(toIsoDate(new Date()))}>
+              Hôm nay
+            </button>
+            <button type="button" onClick={() => setAnchorIso((current) => shiftScheduleAnchor(mode, current, 1))} aria-label="Kỳ sau">
+              ›
+            </button>
+          </div>
+          <div className="lct-mode-switch" role="group" aria-label="Kiểu hiển thị">
+            <button type="button" className={mode === 'week' ? 'is-active' : undefined} onClick={() => setMode('week')}>
+              Tuần
+            </button>
+            <button type="button" className={mode === 'month' ? 'is-active' : undefined} onClick={() => setMode('month')}>
+              Tháng
+            </button>
+          </div>
         </div>
         <button
           type="button"
