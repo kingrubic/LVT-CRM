@@ -227,13 +227,12 @@ Sau khi đổi cách giao việc, nên thông báo cho các thầy cô liên qua
 
 ### Thiết lập thông báo
 
-1. Bật hoặc tắt thông báo cho **Công tác**.
-2. Bật hoặc tắt thông báo cho **Công việc**.
-3. Thêm các mốc nhắc trước hạn bằng số giờ.
-4. Mốc `0` có nghĩa là nhắc khi đến hạn.
-5. Chọn **Lưu thiết lập thông báo**.
+1. Bật hoặc tắt thông báo cho **Công tác**, rồi thêm các mốc giờ của riêng Công tác.
+2. Bật hoặc tắt thông báo cho **Công việc**, rồi thêm các mốc giờ của riêng Công việc.
+3. Mốc `0` có nghĩa là nhắc khi đến hạn.
+4. Chọn **Lưu thiết lập thông báo**.
 
-Ví dụ: `48`, `24`, `12`, `0` tương ứng với nhắc trước 48 giờ, 24 giờ, 12 giờ và khi đến hạn.
+Hai nguồn không dùng chung một danh sách mốc. Ví dụ Công tác có thể chỉ `24` và `0`, trong khi Công việc giữ `48`, `24`, `12`, `0`.
 
 ## 8. Kiểm tra sau khi thiết lập
 

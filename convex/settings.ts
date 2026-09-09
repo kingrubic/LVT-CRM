@@ -5,32 +5,24 @@ import {
   DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
   DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
   getBooleanSystemSetting,
-  getNumberArraySystemSetting,
+  getSourceNotificationMilestones,
   getWorkAssignerMode,
   getWorkVisibilityMode,
   WORK_VISIBILITY_CREATOR,
   WORK_VISIBILITY_SCHOOL,
   WORK_VISIBILITY_SETTING_KEY,
   NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
-  NOTIFICATION_MILESTONES_DEFAULT,
+  NOTIFICATION_DUTY_MILESTONES_SETTING_KEY,
   NOTIFICATION_MILESTONES_SETTING_KEY,
   NOTIFICATION_SOURCE_DEFAULT,
   NOTIFICATION_WORK_ENABLED_SETTING_KEY,
+  NOTIFICATION_WORK_MILESTONES_SETTING_KEY,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
   WORK_ASSIGNER_MODE_SETTING_KEY,
   WORK_ASSIGNER_MODE_SUPERVISOR,
   type WorkAssignerMode,
 } from "./lib";
-
-function cleanMilestones(values: number[]) {
-  const cleaned = [...new Set(values.map(Number))]
-    .filter((value) => Number.isInteger(value) && value >= 0 && value <= 720)
-    .sort((a, b) => b - a);
-  if (!cleaned.length || cleaned.length > 20 || cleaned.length !== values.length) {
-    throw new Error("INVALID_NOTIFICATION_MILESTONES");
-  }
-  return cleaned;
-}
+import { cleanNotificationMilestones, unionMilestoneHours } from "./notificationSettings";
 
 function normalizeAssignerMode(value: string): WorkAssignerMode {
   return value === WORK_ASSIGNER_MODE_SUPERVISOR
@@ -100,7 +92,8 @@ export const displaySettings = query({
       dutyAttendanceConfirmationEnabled,
       notificationDutiesEnabled,
       notificationWorkEnabled,
-      notificationMilestonesHours,
+      notificationDutyMilestonesHours,
+      notificationWorkMilestonesHours,
       workAssignerMode,
       workVisibilityMode,
     ] = await Promise.all([
@@ -119,11 +112,8 @@ export const displaySettings = query({
         NOTIFICATION_WORK_ENABLED_SETTING_KEY,
         NOTIFICATION_SOURCE_DEFAULT,
       ),
-      getNumberArraySystemSetting(
-        ctx,
-        NOTIFICATION_MILESTONES_SETTING_KEY,
-        NOTIFICATION_MILESTONES_DEFAULT,
-      ),
+      getSourceNotificationMilestones(ctx, NOTIFICATION_DUTY_MILESTONES_SETTING_KEY),
+      getSourceNotificationMilestones(ctx, NOTIFICATION_WORK_MILESTONES_SETTING_KEY),
       getWorkAssignerMode(ctx),
       getWorkVisibilityMode(ctx),
     ]);
@@ -131,7 +121,12 @@ export const displaySettings = query({
       dutyAttendanceConfirmationEnabled,
       notificationDutiesEnabled,
       notificationWorkEnabled,
-      notificationMilestonesHours,
+      notificationDutyMilestonesHours,
+      notificationWorkMilestonesHours,
+      notificationMilestonesHours: unionMilestoneHours(
+        notificationDutyMilestonesHours,
+        notificationWorkMilestonesHours,
+      ),
       workAssignerMode,
       workVisibilityMode,
       workAssignerAdminMod: workAssignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD,
@@ -144,11 +139,14 @@ export const updateNotificationSettings = mutation({
   args: {
     dutiesEnabled: v.boolean(),
     workEnabled: v.boolean(),
-    milestonesHours: v.array(v.number()),
+    dutyMilestonesHours: v.array(v.number()),
+    workMilestonesHours: v.array(v.number()),
   },
   handler: async (ctx, args) => {
     const actor = await adminPermissionOrThrow(ctx, "settings:write");
-    const milestonesHours = cleanMilestones(args.milestonesHours);
+    const dutyMilestonesHours = cleanNotificationMilestones(args.dutyMilestonesHours);
+    const workMilestonesHours = cleanNotificationMilestones(args.workMilestonesHours);
+    const milestonesHours = unionMilestoneHours(dutyMilestonesHours, workMilestonesHours);
     const now = Date.now();
     await Promise.all([
       upsertBooleanSetting(
@@ -167,6 +165,20 @@ export const updateNotificationSettings = mutation({
       ),
       upsertNumberArraySetting(
         ctx,
+        NOTIFICATION_DUTY_MILESTONES_SETTING_KEY,
+        dutyMilestonesHours,
+        actor.user._id,
+        now,
+      ),
+      upsertNumberArraySetting(
+        ctx,
+        NOTIFICATION_WORK_MILESTONES_SETTING_KEY,
+        workMilestonesHours,
+        actor.user._id,
+        now,
+      ),
+      upsertNumberArraySetting(
+        ctx,
         NOTIFICATION_MILESTONES_SETTING_KEY,
         milestonesHours,
         actor.user._id,
@@ -179,11 +191,12 @@ export const updateNotificationSettings = mutation({
       details: JSON.stringify({
         dutiesEnabled: args.dutiesEnabled,
         workEnabled: args.workEnabled,
-        milestonesHours,
+        dutyMilestonesHours,
+        workMilestonesHours,
       }),
       at: now,
     });
-    return { milestonesHours };
+    return { dutyMilestonesHours, workMilestonesHours, milestonesHours };
   },
 });
 
