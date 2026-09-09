@@ -1,6 +1,6 @@
 import { internalMutation } from "./_generated/server";
 import { defaultMenuAccess, normalizeMenuAccess } from "./lib";
-import { ensureDefaultDocumentTypes } from "./documentTypes";
+import { ensureDefaultDocumentTypes, backfillUntypedWorkFiles } from "./documentTypes";
 
 export const seed = internalMutation({
   args: {},
@@ -104,5 +104,6 @@ export const seed = internalMutation({
       }
     }
     await ensureDefaultDocumentTypes(ctx, now);
+    await backfillUntypedWorkFiles(ctx, now);
   },
 });

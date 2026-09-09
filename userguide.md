@@ -134,6 +134,8 @@ Loại văn bản dùng khi đính kèm file lúc tạo công việc hoặc khi 
 2. Có thể sửa tên/mã hoặc thêm loại mới.
 3. Không xóa được loại đang được file sử dụng.
 
+File công việc và bằng chứng hoàn thành đã có trước khi có loại văn bản được gắn mặc định **Biên bản**.
+
 Khi tạo công việc có file, chọn **Loại văn bản** ngay dưới khung tải file. Khi nộp hoàn thành, chọn loại sau khi chọn file bằng chứng.
 
 ## 5. Thiết lập nhóm quyền

@@ -718,10 +718,8 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   );
 
   useEffect(() => {
-    if (!allowCreate) return;
-    if ((options?.documentTypes || []).length) return;
     void ensureDocumentTypes({}).catch(() => {});
-  }, [allowCreate, ensureDocumentTypes, options?.documentTypes]);
+  }, [ensureDocumentTypes]);
 
   const reset = () => {
     setEditingDocument(null);
@@ -753,6 +751,13 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
       window.document.getElementById('work-document-editor')?.scrollIntoView({ behavior: 'smooth' });
     });
   };
+
+  useEffect(() => {
+    if (!editingDocument?.privateFile || documentTypeId) return;
+    const types = options?.documentTypes || listData?.documentTypes || [];
+    const fallback = types.find((item) => item.code === 'BIEN_BAN');
+    if (fallback?._id) setDocumentTypeId(fallback._id);
+  }, [documentTypeId, editingDocument, listData?.documentTypes, options?.documentTypes]);
 
   const persistWork = async () => {
     if (saving) return;
@@ -1252,9 +1257,8 @@ export function WorkUserView({ focusTarget = null }) {
   });
 
   useEffect(() => {
-    if ((data?.documentTypes || []).length) return;
     void ensureDocumentTypes({}).catch(() => {});
-  }, [data?.documentTypes, ensureDocumentTypes]);
+  }, [ensureDocumentTypes]);
 
   const visibleMyTasks = useMemo(() => filterWorksByTab(data?.myTasks || [], listTab), [data?.myTasks, listTab]);
   const visibleDepartmentWorks = useMemo(

@@ -10,11 +10,20 @@ import {
 } from "./lib";
 import {
   DEFAULT_DOCUMENT_TYPES,
+  FALLBACK_DOCUMENT_TYPE_CODE,
+  completionHasFile,
+  needsDocumentTypeBackfill,
+  officeDocumentHasFile,
   requireDocumentTypeId,
   sortDocumentTypes,
 } from "./documentTypePolicy";
 
-export { DEFAULT_DOCUMENT_TYPES, requireDocumentTypeId, sortDocumentTypes };
+export {
+  DEFAULT_DOCUMENT_TYPES,
+  FALLBACK_DOCUMENT_TYPE_CODE,
+  requireDocumentTypeId,
+  sortDocumentTypes,
+};
 
 function cleanDocumentType(args: { name: string; code: string }) {
   const name = args.name.trim();
@@ -53,6 +62,51 @@ export async function ensureDefaultDocumentTypes(ctx: { db: any }, now = Date.no
     created.push(String(id));
   }
   return created;
+}
+
+export async function resolveFallbackDocumentTypeId(ctx: { db: any }) {
+  await ensureDefaultDocumentTypes(ctx);
+  const row = await ctx.db
+    .query("documentTypes")
+    .withIndex("by_code", (q: any) => q.eq("code", FALLBACK_DOCUMENT_TYPE_CODE))
+    .unique();
+  if (!row?._id) throw new Error("INVALID_DOCUMENT_TYPE");
+  if (!row.active) {
+    await ctx.db.patch(row._id, { active: true, name: row.name || "Biên bản", updatedAt: Date.now() });
+  }
+  return String(row._id);
+}
+
+function patchCompletionTypes(completions: any[], fallbackId: string) {
+  let changed = 0;
+  const next = (completions || []).map((item: any) => {
+    if (!needsDocumentTypeBackfill(completionHasFile(item), item.documentTypeId)) return item;
+    changed += 1;
+    return { ...item, documentTypeId: fallbackId };
+  });
+  return { next, changed };
+}
+
+export async function backfillUntypedWorkFiles(ctx: { db: any }, now = Date.now()) {
+  const fallbackId = await resolveFallbackDocumentTypeId(ctx);
+  let patchedDocuments = 0;
+  let patchedCompletions = 0;
+  const documents = await ctx.db.query("officeDocuments").collect();
+  for (const row of documents) {
+    if (!needsDocumentTypeBackfill(officeDocumentHasFile(row), row.documentTypeId)) continue;
+    await ctx.db.patch(row._id, { documentTypeId: fallbackId, updatedAt: now });
+    patchedDocuments += 1;
+  }
+  for (const table of ["workItems", "personalTasks"] as const) {
+    const rows = await ctx.db.query(table).collect();
+    for (const row of rows) {
+      const { next, changed } = patchCompletionTypes(row.completions || [], fallbackId);
+      if (!changed) continue;
+      await ctx.db.patch(row._id, { completions: next, updatedAt: now });
+      patchedCompletions += changed;
+    }
+  }
+  return { fallbackId, patchedDocuments, patchedCompletions };
 }
 
 export async function listActiveDocumentTypes(ctx: { db: any }) {
@@ -122,7 +176,8 @@ export const ensureDefaults = mutation({
   handler: async (ctx) => {
     await requireDocumentTypeReader(ctx);
     const created = await ensureDefaultDocumentTypes(ctx);
-    return { createdCount: created.length };
+    const backfill = await backfillUntypedWorkFiles(ctx);
+    return { createdCount: created.length, ...backfill };
   },
 });
 

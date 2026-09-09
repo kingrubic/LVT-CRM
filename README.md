@@ -94,8 +94,8 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 - Badge menu **Công việc** = task chờ duyệt hoàn thành + việc chưa hoàn thành của tôi + việc chưa hoàn thành tôi tạo.
 - Danh sách **Việc của tôi** / **Việc tôi tạo**: bốn tab **Việc cần làm**, **Đang chờ duyệt**, **Quá hạn**, **Đã duyệt hoàn thành** — mỗi tab hiện số việc.
 - Sửa/xóa: người tạo đến khi user nộp; admin/mod mọi lúc.
-- File đính kèm công việc là tùy chọn. Có file thì **bắt buộc chọn Loại văn bản** (Kế hoạch / Biên bản / Báo cáo, catalog admin). Danh sách ưu tiên **tên công việc**.
-- Nộp hoàn thành: bắt buộc file bằng chứng **và** loại văn bản.
+- File đính kèm công việc là tùy chọn. Có file thì **bắt buộc chọn Loại văn bản** (Kế hoạch / Biên bản / Báo cáo, catalog admin). File cũ chưa có loại được gắn mặc định **Biên bản**. Danh sách ưu tiên **tên công việc**.
+- Nộp hoàn thành: bắt buộc file bằng chứng **và** loại văn bản. Bằng chứng cũ chưa có loại cũng gắn **Biên bản**.
 - File xem/tải qua `/api/files/:documentId` + cache server; không trả URL Drive hay Convex Storage cho client.
 
 ### Cấu trúc menu

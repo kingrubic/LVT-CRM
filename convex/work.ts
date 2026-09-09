@@ -43,7 +43,7 @@ import {
   assertActiveDocumentType,
   listActiveDocumentTypes,
 } from "./documentTypes";
-import { requireDocumentTypeId } from "./documentTypePolicy";
+import { requireDocumentTypeId, resolveDisplayedDocumentType } from "./documentTypePolicy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -649,11 +649,11 @@ async function documentView(ctx: any, document: any, catalogData: any, items: an
     fileSize: document.fileSize,
     fileUrl: null,
     privateFile: Boolean(document.driveFileId || document.fileId),
-    documentTypeId: document.documentTypeId || "",
-    documentTypeName:
-      (document.documentTypeId
-        && catalogData.documentTypeMap?.get(String(document.documentTypeId))?.name)
-      || "",
+    ...resolveDisplayedDocumentType(
+      Boolean(document.driveFileId || document.fileId),
+      document.documentTypeId,
+      catalogData.documentTypes || [],
+    ),
     content: document.content,
     deadline: document.deadline,
     status: document.status,

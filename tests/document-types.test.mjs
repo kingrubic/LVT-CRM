@@ -3,7 +3,12 @@ import test from 'node:test';
 
 import {
   DEFAULT_DOCUMENT_TYPES,
+  FALLBACK_DOCUMENT_TYPE_CODE,
+  completionHasFile,
+  needsDocumentTypeBackfill,
+  officeDocumentHasFile,
   requireDocumentTypeId,
+  resolveDisplayedDocumentType,
   sortDocumentTypes,
 } from '../convex/documentTypePolicy.ts';
 
@@ -33,4 +38,35 @@ test('sắp xếp loại văn bản theo tên tiếng Việt', () => {
     { name: 'Biên bản' },
   ]);
   assert.deepEqual(sorted.map((item) => item.name), ['Báo cáo', 'Biên bản', 'Kế hoạch']);
+});
+
+test('file cũ chưa có loại được gắn mặc định Biên bản', () => {
+  assert.equal(FALLBACK_DOCUMENT_TYPE_CODE, 'BIEN_BAN');
+  assert.equal(needsDocumentTypeBackfill(true, ''), true);
+  assert.equal(needsDocumentTypeBackfill(true, '   '), true);
+  assert.equal(needsDocumentTypeBackfill(true, 'type-1'), false);
+  assert.equal(needsDocumentTypeBackfill(false, ''), false);
+  assert.equal(officeDocumentHasFile({ driveFileId: 'drive-1' }), true);
+  assert.equal(officeDocumentHasFile({ fileId: 'file-1' }), true);
+  assert.equal(officeDocumentHasFile({}), false);
+  assert.equal(completionHasFile({ fileName: 'bien_ban.pdf' }), true);
+  assert.equal(completionHasFile({ driveFileId: 'drive-1' }), true);
+  assert.equal(completionHasFile({ fileName: '  ' }), false);
+
+  const types = [
+    { _id: 'kh', code: 'KE_HOACH', name: 'Kế hoạch' },
+    { _id: 'bb', code: 'BIEN_BAN', name: 'Biên bản' },
+  ];
+  assert.deepEqual(resolveDisplayedDocumentType(true, '', types), {
+    documentTypeId: 'bb',
+    documentTypeName: 'Biên bản',
+  });
+  assert.deepEqual(resolveDisplayedDocumentType(true, 'kh', types), {
+    documentTypeId: 'kh',
+    documentTypeName: 'Kế hoạch',
+  });
+  assert.deepEqual(resolveDisplayedDocumentType(false, '', types), {
+    documentTypeId: '',
+    documentTypeName: '',
+  });
 });
