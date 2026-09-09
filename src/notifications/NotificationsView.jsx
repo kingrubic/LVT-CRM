@@ -138,7 +138,9 @@ export default function NotificationsView({ data, onOpenItem }) {
     <section className="notifications-view">
       <div className="notifications-toolbar">
         <p>
-          Mốc đang dùng: {data.settings.milestonesHours.map((hours) => hours === 0 ? 'Đến hạn' : `${hours} giờ`).join(' · ')}
+          Công tác: {(data.settings.dutyMilestonesHours || data.settings.milestonesHours).map((hours) => hours === 0 ? 'Đến hạn' : `${hours} giờ`).join(' · ')}
+          <br />
+          Công việc: {(data.settings.workMilestonesHours || data.settings.milestonesHours).map((hours) => hours === 0 ? 'Đến hạn' : `${hours} giờ`).join(' · ')}
         </p>
         <button
           type="button"

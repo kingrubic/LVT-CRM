@@ -175,7 +175,14 @@ for (const marker of ["listAdmin", "listMine", "BOARDING_PERIOD_EXISTS", "partic
 }
 
 const notifications = readFileSync("convex/notifications.ts", "utf8");
-for (const marker of ["feed", "markRead", "markAllRead", "notificationReads", "NOTIFICATION_MILESTONES_SETTING_KEY"]) {
+for (const marker of [
+  "feed",
+  "markRead",
+  "markAllRead",
+  "notificationReads",
+  "NOTIFICATION_DUTY_MILESTONES_SETTING_KEY",
+  "NOTIFICATION_WORK_MILESTONES_SETTING_KEY",
+]) {
   if (!notifications.includes(marker)) throw new Error(`Notification marker missing: ${marker}`);
 }
 

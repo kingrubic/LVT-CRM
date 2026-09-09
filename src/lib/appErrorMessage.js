@@ -43,6 +43,7 @@ export function messageFor(error) {
       'Tài khoản đã bị khóa do đăng nhập sai quá số lần cho phép. Vui lòng liên hệ quản trị viên để được mở khóa.',
     INVALID_LOGIN_MAX_FAILED_ATTEMPTS: 'Số lần đăng nhập sai phải từ 1 đến 50.',
     INVALID_LOGIN_ATTEMPT_WINDOW: 'Khung thời gian phải từ 1 đến 1440 phút.',
+    INVALID_NOTIFICATION_MILESTONES: 'Mỗi nguồn thông báo cần ít nhất một mốc giờ nguyên từ 0 đến 720.',
     CANNOT_REVOKE_CURRENT_SESSION: 'Không thể thu hồi phiên đang dùng trên thiết bị này.',
     SESSION_NOT_FOUND: 'Phiên đăng nhập không còn tồn tại.',
     EMAIL_TAKEN: 'Email này đã được sử dụng. Vui lòng chọn email khác.',

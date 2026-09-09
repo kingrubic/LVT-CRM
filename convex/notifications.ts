@@ -4,23 +4,23 @@ import {
   activePositionLevel,
   currentUserOrThrow,
   getBooleanSystemSetting,
-  getNumberArraySystemSetting,
+  getSourceNotificationMilestones,
   getWorkAssignerMode,
   isOperationalManagerRole,
   NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
-  NOTIFICATION_MILESTONES_DEFAULT,
-  NOTIFICATION_MILESTONES_SETTING_KEY,
+  NOTIFICATION_DUTY_MILESTONES_SETTING_KEY,
   NOTIFICATION_SOURCE_DEFAULT,
   NOTIFICATION_WORK_ENABLED_SETTING_KEY,
+  NOTIFICATION_WORK_MILESTONES_SETTING_KEY,
   resolveUserMenuAccess,
   canOperateMenu,
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
 import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
+import { createMilestones, unionMilestoneHours } from "./notificationSettings";
 
 const HOUR_MS = 60 * 60 * 1000;
 const VN_OFFSET_MS = 7 * HOUR_MS;
-const OVERDUE_VISIBILITY_MS = 24 * HOUR_MS;
 
 type NotificationSource = {
   kind: "duty" | "work";
@@ -53,37 +53,6 @@ function workItemCompleted(tasks: any[]) {
   return tasks.length > 0 && tasks.every(taskCompletedForAll);
 }
 
-function createMilestones(
-  sources: NotificationSource[],
-  milestonesHours: number[],
-  now: number,
-) {
-  const prioritySources = sources.filter((source) => source.priority === "high");
-  const regularSources = sources.filter((source) => source.priority !== "high");
-  const priorityItems = prioritySources.map((source) => ({
-    key: `${source.kind}:${source.sourceType}:${source.sourceId}:reject`,
-    ...source,
-    milestoneHours: -1,
-    milestoneLabel: "Bị từ chối",
-    availableAt: source.dueAt,
-  }));
-  const regularItems = regularSources
-    .flatMap((source) =>
-      milestonesHours
-        .filter((hours) => now >= source.dueAt - hours * HOUR_MS)
-        .map((hours) => ({
-          key: `${source.kind}:${source.sourceType}:${source.sourceId}:${hours}`,
-          ...source,
-          milestoneHours: hours,
-          milestoneLabel: hours === 0 ? "Đến hạn" : `Còn ${hours} giờ`,
-          availableAt: source.dueAt - hours * HOUR_MS,
-        })),
-    )
-    .filter((item) => item.dueAt >= now - OVERDUE_VISIBILITY_MS)
-    .sort((a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"));
-  return [...priorityItems, ...regularItems];
-}
-
 async function notificationContext(ctx: any) {
   const user = await currentUserOrThrow(ctx);
   if (user.status !== "active") throw new Error("USER_NOT_ACTIVE");
@@ -97,7 +66,7 @@ async function notificationContext(ctx: any) {
 
 async function notificationItems(ctx: any, requestedNow?: number) {
   const { user, menuAccess } = await notificationContext(ctx);
-  const [dutiesEnabled, workEnabled, milestonesHours] = await Promise.all([
+  const [dutiesEnabled, workEnabled, dutyMilestonesHours, workMilestonesHours] = await Promise.all([
     getBooleanSystemSetting(
       ctx,
       NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
@@ -108,11 +77,8 @@ async function notificationItems(ctx: any, requestedNow?: number) {
       NOTIFICATION_WORK_ENABLED_SETTING_KEY,
       NOTIFICATION_SOURCE_DEFAULT,
     ),
-    getNumberArraySystemSetting(
-      ctx,
-      NOTIFICATION_MILESTONES_SETTING_KEY,
-      NOTIFICATION_MILESTONES_DEFAULT,
-    ),
+    getSourceNotificationMilestones(ctx, NOTIFICATION_DUTY_MILESTONES_SETTING_KEY),
+    getSourceNotificationMilestones(ctx, NOTIFICATION_WORK_MILESTONES_SETTING_KEY),
   ]);
   const canUseDuties =
     dutiesEnabled &&
@@ -411,11 +377,10 @@ async function notificationItems(ctx: any, requestedNow?: number) {
           };
         })
     : [];
-  const scheduledMilestones = createMilestones(
-    [...dutySources, ...workSources],
-    milestonesHours,
-    now,
-  );
+  const scheduledMilestones = [
+    ...createMilestones(dutySources, dutyMilestonesHours, now),
+    ...createMilestones(workSources, workMilestonesHours, now),
+  ];
   const approvalIdsWithMilestone = new Set(
     scheduledMilestones
       .filter((item) => item.sourceType === "approval")
@@ -462,7 +427,9 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     settings: {
       dutiesEnabled,
       workEnabled,
-      milestonesHours,
+      dutyMilestonesHours,
+      workMilestonesHours,
+      milestonesHours: unionMilestoneHours(dutyMilestonesHours, workMilestonesHours),
     },
   };
 }

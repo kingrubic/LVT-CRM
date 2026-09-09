@@ -17,6 +17,10 @@ import {
   type MenuAccess,
   type MenuId,
 } from "./menuAccess";
+import {
+  NOTIFICATION_MILESTONES_DEFAULT,
+  resolveSourceMilestones,
+} from "./notificationSettings";
 
 export type DbCtx = QueryCtx | MutationCtx;
 
@@ -36,8 +40,10 @@ export const DUTY_ATTENDANCE_CONFIRMATION_DEFAULT = true;
 export const NOTIFICATION_DUTIES_ENABLED_SETTING_KEY = "notificationDutiesEnabled";
 export const NOTIFICATION_WORK_ENABLED_SETTING_KEY = "notificationWorkEnabled";
 export const NOTIFICATION_MILESTONES_SETTING_KEY = "notificationMilestonesHours";
+export const NOTIFICATION_DUTY_MILESTONES_SETTING_KEY = "notificationDutyMilestonesHours";
+export const NOTIFICATION_WORK_MILESTONES_SETTING_KEY = "notificationWorkMilestonesHours";
 export const NOTIFICATION_SOURCE_DEFAULT = true;
-export const NOTIFICATION_MILESTONES_DEFAULT = [48, 24, 12, 0] as const;
+export { NOTIFICATION_MILESTONES_DEFAULT };
 
 /** Who creates/assigns work items: admin_mod (default) or supervisor (legacy L2/L3). */
 export const WORK_ASSIGNER_MODE_SETTING_KEY = "workAssignerMode";
@@ -156,6 +162,25 @@ export async function getNumberArraySystemSetting(
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
   return row?.numberValues ? [...row.numberValues] : [...fallback];
+}
+
+export async function getNumberArraySystemSettingIfPresent(
+  ctx: DbCtx,
+  key: string,
+): Promise<number[] | null> {
+  const row = await ctx.db
+    .query("systemSettings")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  return row?.numberValues ? [...row.numberValues] : null;
+}
+
+export async function getSourceNotificationMilestones(ctx: DbCtx, sourceKey: string): Promise<number[]> {
+  const [specific, shared] = await Promise.all([
+    getNumberArraySystemSettingIfPresent(ctx, sourceKey),
+    getNumberArraySystemSettingIfPresent(ctx, NOTIFICATION_MILESTONES_SETTING_KEY),
+  ]);
+  return resolveSourceMilestones(specific, shared, NOTIFICATION_MILESTONES_DEFAULT);
 }
 
 export async function getStringSystemSetting(
