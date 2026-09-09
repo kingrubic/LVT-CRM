@@ -293,6 +293,23 @@
   overflow: hidden;
 }
 
+.report-calendar-search {
+  padding: 14px 20px 2px;
+}
+
+.report-list-tabs {
+  padding: 10px 20px 0;
+}
+
+.report-duty-list {
+  padding: 16px 20px 28px;
+  overflow: auto;
+}
+
+.report-calendar-stage .duty-list-empty {
+  margin: 48px auto;
+}
+
 .report-calendar-toolbar {
   display: flex;
   align-items: center;

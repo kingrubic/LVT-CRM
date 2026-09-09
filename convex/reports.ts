@@ -114,13 +114,14 @@ function bumpKpi(
 export const dutyCalendar = query({
   args: {
     userId: v.optional(v.id("users")),
-    startDate: v.string(),
-    endDate: v.string(),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const startDate = args.startDate.trim();
-    const endDate = args.endDate.trim();
-    if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate) {
+    const startDate = args.startDate?.trim() || "";
+    const endDate = args.endDate?.trim() || "";
+    const unbounded = !startDate && !endDate;
+    if (!unbounded && (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate)) {
       throw new Error("INVALID_DATE_RANGE");
     }
 
@@ -221,8 +222,7 @@ export const dutyCalendar = query({
       .filter(
         (duty) =>
           duty.active &&
-          duty.startDate <= endDate &&
-          duty.endDate >= startDate &&
+          (unbounded || (duty.startDate <= endDate && duty.endDate >= startDate)) &&
           userIsParticipant(selectedUser, duty),
       )
       .map((duty) => {
@@ -260,7 +260,11 @@ export const dutyCalendar = query({
           endTime: duty.endTime,
           allDay: duty.allDay,
           locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
+          locationText: duty.locationText || "",
           departmentNames: mapNames(duty.departmentIds, departments),
+          participantNames: participants.map(
+            (participant) => participant.name || participant.email || "",
+          ).filter(Boolean),
           assignmentType: duty.participantUserIds.some(
             (id) => String(id) === selectedUserId,
           )
@@ -273,6 +277,7 @@ export const dutyCalendar = query({
             isOngoing: timing.isOngoing,
             isUpcoming: timing.isUpcoming,
             isOverdue: timing.isOverdue,
+            nearDeadline: timing.nearDeadline,
           },
           subordinateParticipants,
           visibleParticipants,

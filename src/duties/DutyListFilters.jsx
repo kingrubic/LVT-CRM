@@ -10,7 +10,12 @@ export function DutyListHeading({ children }) {
   return <h3 className="duty-list-heading">{children}</h3>;
 }
 
-export function DutyListTabs({ tab, onChange }) {
+export function DutyListTabs({
+  tab,
+  onChange,
+  upcomingLabel = 'Công tác chưa diễn ra',
+  pastLabel = 'Công tác đã diễn ra',
+}) {
   return (
     <div className="duty-list-tabs" role="tablist" aria-label="Lọc danh sách công tác">
       <button
@@ -20,7 +25,7 @@ export function DutyListTabs({ tab, onChange }) {
         className={tab === DUTY_LIST_TAB_UPCOMING ? 'is-active' : undefined}
         onClick={() => onChange(DUTY_LIST_TAB_UPCOMING)}
       >
-        Chưa diễn ra
+        {upcomingLabel}
       </button>
       <button
         type="button"
@@ -29,7 +34,7 @@ export function DutyListTabs({ tab, onChange }) {
         className={tab === DUTY_LIST_TAB_PAST ? 'is-active' : undefined}
         onClick={() => onChange(DUTY_LIST_TAB_PAST)}
       >
-        Đã diễn ra
+        {pastLabel}
       </button>
     </div>
   );

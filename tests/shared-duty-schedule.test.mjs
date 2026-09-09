@@ -160,4 +160,13 @@ test('UI Lịch công tác có 2 tab, lịch cá nhân dạng lịch, trang tạ
   assert.match(personal, /reports\.dutyCalendar/);
   assert.match(personal, /Chọn một người để xem lịch công tác/);
   assert.match(personal, /Lịch công tác của/);
+  assert.match(personal, /\['list', 'List'\]/);
+  assert.match(personal, /\['week', 'Tuần'\]/);
+  assert.match(personal, /\['month', 'Tháng'\]/);
+  assert.match(personal, /\['year', 'Năm'\]/);
+  assert.doesNotMatch(personal, /\['quarter', 'Quý'\]/);
+  assert.match(personal, /useState\('week'\)/);
+  assert.match(personal, /DutyListSearch/);
+  assert.match(personal, /DutyListTabs/);
+  assert.match(personal, /report-calendar-search/);
 });
