@@ -307,7 +307,8 @@ function DocxPreviewBody({ buffer, fileName }) {
         if (cancelled) return;
         await renderAsync(buffer, container, undefined, {
           inWrapper: true,
-          ignoreWidth: false,
+          ignoreWidth: true,
+          ignoreHeight: true,
           breakPages: true,
         });
       } catch (error) {

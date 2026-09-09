@@ -1211,15 +1211,23 @@
 
 .work-file-preview-content.is-office {
   background: #e8eef2;
-  align-content: start;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
 }
 
 .work-office-preview {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  height: 100%;
   min-height: 0;
   padding: 12px 14px 16px;
-  align-content: start;
+}
+
+.work-office-preview > .work-docx-preview,
+.work-office-preview > .work-sheet-scroll {
+  flex: 1 1 auto;
 }
 
 .work-office-preview-note,
@@ -1262,7 +1270,7 @@
 
 .work-sheet-scroll {
   overflow: auto;
-  max-height: min(70vh, 720px);
+  min-height: 0;
   background: #fff;
   border: 1px solid #d3dee6;
   border-radius: 10px;
@@ -1285,12 +1293,28 @@
 
 .work-docx-preview {
   overflow: auto;
-  max-height: min(70vh, 720px);
+  min-height: 0;
   background: #fff;
   border: 1px solid #d3dee6;
   border-radius: 10px;
-  padding: 12px;
   color: #12202b;
+}
+
+.work-docx-preview .docx-wrapper {
+  background: transparent !important;
+  padding: 12px !important;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.work-docx-preview .docx-wrapper > section {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.work-docx-preview .docx-wrapper > section:only-child {
+  min-height: calc(100% - 8px);
 }
 
 @media (max-width: 640px) {
