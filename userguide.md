@@ -10,7 +10,7 @@ Cập nhật theo phiên bản web ngày 28/07/2026
 LVT CRM có ba loại tài khoản:
 
 - **Administrator (Admin):** thiết lập toàn bộ hệ thống, quản lý tài khoản và sử dụng tất cả chức năng.
-- **Moderator:** quản lý các hoạt động hằng ngày của nhà trường, gồm Công tác, Bán trú và Công việc.
+- **Moderator:** quản lý các hoạt động hằng ngày của nhà trường, gồm Lịch công tác, Bán trú và Công việc.
 - **User:** sử dụng các chức năng được nhà trường cấp cho tài khoản.
 
 Admin có thể làm mọi việc của Moderator và User. Moderator có thể dùng phần Quản trị hệ thống và các Chức năng chính đã hoàn thiện trong tài liệu này, nhưng không vào được phần Thiết lập tối cao.
@@ -388,9 +388,12 @@ Chọn **Đánh dấu tất cả là đã đọc** ở đầu trang.
 
 Nếu tài khoản có quyền xóa thông báo, dấu `×` sẽ xuất hiện trên từng thông báo.
 
-## 2. Công tác
+## 2. Lịch công tác
 
-Trang **Công tác** hiển thị lịch được giao cho cá nhân, phòng ban hoặc cấp dưới thuộc phạm vi được phép xem.
+Trang **Lịch công tác** có hai tab:
+
+- **Lịch công tác cá nhân:** lịch được giao cho cá nhân, phòng ban hoặc cấp dưới thuộc phạm vi được phép xem.
+- **Lịch công tác chung:** lịch toàn trường theo tuần hoặc tháng, trình bày như mẫu Word nhà trường (Ngày, Thời gian, Nội dung, Địa điểm, Thành phần). Có thể tải PDF.
 
 Mỗi công tác có:
 
@@ -404,7 +407,7 @@ Mỗi công tác có:
 
 Người được phép **Tạo công tác** (Administrator, Moderator, tổ trưởng/tổ phó) có thể nhập nhiều lịch cùng lúc:
 
-1. Mở **Công tác**.
+1. Mở **Lịch công tác** → tab **Lịch công tác cá nhân**.
 2. Chọn **Import Excel**.
 3. Tải **file nhập liệu mẫu** nếu chưa có.
 4. Điền mỗi dòng một công tác, rồi chọn **Import file nhập liệu**.
@@ -476,15 +479,13 @@ Nếu trên màn hình có mục **Duyệt hoàn thành**, tài khoản đã đ�
 
 ## 4. Báo cáo
 
-Menu **Báo cáo** có ba phần.
+Menu **Báo cáo** hiện phần Công việc (Bán trú đang ẩn). Lịch công tác toàn trường nằm ở menu **Lịch công tác** → **Lịch công tác chung**, không còn mục Báo cáo > Công tác.
 
-### Báo cáo Công tác
+### Lịch công tác chung
 
-- Chọn người cần xem nếu tài khoản được phép xem nhiều người.
-- Chọn chế độ Tuần, Tháng, Quý hoặc Năm.
-- Dùng nút mũi tên để chuyển kỳ hoặc chọn **Hôm nay**.
-- Chọn một công tác trên lịch để xem chi tiết.
-- Khi xác nhận tham gia đang bật, báo cáo có số công tác đã tham gia và chưa xác nhận.
+- Chọn **Tuần** hoặc **Tháng**, rồi dùng mũi tên hoặc **Hôm nay** để đổi kỳ.
+- Bảng hiển thị theo mẫu lịch công tác nhà trường. Chủ Nhật không đưa vào bảng tuần.
+- Chọn **Tải PDF** nếu cần in hoặc gửi file.
 
 ### Báo cáo Công việc
 
