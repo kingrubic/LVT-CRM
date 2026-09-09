@@ -100,6 +100,21 @@ enum WorkHelpers {
         return content
     }
 
+    static func publicFileURL(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = trimmed.lowercased()
+        guard !trimmed.isEmpty, lowered != "null", lowered != "undefined" else { return nil }
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return nil }
+        return trimmed
+    }
+
+    static func jsonString(_ value: Any?) -> String {
+        guard let text = value as? String else { return "" }
+        return text
+    }
+
     static func hasAttachedFile(_ task: WorkTaskItem) -> Bool {
         !task.documentId.isEmpty && task.privateFile
     }
@@ -174,7 +189,7 @@ final class WorkRepository: Sendable {
                     id: (document["_id"] as? String) ?? "",
                     title: (document["title"] as? String) ?? "",
                     fileName: (document["fileName"] as? String) ?? "",
-                    fileURL: (document["fileUrl"] as? String) ?? "",
+                    fileURL: WorkHelpers.publicFileURL(WorkHelpers.jsonString(document["fileUrl"])) ?? "",
                     privateFile: (document["privateFile"] as? Bool) ?? false,
                     content: (document["content"] as? String) ?? "",
                     deadline: (document["deadline"] as? String) ?? "",
@@ -194,7 +209,7 @@ final class WorkRepository: Sendable {
                     id: (document["_id"] as? String) ?? "",
                     title: (document["title"] as? String) ?? "",
                     fileName: (document["fileName"] as? String) ?? "",
-                    fileURL: (document["fileUrl"] as? String) ?? "",
+                    fileURL: WorkHelpers.publicFileURL(WorkHelpers.jsonString(document["fileUrl"])) ?? "",
                     privateFile: (document["privateFile"] as? Bool) ?? false,
                     content: (document["content"] as? String) ?? "",
                     deadline: (document["deadline"] as? String) ?? "",
@@ -229,7 +244,7 @@ final class WorkRepository: Sendable {
                 documentTitle: (task["documentTitle"] as? String) ?? "",
                 fileName: (task["fileName"] as? String) ?? "",
                 documentId: (task["documentId"] as? String) ?? "",
-                fileURL: (task["fileUrl"] as? String) ?? "",
+                fileURL: WorkHelpers.publicFileURL(WorkHelpers.jsonString(task["fileUrl"])) ?? "",
                 privateFile: (task["privateFile"] as? Bool) ?? false,
                 memberNames: Self.memberNames(from: task),
                 note: Self.completionNote(from: task)
@@ -253,7 +268,7 @@ final class WorkRepository: Sendable {
                 documentTitle: (task["documentTitle"] as? String) ?? "",
                 fileName: (task["fileName"] as? String) ?? "",
                 documentId: (task["documentId"] as? String) ?? "",
-                fileURL: (task["fileUrl"] as? String) ?? "",
+                fileURL: WorkHelpers.publicFileURL(WorkHelpers.jsonString(task["fileUrl"])) ?? "",
                 privateFile: (task["privateFile"] as? Bool) ?? false,
                 memberNames: Self.memberNames(from: task, key: "assignees"),
                 note: Self.completionNote(from: task)
@@ -468,15 +483,11 @@ final class WorkRepository: Sendable {
         let sourceURL: URL
         var request: URLRequest
         let sourceIdentity: String
-        if !document.fileURL.isEmpty, let url = URL(string: document.fileURL) {
-            sourceURL = url
-            request = URLRequest(url: url)
-            sourceIdentity = "public:\(document.id):\(document.fileURL)"
-        } else if document.privateFile,
-                  let encodedId = document.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-                  let url = URL(string: "\(ConvexConfig.webURL)/api/files/\(encodedId)"),
-                  let metadataURL = URL(string: "\(ConvexConfig.webURL)/api/files/\(encodedId)/metadata"),
-                  let token = tokenProvider(), !token.isEmpty {
+        if document.privateFile,
+           let encodedId = document.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+           let url = URL(string: "\(ConvexConfig.webURL)/api/files/\(encodedId)"),
+           let metadataURL = URL(string: "\(ConvexConfig.webURL)/api/files/\(encodedId)/metadata"),
+           let token = tokenProvider(), !token.isEmpty {
             var metadataRequest = URLRequest(url: metadataURL)
             metadataRequest.cachePolicy = .reloadIgnoringLocalCacheData
             metadataRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -492,6 +503,11 @@ final class WorkRepository: Sendable {
             request = URLRequest(url: url)
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             sourceIdentity = "private:\(document.id):\(fileVersion)"
+        } else if let publicURL = WorkHelpers.publicFileURL(document.fileURL),
+                  let url = URL(string: publicURL) {
+            sourceURL = url
+            request = URLRequest(url: url)
+            sourceIdentity = "public:\(document.id):\(publicURL)"
         } else {
             throw ConvexException(code: "WORK_FILE_UNAVAILABLE", message: "Tệp công văn chưa sẵn sàng để mở.")
         }

@@ -8,6 +8,10 @@ data class AppChangelogEntry(
 object AppChangelog {
     val entries: List<AppChangelogEntry> = listOf(
         AppChangelogEntry(
+            "0.13.3",
+            listOf("Xem trước tệp đính kèm trong ứng dụng, tải xuống khi cần, và mở lại nhanh trong 24 giờ."),
+        ),
+        AppChangelogEntry(
             "0.13.2",
             listOf("Chi tiết nhiệm vụ Công việc hiện tệp đính kèm và cho phép mở tệp."),
         ),

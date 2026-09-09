@@ -8,13 +8,15 @@ import androidx.core.content.FileProvider
 import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkRepository
+import java.io.File
 
 class WorkFileOpener(
     private val context: Context,
     private val repository: WorkRepository,
 ) {
-    suspend fun open(document: WorkApprovalItem) {
-        val file = repository.downloadDocument(document)
+    suspend fun download(document: WorkApprovalItem): File = repository.downloadDocument(document)
+
+    fun openExternally(document: WorkApprovalItem, file: File) {
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.files",

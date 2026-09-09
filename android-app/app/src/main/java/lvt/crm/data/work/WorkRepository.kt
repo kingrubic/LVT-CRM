@@ -112,6 +112,20 @@ internal fun decisionForUser(currentUserId: String, approvers: List<ApprovalDeci
     }
 }
 
+internal fun publicFileUrl(raw: String?): String {
+    val value = raw?.trim().orEmpty()
+    if (value.isEmpty() || value.equals("null", ignoreCase = true) || value.equals("undefined", ignoreCase = true)) {
+        return ""
+    }
+    if (!value.startsWith("https://") && !value.startsWith("http://")) return ""
+    return value
+}
+
+private fun JSONObject.optPublicFileUrl(key: String): String {
+    if (!has(key) || isNull(key)) return ""
+    return publicFileUrl(optString(key, ""))
+}
+
 interface WorkOperations {
     suspend fun listMine(): WorkSnapshot
     suspend fun complete(
@@ -186,7 +200,7 @@ class WorkRepository(
                     approvalTotal = document.optInt("approvalTotal"),
                     myDecision = myDecision,
                     assignments = parseAssignments(document.optJSONArray("assignments")),
-                    fileUrl = document.optString("fileUrl"),
+                    fileUrl = document.optPublicFileUrl("fileUrl"),
                     privateFile = document.optBoolean("privateFile", false),
                     title = document.optString("title"),
                 )
@@ -211,7 +225,7 @@ class WorkRepository(
                     approvalTotal = document.optInt("approvalTotal"),
                     myDecision = "",
                     assignments = parseAssignments(document.optJSONArray("assignments")),
-                    fileUrl = document.optString("fileUrl"),
+                    fileUrl = document.optPublicFileUrl("fileUrl"),
                     privateFile = document.optBoolean("privateFile", false),
                     title = document.optString("title"),
                 )
@@ -239,7 +253,7 @@ class WorkRepository(
                     documentTitle = t.optString("documentTitle"),
                     fileName = t.optString("fileName"),
                     documentId = t.optString("documentId"),
-                    fileUrl = t.optString("fileUrl"),
+                    fileUrl = t.optPublicFileUrl("fileUrl"),
                     privateFile = t.optBoolean("privateFile", false),
                     memberNames = t.optJSONArray("members").toMemberNames(),
                     note = t.optWorkNote(),
@@ -265,7 +279,7 @@ class WorkRepository(
                     documentTitle = t.optString("documentTitle"),
                     fileName = t.optString("fileName"),
                     documentId = t.optString("documentId"),
-                    fileUrl = t.optString("fileUrl"),
+                    fileUrl = t.optPublicFileUrl("fileUrl"),
                     privateFile = t.optBoolean("privateFile", false),
                     memberNames = t.optJSONArray("assignees").toMemberNames(),
                     note = t.optWorkNote(),
@@ -473,11 +487,8 @@ class WorkRepository(
             ?: throw ConvexException("WORK_FILE_UNAVAILABLE", "Tệp công văn chưa sẵn sàng để mở.")
         val request: Request
         val sourceIdentity: String
-        val publicUrl = document.fileUrl.trim()
-        if (publicUrl.isNotEmpty()) {
-            request = Request.Builder().url(publicUrl).get().build()
-            sourceIdentity = "public:${document.id}:$publicUrl"
-        } else if (document.privateFile) {
+        val publicUrl = publicFileUrl(document.fileUrl)
+        if (document.privateFile) {
             val token = tokenProvider()?.takeIf { it.isNotBlank() }
                 ?: throw ConvexException("WORK_FILE_FORBIDDEN", "Bạn không còn quyền mở tệp công văn này.")
             val encodedId = URLEncoder.encode(document.id, Charsets.UTF_8.name()).replace("+", "%20")
@@ -506,6 +517,9 @@ class WorkRepository(
                 .get()
                 .build()
             sourceIdentity = "private:${document.id}:$fileVersion"
+        } else if (publicUrl.isNotEmpty()) {
+            request = Request.Builder().url(publicUrl).get().build()
+            sourceIdentity = "public:${document.id}:$publicUrl"
         } else {
             throw ConvexException("WORK_FILE_UNAVAILABLE", "Tệp công văn chưa sẵn sàng để mở.")
         }
