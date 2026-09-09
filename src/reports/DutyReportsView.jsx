@@ -2,12 +2,20 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { DutyCreateToolbarActions } from '../duties/DutyBulkImport';
+import DutyListSummary from '../duties/DutyListSummary';
+import { DutyListEmpty, DutyListSearch, DutyListTabs } from '../duties/DutyListFilters';
+import {
+  DUTY_LIST_TAB_UPCOMING,
+  emptyDutySearch,
+  filterDutiesBySearch,
+  filterDutiesByTab,
+} from '../duties/dutyDisplay';
 import './dutyCalendar.css';
 
 const VIEW_OPTIONS = [
+  ['list', 'List'],
   ['week', 'Tuần'],
   ['month', 'Tháng'],
-  ['quarter', 'Quý'],
   ['year', 'Năm'],
 ];
 const WEEKDAYS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'];
@@ -88,14 +96,6 @@ function viewRange(mode, anchor) {
       start: grid[0],
       end: grid[grid.length - 1],
       title: `Tháng ${month + 1}, ${year}`,
-    };
-  }
-  if (mode === 'quarter') {
-    const firstMonth = Math.floor(month / 3) * 3;
-    return {
-      start: new Date(year, firstMonth, 1),
-      end: new Date(year, firstMonth + 3, 0),
-      title: `Quý ${Math.floor(month / 3) + 1} · Tháng ${firstMonth + 1}–${firstMonth + 3}/${year}`,
     };
   }
   return {
@@ -402,20 +402,29 @@ export default function DutyReportsView({
   onEdit = null,
   focusDutyId = null,
 } = {}) {
-  const [mode, setMode] = useState('month');
+  const [mode, setMode] = useState('week');
   const [anchor, setAnchor] = useState(() => new Date());
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [peopleCollapsed, setPeopleCollapsed] = useState(false);
   const [pending, setPending] = useState('');
+  const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
+  const [search, setSearch] = useState(() => emptyDutySearch());
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setAttendanceForUser = useMutation(anyApi.duties.setAttendanceForUser);
   const removeDuty = useMutation(anyApi.duties.remove);
-  const range = useMemo(() => viewRange(mode, anchor), [mode, anchor]);
+  const calendarRange = useMemo(
+    () => viewRange(mode === 'list' ? 'week' : mode, anchor),
+    [mode, anchor],
+  );
   const queryArgs = {
-    startDate: toIsoDate(range.start),
-    endDate: toIsoDate(range.end),
     ...(selectedUserId ? { userId: selectedUserId } : {}),
+    ...(mode === 'list'
+      ? {}
+      : {
+          startDate: toIsoDate(calendarRange.start),
+          endDate: toIsoDate(calendarRange.end),
+        }),
   };
   const data = useQuery(anyApi.reports.dutyCalendar, queryArgs);
 
@@ -464,11 +473,16 @@ export default function DutyReportsView({
   const movePeriod = (direction) => {
     if (mode === 'week') setAnchor((current) => addDays(current, direction * 7));
     else if (mode === 'month') setAnchor((current) => addMonths(current, direction));
-    else if (mode === 'quarter') setAnchor((current) => addMonths(current, direction * 3));
-    else setAnchor((current) => new Date(current.getFullYear() + direction, current.getMonth(), 1));
+    else if (mode === 'year') setAnchor((current) => new Date(current.getFullYear() + direction, current.getMonth(), 1));
   };
 
-  const events = data?.events || [];
+  const searchedEvents = useMemo(
+    () => filterDutiesBySearch(data?.events || [], search),
+    [data?.events, search],
+  );
+  const events = useMemo(() => (
+    mode === 'list' ? filterDutiesByTab(searchedEvents, listTab) : searchedEvents
+  ), [searchedEvents, mode, listTab]);
   const attendanceEnabled = data?.attendanceConfirmationEnabled !== false;
   const attendedCount = events.filter((event) => event.attendanceStatus === 'attended').length;
   const pendingCount = events.filter((event) => event.attendanceStatus === 'pending').length;
@@ -541,6 +555,9 @@ export default function DutyReportsView({
           </aside>
 
           <main className="report-calendar-panel">
+            <div className="report-calendar-search">
+              <DutyListSearch value={search} onChange={setSearch} />
+            </div>
             <div className="report-calendar-toolbar">
               <button
                 type="button"
@@ -555,17 +572,19 @@ export default function DutyReportsView({
               </button>
               <div className="report-calendar-title">
                 <span>Lịch công tác của {data.selectedUserName}</span>
-                <h3>{range.title}</h3>
+                <h3>{mode === 'list' ? 'Danh sách' : calendarRange.title}</h3>
               </div>
               <div className="report-toolbar-actions">
                 {data.canCreate && onCreate && onImport ? (
                   <DutyCreateToolbarActions onCreate={onCreate} onImport={onImport} />
                 ) : null}
-                <div className="report-period-nav">
-                  <button type="button" onClick={() => movePeriod(-1)} aria-label="Kỳ trước">‹</button>
-                  <button type="button" className="today-button" onClick={() => setAnchor(new Date())}>Hôm nay</button>
-                  <button type="button" onClick={() => movePeriod(1)} aria-label="Kỳ sau">›</button>
-                </div>
+                {mode !== 'list' ? (
+                  <div className="report-period-nav">
+                    <button type="button" onClick={() => movePeriod(-1)} aria-label="Kỳ trước">‹</button>
+                    <button type="button" className="today-button" onClick={() => setAnchor(new Date())}>Hôm nay</button>
+                    <button type="button" onClick={() => movePeriod(1)} aria-label="Kỳ sau">›</button>
+                  </div>
+                ) : null}
                 <div className="report-mode-switch">
                   {VIEW_OPTIONS.map(([id, label]) => (
                     <button type="button" className={mode === id ? 'active' : ''} key={id} onClick={() => setMode(id)}>
@@ -576,6 +595,12 @@ export default function DutyReportsView({
               </div>
             </div>
 
+            {mode === 'list' ? (
+              <div className="report-list-tabs">
+                <DutyListTabs tab={listTab} onChange={setListTab} />
+              </div>
+            ) : null}
+
             <div className={`report-summary-row ${attendanceEnabled ? '' : 'attendance-hidden'}`}>
               <div><strong>{events.length}</strong><span>Công tác trong kỳ</span></div>
               {attendanceEnabled ? <div className="attended"><strong>{attendedCount}</strong><span>Đã tham gia</span></div> : null}
@@ -584,14 +609,31 @@ export default function DutyReportsView({
             </div>
 
             <div className="report-calendar-stage">
-              {mode === 'week' ? (
-                <WeekCalendar range={range} events={events} onSelect={setSelectedEvent} />
+              {mode === 'list' ? (
+                events.length ? (
+                  <div className="duty-modern-list report-duty-list">
+                    {events.map((event) => (
+                      <article className="duty-modern-card" key={event._id}>
+                        <button type="button" className="duty-card-toggle" onClick={() => setSelectedEvent(event)}>
+                          <DutyListSummary item={event} />
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <DutyListEmpty
+                    tab={listTab}
+                    filtered={Boolean((data.events || []).length) && searchedEvents.length === 0}
+                  />
+                )
+              ) : mode === 'week' ? (
+                <WeekCalendar range={calendarRange} events={events} onSelect={setSelectedEvent} />
               ) : mode === 'month' ? (
                 <MonthCalendar anchor={anchor} events={events} onSelect={setSelectedEvent} />
               ) : (
-                <PeriodCalendar mode={mode} anchor={anchor} events={events} onSelect={setSelectedEvent} />
+                <PeriodCalendar mode="year" anchor={anchor} events={events} onSelect={setSelectedEvent} />
               )}
-              {!events.length ? (
+              {mode !== 'list' && !events.length ? (
                 <div className="report-empty-overlay">
                   <span>✦</span>
                   <strong>Kỳ này đang trống lịch</strong>
