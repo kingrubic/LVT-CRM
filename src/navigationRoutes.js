@@ -15,6 +15,7 @@ const MENU_PATHS = Object.freeze({
   locations: '/thiet-lap-dia-diem',
   roles: '/thiet-lap-nhom-quyen',
   positions: '/thiet-lap-chuc-vu',
+  'document-types': '/thiet-lap-loai-van-ban',
   'display-settings': '/thiet-lap-hien-thi',
 });
 

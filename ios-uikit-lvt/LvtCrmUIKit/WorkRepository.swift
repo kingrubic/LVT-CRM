@@ -81,6 +81,7 @@ struct WorkSnapshot: Equatable, Sendable {
     let completionReviews: [WorkCompletionReviewItem]
     let canCreate: Bool
     let isOps: Bool
+    let documentTypes: [WorkDocumentType]
 }
 
 enum WorkHelpers {
@@ -158,6 +159,15 @@ enum WorkHelpers {
         if (approver["rejected"] as? Bool) == true { return "rejected" }
         return ""
     }
+
+    static func documentTypes(from result: [String: Any]) -> [WorkDocumentType] {
+        ((result["documentTypes"] as? [[String: Any]]) ?? []).compactMap { item in
+            let id = (item["_id"] as? String) ?? ""
+            let name = (item["name"] as? String) ?? ""
+            guard !id.isEmpty, !name.isEmpty else { return nil }
+            return WorkDocumentType(id: id, name: name, code: (item["code"] as? String) ?? "")
+        }
+    }
 }
 
 final class WorkRepository: Sendable {
@@ -171,7 +181,11 @@ final class WorkRepository: Sendable {
     }
 
     func listMine() async throws -> WorkSnapshot {
-        let result = try await convex.query("work:listMine")
+        var result = try await convex.query("work:listMine")
+        if WorkHelpers.documentTypes(from: result).isEmpty {
+            _ = try? await convex.mutation("documentTypes:ensureDefaults", args: [:])
+            result = try await convex.query("work:listMine")
+        }
         let isAdmin = (result["isAdmin"] as? Bool) ?? false
         let canCreate = (result["canCreate"] as? Bool) ?? false
         let accessLevel = (result["level"] as? Int) ?? 0
@@ -289,12 +303,19 @@ final class WorkRepository: Sendable {
             approvals: sortedApprovals,
             completionReviews: completionReviews,
             canCreate: canCreate,
-            isOps: isOps
+            isOps: isOps,
+            documentTypes: WorkHelpers.documentTypes(from: result)
         )
     }
 
     func formOptions() async throws -> WorkFormOptions {
-        let result = try await convex.query("work:formOptions")
+        var result = try await convex.query("work:formOptions")
+        var documentTypes = WorkHelpers.documentTypes(from: result)
+        if documentTypes.isEmpty {
+            _ = try? await convex.mutation("documentTypes:ensureDefaults", args: [:])
+            result = try await convex.query("work:formOptions")
+            documentTypes = WorkHelpers.documentTypes(from: result)
+        }
         let departments = (result["departments"] as? [[String: Any]] ?? []).map { item in
             WorkFormDepartment(
                 id: (item["_id"] as? String) ?? "",
@@ -313,14 +334,16 @@ final class WorkRepository: Sendable {
             canCreate: (result["canCreate"] as? Bool) ?? false,
             isOps: (result["isOps"] as? Bool) ?? false,
             departments: departments,
-            users: users
+            users: users,
+            documentTypes: documentTypes
         )
     }
 
     func createDocument(
         title: String,
         assignments: [WorkCreateAssignment],
-        evidence: WorkUploadedEvidence?
+        evidence: WorkUploadedEvidence?,
+        documentTypeId: String?
     ) async throws -> String {
         var payload: [[String: Any]] = []
         for row in assignments {
@@ -340,6 +363,9 @@ final class WorkRepository: Sendable {
             "title": title.trimmingCharacters(in: .whitespacesAndNewlines),
             "assignments": payload,
         ]
+        if let documentTypeId, !documentTypeId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            args["documentTypeId"] = documentTypeId.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if let evidence {
             args["driveFileId"] = evidence.driveFileId
             args["driveChecksum"] = evidence.driveChecksum
@@ -362,7 +388,13 @@ final class WorkRepository: Sendable {
         }
     }
 
-    func complete(item: WorkTaskItem, qualityPercent: Int? = nil, evidence: WorkUploadedEvidence? = nil, note: String? = nil) async throws {
+    func complete(
+        item: WorkTaskItem,
+        qualityPercent: Int? = nil,
+        evidence: WorkUploadedEvidence? = nil,
+        note: String? = nil,
+        documentTypeId: String? = nil
+    ) async throws {
         var args: [String: Any] = [:]
         if let qualityPercent { args["qualityPercent"] = qualityPercent }
         if let evidence {
@@ -372,6 +404,10 @@ final class WorkRepository: Sendable {
             args["fileName"] = evidence.fileName
             args["fileType"] = evidence.fileType
             args["fileSize"] = evidence.fileSize
+        }
+        if let documentTypeId {
+            let trimmed = documentTypeId.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { args["documentTypeId"] = trimmed }
         }
         let trimmedNote = (note ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedNote.isEmpty {

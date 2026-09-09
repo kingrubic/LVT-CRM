@@ -167,7 +167,7 @@ actor ConvexHttpClient {
             "PASSWORD_CHANGE_REQUIRED", "PASSWORD_RESET_FAILED", "PASSWORD_RESET_EMAIL_FAILED",
             "MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PUBLIC_SIGNUP_DISABLED", "INVALID_EMAIL",
             "INVALID_AUTH_FLOW", "FORBIDDEN", "UNAUTHENTICATED", "CANNOT_REVOKE_CURRENT_SESSION",
-            "SESSION_NOT_FOUND",
+            "SESSION_NOT_FOUND", "DOCUMENT_TYPE_REQUIRED", "INVALID_DOCUMENT_TYPE",
         ]
         return known.first { message.localizedCaseInsensitiveContains($0) } ?? message
     }
@@ -198,6 +198,8 @@ actor ConvexHttpClient {
         case code == "INVALID_WORK_ASSIGNEE":
             return "Người thực hiện phải cùng phòng ban và có cấp sao thấp hơn bạn."
         case code == "INVALID_WORK_FILE": return "Tệp công văn không đúng định dạng được hỗ trợ."
+        case code == "DOCUMENT_TYPE_REQUIRED": return "Vui lòng chọn loại văn bản cho file đính kèm."
+        case code == "INVALID_DOCUMENT_TYPE": return "Loại văn bản không hợp lệ hoặc đã ngưng sử dụng."
         case code == "WORK_ASSIGNMENTS_REQUIRED": return "Vui lòng thêm ít nhất một phân công."
         case code == "WORK_DEPARTMENT_FORBIDDEN":
             return "Tổ trưởng/tổ phó chỉ được giao công việc cho cấp dưới, không chọn cả phòng ban."

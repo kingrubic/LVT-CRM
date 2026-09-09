@@ -23,7 +23,8 @@ test('mỗi menu CRM có một đường dẫn con duy nhất', () => {
   assert.equal(new Set(paths).size, paths.length);
   assert.equal(pathnameForMenu('users'), '/thiet-lap-nguoi-dung');
   assert.equal(pathnameForMenu('roles'), '/thiet-lap-nhom-quyen');
-  assert.equal(pathnameForMenu('profile'), '/thong-tin-ca-nhan');
+  assert.equal(pathnameForMenu('positions'), '/thiet-lap-chuc-vu');
+  assert.equal(pathnameForMenu('document-types'), '/thiet-lap-loai-van-ban');
 });
 
 test('đường dẫn con mở đúng menu và chuẩn hóa dấu gạch cuối', () => {

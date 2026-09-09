@@ -69,4 +69,27 @@ class WorkCreatePolicyTest {
             ),
         )
     }
+
+    @Test
+    fun validateRequiresDocumentTypeWhenFileAttached() {
+        val assignment = WorkCreateAssignment(
+            type = "individual",
+            userIds = listOf("user-1"),
+            content = "Làm báo cáo",
+            deadline = "2026-09-01",
+        )
+        assertEquals(
+            "Vui lòng chọn loại văn bản.",
+            WorkCreatePolicy.validate("Họp tổ", listOf(assignment), hasFile = true),
+        )
+        assertNull(
+            WorkCreatePolicy.validate(
+                "Họp tổ",
+                listOf(assignment),
+                hasFile = true,
+                documentTypeId = "type-1",
+            ),
+        )
+        assertNull(WorkCreatePolicy.validate("Họp tổ", listOf(assignment), hasFile = false))
+    }
 }

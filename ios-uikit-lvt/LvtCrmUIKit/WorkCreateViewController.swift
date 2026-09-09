@@ -13,6 +13,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
     private let addRow = UIStackView()
     private let assignmentsStack = UIStackView()
     private let fileLabel = UILabel()
+    private let typeButton = UIButton(type: .system)
     private let errorLabel = UILabel()
     private let submitButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -22,6 +23,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
     private var fileData: Data?
     private var fileName = ""
     private var fileMime = ""
+    private var documentTypeId = ""
     private var isBusy = false
 
     private static let maxUploadFileSize = 20 * 1024 * 1024
@@ -77,6 +79,12 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         fileLabel.textColor = .secondaryLabel
         fileLabel.text = "Tệp đính kèm (không bắt buộc)"
 
+        typeButton.setTitle("Chọn loại văn bản", for: .normal)
+        typeButton.contentHorizontalAlignment = .leading
+        typeButton.addTarget(self, action: #selector(pickDocumentType), for: .touchUpInside)
+        typeButton.isHidden = true
+        typeButton.accessibilityLabel = "Loại văn bản"
+
         errorLabel.font = .preferredFont(forTextStyle: .footnote)
         errorLabel.adjustsFontForContentSizeCategory = true
         errorLabel.textColor = .systemRed
@@ -107,6 +115,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
             photoButton,
             fileButton,
             clearFile,
+            typeButton,
             errorLabel,
             submitButton,
             spinner,
@@ -327,7 +336,25 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         fileData = nil
         fileName = ""
         fileMime = ""
+        documentTypeId = ""
         fileLabel.text = "Tệp đính kèm (không bắt buộc)"
+        refreshTypeButton()
+    }
+
+    @objc private func pickDocumentType() {
+        let items = (options?.documentTypes ?? []).map { ($0.id, $0.name) }
+        let picker = WorkChoiceViewController(titleText: "Chọn loại văn bản", items: items) { [weak self] id in
+            self?.documentTypeId = id
+            self?.refreshTypeButton()
+        }
+        navigationController?.pushViewController(picker, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
+    private func refreshTypeButton() {
+        let hasFile = fileData != nil
+        typeButton.isHidden = !hasFile
+        let name = options?.documentTypes.first { $0.id == documentTypeId }?.name
+        typeButton.setTitle(name ?? "Chọn loại văn bản", for: .normal)
     }
 
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
@@ -353,6 +380,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
             fileName = url.lastPathComponent
             fileMime = mimeType(for: url)
             fileLabel.text = fileName
+            refreshTypeButton()
         } catch {
             showError("Không thể đọc tệp đã chọn. Vui lòng thử lại.")
         }
@@ -382,6 +410,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
                 self.fileName = "dinh_kem_\(formatter.string(from: Date())).jpg"
                 self.fileMime = "image/jpeg"
                 self.fileLabel.text = self.fileName
+                self.refreshTypeButton()
             }
         }
     }
@@ -389,7 +418,12 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
     @objc private func submit() {
         guard !isBusy else { return }
         hideError()
-        if let message = WorkCreatePolicy.validate(title: titleField.text ?? "", assignments: assignments) {
+        if let message = WorkCreatePolicy.validate(
+            title: titleField.text ?? "",
+            assignments: assignments,
+            hasFile: fileData != nil,
+            documentTypeId: documentTypeId
+        ) {
             showError(message)
             return
         }
@@ -403,7 +437,8 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
                     assignments: assignments,
                     fileData: fileData,
                     fileName: fileName.isEmpty ? nil : fileName,
-                    mimeType: fileMime.isEmpty ? nil : fileMime
+                    mimeType: fileMime.isEmpty ? nil : fileMime,
+                    documentTypeId: documentTypeId
                 )
                 onCreated()
                 navigationController?.popViewController(animated: !UIAccessibility.isReduceMotionEnabled)

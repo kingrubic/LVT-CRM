@@ -20,6 +20,7 @@ import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkTaskItem
 import lvt.crm.data.work.WorkCreateAssignment
 import lvt.crm.data.work.WorkCreatePolicy
+import lvt.crm.data.work.WorkDocumentType
 import lvt.crm.data.work.WorkFormOptions
 import lvt.crm.ui.components.ListSearchState
 
@@ -45,6 +46,7 @@ data class WorkUiState(
     val formOptions: WorkFormOptions? = null,
     val formOptionsLoading: Boolean = false,
     val creating: Boolean = false,
+    val documentTypes: List<WorkDocumentType> = emptyList(),
     val mineTab: WorkListTab = WorkListTab.Todo,
     val createdTab: WorkListTab = WorkListTab.Todo,
     val needsExecutionOnly: Boolean = false,
@@ -90,6 +92,7 @@ class WorkViewModel(
                         formOptions = options,
                         formOptionsLoading = false,
                         isOps = options.isOps,
+                        documentTypes = options.documentTypes.ifEmpty { it.documentTypes },
                     )
                 }
             } catch (e: Exception) {
@@ -110,9 +113,11 @@ class WorkViewModel(
         fileBytes: ByteArray? = null,
         fileName: String? = null,
         mimeType: String? = null,
+        documentTypeId: String = "",
         onSuccess: () -> Unit,
     ) {
-        val validationError = WorkCreatePolicy.validate(title, assignments)
+        val hasFile = fileBytes != null && fileName != null && mimeType != null
+        val validationError = WorkCreatePolicy.validate(title, assignments, hasFile, documentTypeId)
         if (validationError != null) {
             _uiState.update { it.copy(actionError = validationError) }
             return
@@ -121,12 +126,12 @@ class WorkViewModel(
         viewModelScope.launch {
             operationMutex.withLock {
                 try {
-                    val evidence = if (fileBytes != null && fileName != null && mimeType != null) {
-                        repository.uploadEvidence(fileBytes, fileName, mimeType)
+                    val evidence = if (hasFile) {
+                        repository.uploadEvidence(fileBytes!!, fileName!!, mimeType!!)
                     } else {
                         null
                     }
-                    repository.createDocument(title, assignments, evidence)
+                    repository.createDocument(title, assignments, evidence, documentTypeId.takeIf { it.isNotBlank() })
                     reloadAfterCommittedMutation()
                     onSuccess()
                 } catch (e: Exception) {
@@ -166,6 +171,7 @@ class WorkViewModel(
                         tasks = snap.tasks,
                         approvals = snap.approvals,
                         completionReviews = snap.completionReviews,
+                        documentTypes = snap.documentTypes,
                     )
                 }
             } catch (e: Exception) {
@@ -240,8 +246,20 @@ class WorkViewModel(
         fileBytes: ByteArray,
         fileName: String,
         mimeType: String,
+        documentTypeId: String = "",
     ) {
-        complete(task, qualityPercent = null, fileBytes = fileBytes, fileName = fileName, mimeType = mimeType)
+        if (task.kind == WorkTaskItem.Kind.WorkItem && documentTypeId.isBlank()) {
+            _uiState.update { it.copy(actionError = "Vui lòng chọn loại văn bản.") }
+            return
+        }
+        complete(
+            task,
+            qualityPercent = null,
+            fileBytes = fileBytes,
+            fileName = fileName,
+            mimeType = mimeType,
+            documentTypeId = documentTypeId,
+        )
     }
 
     fun decideApproval(approval: WorkApprovalItem, approve: Boolean) {
@@ -341,6 +359,7 @@ class WorkViewModel(
         fileBytes: ByteArray? = null,
         fileName: String? = null,
         mimeType: String? = null,
+        documentTypeId: String = "",
     ) {
         val note = _uiState.value.evidenceNote.trim().ifBlank { null }
         _uiState.update { it.copy(busyTaskId = task.id, actionError = null, evidencePromptTask = null, evidenceNote = "") }
@@ -350,7 +369,13 @@ class WorkViewModel(
                     val evidence = if (fileBytes != null && fileName != null && mimeType != null) {
                         repository.uploadEvidence(fileBytes, fileName, mimeType)
                     } else null
-                    repository.complete(task, qualityPercent, evidence, note)
+                    repository.complete(
+                        task,
+                        qualityPercent,
+                        evidence,
+                        note,
+                        documentTypeId.takeIf { it.isNotBlank() },
+                    )
                     _uiState.update { state ->
                         state.copy(
                             tasks = state.tasks.map { item ->
@@ -395,6 +420,7 @@ class WorkViewModel(
                     tasks = snap.tasks,
                     approvals = snap.approvals,
                     completionReviews = snap.completionReviews,
+                    documentTypes = snap.documentTypes,
                 )
             }
         } catch (_: Exception) {

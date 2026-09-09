@@ -12,11 +12,18 @@ struct WorkFormUser: Equatable, Sendable {
     let level: Int
 }
 
+struct WorkDocumentType: Equatable, Sendable {
+    let id: String
+    let name: String
+    let code: String
+}
+
 struct WorkFormOptions: Equatable, Sendable {
     let canCreate: Bool
     let isOps: Bool
     let departments: [WorkFormDepartment]
     let users: [WorkFormUser]
+    let documentTypes: [WorkDocumentType]
 }
 
 struct WorkCreateAssignment: Equatable {
@@ -38,13 +45,21 @@ struct WorkCreateAssignment: Equatable {
 }
 
 enum WorkCreatePolicy {
-    static func validate(title: String, assignments: [WorkCreateAssignment]) -> String? {
+    static func validate(
+        title: String,
+        assignments: [WorkCreateAssignment],
+        hasFile: Bool = false,
+        documentTypeId: String = ""
+    ) -> String? {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed.count > 200 {
             return "Vui lòng nhập tên công việc (tối đa 200 ký tự)."
         }
         if assignments.isEmpty {
             return "Vui lòng thêm ít nhất một phân công."
+        }
+        if hasFile && documentTypeId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Vui lòng chọn loại văn bản."
         }
         for (index, row) in assignments.enumerated() {
             let label = "Phân công \(index + 1)"

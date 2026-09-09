@@ -481,15 +481,39 @@ function SubmitterNote({ note, label = 'Nội dung từ người nộp' }) {
   );
 }
 
-function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
+function DocumentTypeField({ types, value, onChange, id = 'document-type' }) {
+  return (
+    <label className="duty-field work-document-type-field" htmlFor={id}>
+      <span className="duty-field-label">Loại văn bản</span>
+      <select
+        id={id}
+        required
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">Chọn loại văn bản</option>
+        {(types || []).map((item) => (
+          <option key={item._id} value={item._id}>{item.name}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function CompletionSubmitModal({ title, onClose, onSubmit, saving, documentTypes = [], requireDocumentType = false }) {
   const { fetchAccessToken } = useConvexAuth();
   const [file, setFile] = useState(null);
   const [note, setNote] = useState('');
+  const [documentTypeId, setDocumentTypeId] = useState('');
   const [error, setError] = useState('');
   const submit = async (event) => {
     event.preventDefault();
     if (!file) {
       setError('Vui lòng đính kèm file bằng chứng hoàn thành.');
+      return;
+    }
+    if (requireDocumentType && !documentTypeId) {
+      setError('Vui lòng chọn loại văn bản.');
       return;
     }
     setError('');
@@ -511,6 +535,7 @@ function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
       }
       await onSubmit({
         note: note.trim(),
+        documentTypeId,
         uploaded: {
           driveFileId: uploaded.driveFileId,
           driveChecksum: uploaded.driveChecksum,
@@ -537,9 +562,18 @@ function CompletionSubmitModal({ title, onClose, onSubmit, saving }) {
           label="Kéo thả tài liệu/hình vào đây"
           onFile={(nextFile, fileError) => {
             setFile(nextFile);
+            if (!nextFile) setDocumentTypeId('');
             if (fileError) setError(fileError);
           }}
         />
+        {file && requireDocumentType ? (
+          <DocumentTypeField
+            id="completion-document-type"
+            types={documentTypes}
+            value={documentTypeId}
+            onChange={setDocumentTypeId}
+          />
+        ) : null}
         <label className="work-field-label" htmlFor="completion-note">Nội dung gửi người giao (không bắt buộc)</label>
         <textarea
           id="completion-note"
@@ -648,12 +682,14 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const createDocument = useMutation(anyApi.work.createDocument);
   const updateDocument = useMutation(anyApi.work.updateDocument);
   const deleteDocument = useMutation(anyApi.work.deleteDocument);
+  const ensureDocumentTypes = useMutation(anyApi.documentTypes.ensureDefaults);
   const { fetchAccessToken } = useConvexAuth();
   const reviewWorkCompletion = useMutation(anyApi.work.reviewWorkCompletion);
   const reviewPersonalCompletion = useMutation(anyApi.work.reviewPersonalCompletion);
   const [open, setOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState(null);
   const [file, setFile] = useState(null);
+  const [documentTypeId, setDocumentTypeId] = useState('');
   const [title, setTitle] = useState('');
   const [assignments, setAssignments] = useState([]);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -681,9 +717,14 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
     [visibleDocuments, listSearch],
   );
 
+  useEffect(() => {
+    void ensureDocumentTypes({}).catch(() => {});
+  }, [ensureDocumentTypes]);
+
   const reset = () => {
     setEditingDocument(null);
     setFile(null);
+    setDocumentTypeId('');
     setTitle('');
     setAssignments([]);
     setApproverIds([]);
@@ -699,6 +740,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
   const startEdit = (document) => {
     setEditingDocument(document);
     setFile(null);
+    setDocumentTypeId(document.documentTypeId || '');
     setTitle(document.title || document.fileName || '');
     setApproverIds([]);
     setAssignments(assignmentsFromDocument(document));
@@ -709,6 +751,13 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
       window.document.getElementById('work-document-editor')?.scrollIntoView({ behavior: 'smooth' });
     });
   };
+
+  useEffect(() => {
+    if (!editingDocument?.privateFile || documentTypeId) return;
+    const types = options?.documentTypes || listData?.documentTypes || [];
+    const fallback = types.find((item) => item.code === 'BIEN_BAN');
+    if (fallback?._id) setDocumentTypeId(fallback._id);
+  }, [documentTypeId, editingDocument, listData?.documentTypes, options?.documentTypes]);
 
   const persistWork = async () => {
     if (saving) return;
@@ -740,6 +789,9 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
     if (!assignments.length) {
       return setFeedback({ type: 'error', text: 'Vui lòng thêm ít nhất một phân công.' });
     }
+    if (file && !documentTypeId) {
+      return setFeedback({ type: 'error', text: 'Vui lòng chọn loại văn bản.' });
+    }
     setSaving(true);
     let stage = file ? 'upload' : 'save';
     let uploaded = null;
@@ -767,6 +819,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
       const workflow = {
         title: title.trim(),
         assignments: workAssignmentPayload(assignments),
+        ...(documentTypeId ? { documentTypeId } : {}),
       };
       const fileArgs = uploaded ? {
         driveFileId: uploaded.driveFileId,
@@ -942,9 +995,17 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
               file={file}
               onFile={(nextFile, error) => {
                 setFile(nextFile);
+                if (!nextFile) setDocumentTypeId(editingDocument?.documentTypeId || '');
                 if (error) setFeedback({ type: 'error', text: error });
               }}
             />
+            {file || editingDocument?.privateFile ? (
+              <DocumentTypeField
+                types={options?.documentTypes || listData?.documentTypes || []}
+                value={documentTypeId}
+                onChange={setDocumentTypeId}
+              />
+            ) : null}
           </div>
           <WorkAssignmentRows
             assignments={assignments}
@@ -1080,6 +1141,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
                             privateFile={document.privateFile}
                           >
                             {document.fileName} · {fileSizeLabel(document.fileSize)}
+                            {document.documentTypeName ? ` · ${document.documentTypeName}` : ''}
                           </PrivateFileLink>
                         </div>
                       ) : null}
@@ -1171,6 +1233,7 @@ export function WorkUserView({ focusTarget = null }) {
   const createPersonalTask = useMutation(anyApi.work.createPersonalTask);
   const completePersonalTask = useMutation(anyApi.work.completePersonalTask);
   const completeWorkItem = useMutation(anyApi.work.completeWorkItem);
+  const ensureDocumentTypes = useMutation(anyApi.documentTypes.ensureDefaults);
   const reviewWorkCompletion = useMutation(anyApi.work.reviewWorkCompletion);
   const reviewPersonalCompletion = useMutation(anyApi.work.reviewPersonalCompletion);
   const [assigning, setAssigning] = useState(null);
@@ -1192,6 +1255,10 @@ export function WorkUserView({ focusTarget = null }) {
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: WORK_NOTIFICATION_FOCUS_TYPES,
   });
+
+  useEffect(() => {
+    void ensureDocumentTypes({}).catch(() => {});
+  }, [ensureDocumentTypes]);
 
   const visibleMyTasks = useMemo(() => filterWorksByTab(data?.myTasks || [], listTab), [data?.myTasks, listTab]);
   const visibleDepartmentWorks = useMemo(
@@ -1257,9 +1324,9 @@ export function WorkUserView({ focusTarget = null }) {
     }
   };
 
-  /** @param {{ uploaded?: { driveFileId: string, driveChecksum?: string, cleanupToken: string, fileName: string, fileType: string, fileSize: number }, note?: string }} [result] */
+  /** @param {{ uploaded?: { driveFileId: string, driveChecksum?: string, cleanupToken: string, fileName: string, fileType: string, fileSize: number }, note?: string, documentTypeId?: string }} [result] */
   const handleCompleteWorkItem = async (result = {}) => {
-    const { uploaded, note } = result;
+    const { uploaded, note, documentTypeId } = result;
     if (!completing || !uploaded) return;
     setCompletingSaving(true);
     setFeedback({ type: '', text: '' });
@@ -1272,6 +1339,7 @@ export function WorkUserView({ focusTarget = null }) {
         fileName: uploaded.fileName,
         fileType: uploaded.fileType,
         fileSize: uploaded.fileSize,
+        documentTypeId,
         ...(note ? { note } : {}),
       });
       await settleWorkUploadedFile(fetchAccessToken, uploaded.cleanupToken, true);
@@ -1638,6 +1706,8 @@ export function WorkUserView({ focusTarget = null }) {
         <CompletionSubmitModal
           title={completing.content || completing.title}
           saving={completingSaving}
+          documentTypes={data?.documentTypes || []}
+          requireDocumentType={completing.mode !== 'personal_task'}
           onClose={() => setCompleting(null)}
           onSubmit={completing.mode === 'personal_task' ? handleCompletePersonal : handleCompleteWorkItem}
         />

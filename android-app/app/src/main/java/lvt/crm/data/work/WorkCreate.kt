@@ -12,11 +12,18 @@ data class WorkFormUser(
     val level: Int,
 )
 
+data class WorkDocumentType(
+    val id: String,
+    val name: String,
+    val code: String = "",
+)
+
 data class WorkFormOptions(
     val canCreate: Boolean,
     val isOps: Boolean,
     val departments: List<WorkFormDepartment>,
     val users: List<WorkFormUser>,
+    val documentTypes: List<WorkDocumentType> = emptyList(),
 )
 
 data class WorkCreateAssignment(
@@ -46,12 +53,20 @@ object WorkCreatePolicy {
         return level == 2 || level == 3
     }
 
-    fun validate(title: String, assignments: List<WorkCreateAssignment>): String? {
+    fun validate(
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        hasFile: Boolean = false,
+        documentTypeId: String = "",
+    ): String? {
         if (title.trim().isEmpty() || title.trim().length > 200) {
             return "Vui lòng nhập tên công việc (tối đa 200 ký tự)."
         }
         if (assignments.isEmpty()) {
             return "Vui lòng thêm ít nhất một phân công."
+        }
+        if (hasFile && documentTypeId.trim().isEmpty()) {
+            return "Vui lòng chọn loại văn bản."
         }
         assignments.forEachIndexed { index, row ->
             val label = "Phân công ${index + 1}"

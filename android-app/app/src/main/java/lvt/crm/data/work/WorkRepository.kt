@@ -95,6 +95,7 @@ data class WorkSnapshot(
     val completionReviews: List<WorkCompletionReviewItem> = emptyList(),
     val canCreate: Boolean = false,
     val isOps: Boolean = false,
+    val documentTypes: List<WorkDocumentType> = emptyList(),
 )
 
 internal data class ApprovalDecision(
@@ -133,6 +134,7 @@ interface WorkOperations {
         qualityPercent: Int? = null,
         evidence: WorkUploadedEvidence? = null,
         note: String? = null,
+        documentTypeId: String? = null,
     )
     suspend fun uploadEvidence(fileBytes: ByteArray, fileName: String, mimeType: String): WorkUploadedEvidence =
         throw UnsupportedOperationException()
@@ -148,6 +150,7 @@ interface WorkOperations {
         title: String,
         assignments: List<WorkCreateAssignment>,
         evidence: WorkUploadedEvidence? = null,
+        documentTypeId: String? = null,
     ): String = throw UnsupportedOperationException()
 }
 
@@ -165,7 +168,11 @@ class WorkRepository(
         .followRedirects(true)
         .build()
     override suspend fun listMine(): WorkSnapshot {
-        val result = convex.query("work:listMine")
+        var result = convex.query("work:listMine")
+        if (parseDocumentTypes(result).isEmpty()) {
+            runCatching { convex.mutation("documentTypes:ensureDefaults") }
+            result = convex.query("work:listMine")
+        }
         val isAdmin = result.optBoolean("isAdmin", false)
         val canCreate = result.optBoolean("canCreate", false)
         val accessLevel = result.optInt("level", 0)
@@ -296,11 +303,18 @@ class WorkRepository(
             completionReviews = completionReviews,
             canCreate = canCreate,
             isOps = isOps,
+            documentTypes = parseDocumentTypes(result),
         )
     }
 
     override suspend fun formOptions(): WorkFormOptions {
-        val result = convex.query("work:formOptions")
+        var result = convex.query("work:formOptions")
+        var documentTypes = parseDocumentTypes(result)
+        if (documentTypes.isEmpty()) {
+            convex.mutation("documentTypes:ensureDefaults")
+            result = convex.query("work:formOptions")
+            documentTypes = parseDocumentTypes(result)
+        }
         val departments = result.optJSONArray("departments") ?: org.json.JSONArray()
         val users = result.optJSONArray("users") ?: org.json.JSONArray()
         return WorkFormOptions(
@@ -322,6 +336,7 @@ class WorkRepository(
                     level = item.optInt("level", 0),
                 )
             },
+            documentTypes = documentTypes,
         )
     }
 
@@ -329,6 +344,7 @@ class WorkRepository(
         title: String,
         assignments: List<WorkCreateAssignment>,
         evidence: WorkUploadedEvidence?,
+        documentTypeId: String?,
     ): String {
         val args = org.json.JSONObject()
             .put("title", title.trim())
@@ -348,6 +364,9 @@ class WorkRepository(
                     )
                 }
             })
+        if (!documentTypeId.isNullOrBlank()) {
+            args.put("documentTypeId", documentTypeId.trim())
+        }
         if (evidence != null) {
             args.put("driveFileId", evidence.driveFileId)
             args.put("driveChecksum", evidence.driveChecksum)
@@ -370,7 +389,13 @@ class WorkRepository(
         }
     }
 
-    override suspend fun complete(item: WorkTaskItem, qualityPercent: Int?, evidence: WorkUploadedEvidence?, note: String?) {
+    override suspend fun complete(
+        item: WorkTaskItem,
+        qualityPercent: Int?,
+        evidence: WorkUploadedEvidence?,
+        note: String?,
+        documentTypeId: String?,
+    ) {
         val args = JSONObject()
         if (qualityPercent != null) {
             args.put("qualityPercent", qualityPercent)
@@ -382,6 +407,9 @@ class WorkRepository(
             args.put("fileName", evidence.fileName)
             args.put("fileType", evidence.fileType)
             args.put("fileSize", evidence.fileSize)
+        }
+        if (!documentTypeId.isNullOrBlank()) {
+            args.put("documentTypeId", documentTypeId.trim())
         }
         val trimmedNote = note?.trim().orEmpty()
         if (trimmedNote.isNotEmpty()) {
@@ -631,4 +659,16 @@ private fun JSONObject.optWorkNote(): String {
 private fun JSONObject.optIntOrNull(key: String): Int? {
     if (!has(key) || isNull(key)) return null
     return optInt(key)
+}
+
+private fun parseDocumentTypes(result: JSONObject): List<WorkDocumentType> {
+    val array = result.optJSONArray("documentTypes") ?: return emptyList()
+    return List(array.length()) { index ->
+        val item = array.optJSONObject(index) ?: return@List WorkDocumentType("", "")
+        WorkDocumentType(
+            id = item.optString("_id"),
+            name = item.optString("name"),
+            code = item.optString("code"),
+        )
+    }.filter { it.id.isNotBlank() && it.name.isNotBlank() }
 }

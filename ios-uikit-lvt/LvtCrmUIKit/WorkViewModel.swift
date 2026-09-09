@@ -171,6 +171,7 @@ final class WorkViewModel {
     private(set) var isAdmin = false
     private(set) var canCreate = false
     private(set) var isOps = false
+    private(set) var documentTypes: [WorkDocumentType] = []
     private(set) var accessLevel = 0
     private(set) var tasks: [WorkTaskItem] = []
     private(set) var approvals: [WorkApprovalItem] = []
@@ -292,16 +293,31 @@ final class WorkViewModel {
         assignments: [WorkCreateAssignment],
         fileData: Data?,
         fileName: String?,
-        mimeType: String?
+        mimeType: String?,
+        documentTypeId: String = ""
     ) async throws {
-        if let message = WorkCreatePolicy.validate(title: title, assignments: assignments) {
+        let hasFile = fileData != nil && fileName != nil && mimeType != nil
+        if let message = WorkCreatePolicy.validate(
+            title: title,
+            assignments: assignments,
+            hasFile: hasFile,
+            documentTypeId: documentTypeId
+        ) {
             throw ConvexException(code: "VALIDATION", message: message)
         }
         var evidence: WorkUploadedEvidence?
         if let fileData, let fileName, let mimeType {
             evidence = try await repository.uploadEvidence(fileData: fileData, fileName: fileName, mimeType: mimeType)
         }
-        _ = try await repository.createDocument(title: title, assignments: assignments, evidence: evidence)
+        _ = try await repository.createDocument(
+            title: title,
+            assignments: assignments,
+            evidence: evidence,
+            documentTypeId: {
+                let trimmed = documentTypeId.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }()
+        )
         try await loadSnapshot()
     }
 
@@ -311,7 +327,8 @@ final class WorkViewModel {
         fileData: Data? = nil,
         fileName: String? = nil,
         mimeType: String? = nil,
-        note: String? = nil
+        note: String? = nil,
+        documentTypeId: String? = nil
     ) {
         guard busyTaskId == nil else { return }
         busyTaskId = item.id
@@ -324,7 +341,13 @@ final class WorkViewModel {
                     mimeType: mimeType
                 )
             }
-            try await self.repository.complete(item: item, qualityPercent: qualityPercent, evidence: evidence, note: note)
+            try await self.repository.complete(
+                item: item,
+                qualityPercent: qualityPercent,
+                evidence: evidence,
+                note: note,
+                documentTypeId: documentTypeId
+            )
             self.tasks = self.tasks.map {
                 guard $0.id == item.id else { return $0 }
                 var updated = $0
@@ -418,6 +441,7 @@ final class WorkViewModel {
         isAdmin = snapshot.isAdmin
         canCreate = snapshot.canCreate
         isOps = snapshot.isOps
+        documentTypes = snapshot.documentTypes
         accessLevel = snapshot.accessLevel
         tasks = snapshot.tasks
         approvals = snapshot.approvals

@@ -126,6 +126,18 @@ Người có cấp cao hơn mới được duyệt hoặc quản lý người c�
 
 Khi xóa chức vụ, những tài khoản đang mang chức vụ đó sẽ được gỡ chức vụ nhưng không bị xóa tài khoản.
 
+## 4b. Thiết lập loại văn bản
+
+Loại văn bản dùng khi đính kèm file lúc tạo công việc hoặc khi người được giao nộp bằng chứng hoàn thành. Hệ thống có sẵn **Kế hoạch**, **Biên bản**, **Báo cáo**.
+
+1. Vào **Thiết lập tối cao → Thiết lập loại văn bản**.
+2. Có thể sửa tên/mã hoặc thêm loại mới.
+3. Không xóa được loại đang được file sử dụng.
+
+File công việc và bằng chứng hoàn thành đã có trước khi có loại văn bản được gắn mặc định **Biên bản**.
+
+Khi tạo công việc có file, chọn **Loại văn bản** ngay dưới khung tải file. Khi nộp hoàn thành, chọn loại sau khi chọn file bằng chứng.
+
 ## 5. Thiết lập nhóm quyền
 
 Nhóm quyền quyết định User nhìn thấy menu nào và được sử dụng ở mức nào. Administrator và Moderator không cần gán nhóm quyền.
@@ -443,7 +455,8 @@ Mục này xuất hiện khi hệ thống dùng cách **Cấp trên giao việc*
 1. Mở công việc được giao.
 2. Đọc nội dung, thời hạn và công văn đính kèm.
 3. Chọn **Đã hoàn thành**.
-4. Hệ thống chuyển công việc sang trạng thái **Chờ duyệt hoàn thành**.
+4. Đính kèm file bằng chứng, rồi chọn **Loại văn bản**.
+5. Hệ thống chuyển công việc sang trạng thái **Chờ duyệt hoàn thành**.
 
 Nếu bị trả lại:
 
