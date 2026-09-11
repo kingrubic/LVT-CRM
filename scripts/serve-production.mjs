@@ -18,6 +18,10 @@ import { canonicalUploadMime, downloadContentPolicy } from './lib/file-content-p
 import { FileHttpError, classifyFileError } from './lib/file-http-errors.mjs';
 import { matchDriveMutationRoute } from './lib/file-route-policy.mjs';
 import {
+  buildAuthorizedSharedSchedulePdf,
+  parseSharedScheduleQuery,
+} from './lib/shared-duty-schedule-pdf.mjs';
+import {
   assertStagedUploadOwner,
   settleClaimedUpload,
   throwUploadRegistrationError,
@@ -434,6 +438,25 @@ async function downloadFromDrive(request, response, documentId) {
   await serveAuthorizedDriveFile(request, response, file, `work:${documentId}`);
 }
 
+async function downloadSharedDutySchedulePdf(request, response) {
+  const url = new URL(request.url || '/', 'http://localhost');
+  const { mode, anchor } = parseSharedScheduleQuery(url.searchParams);
+  const client = await authorizedClient(request);
+  const built = await buildAuthorizedSharedSchedulePdf(client, mode, anchor);
+  const bytes = Buffer.from(built.bytes);
+  const fileName = built.filename || 'LCT.pdf';
+  response.setHeader('Cache-Control', 'private, no-store');
+  response.setHeader('Content-Type', 'application/pdf');
+  response.setHeader(
+    'Content-Disposition',
+    `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  );
+  response.setHeader('Content-Length', bytes.length);
+  response.setHeader('Vary', 'Authorization');
+  response.writeHead(200);
+  response.end(bytes);
+}
+
 async function existingFile(candidate) {
   try {
     const metadata = await stat(candidate);
@@ -487,6 +510,11 @@ const server = createServer(async (request, response) => {
     const privateDownload = privatePath.match(/^\/api\/files\/([^/]+)$/);
     if (privateDownload) {
       await downloadFromDrive(request, response, privateDownload[1]);
+      return;
+    }
+
+    if (request.method === 'GET' && privatePath === '/api/duties/shared-schedule.pdf') {
+      await downloadSharedDutySchedulePdf(request, response);
       return;
     }
 

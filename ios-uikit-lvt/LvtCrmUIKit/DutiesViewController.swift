@@ -18,7 +18,7 @@ final class DutiesViewController: UITableViewController {
     init(viewModel: DutiesViewModel) {
         self.viewModel = viewModel
         super.init(style: .insetGrouped)
-        title = "Công tác"
+        title = "Lịch công tác cá nhân"
     }
 
     @available(*, unavailable)

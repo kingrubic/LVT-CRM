@@ -34,7 +34,11 @@ class AppContainer(context: Context) {
         beforeSignOut = { accessToken -> fcmTokenRegistrar.unregister(accessToken) },
         afterAuthenticated = { sessionsRepository.registerCurrentDevice() },
     )
-    val dutiesRepository = DutiesRepository(convex)
+    val dutiesRepository = DutiesRepository(
+        convex,
+        tokenProvider = { tokenStore.accessToken },
+        cacheDir = appContext.cacheDir,
+    )
     val notificationsRepository = NotificationsRepository(convex)
     val workRepository = WorkRepository(
         convex,

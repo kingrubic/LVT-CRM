@@ -395,6 +395,8 @@ Trang **Lịch công tác** có hai tab:
 - **Lịch công tác cá nhân:** lịch tuần/tháng/quý/năm theo người được chọn (cột nhân sự bên trái). Mỗi ô hiện công tác được giao cho người đó; bấm một mục để xem chi tiết, xác nhận tham gia, sửa hoặc xóa khi đủ quyền.
 - **Lịch công tác chung:** lịch toàn trường theo tuần hoặc tháng, trình bày như mẫu Word nhà trường (Ngày, Thời gian, Nội dung, Địa điểm, Thành phần). Có thể tải PDF.
 
+Trên ứng dụng Android/iOS, menu dưới cùng là **Lịch CT**. Chạm đúng menu này sẽ thấy hai nút lớn (lịch cá nhân / lịch chung PDF). Mở từ Tổng quan hoặc từ thông báo thì vào thẳng lịch cá nhân.
+
 Mỗi công tác có:
 
 - Thời gian bắt đầu và kết thúc.

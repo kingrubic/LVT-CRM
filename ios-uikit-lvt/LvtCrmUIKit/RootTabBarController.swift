@@ -1,7 +1,7 @@
 import UIKit
 
 /// Authenticated UIKit shell.
-final class RootTabBarController: UITabBarController {
+final class RootTabBarController: UITabBarController, UITabBarControllerDelegate {
     private let session: UserSession
     private let authRepository: AuthRepository
     private let sessionsRepository: SessionsRepository
@@ -10,7 +10,7 @@ final class RootTabBarController: UITabBarController {
     private let workRepository: WorkRepository
     private var tabControllers: [AppTab: UINavigationController] = [:]
     private weak var notificationsViewController: NotificationsViewController?
-    private weak var dutiesViewController: DutiesViewController?
+    private weak var dutiesHubViewController: DutiesHubViewController?
     private weak var workViewController: WorkViewController?
 
     init(
@@ -35,6 +35,7 @@ final class RootTabBarController: UITabBarController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        delegate = self
         let overviewViewController = DashboardViewController(
             dutiesRepository: dutiesRepository,
             workRepository: workRepository,
@@ -57,13 +58,14 @@ final class RootTabBarController: UITabBarController {
             systemImage: "bell",
             viewController: notificationsViewController
         )
-        let dutiesViewController = DutiesViewController(
-            viewModel: DutiesViewModel(repository: dutiesRepository, currentUserId: session.userId)
+        let dutiesHubViewController = DutiesHubViewController(
+            dutiesViewModel: DutiesViewModel(repository: dutiesRepository, currentUserId: session.userId),
+            dutiesRepository: dutiesRepository
         )
         let duties = navigationController(
-            title: "Công tác",
+            title: "Lịch CT",
             systemImage: "briefcase",
-            viewController: dutiesViewController
+            viewController: dutiesHubViewController
         )
         let repository = workRepository
         let workViewController = WorkViewController(
@@ -91,7 +93,7 @@ final class RootTabBarController: UITabBarController {
             .profile: profile,
         ]
         self.notificationsViewController = notificationsViewController
-        self.dutiesViewController = dutiesViewController
+        self.dutiesHubViewController = dutiesHubViewController
         self.workViewController = workViewController
         viewControllers = [overview, notifications, duties, work, profile]
         Task { await sessionsRepository.registerCurrentDevice() }
@@ -103,8 +105,8 @@ final class RootTabBarController: UITabBarController {
 
     private func openDuties(tab: DutyListTab) {
         selectTab(.duties)
-        tabControllers[.duties]?.popToRootViewController(animated: false)
-        dutiesViewController?.applyListTab(tab)
+        dutiesHubViewController?.openPersonal(animated: false)
+        dutiesHubViewController?.dutiesListController.applyListTab(tab)
     }
 
     private func openWork(filter: WorkDashboardFilter?) {
@@ -117,11 +119,14 @@ final class RootTabBarController: UITabBarController {
         let tab = destination.route
         guard let navigationController = tabControllers[tab] else { return }
         selectedViewController = navigationController
-        navigationController.popToRootViewController(animated: false)
         if tab == .duties {
-            dutiesViewController?.focus(dutyId: destination.sourceId)
-        } else if tab == .work {
-            workViewController?.focus(itemId: destination.sourceId)
+            dutiesHubViewController?.openPersonal(animated: false)
+            dutiesHubViewController?.dutiesListController.focus(dutyId: destination.sourceId)
+        } else {
+            navigationController.popToRootViewController(animated: false)
+            if tab == .work {
+                workViewController?.focus(itemId: destination.sourceId)
+            }
         }
         if markNotificationRead, let key = destination.notificationKey {
             Task { [weak self] in
@@ -145,6 +150,13 @@ final class RootTabBarController: UITabBarController {
             selectedImage: nil
         )
         return navigationController
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        if viewController === tabControllers[.duties] {
+            tabControllers[.duties]?.popToRootViewController(animated: false)
+        }
+        return true
     }
 }
 

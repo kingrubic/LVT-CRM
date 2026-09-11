@@ -58,7 +58,7 @@ import lvt.crm.push.NotificationMarkReadWorker
 import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.auth.LoginScreen
 import lvt.crm.ui.auth.LoginViewModel
-import lvt.crm.ui.duties.DutiesScreen
+import lvt.crm.ui.duties.DutiesTabHost
 import lvt.crm.ui.duties.DutiesViewModel
 import lvt.crm.ui.duties.DutyListTab
 import lvt.crm.ui.home.DashboardScreen
@@ -159,6 +159,7 @@ private fun MainShell(
     var tabOpenToken by remember { mutableStateOf(0) }
     var dutyOpenTab by remember { mutableStateOf<DutyListTab?>(null) }
     var dutyFilterToken by remember { mutableStateOf(0) }
+    var dutiesSkipHub by remember { mutableStateOf(false) }
     var workOpenFilter by remember { mutableStateOf<WorkDashboardFilter?>(null) }
     var workFilterToken by remember { mutableStateOf(0) }
     var fileError by remember { mutableStateOf<String?>(null) }
@@ -198,6 +199,7 @@ private fun MainShell(
             sourceId = item.sourceId,
             notificationKey = item.key,
         )
+        if (destination.route == Routes.Duties) dutiesSkipHub = true
         focusTarget = destination
         navController.navigate(destination.route) {
             launchSingleTop = true
@@ -206,6 +208,7 @@ private fun MainShell(
 
     LaunchedEffect(notificationDestination) {
         val destination = notificationDestination ?: return@LaunchedEffect
+        if (destination.route == Routes.Duties) dutiesSkipHub = true
         focusTarget = destination
         navController.navigate(destination.route) {
             launchSingleTop = true
@@ -234,6 +237,10 @@ private fun MainShell(
                         onClick = {
                             tabOpenToken += 1
                             focusTarget = null
+                            if (route == Routes.Duties) {
+                                dutiesSkipHub = false
+                                dutyOpenTab = null
+                            }
                             navController.navigate(route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
@@ -296,6 +303,7 @@ private fun MainShell(
                     tabOpenToken = tabOpenToken,
                     onOpenDuties = { tab ->
                         focusTarget = null
+                        dutiesSkipHub = true
                         dutyOpenTab = tab
                         dutyFilterToken += 1
                         navController.navigate(Routes.Duties) {
@@ -331,14 +339,16 @@ private fun MainShell(
                 val vm: DutiesViewModel = viewModel(
                     factory = DutiesViewModel.factory(container.dutiesRepository, sessionUserId),
                 )
-                DutiesScreen(
+                DutiesTabHost(
                     viewModel = vm,
+                    dutiesRepository = container.dutiesRepository,
                     focusId = focusTarget
                         ?.takeIf { it.route == Routes.Duties }
                         ?.sourceId,
                     tabOpenToken = tabOpenToken,
                     openTab = dutyOpenTab,
                     openFilterToken = dutyFilterToken,
+                    skipHub = dutiesSkipHub,
                 )
             }
             composable(Routes.Work) {

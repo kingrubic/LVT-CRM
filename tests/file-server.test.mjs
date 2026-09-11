@@ -31,6 +31,7 @@ const uploadApis = {
 
 test('file errors preserve truthful authentication, validation, and infrastructure statuses', () => {
   assert.equal(classifyFileError(new Error('UNAUTHORIZED')).status, 401);
+  assert.equal(classifyFileError(new Error('INVALID_DATE_RANGE')).status, 400);
   assert.equal(classifyFileError(new Error('WORK_FILE_TOO_LARGE')).status, 413);
   assert.equal(classifyFileError(new Error('WORK_FILE_SIZE_MISMATCH')).status, 400);
   assert.equal(classifyFileError(new Error('WORK_FILE_FORBIDDEN')).status, 403);

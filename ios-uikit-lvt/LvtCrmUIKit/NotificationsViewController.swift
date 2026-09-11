@@ -270,7 +270,7 @@ final class NotificationsViewController: UITableViewController {
         cell.accessibilityLabel = [state, kindLabel(item), item.title, item.description, dueText(item)]
             .filter { !$0.isEmpty }
             .joined(separator: ". ")
-        cell.accessibilityHint = "Mở \(item.kind == "duty" ? "tab Công tác" : "tab Công việc")"
+        cell.accessibilityHint = "Mở \(item.kind == "duty" ? "tab Lịch CT" : "tab Công việc")"
         cell.accessibilityTraits = .button
     }
 
