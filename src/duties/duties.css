@@ -229,6 +229,20 @@
   background: #def1ec;
 }
 
+.duty-modern-editor .multi-check-panel {
+  border-top-color: #e3e9ec;
+}
+
+.duty-modern-editor .multi-check-search {
+  min-height: 36px;
+  margin: 10px 10px 0;
+  padding: 0 11px;
+  border-color: #d9e3e8;
+  color: #2b465e;
+  background: #fff;
+  font-size: 14px;
+}
+
 .duty-modern-editor .multi-check-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   max-height: 190px;
