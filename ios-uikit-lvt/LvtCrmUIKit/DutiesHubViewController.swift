@@ -38,14 +38,19 @@ final class DutiesHubViewController: UIViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical
         stack.spacing = 16
+        stack.distribution = .fillEqually
+        stack.alignment = .fill
         view.addSubview(stack)
 
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
-            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            stack.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             personal.heightAnchor.constraint(greaterThanOrEqualToConstant: 132),
-            shared.heightAnchor.constraint(greaterThanOrEqualToConstant: 132),
+            personal.heightAnchor.constraint(lessThanOrEqualToConstant: 180),
+            shared.heightAnchor.constraint(equalTo: personal.heightAnchor),
         ])
     }
 
@@ -94,6 +99,8 @@ final class DutiesHubViewController: UIViewController {
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 22, leading: 16, bottom: 22, trailing: 16)
         let button = UIButton(configuration: configuration)
         button.addTarget(self, action: action, for: .touchUpInside)
+        button.setContentHuggingPriority(.required, for: .vertical)
+        button.setContentCompressionResistancePriority(.required, for: .vertical)
         button.accessibilityLabel = title
         button.accessibilityHint = subtitle
         return button
