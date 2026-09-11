@@ -22,6 +22,7 @@ import {
   workAssignmentPayload,
 } from './workDisplay';
 import { canPreviewWorkFile, spreadsheetPreviewFromArrayBuffer, workFilePreviewKind } from './workFilePreview';
+import { filterByPickerSearch, personPickerHaystack } from '../lib/pickerSearch';
 import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
@@ -1194,6 +1195,8 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
   const [title, setTitle] = useState('');
   const [deadline, setDeadline] = useState(work.deadline);
   const [assigneeIds, setAssigneeIds] = useState([]);
+  const [personQuery, setPersonQuery] = useState('');
+  const visibleUsers = filterByPickerSearch(users, personQuery, personPickerHaystack);
   return (
     <div className="work-modal-backdrop" role="presentation">
       <form className="work-modal" onSubmit={(event) => { event.preventDefault(); onSubmit({ title, deadline, assigneeUserIds: assigneeIds }); }}>
@@ -1206,8 +1209,22 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
         <label className="work-field-label" htmlFor="personal-deadline">Hạn chót hoàn thành</label>
         <input id="personal-deadline" type="date" min={new Date().toISOString().slice(0, 10)} value={deadline} onChange={(event) => setDeadline(event.target.value)} required />
         <div className="work-field-label">Người thực hiện <small>{assigneeIds.length} người</small></div>
+        {users.length ? (
+          <input
+            className="work-person-search"
+            type="search"
+            value={personQuery}
+            autoComplete="off"
+            placeholder="Tìm người thực hiện…"
+            aria-label="Tìm người thực hiện"
+            onChange={(event) => setPersonQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.preventDefault();
+            }}
+          />
+        ) : null}
         <div className="work-assignee-list">
-          {users.map((person) => (
+          {visibleUsers.map((person) => (
             <label key={person._id} className={assigneeIds.includes(person._id) ? 'is-selected' : ''}>
               <input type="checkbox" checked={assigneeIds.includes(person._id)} onChange={() => setAssigneeIds((current) => current.includes(person._id) ? current.filter((id) => id !== person._id) : [...current, person._id])} />
               <span className="work-person-avatar" aria-hidden="true">{String(person.name).trim().slice(0, 1).toUpperCase()}</span>
@@ -1215,6 +1232,7 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
             </label>
           ))}
           {!users.length ? <p className="work-muted">Không có user cấp thấp hơn cùng phòng ban.</p> : null}
+          {users.length && !visibleUsers.length ? <p className="work-muted">Không tìm thấy người phù hợp.</p> : null}
         </div>
         <div className="work-modal-actions">
           <button type="button" className="work-ghost-button" onClick={onClose}>Hủy</button>

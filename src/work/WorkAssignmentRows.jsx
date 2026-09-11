@@ -1,4 +1,103 @@
+import { useEffect, useRef, useState } from 'react';
 import { emptyWorkAssignment } from './workDisplay';
+import { filterByPickerSearch, personPickerHaystack } from '../lib/pickerSearch';
+
+function SearchablePersonSelect({
+  options,
+  value,
+  onChange,
+  getLabel,
+  placeholder = 'Chọn người nhận',
+  searchPlaceholder = 'Tìm theo tên, email…',
+  required = false,
+  emptyText = 'Không tìm thấy người phù hợp.',
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = useRef(null);
+  const selected = options.find((item) => String(item._id) === String(value));
+  const filtered = filterByPickerSearch(options, query, (item) => personPickerHaystack(item, getLabel(item)));
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  const choose = (id) => {
+    onChange(id);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <div className={`work-person-select ${open ? 'is-open' : ''}`} ref={rootRef}>
+      <input
+        type="search"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        autoComplete="off"
+        value={open ? query : (selected ? getLabel(selected) : '')}
+        placeholder={searchPlaceholder}
+        aria-label={searchPlaceholder}
+        onFocus={() => {
+          setOpen(true);
+          setQuery('');
+        }}
+        onChange={(event) => {
+          setOpen(true);
+          setQuery(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            if (filtered.length === 1) choose(filtered[0]._id);
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setOpen(false);
+            setQuery('');
+          }
+        }}
+      />
+      <select
+        className="sr-only"
+        required={required}
+        tabIndex={-1}
+        value={value || ''}
+        onChange={(event) => onChange(event.target.value)}
+        aria-hidden="true"
+      >
+        <option value="">{placeholder}</option>
+        {value ? <option value={value}>{selected ? getLabel(selected) : value}</option> : null}
+      </select>
+      {open ? (
+        <div className="work-person-select-menu" role="listbox">
+          {filtered.map((person) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={String(person._id) === String(value)}
+              className={String(person._id) === String(value) ? 'is-selected' : ''}
+              key={person._id}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(person._id)}
+            >
+              {getLabel(person)}
+            </button>
+          ))}
+          {!filtered.length ? (
+            <p>{options.length ? emptyText : placeholder}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function WorkAssignmentRows({
   assignments,
@@ -57,18 +156,15 @@ export default function WorkAssignmentRows({
                 {isIndividual ? (
                   <label>
                     Cá nhân
-                    <select
+                    <SearchablePersonSelect
                       required
+                      options={userOptions}
                       value={row.userIds?.[0] || ''}
-                      onChange={(event) => updateRow(index, { userIds: event.target.value ? [event.target.value] : [] })}
-                    >
-                      <option value="">Chọn người nhận</option>
-                      {userOptions.map((user) => (
-                        <option key={user._id} value={user._id}>
-                          {user.name}{user.departmentName ? ` · ${user.departmentName}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(nextId) => updateRow(index, { userIds: nextId ? [nextId] : [] })}
+                      getLabel={(user) => `${user.name}${user.departmentName ? ` · ${user.departmentName}` : ''}`}
+                      placeholder="Chọn người nhận"
+                      searchPlaceholder="Tìm theo tên, email…"
+                    />
                   </label>
                 ) : (
                   <label>

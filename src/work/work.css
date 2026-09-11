@@ -484,7 +484,7 @@
 }
 
 .work-department-assignments {
-  overflow: hidden;
+  overflow: visible;
   margin-top: 17px;
   border: 1px solid #dce5e9;
   border-radius: 12px;
@@ -498,6 +498,7 @@
   gap: 14px;
   padding: 12px 13px;
   border-bottom: 1px solid #e2e9ed;
+  border-radius: 12px 12px 0 0;
   background: #fff;
 }
 
@@ -544,7 +545,8 @@
 
 .work-inline-row select,
 .work-inline-row textarea,
-.work-inline-row input[type="date"] {
+.work-inline-row input[type="date"],
+.work-person-select > input {
   width: 100%;
   min-height: 42px;
   padding: 8px 11px;
@@ -554,6 +556,66 @@
   background: #fbfcfc;
   font: inherit;
   font-size: 14px;
+}
+
+.work-person-select {
+  position: relative;
+}
+
+.work-person-select .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.work-person-select-menu {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid #d9e3e8;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(18, 53, 87, .12);
+}
+
+.work-person-select-menu button {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  color: #2b465e;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.work-person-select-menu button:hover,
+.work-person-select-menu button.is-selected {
+  color: #155f56;
+  background: #eaf7f3;
+}
+
+.work-person-select-menu p {
+  margin: 0;
+  padding: 10px 8px;
+  color: #8b9aa5;
+  font-size: 12px;
 }
 
 .work-inline-row textarea {
@@ -1686,9 +1748,22 @@
 
 .work-modal input[type="text"],
 .work-modal input[type="date"],
+.work-modal input[type="search"],
 .work-modal select,
 .work-modal textarea {
   margin-top: 5px;
+}
+
+.work-person-search {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid #dce5e8;
+  border-radius: 9px;
+  color: #2b465e;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
 }
 
 .work-assignee-list {

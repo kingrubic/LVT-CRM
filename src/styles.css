@@ -228,8 +228,12 @@ button { font: inherit; cursor: pointer; }
 .multi-check-summary { display: inline-flex; align-items: center; gap: 8px; color: #8a9aa8; font-size: 11px; font-weight: 550; }
 .multi-check-chevron { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid #d8e2e9; border-radius: 6px; color: var(--lvt-teal); background: #fff; font-size: 15px; line-height: 1; transition: transform .18s ease, background .18s ease; }
 .multi-check-group.is-open .multi-check-chevron { transform: rotate(180deg); background: #edf8f5; }
+.multi-check-panel { display: grid; gap: 0; }
+.multi-check-search { width: calc(100% - 16px); min-height: 34px; margin: 8px 8px 0; padding: 0 10px; border: 1px solid #d8e2e9; border-radius: 7px; color: #324463; background: #fff; font: inherit; font-size: 12px; font-weight: 550; }
+.multi-check-search:focus { outline: 2px solid rgba(19, 143, 123, .18); border-color: #9ed9bb; }
 .multi-check-list { display: grid; gap: 4px; max-height: 180px; overflow: auto; padding: 8px; border: 1px solid var(--lvt-line); border-radius: 8px; background: var(--lvt-paper); }
-.multi-check-group .multi-check-list { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 0; border-top: 1px solid #e5ecef; border-radius: 0; }
+.multi-check-group .multi-check-panel { border-top: 1px solid #e5ecef; }
+.multi-check-group .multi-check-list { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 0; border-radius: 0; }
 .multi-check-item { display: flex !important; align-items: center; gap: 8px; margin: 0; padding: 6px 8px; border-radius: 6px; font-weight: 500; color: #324463; }
 .multi-check-item:hover { background: #edf8f5; }
 .multi-check-item input { width: auto; min-height: auto; accent-color: var(--lvt-teal); }

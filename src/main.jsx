@@ -27,6 +27,7 @@ import HomeroomRouter from './homeroom/HomeroomRouter';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
+import { filterByPickerSearch, personPickerHaystack } from './lib/pickerSearch';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyBulkImport from './duties/DutyBulkImport';
@@ -613,15 +614,31 @@ function MultiCheckList({ options, values, onChange, getLabel, emptyText = 'Khô
   );
 }
 
-function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel = (item) => item.name, emptyText }) {
+function CollapsibleMultiCheckList({
+  title,
+  options,
+  values,
+  onChange,
+  getLabel = (item) => item.name,
+  emptyText,
+  searchPlaceholder = 'Tìm…',
+}) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const selectedCount = values?.length || 0;
+  const filtered = filterByPickerSearch(options || [], search, (item) => personPickerHaystack(item, getLabel ? getLabel(item) : item.name));
   return (
     <div className={`multi-check-group ${open ? 'is-open' : ''}`}>
       <button
         type="button"
         className="multi-check-toggle"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setOpen((current) => {
+            const next = !current;
+            if (!next) setSearch('');
+            return next;
+          });
+        }}
         aria-expanded={open}
       >
         <span>{title}</span>
@@ -631,13 +648,30 @@ function CollapsibleMultiCheckList({ title, options, values, onChange, getLabel 
         </span>
       </button>
       {open ? (
-        <MultiCheckList
-          options={options}
-          values={values}
-          onChange={onChange}
-          getLabel={getLabel}
-          emptyText={emptyText}
-        />
+        <div className="multi-check-panel">
+          {options?.length ? (
+            <input
+              autoFocus
+              className="multi-check-search"
+              type="search"
+              value={search}
+              autoComplete="off"
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.preventDefault();
+              }}
+            />
+          ) : null}
+          <MultiCheckList
+            options={filtered}
+            values={values}
+            onChange={onChange}
+            getLabel={getLabel}
+            emptyText={search.trim() ? 'Không tìm thấy kết quả phù hợp.' : emptyText}
+          />
+        </div>
       ) : null}
     </div>
   );
@@ -821,6 +855,7 @@ function DutiesAdminView({
             values={form.departmentIds}
             onChange={(ids) => setField('departmentIds', ids)}
             getLabel={(d) => `${d.name}${d.code ? ` (${d.code})` : ''}`}
+            searchPlaceholder="Tìm phòng ban…"
             emptyText="Chưa có phòng ban."
           />
         </div>
@@ -833,6 +868,7 @@ function DutiesAdminView({
             values={form.participantUserIds}
             onChange={(ids) => setField('participantUserIds', ids)}
             getLabel={(u) => `${u.name || '—'} · ${u.email || ''}`}
+            searchPlaceholder="Tìm theo tên, email…"
             emptyText="Chưa có người dùng."
           />
         </div>
@@ -1049,6 +1085,7 @@ function DutiesUserView({
               values={form.participantUserIds}
               onChange={(ids) => setField('participantUserIds', ids)}
               getLabel={(u) => `${u.name || '—'} · ${u.email || ''}`}
+              searchPlaceholder="Tìm theo tên, email…"
               emptyText="Chưa có người tham gia trong phòng ban."
             />
           </div>
