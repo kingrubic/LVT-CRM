@@ -29,6 +29,7 @@ data class DutyItem(
     val title: String = "",
     val createdBy: String = "",
     val locationText: String = "",
+    val otherParticipants: String = "",
 )
 
 data class DutiesSnapshot(
@@ -78,6 +79,7 @@ class DutiesRepository(
                             title = d.optString("title"),
                             createdBy = d.optString("createdBy"),
                             locationText = d.optString("locationText"),
+                            otherParticipants = d.optString("otherParticipants"),
                         ),
                     )
                 }

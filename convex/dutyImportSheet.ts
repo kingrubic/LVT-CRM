@@ -11,6 +11,7 @@ export const DUTY_IMPORT_HEADERS = [
   "ca_ngay",
   "ma_phong_ban",
   "email_tham_gia",
+  "thanh_phan_khac",
 ] as const;
 
 export const DUTY_IMPORT_MAX_BYTES = 2 * 1024 * 1024;

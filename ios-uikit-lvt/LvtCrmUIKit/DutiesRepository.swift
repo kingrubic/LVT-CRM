@@ -26,6 +26,7 @@ struct DutyItem: Identifiable, Equatable, Sendable {
     let title: String
     let createdBy: String
     let locationText: String
+    let otherParticipants: String
 }
 
 struct DutiesSnapshot: Equatable, Sendable {
@@ -96,7 +97,8 @@ final class DutiesRepository: Sendable {
             canMarkAttendance: (timing["canMarkAttendance"] as? Bool) ?? false,
             title: (value["title"] as? String) ?? "",
             createdBy: (value["createdBy"] as? String) ?? "",
-            locationText: (value["locationText"] as? String) ?? ""
+            locationText: (value["locationText"] as? String) ?? "",
+            otherParticipants: (value["otherParticipants"] as? String) ?? ""
         )
     }
 }

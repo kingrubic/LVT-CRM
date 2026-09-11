@@ -88,6 +88,7 @@ function baseRow(overrides = {}) {
     ca_ngay: '0',
     ma_phong_ban: 'TOAN',
     email_tham_gia: '',
+    thanh_phan_khac: '',
     ...overrides,
   };
 }
@@ -99,12 +100,13 @@ test('client template headers match server duty import headers', () => {
 test('rowsFromDutyMatrix accepts required headers and skips empty rows', () => {
   const parsed = rowsFromDutyMatrix([
     [...DUTY_IMPORT_HEADERS],
-    ['Hop to', 'Noi dung', 'Hoi truong', '2026-09-15', '08:00', '2026-09-15', '11:00', '0', 'TOAN', ''],
-    ['', '', '', '', '', '', '', '', '', ''],
+    ['Hop to', 'Noi dung', 'Hoi truong', '2026-09-15', '08:00', '2026-09-15', '11:00', '0', 'TOAN', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', ''],
   ]);
   assert.equal(parsed.headersOk, true);
   assert.equal(parsed.rows.length, 1);
   assert.equal(parsed.rows[0].ten_cong_tac, 'Hop to');
+  assert.equal(parsed.rows[0].thanh_phan_khac, '');
   assert.equal(parsed.rows[0].rowNumber, 2);
 });
 
@@ -172,12 +174,41 @@ test('ca_ngay dùng ngày bắt đầu và giờ mặc định 08:00-17:00', () 
 
 test('thiếu người tham gia thì all-or-nothing', () => {
   const result = validateDutyImportRows(
-    [baseRow({ ma_phong_ban: '', email_tham_gia: '' })],
+    [baseRow({ ma_phong_ban: '', email_tham_gia: '', thanh_phan_khac: '' })],
     { actor: opsActor, departments, users },
   );
   assert.equal(result.ok, false);
   assert.equal(result.preview.length, 0);
   assert.equal(result.errors.some((item) => item.message === DUTY_IMPORT_MESSAGES.participantsRequired), true);
+});
+
+test('chỉ thành phần khác vẫn hợp lệ', () => {
+  const result = validateDutyImportRows(
+    [baseRow({ ma_phong_ban: '', email_tham_gia: '', thanh_phan_khac: '  Đoàn Sở GD  ' })],
+    { actor: opsActor, departments, users },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.preview[0].otherParticipants, 'Đoàn Sở GD');
+  assert.deepEqual(result.preview[0].departmentIds, []);
+  assert.deepEqual(result.preview[0].participantUserIds, []);
+});
+
+test('tổ trưởng được tạo công tác chỉ với thành phần khác', () => {
+  const result = validateDutyImportRows(
+    [baseRow({ ma_phong_ban: '', email_tham_gia: '', thanh_phan_khac: 'Khách mời phòng GD' })],
+    { actor: leadActor, departments, users },
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.preview[0].otherParticipants, 'Khách mời phòng GD');
+});
+
+test('thành phần khác quá 500 ký tự bị chặn', () => {
+  const result = validateDutyImportRows(
+    [baseRow({ ma_phong_ban: '', email_tham_gia: '', thanh_phan_khac: 'x'.repeat(501) })],
+    { actor: opsActor, departments, users },
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some((item) => item.message === DUTY_IMPORT_MESSAGES.otherParticipantsInvalid), true);
 });
 
 test('mã phòng ban và email sai bị chặn', () => {
@@ -261,6 +292,22 @@ test('evaluateDutyRefs giữ rule tạo tay', () => {
     }),
     'DUTY_PARTICIPANTS_REQUIRED',
   );
+  assert.equal(
+    evaluateDutyRefs(
+      { departmentIds: [], participantUserIds: [], otherParticipants: 'Đoàn Sở GD' },
+      opsActor,
+      { departments, users },
+    ),
+    null,
+  );
+  assert.equal(
+    evaluateDutyRefs(
+      { departmentIds: [], participantUserIds: [], otherParticipants: 'Khách mời' },
+      leadActor,
+      { departments, users },
+    ),
+    null,
+  );
 });
 
 test('một dòng lỗi thì không có preview commit', () => {
@@ -283,4 +330,6 @@ test('UI Công tác có nút Import Excel và gọi dutyImport', () => {
   assert.match(ui, /anyApi\.dutyImport\.validateUpload/);
   assert.match(ui, /anyApi\.dutyImport\.commit/);
   assert.match(ui, /Tải file nhập liệu mẫu/);
+  const editor = readFileSync(new URL('../src/duties/DutyEditorFields.jsx', import.meta.url), 'utf8');
+  assert.match(editor, /Thành phần khác/);
 });

@@ -200,7 +200,8 @@ export default defineSchema({
     .index("by_actor", ["actorUserId"]),
   /**
    * School duties / work events (Công tác).
-   * Participants = users in selected departments ∪ explicit participantUserIds.
+   * Recipients = users in selected departments ∪ explicit participantUserIds.
+   * otherParticipants is display-only free text (not a notification recipient).
    */
   duties: defineTable({
     startDate: v.string(), // YYYY-MM-DD
@@ -216,6 +217,8 @@ export default defineSchema({
     locationText: v.optional(v.string()),
     departmentIds: v.array(v.string()),
     participantUserIds: v.array(v.string()),
+    /** Free-text guests; empty/omitted on older rows. Not a push/email recipient. */
+    otherParticipants: v.optional(v.string()),
     active: v.boolean(),
     createdBy: v.string(),
     updatedBy: v.optional(v.string()),

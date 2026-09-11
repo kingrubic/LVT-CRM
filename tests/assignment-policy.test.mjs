@@ -10,6 +10,7 @@ import {
   canSeeLiveWork,
   cleanDutyContent,
   cleanDutyLocationText,
+  cleanDutyOtherParticipants,
   cleanDutyTitle,
   cleanWorkTitle,
   cleanCompletionNote,
@@ -60,6 +61,15 @@ test('địa điểm công tác là text tự do đã trim', () => {
   assert.throws(() => cleanDutyLocationText('   '), /INVALID_LOCATION/);
   assert.equal(dutyLocationLabel({ locationText: 'UBND Q.3' }, ['Kho cũ']), 'UBND Q.3');
   assert.equal(dutyLocationLabel({ locationIds: ['x'] }, ['Hội trường']), 'Hội trường');
+});
+
+test('thành phần khác được trim, được để trống, tối đa 500 ký tự', () => {
+  assert.equal(cleanDutyOtherParticipants('  Đoàn Sở GD  '), 'Đoàn Sở GD');
+  assert.equal(cleanDutyOtherParticipants(''), '');
+  assert.equal(cleanDutyOtherParticipants('   '), '');
+  assert.equal(cleanDutyOtherParticipants(undefined), '');
+  assert.equal(cleanDutyOtherParticipants('x'.repeat(500)), 'x'.repeat(500));
+  assert.throws(() => cleanDutyOtherParticipants('x'.repeat(501)), /INVALID_OTHER_PARTICIPANTS/);
 });
 
 test('danh sách công việc ưu tiên tên công việc, không bắt buộc file', () => {

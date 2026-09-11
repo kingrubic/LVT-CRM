@@ -265,6 +265,7 @@ export const dutyCalendar = query({
           participantNames: participants.map(
             (participant) => participant.name || participant.email || "",
           ).filter(Boolean),
+          otherParticipants: String(duty.otherParticipants || "").trim(),
           assignmentType: duty.participantUserIds.some(
             (id) => String(id) === selectedUserId,
           )

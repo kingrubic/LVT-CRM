@@ -11,6 +11,7 @@ export const DUTY_IMPORT_HEADERS = [
   'ca_ngay',
   'ma_phong_ban',
   'email_tham_gia',
+  'thanh_phan_khac',
 ];
 
 export function buildDutyImportTemplateWorkbook() {
@@ -27,6 +28,7 @@ export function buildDutyImportTemplateWorkbook() {
       '0',
       'TOAN, VAN',
       'a.nguyen@example.school',
+      '',
     ],
     [
       'Truc le khai giang',
@@ -39,6 +41,20 @@ export function buildDutyImportTemplateWorkbook() {
       '1',
       'TOAN',
       '',
+      '',
+    ],
+    [
+      'Tiep doan so',
+      'Lam viec voi doan kiem tra',
+      'Phong hop BGH',
+      '2026-09-16',
+      '14:00',
+      '2026-09-16',
+      '16:00',
+      '0',
+      '',
+      '',
+      'Doan So GD',
     ],
   ]);
   sheet['!cols'] = DUTY_IMPORT_HEADERS.map(() => ({ wch: 20 }));

@@ -767,7 +767,7 @@ function DutiesAdminView({
     }
     setPreviewOpen(false);
     if (!dutyFormHasParticipants(form)) {
-      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      setFeedback({ type: 'error', text: 'Vui lòng chọn phòng ban, cá nhân tham gia, hoặc điền thành phần khác.' });
       return;
     }
     const ok = await run('save', () => create(payload), 'Đã thêm công tác.');
@@ -781,7 +781,7 @@ function DutiesAdminView({
       return;
     }
     if (!dutyFormHasParticipants(form)) {
-      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      setFeedback({ type: 'error', text: 'Vui lòng chọn phòng ban, cá nhân tham gia, hoặc điền thành phần khác.' });
       return;
     }
     setPreviewOpen(true);
@@ -1017,7 +1017,7 @@ function DutiesUserView({
     }
     setPreviewOpen(false);
     if (!dutyFormHasParticipants(form, { includeDepartments })) {
-      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      setFeedback({ type: 'error', text: 'Vui lòng chọn phòng ban, cá nhân tham gia, hoặc điền thành phần khác.' });
       return;
     }
     const ok = await run('save', () => create(payload), 'Đã tạo công tác.');
@@ -1031,7 +1031,7 @@ function DutiesUserView({
       return;
     }
     if (!dutyFormHasParticipants(form, { includeDepartments: Boolean(options?.isOps) })) {
-      setFeedback({ type: 'error', text: 'Vui lòng chọn ít nhất một người tham gia.' });
+      setFeedback({ type: 'error', text: 'Vui lòng chọn phòng ban, cá nhân tham gia, hoặc điền thành phần khác.' });
       return;
     }
     setPreviewOpen(true);

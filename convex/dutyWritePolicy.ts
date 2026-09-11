@@ -1,6 +1,7 @@
 import {
   cleanDutyContent,
   cleanDutyLocationText,
+  cleanDutyOtherParticipants,
   cleanDutyTitle,
   normalizeDutyClock,
 } from "./assignmentPolicy.ts";
@@ -58,6 +59,7 @@ export function cleanDutyInput(args: {
   locationText: string;
   departmentIds: string[];
   participantUserIds: string[];
+  otherParticipants?: string;
 }) {
   const startDate = args.startDate.trim();
   const endDate = args.endDate.trim();
@@ -85,6 +87,7 @@ export function cleanDutyInput(args: {
     locationIds: [] as string[],
     departmentIds: uniq(args.departmentIds || []),
     participantUserIds: uniq(args.participantUserIds || []),
+    otherParticipants: cleanDutyOtherParticipants(args.otherParticipants),
   };
 }
 
@@ -92,6 +95,7 @@ export function evaluateDutyRefs(
   input: {
     departmentIds: string[];
     participantUserIds: string[];
+    otherParticipants?: string;
   },
   actor: { user: any; isOps: boolean; positions: any[] },
   catalogs: {
@@ -113,7 +117,11 @@ export function evaluateDutyRefs(
       return "NOT_A_SUBORDINATE";
     }
   }
-  if (!input.departmentIds.length && !input.participantUserIds.length) {
+  if (
+    !input.departmentIds.length &&
+    !input.participantUserIds.length &&
+    !String(input.otherParticipants || "").trim()
+  ) {
     return "DUTY_PARTICIPANTS_REQUIRED";
   }
   return null;

@@ -6,6 +6,7 @@ import {
   buildSharedScheduleRows,
   formatDayCell,
   formatDutyClock,
+  formatParticipantCell,
   formatTimeCell,
   formatVnDate,
   scheduleRange,
@@ -99,7 +100,7 @@ test('format lịch chung khớp file Word mẫu tuần 07/9–12/9', () => {
   assert.equal(monday[1].showDay, false);
   assert.equal(monday[0].time, '7g00');
   assert.equal(monday[1].time, '9g00');
-  assert.equal(monday[0].participants, 'BGH; GVCN');
+  assert.equal(monday[0].participants, 'BGH, GVCN');
 
   const tuesday = rows.filter((row) => row.dayIso === '2026-09-08');
   assert.equal(tuesday[0].time, 'Cả ngày');
@@ -111,6 +112,18 @@ test('format lịch chung khớp file Word mẫu tuần 07/9–12/9', () => {
   assert.equal(saturday.length, 1);
   assert.equal(saturday[0].content, '');
   assert.equal(rows.some((row) => row.dayIso === '2026-09-13'), false);
+  assert.equal(
+    formatParticipantCell({
+      departmentNames: ['BGH'],
+      participantNames: ['GVCN'],
+      otherParticipants: 'Đoàn Sở GD',
+    }),
+    'BGH, GVCN, Đoàn Sở GD',
+  );
+  assert.equal(
+    formatParticipantCell({ departmentNames: [], participantNames: [], otherParticipants: 'Khách mời' }),
+    'Khách mời',
+  );
 });
 
 test('PDF lịch chung nhúng font tiếng Việt và giữ tiêu đề/cột của mẫu', async () => {

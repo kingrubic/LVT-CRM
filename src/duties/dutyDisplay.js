@@ -42,6 +42,7 @@ export function emptyDutyForm() {
     locationText: '',
     departmentIds: [],
     participantUserIds: [],
+    otherParticipants: '',
   };
 }
 
@@ -57,6 +58,7 @@ export function dutyFormFromItem(item) {
     locationText: item.locationText || (item.locationNames || []).join(', '),
     departmentIds: [...(item.departmentIds || [])],
     participantUserIds: [...(item.participantUserIds || [])],
+    otherParticipants: item.otherParticipants || '',
   };
 }
 
@@ -72,12 +74,17 @@ export function dutyPayloadFromForm(form, { includeDepartments = true } = {}) {
     locationText: form.locationText,
     departmentIds: includeDepartments ? form.departmentIds : [],
     participantUserIds: form.participantUserIds,
+    otherParticipants: form.otherParticipants || '',
   };
 }
 
 export function dutyFormHasParticipants(form, options) {
   const payload = dutyPayloadFromForm(form, options);
-  return payload.departmentIds.length > 0 || payload.participantUserIds.length > 0;
+  return (
+    payload.departmentIds.length > 0 ||
+    payload.participantUserIds.length > 0 ||
+    Boolean(String(payload.otherParticipants || '').trim())
+  );
 }
 
 export function applyDutyFormField(prev, field, value) {
@@ -198,6 +205,7 @@ function dutyPersonSearchText(item) {
   for (const person of item?.participants || []) {
     names.push(person?.name, person?.email);
   }
+  names.push(item?.otherParticipants);
   return names.filter(Boolean).join(' ');
 }
 
@@ -268,5 +276,6 @@ export function buildDutyCreatePreview(form, catalogs = {}) {
     showDepartments: includeDepartments,
     departments: departments.length ? departments.join(', ') : '—',
     participants: participants.length ? participants.join(', ') : '—',
+    otherParticipants: String(payload.otherParticipants || '').trim() || '—',
   };
 }

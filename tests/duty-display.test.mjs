@@ -44,6 +44,7 @@ test('form công tác giữ title và đồng bộ cả ngày', () => {
   const form = emptyDutyForm();
   assert.equal(form.title, '');
   assert.equal(form.startTime, '08:00');
+  assert.equal(form.otherParticipants, '');
   const started = applyDutyStartDateTime(form, '2024-08-15', '08:00');
   const allDay = applyDutyFormField(started, 'allDay', true);
   assert.equal(allDay.endDate, '2024-08-15');
@@ -84,7 +85,7 @@ test('tab chưa diễn ra mặc định, sự kiện gần nhất lên đầu', 
   assert.deepEqual(finished.map((item) => item._id), ['c', 'd']);
 });
 
-test('tạo công tác cần ít nhất một phòng ban hoặc người tham gia', () => {
+test('tạo công tác cần phòng ban, người tham gia, hoặc thành phần khác', () => {
   const form = {
     ...emptyDutyForm(),
     title: 'Họp khối',
@@ -97,6 +98,8 @@ test('tạo công tác cần ít nhất một phòng ban hoặc người tham gi
   assert.equal(dutyFormHasParticipants({ ...form, participantUserIds: ['u1'] }), true);
   assert.equal(dutyFormHasParticipants({ ...form, departmentIds: ['d1'] }), true);
   assert.equal(dutyFormHasParticipants({ ...form, departmentIds: ['d1'] }, { includeDepartments: false }), false);
+  assert.equal(dutyFormHasParticipants({ ...form, otherParticipants: 'Đoàn Sở GD' }), true);
+  assert.equal(dutyFormHasParticipants({ ...form, otherParticipants: '   ' }), false);
 });
 
 test('preview tạo công tác gom nhãn phòng ban và người tham gia', () => {
@@ -112,6 +115,7 @@ test('preview tạo công tác gom nhãn phòng ban và người tham gia', () =
       locationText: 'HCM',
       departmentIds: ['d1'],
       participantUserIds: ['u2'],
+      otherParticipants: 'Đoàn Sở GD',
     },
     {
       departments: [{ _id: 'd1', name: 'Phòng Tổ chức' }, { _id: 'd2', name: 'Khác' }],
@@ -126,6 +130,7 @@ test('preview tạo công tác gom nhãn phòng ban và người tham gia', () =
   assert.equal(preview.showDepartments, true);
   assert.equal(preview.departments, 'Phòng Tổ chức');
   assert.equal(preview.participants, 'Bình');
+  assert.equal(preview.otherParticipants, 'Đoàn Sở GD');
 
   const userPreview = buildDutyCreatePreview(
     {
@@ -147,6 +152,7 @@ test('preview tạo công tác gom nhãn phòng ban và người tham gia', () =
   assert.equal(userPreview.showDepartments, false);
   assert.equal(userPreview.departments, '—');
   assert.equal(userPreview.participants, '—');
+  assert.equal(userPreview.otherParticipants, '—');
 });
 
 test('tách danh sách công tác: việc của tôi và việc tôi tạo', () => {
@@ -225,6 +231,13 @@ test('tìm kiếm nâng cao theo phòng ban, cá nhân, địa điểm và kho�
   const base = emptyDutySearch();
   assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, department: 'giao vien' }).map((item) => item._id), ['a']);
   assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, person: 'anh vu' }).map((item) => item._id), ['a']);
+  assert.deepEqual(
+    filterDutiesBySearch(
+      [trip, { ...other, otherParticipants: 'Đoàn Sở Giáo dục' }],
+      { ...base, person: 'doan so' },
+    ).map((item) => item._id),
+    ['b'],
+  );
   assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, location: 'san truong' }).map((item) => item._id), ['b']);
   assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, dateFrom: '2026-08-20', dateTo: '2026-08-20' }).map((item) => item._id), ['b']);
   assert.deepEqual(filterDutiesBySearch([trip, other], { ...base, query: 'hop', department: 'to chuc' }).map((item) => item._id), []);

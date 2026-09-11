@@ -166,7 +166,7 @@ export default function DutyBulkImport({ onClose, onImported = null }) {
 
       <p className="duty-bulk-import-help">
         Mỗi dòng là một công tác. File được tải lên server trước, hệ thống đọc lại để kiểm tra.
-        Một dòng lỗi thì chưa nhập dòng nào. Tổ trưởng/tổ phó chỉ dùng cột email cấp dưới, không điền mã phòng ban.
+        Một dòng lỗi thì chưa nhập dòng nào. Tổ trưởng/tổ phó chỉ dùng cột email cấp dưới hoặc thành phần khác, không điền mã phòng ban.
       </p>
 
       <div className="duty-bulk-import-actions">
@@ -225,6 +225,7 @@ export default function DutyBulkImport({ onClose, onImported = null }) {
                   {[
                     row.departmentNames.length ? `PB: ${row.departmentNames.join(', ')}` : '',
                     row.participantEmails.length ? `Email: ${row.participantEmails.join(', ')}` : '',
+                    row.otherParticipants ? `Khác: ${row.otherParticipants}` : '',
                   ]
                     .filter(Boolean)
                     .join(' · ')}

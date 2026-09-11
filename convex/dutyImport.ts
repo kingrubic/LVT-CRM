@@ -41,6 +41,7 @@ const previewRowValidator = v.object({
   participantUserIds: v.array(v.string()),
   participantEmails: v.array(v.string()),
   participantNames: v.array(v.string()),
+  otherParticipants: v.string(),
 });
 
 function parseFailureMessage(code: string | null) {
@@ -147,6 +148,7 @@ export const commitValidatedInternal = internalMutation({
         locationText: row.locationText,
         departmentIds: row.departmentIds,
         participantUserIds: row.participantUserIds,
+        otherParticipants: row.otherParticipants,
       });
       const refError = evaluateDutyRefs(input, actor, { departments, users });
       if (refError) throw new Error(refError);

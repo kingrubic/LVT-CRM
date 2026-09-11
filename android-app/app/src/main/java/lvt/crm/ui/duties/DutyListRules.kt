@@ -85,7 +85,11 @@ fun filterDutiesBySearch(list: List<DutyItem>, search: ListSearchState): List<Du
     return list.filter { duty ->
         val queryText = listOf(duty.title, duty.content).joinToString(" ")
         val departmentText = duty.departmentNames.joinToString(" ")
-        val personText = (duty.participantNames + duty.departmentParticipants.flatMap { it.participantNames })
+        val personText = (
+            duty.participantNames +
+                duty.departmentParticipants.flatMap { it.participantNames } +
+                listOf(duty.otherParticipants)
+            )
             .joinToString(" ")
         val locationText = (duty.locationNames + listOf(duty.locationText)).joinToString(" ")
         if (query.isNotBlank() && !includesListSearch(queryText, query)) return@filter false

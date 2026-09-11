@@ -29,7 +29,8 @@ export const DUTY_IMPORT_MESSAGES = {
   missingEndDate: "Vui lòng điền ngày kết thúc (hoặc đánh dấu ca_ngay).",
   invalidAllDay: "Cột ca_ngay không hợp lệ. Dùng 1/0, có/không, true/false.",
   endBeforeStart: "Thời gian kết thúc phải sau thời gian bắt đầu.",
-  participantsRequired: "Mỗi công tác cần ít nhất một mã phòng ban hoặc một email tham gia.",
+  participantsRequired: "Mỗi công tác cần ít nhất một mã phòng ban, một email tham gia, hoặc thành phần khác.",
+  otherParticipantsInvalid: "Thành phần khác tối đa 500 ký tự.",
   invalidDepartment: "Mã phòng ban không chính xác, vui lòng đảm bảo trùng với hệ thống.",
   departmentForbidden: "Tổ trưởng/tổ phó không được gán công tác theo phòng ban. Hãy dùng cột email_tham_gia.",
   invalidParticipant: "Email tham gia không chính xác hoặc tài khoản không còn hoạt động.",
@@ -59,6 +60,7 @@ export type DutyImportPreviewRow = {
   participantUserIds: string[];
   participantEmails: string[];
   participantNames: string[];
+  otherParticipants: string;
 };
 
 export type DutyImportActor = {
@@ -107,6 +109,7 @@ function messageForCleanError(code: string) {
   if (code === "INVALID_DUTY_TITLE") return DUTY_IMPORT_MESSAGES.titleInvalid;
   if (code === "INVALID_CONTENT") return DUTY_IMPORT_MESSAGES.contentInvalid;
   if (code === "INVALID_LOCATION") return DUTY_IMPORT_MESSAGES.locationInvalid;
+  if (code === "INVALID_OTHER_PARTICIPANTS") return DUTY_IMPORT_MESSAGES.otherParticipantsInvalid;
   if (code === "INVALID_DATE") return DUTY_IMPORT_MESSAGES.invalidStartDate;
   if (code === "INVALID_TIME") return DUTY_IMPORT_MESSAGES.invalidStartTime;
   if (code === "END_BEFORE_START") return DUTY_IMPORT_MESSAGES.endBeforeStart;
@@ -176,6 +179,7 @@ export function validateDutyImportRows(
     const endTimeRaw = String(raw.gio_ket_thuc || "").trim();
     const departmentTokens = splitCommaList(raw.ma_phong_ban);
     const emailTokens = splitCommaList(raw.email_tham_gia);
+    const otherParticipants = String(raw.thanh_phan_khac || "").trim();
 
     let rowHasError = false;
     if (!title) {
@@ -282,7 +286,7 @@ export function validateDutyImportRows(
       participantNames.push(user.name || email);
     }
 
-    if (!departmentIds.length && !participantUserIds.length) {
+    if (!departmentIds.length && !participantUserIds.length && !otherParticipants) {
       pushError(rowNumber, DUTY_IMPORT_MESSAGES.participantsRequired);
       rowHasError = true;
     }
@@ -306,6 +310,7 @@ export function validateDutyImportRows(
         locationText,
         departmentIds,
         participantUserIds,
+        otherParticipants,
       });
       const refError = evaluateDutyRefs(input, context.actor, {
         departments: context.departments,
@@ -331,6 +336,7 @@ export function validateDutyImportRows(
         participantUserIds: input.participantUserIds,
         participantEmails,
         participantNames,
+        otherParticipants: input.otherParticipants,
       });
     } catch (error) {
       const code = String((error as Error)?.message || error);

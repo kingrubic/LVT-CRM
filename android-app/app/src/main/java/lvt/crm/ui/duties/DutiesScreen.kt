@@ -447,10 +447,18 @@ private fun DutyDetailScreen(
                         "${department.departmentName}: ${department.participantNames.ifEmpty { listOf("Chưa cập nhật cá nhân") }.joinToString(", ")}",
                     )
                 }
-                DetailLine(
-                    Icons.Outlined.PeopleOutline,
-                    "Cá nhân tham gia: ${duty.participantNames.ifEmpty { listOf("Chưa cập nhật") }.joinToString(", ")}",
-                )
+                if (duty.participantNames.isNotEmpty() || duty.otherParticipants.isBlank()) {
+                    DetailLine(
+                        Icons.Outlined.PeopleOutline,
+                        "Cá nhân tham gia: ${duty.participantNames.ifEmpty { listOf("Chưa cập nhật") }.joinToString(", ")}",
+                    )
+                }
+                if (duty.otherParticipants.isNotBlank()) {
+                    DetailLine(
+                        Icons.Outlined.PeopleOutline,
+                        "Thành phần khác: ${duty.otherParticipants}",
+                    )
+                }
                 if (confirmationEnabled && duty.isMine) {
                     Spacer(modifier = Modifier.height(18.dp))
                     StatusPill(label = statusLabel(duty.myStatus), tone = statusTone(duty.myStatus))

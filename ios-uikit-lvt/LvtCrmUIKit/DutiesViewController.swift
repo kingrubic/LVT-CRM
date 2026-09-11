@@ -725,6 +725,10 @@ private final class DutyDetailViewController: UITableViewController {
         if !duty.participantNames.isEmpty {
             rows.append(("Thành phần", duty.participantNames.joined(separator: ", ")))
         }
+        let other = duty.otherParticipants.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !other.isEmpty {
+            rows.append(("Thành phần khác", other))
+        }
         return rows
     }
 }
