@@ -10,6 +10,8 @@ final class AuthRepository: ObservableObject {
     private let beforeSignOut: ((String) async -> Void)?
     private var authGeneration: Int64 = 0
 
+    private var restoreRetryScheduled = false
+
     init(
         tokenStore: CredentialStore,
         convex: ConvexHttpClient,
@@ -33,14 +35,10 @@ final class AuthRepository: ObservableObject {
             } else {
                 _ = clearCurrentCredentialsAndSignOut(credentials, generation: generation)
             }
-        } catch let error as ConvexException
-            where error.code.localizedCaseInsensitiveContains("Unauthenticated")
-                || error.code.localizedCaseInsensitiveContains("Authentication") {
+        } catch let error as ConvexException where isAuthenticationFailure(error) {
             _ = clearCurrentCredentialsAndSignOut(credentials, generation: generation)
         } catch {
-            if authGeneration == generation, tokenStore.snapshot() == credentials {
-                state = .signedOut
-            }
+            scheduleRestoreRetry()
         }
     }
 
@@ -183,6 +181,21 @@ final class AuthRepository: ObservableObject {
     }
 
     private func fetchSession() async throws -> UserSession? {
+        try await withThrowingTaskGroup(of: UserSession?.self) { group in
+            group.addTask {
+                try await self.loadSessionContext()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(20))
+                throw ConvexException(code: "SESSION_TIMEOUT", message: "Không kết nối được máy chủ. Thử mở lại ứng dụng.")
+            }
+            let session = try await group.next() ?? nil
+            group.cancelAll()
+            return session
+        }
+    }
+
+    private func loadSessionContext() async throws -> UserSession? {
         let result = try await convex.query("users:sessionContext")
         guard let user = result["user"] as? [String: Any], !user.isEmpty else { return nil }
         let department = result["department"] as? [String: Any]
@@ -199,6 +212,25 @@ final class AuthRepository: ObservableObject {
             positionName: position?["name"] as? String,
             positionLevel: position?["level"] as? Int
         )
+    }
+
+    private func isAuthenticationFailure(_ error: ConvexException) -> Bool {
+        error.code.localizedCaseInsensitiveContains("Unauthenticated")
+            || error.code.localizedCaseInsensitiveContains("Authentication")
+            || error.code == "UNAUTHENTICATED"
+    }
+
+    private func scheduleRestoreRetry() {
+        guard !restoreRetryScheduled else { return }
+        restoreRetryScheduled = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self else { return }
+            self.restoreRetryScheduled = false
+            if case .loading = self.state {
+                await self.restoreSession()
+            }
+        }
     }
 
     private func invalidatesCredentials(_ error: Error) -> Bool {

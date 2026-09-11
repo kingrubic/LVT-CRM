@@ -99,6 +99,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
         Task { @MainActor in
+            if case .loading = appDelegate.container.authRepository.state {
+                await appDelegate.container.authRepository.restoreSession()
+            }
             await appDelegate.container.notificationSync.syncNow()
         }
     }

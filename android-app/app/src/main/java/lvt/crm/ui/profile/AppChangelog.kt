@@ -8,6 +8,10 @@ data class AppChangelogEntry(
 object AppChangelog {
     val entries: List<AppChangelogEntry> = listOf(
         AppChangelogEntry(
+            "0.14.1",
+            listOf("Danh sách Công việc tự cập nhật ngay sau khi nộp bằng chứng hoàn thành."),
+        ),
+        AppChangelogEntry(
             "0.14.0",
             listOf("Khi đính kèm file công việc hoặc nộp bằng chứng, chọn Loại văn bản (Kế hoạch, Biên bản, Báo cáo)."),
         ),

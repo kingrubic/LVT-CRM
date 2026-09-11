@@ -15,13 +15,16 @@ final class AppContainer {
     init() {
         let tokenStore = TokenStore()
         self.tokenStore = tokenStore
+        let tokenProvider: @Sendable () -> String? = { tokenStore.accessToken }
+        let refreshCredentialsProvider: @Sendable () -> CredentialSnapshot? = { tokenStore.snapshot() }
+        let onTokensRefreshed: @Sendable (CredentialSnapshot, String, String) -> Bool = { expected, access, refresh in
+            tokenStore.replaceIfCurrent(expected, accessToken: access, refreshToken: refresh)
+        }
         let convex = ConvexHttpClient(
             baseURL: ConvexConfig.url,
-            tokenProvider: { tokenStore.accessToken },
-            refreshCredentialsProvider: { tokenStore.snapshot() },
-            onTokensRefreshed: { expected, access, refresh in
-                tokenStore.replaceIfCurrent(expected, accessToken: access, refreshToken: refresh)
-            }
+            tokenProvider: tokenProvider,
+            refreshCredentialsProvider: refreshCredentialsProvider,
+            onTokensRefreshed: onTokensRefreshed
         )
         self.convex = convex
         sessionsRepository = SessionsRepository(convex: convex)

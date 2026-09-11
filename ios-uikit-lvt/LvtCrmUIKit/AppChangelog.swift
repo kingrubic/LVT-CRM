@@ -8,6 +8,13 @@ struct AppChangelogEntry: Equatable {
 enum AppChangelog {
     static let entries: [AppChangelogEntry] = [
         AppChangelogEntry(
+            version: "1.6.1",
+            highlights: [
+                "Nộp được bằng chứng hoàn thành sau khi chọn ảnh hoặc tệp.",
+                "Hết treo màn hình trắng khi mở lại app sau một thời gian.",
+            ]
+        ),
+        AppChangelogEntry(
             version: "1.6.0",
             highlights: ["Khi đính kèm file công việc hoặc nộp bằng chứng, chọn Loại văn bản (Kế hoạch, Biên bản, Báo cáo)."]
         ),
