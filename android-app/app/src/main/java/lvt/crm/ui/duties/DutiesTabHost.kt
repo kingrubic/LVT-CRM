@@ -1,13 +1,17 @@
 package lvt.crm.ui.duties
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Person
@@ -76,26 +80,29 @@ fun DutiesHubScreen(
     onOpenShared: () -> Unit,
 ) {
     LvtScreen(title = "Lịch CT") {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            HubChoiceCard(
-                title = "Lịch công tác cá nhân",
-                subtitle = "Công tác được giao và công tác bạn tạo",
-                icon = { Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.size(32.dp)) },
-                onClick = onOpenPersonal,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            HubChoiceCard(
-                title = "Lịch công tác chung",
-                subtitle = "Xem và tải PDF lịch toàn trường",
-                icon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null, modifier = Modifier.size(32.dp)) },
-                onClick = onOpenShared,
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                HubChoiceCard(
+                    title = "Lịch công tác cá nhân",
+                    subtitle = "Công tác được giao và công tác bạn tạo",
+                    icon = { Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.size(32.dp)) },
+                    onClick = onOpenPersonal,
+                )
+                HubChoiceCard(
+                    title = "Lịch công tác chung",
+                    subtitle = "Xem và tải PDF lịch toàn trường",
+                    icon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null, modifier = Modifier.size(32.dp)) },
+                    onClick = onOpenShared,
+                )
+            }
         }
     }
 }
@@ -109,12 +116,14 @@ private fun HubChoiceCard(
 ) {
     ElevatedCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 132.dp),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,

@@ -212,7 +212,16 @@ test('native Lịch CT mở hub trên tab, PDF qua cùng gateway, deep link vào
   const androidStrings = readFileSync(new URL('../android-app/app/src/main/res/values/strings.xml', import.meta.url), 'utf8');
   const iosRoot = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/RootTabBarController.swift', import.meta.url), 'utf8');
   const iosRepo = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/DutiesRepository.swift', import.meta.url), 'utf8');
+  const androidHub = readFileSync(new URL('../android-app/app/src/main/java/lvt/crm/ui/duties/DutiesTabHost.kt', import.meta.url), 'utf8');
+  const iosHub = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/DutiesHubViewController.swift', import.meta.url), 'utf8');
   assert.match(androidStrings, /Lịch CT/);
+  assert.match(androidHub, /Lịch công tác cá nhân/);
+  assert.match(androidHub, /Lịch công tác chung/);
+  assert.match(androidHub, /heightIn\(min = 132\.dp\)/);
+  assert.doesNotMatch(androidHub, /Modifier\s*\n\s*\.fillMaxSize\(\)\s*\n\s*\.padding\(horizontal = 20\.dp, vertical = 18\.dp\)/);
+  assert.match(iosHub, /Lịch công tác cá nhân/);
+  assert.match(iosHub, /Lịch công tác chung/);
+  assert.match(iosHub, /fillEqually/);
   assert.match(androidRoot, /dutiesSkipHub/);
   assert.match(androidRoot, /DutiesTabHost/);
   assert.match(androidRepo, /\/api\/duties\/shared-schedule\.pdf/);

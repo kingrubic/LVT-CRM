@@ -8,6 +8,10 @@ struct AppChangelogEntry: Equatable {
 enum AppChangelog {
     static let entries: [AppChangelogEntry] = [
         AppChangelogEntry(
+            version: "1.8.1",
+            highlights: ["Màn Lịch CT hiện đủ hai nút lịch cá nhân và lịch chung."]
+        ),
+        AppChangelogEntry(
             version: "1.8.0",
             highlights: ["Tab Lịch CT: chọn lịch cá nhân hoặc xem PDF lịch công tác chung giống trên máy tính."]
         ),
