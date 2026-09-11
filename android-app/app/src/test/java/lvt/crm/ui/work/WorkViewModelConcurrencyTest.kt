@@ -99,6 +99,26 @@ class WorkViewModelConcurrencyTest {
         assertEquals(null, viewModel.uiState.value.evidencePromptTask)
     }
 
+    @Test
+    fun `completeWithEvidence keeps submitted task out of todo if listMine is stale`() = runTest(dispatcher) {
+        val open = task("task-2").copy(isAdmin = false, status = "pending_task")
+        val repository = BlockingWorkOperations(tasksAfterRefresh = listOf(open))
+        val viewModel = WorkViewModel(repository)
+        repository.releaseRefresh.complete(Unit)
+        advanceUntilIdle()
+
+        viewModel.completeWithEvidence(open, "hello".toByteArray(), "proof.pdf", "application/pdf", "type-1")
+        advanceUntilIdle()
+
+        assertEquals(1, repository.completionCalls)
+        assertEquals("pending_completion", viewModel.uiState.value.tasks.single().status)
+        assertEquals(emptyList<String>(), viewModel.uiState.value.tabMine.map { it.id })
+        assertEquals(
+            listOf("task-2"),
+            filterTasksByTab(viewModel.uiState.value.tasks, WorkListTab.PendingReview).map { it.id },
+        )
+    }
+
     private fun approval(id: String) = WorkApprovalItem(
         id = id,
         fileName = "file.pdf",
@@ -124,7 +144,9 @@ class WorkViewModelConcurrencyTest {
     )
 }
 
-private class BlockingWorkOperations : WorkOperations {
+private class BlockingWorkOperations(
+    private val tasksAfterRefresh: List<WorkTaskItem> = emptyList(),
+) : WorkOperations {
     val refreshStarted = CompletableDeferred<Unit>()
     val releaseRefresh = CompletableDeferred<Unit>()
     var listCalls = 0
@@ -145,7 +167,7 @@ private class BlockingWorkOperations : WorkOperations {
             assignerMode = "",
             isAdmin = true,
             accessLevel = 3,
-            tasks = emptyList(),
+            tasks = tasksAfterRefresh,
             approvals = emptyList(),
         )
     }

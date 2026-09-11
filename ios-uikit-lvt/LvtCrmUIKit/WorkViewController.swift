@@ -479,6 +479,26 @@ final class WorkViewController: UITableViewController {
         fileName: String,
         mimeType: String
     ) {
+        presentAfterDismiss { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.viewModel.ensureDocumentTypes()
+                self.showDocumentTypeSheet(
+                    item: item,
+                    fileData: fileData,
+                    fileName: fileName,
+                    mimeType: mimeType
+                )
+            }
+        }
+    }
+
+    private func showDocumentTypeSheet(
+        item: WorkTaskItem,
+        fileData: Data,
+        fileName: String,
+        mimeType: String
+    ) {
         let types = viewModel.documentTypes
         guard !types.isEmpty else {
             clearPendingUpload()
@@ -509,7 +529,7 @@ final class WorkViewController: UITableViewController {
             popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
             popover.permittedArrowDirections = []
         }
-        presentFromVisibleController(alert)
+        presentationHost().present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     private func finishEvidence(
@@ -538,7 +558,7 @@ final class WorkViewController: UITableViewController {
         config.selectionLimit = 1
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = self
-        (navigationController?.visibleViewController ?? self).present(
+        (navigationController ?? self).present(
             picker,
             animated: !UIAccessibility.isReduceMotionEnabled
         )
@@ -549,7 +569,7 @@ final class WorkViewController: UITableViewController {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = self
-        (navigationController?.visibleViewController ?? self).present(
+        (navigationController ?? self).present(
             picker,
             animated: !UIAccessibility.isReduceMotionEnabled
         )
@@ -566,7 +586,7 @@ final class WorkViewController: UITableViewController {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
         picker.delegate = self
         picker.allowsMultipleSelection = false
-        (navigationController?.visibleViewController ?? self).present(
+        (navigationController ?? self).present(
             picker,
             animated: !UIAccessibility.isReduceMotionEnabled
         )
@@ -635,10 +655,31 @@ final class WorkViewController: UITableViewController {
     }
 
     private func presentFromVisibleController(_ alert: UIAlertController) {
-        (navigationController?.visibleViewController ?? self).present(
-            alert,
-            animated: !UIAccessibility.isReduceMotionEnabled
-        )
+        presentAfterDismiss { [weak self] in
+            guard let self else { return }
+            self.presentationHost().present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
+        }
+    }
+
+    private func presentationHost() -> UIViewController {
+        navigationController ?? self
+    }
+
+    private func presentAfterDismiss(_ action: @escaping () -> Void) {
+        let host = presentationHost()
+        if let presented = host.presentedViewController, !presented.isBeingDismissed {
+            presented.dismiss(animated: true) { [weak self] in
+                self?.presentAfterDismiss(action)
+            }
+            return
+        }
+        if host.presentedViewController != nil {
+            DispatchQueue.main.async { [weak self] in
+                self?.presentAfterDismiss(action)
+            }
+            return
+        }
+        action()
     }
 
     private func workCell(at indexPath: IndexPath) -> WorkItemCell {
@@ -1230,44 +1271,47 @@ extension WorkViewController: UIDocumentPickerDelegate {
 
 extension WorkViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        picker.dismiss(animated: true)
-        guard let result = results.first, let item = pendingUploadTask else {
-            clearPendingUpload()
-            return
-        }
-        let itemProvider = result.itemProvider
-        guard itemProvider.canLoadObject(ofClass: UIImage.self) else {
-            clearPendingUpload()
-            presentValidation("Không thể tải ảnh đã chọn.")
-            return
-        }
-        itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self, let image = object as? UIImage else {
-                DispatchQueue.main.async {
-                    self?.clearPendingUpload()
-                    self?.presentValidation("Không thể đọc ảnh đã chọn.")
-                }
+        let item = pendingUploadTask
+        picker.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            guard let result = results.first, let item else {
+                self.clearPendingUpload()
                 return
             }
-            guard let data = image.jpegData(compressionQuality: 0.85) else {
-                DispatchQueue.main.async {
-                    self.clearPendingUpload()
-                    self.presentValidation("Không thể xử lý định dạng ảnh.")
-                }
+            let itemProvider = result.itemProvider
+            guard itemProvider.canLoadObject(ofClass: UIImage.self) else {
+                self.clearPendingUpload()
+                self.presentValidation("Không thể tải ảnh đã chọn.")
                 return
             }
-            guard data.count <= Self.maxUploadFileSize else {
-                DispatchQueue.main.async {
-                    self.clearPendingUpload()
-                    self.presentValidation("Dung lượng ảnh tối đa là 20MB.")
+            itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+                guard let self, let image = object as? UIImage else {
+                    DispatchQueue.main.async {
+                        self?.clearPendingUpload()
+                        self?.presentValidation("Không thể đọc ảnh đã chọn.")
+                    }
+                    return
                 }
-                return
-            }
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyyMMdd_HHmmss"
-            let fileName = "bang_chung_\(formatter.string(from: Date())).jpg"
-            DispatchQueue.main.async {
-                self.submitEvidence(item: item, fileData: data, fileName: fileName, mimeType: "image/jpeg")
+                guard let data = image.jpegData(compressionQuality: 0.85) else {
+                    DispatchQueue.main.async {
+                        self.clearPendingUpload()
+                        self.presentValidation("Không thể xử lý định dạng ảnh.")
+                    }
+                    return
+                }
+                guard data.count <= Self.maxUploadFileSize else {
+                    DispatchQueue.main.async {
+                        self.clearPendingUpload()
+                        self.presentValidation("Dung lượng ảnh tối đa là 20MB.")
+                    }
+                    return
+                }
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyyMMdd_HHmmss"
+                let fileName = "bang_chung_\(formatter.string(from: Date())).jpg"
+                DispatchQueue.main.async {
+                    self.submitEvidence(item: item, fileData: data, fileName: fileName, mimeType: "image/jpeg")
+                }
             }
         }
     }
@@ -1275,26 +1319,29 @@ extension WorkViewController: PHPickerViewControllerDelegate {
 
 extension WorkViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-        picker.dismiss(animated: true)
-        guard let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage),
-              let item = pendingUploadTask else {
-            clearPendingUpload()
-            return
+        let item = pendingUploadTask
+        picker.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            guard let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage),
+                  let item else {
+                self.clearPendingUpload()
+                return
+            }
+            guard let data = image.jpegData(compressionQuality: 0.85) else {
+                self.clearPendingUpload()
+                self.presentValidation("Không thể xử lý định dạng ảnh.")
+                return
+            }
+            guard data.count <= Self.maxUploadFileSize else {
+                self.clearPendingUpload()
+                self.presentValidation("Dung lượng ảnh tối đa là 20MB.")
+                return
+            }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd_HHmmss"
+            let fileName = "chup_anh_\(formatter.string(from: Date())).jpg"
+            self.submitEvidence(item: item, fileData: data, fileName: fileName, mimeType: "image/jpeg")
         }
-        guard let data = image.jpegData(compressionQuality: 0.85) else {
-            clearPendingUpload()
-            presentValidation("Không thể xử lý định dạng ảnh.")
-            return
-        }
-        guard data.count <= Self.maxUploadFileSize else {
-            clearPendingUpload()
-            presentValidation("Dung lượng ảnh tối đa là 20MB.")
-            return
-        }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let fileName = "chup_anh_\(formatter.string(from: Date())).jpg"
-        submitEvidence(item: item, fileData: data, fileName: fileName, mimeType: "image/jpeg")
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {

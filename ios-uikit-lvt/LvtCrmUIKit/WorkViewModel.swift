@@ -218,6 +218,7 @@ final class WorkViewModel {
     private let repository: WorkRepository
     private var operationBusy = false
     private var refreshPending = false
+    private var localCompletions: [String: String] = [:]
     private var task: Task<Void, Never>?
 
     init(repository: WorkRepository) {
@@ -288,6 +289,19 @@ final class WorkViewModel {
         try await repository.formOptions()
     }
 
+    func ensureDocumentTypes() async {
+        if !documentTypes.isEmpty { return }
+        do {
+            let options = try await repository.formOptions()
+            if !options.documentTypes.isEmpty {
+                documentTypes = options.documentTypes
+                notifyChange()
+            }
+        } catch {
+            // Picker shows the empty-state message if types still cannot be loaded.
+        }
+    }
+
     func submitCreate(
         title: String,
         assignments: [WorkCreateAssignment],
@@ -348,12 +362,8 @@ final class WorkViewModel {
                 note: note,
                 documentTypeId: documentTypeId
             )
-            self.tasks = self.tasks.map {
-                guard $0.id == item.id else { return $0 }
-                var updated = $0
-                updated.status = qualityPercent == nil ? "pending_completion" : "completed"
-                return updated
-            }
+            self.rememberLocalCompletion(item, qualityPercent: qualityPercent)
+            self.tasks = self.overlayLocalCompletions(self.tasks)
         } finish: {
             if self.busyTaskId == item.id { self.busyTaskId = nil }
         }
@@ -443,7 +453,8 @@ final class WorkViewModel {
         isOps = snapshot.isOps
         documentTypes = snapshot.documentTypes
         accessLevel = snapshot.accessLevel
-        tasks = snapshot.tasks
+        dropResolvedLocalCompletions(snapshot.tasks)
+        tasks = overlayLocalCompletions(snapshot.tasks)
         approvals = snapshot.approvals
         completionReviews = snapshot.completionReviews
         loading = false
@@ -458,6 +469,34 @@ final class WorkViewModel {
             refresh()
         } else {
             notifyChange()
+        }
+    }
+
+    private func completionKey(_ item: WorkTaskItem) -> String {
+        "\(item.kind.rawValue)-\(item.id)"
+    }
+
+    private func rememberLocalCompletion(_ item: WorkTaskItem, qualityPercent: Int?) {
+        localCompletions[completionKey(item)] = qualityPercent == nil ? "pending_completion" : "completed"
+    }
+
+    private func dropResolvedLocalCompletions(_ tasks: [WorkTaskItem]) {
+        guard !localCompletions.isEmpty else { return }
+        for item in tasks where WorkListRules.isTaskPendingReview(item) || WorkListRules.isTaskCompleted(item) {
+            localCompletions.removeValue(forKey: completionKey(item))
+        }
+    }
+
+    private func overlayLocalCompletions(_ tasks: [WorkTaskItem]) -> [WorkTaskItem] {
+        guard !localCompletions.isEmpty else { return tasks }
+        return tasks.map { item in
+            guard let status = localCompletions[completionKey(item)] else { return item }
+            if WorkListRules.isTaskPendingReview(item) || WorkListRules.isTaskCompleted(item) {
+                return item
+            }
+            var updated = item
+            updated.status = status
+            return updated
         }
     }
 

@@ -17,7 +17,7 @@ actor ConvexHttpClient {
     private let refreshCredentialsProvider: @Sendable () -> CredentialSnapshot?
     private let onTokensRefreshed: @Sendable (CredentialSnapshot, String, String) -> Bool
     private let session: URLSession
-    private var isRefreshing = false
+    private var inFlightRefresh: Task<String?, Never>?
 
     init(
         baseURL: String,
@@ -32,6 +32,7 @@ actor ConvexHttpClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 45
         configuration.timeoutIntervalForResource = 60
+        configuration.waitsForConnectivity = false
         session = URLSession(configuration: configuration)
     }
 
@@ -112,12 +113,22 @@ actor ConvexHttpClient {
     }
 
     private func tryRefresh(failedAccessToken: String?) async -> String? {
-        guard !isRefreshing else { return nil }
-        isRefreshing = true
-        defer { isRefreshing = false }
-        guard let expected = refreshCredentialsProvider(),
-              let failedAccessToken, !failedAccessToken.isEmpty,
-              expected.accessToken == failedAccessToken else { return nil }
+        if let inFlightRefresh {
+            return await inFlightRefresh.value
+        }
+        let task = Task { await self.performRefresh(failedAccessToken: failedAccessToken) }
+        inFlightRefresh = task
+        let result = await task.value
+        inFlightRefresh = nil
+        return result
+    }
+
+    private func performRefresh(failedAccessToken: String?) async -> String? {
+        guard let expected = refreshCredentialsProvider() else { return nil }
+        if let failedAccessToken, !failedAccessToken.isEmpty, expected.accessToken != failedAccessToken {
+            return expected.accessToken
+        }
+        guard let failedAccessToken, !failedAccessToken.isEmpty else { return nil }
         do {
             guard let url = URL(string: "\(baseURL)/api/action") else { return nil }
             var request = URLRequest(url: url)

@@ -75,6 +75,7 @@ class WorkViewModel(
 ) : ViewModel() {
     private val operationMutex = Mutex()
     private val refreshPending = AtomicBoolean(false)
+    private val localCompletions = mutableMapOf<String, LocalTaskCompletion>()
     private val _uiState = MutableStateFlow(WorkUiState())
     val uiState: StateFlow<WorkUiState> = _uiState.asStateFlow()
 
@@ -160,6 +161,7 @@ class WorkViewModel(
         viewModelScope.launch {
             try {
                 val snap = repository.listMine()
+                dropResolvedLocalCompletions(snap.tasks)
                 _uiState.update {
                     it.copy(
                         loading = false,
@@ -168,7 +170,7 @@ class WorkViewModel(
                         accessLevel = snap.accessLevel,
                         canCreate = snap.canCreate,
                         isOps = snap.isOps,
-                        tasks = snap.tasks,
+                        tasks = overlayLocalCompletions(snap.tasks),
                         approvals = snap.approvals,
                         completionReviews = snap.completionReviews,
                         documentTypes = snap.documentTypes,
@@ -376,19 +378,9 @@ class WorkViewModel(
                         note,
                         documentTypeId.takeIf { it.isNotBlank() },
                     )
+                    rememberLocalCompletion(task, qualityPercent)
                     _uiState.update { state ->
-                        state.copy(
-                            tasks = state.tasks.map { item ->
-                                if (item.id == task.id && item.kind == task.kind) {
-                                    item.copy(
-                                        status = if (task.isAdmin) "completed" else "pending_completion",
-                                        qualityPercent = qualityPercent ?: item.qualityPercent,
-                                    )
-                                } else {
-                                    item
-                                }
-                            },
-                        )
+                        state.copy(tasks = overlayLocalCompletions(state.tasks))
                     }
                     reloadAfterCommittedMutation()
                 } catch (e: Exception) {
@@ -411,13 +403,14 @@ class WorkViewModel(
     private suspend fun reloadAfterCommittedMutation() {
         try {
             val snap = repository.listMine()
+            dropResolvedLocalCompletions(snap.tasks)
             _uiState.update {
                 it.copy(
                     isAdmin = snap.isAdmin,
                     accessLevel = snap.accessLevel,
                     canCreate = snap.canCreate,
                     isOps = snap.isOps,
-                    tasks = snap.tasks,
+                    tasks = overlayLocalCompletions(snap.tasks),
                     approvals = snap.approvals,
                     completionReviews = snap.completionReviews,
                     documentTypes = snap.documentTypes,
@@ -438,6 +431,47 @@ class WorkViewModel(
     private fun runPendingRefresh() {
         if (refreshPending.getAndSet(false)) refresh()
     }
+
+    private fun rememberLocalCompletion(task: WorkTaskItem, qualityPercent: Int?) {
+        localCompletions[localCompletionKey(task.kind, task.id)] = LocalTaskCompletion(
+            status = if (qualityPercent != null) "completed" else "pending_completion",
+            qualityPercent = qualityPercent,
+        )
+    }
+
+    private fun dropResolvedLocalCompletions(tasks: List<WorkTaskItem>) {
+        if (localCompletions.isEmpty()) return
+        for (item in tasks) {
+            if (serverHasCompletion(item)) {
+                localCompletions.remove(localCompletionKey(item.kind, item.id))
+            }
+        }
+    }
+
+    private fun overlayLocalCompletions(tasks: List<WorkTaskItem>): List<WorkTaskItem> {
+        if (localCompletions.isEmpty()) return tasks
+        return tasks.map { item ->
+            val local = localCompletions[localCompletionKey(item.kind, item.id)] ?: return@map item
+            if (serverHasCompletion(item)) {
+                item
+            } else {
+                item.copy(
+                    status = local.status,
+                    qualityPercent = local.qualityPercent ?: item.qualityPercent,
+                )
+            }
+        }
+    }
+
+    private fun serverHasCompletion(item: WorkTaskItem): Boolean =
+        isTaskPendingReview(item) || isTaskCompleted(item)
+
+    private data class LocalTaskCompletion(
+        val status: String,
+        val qualityPercent: Int?,
+    )
+
+    private fun localCompletionKey(kind: WorkTaskItem.Kind, id: String) = "$kind-$id"
 
     companion object {
         fun factory(repository: WorkRepository): ViewModelProvider.Factory =
