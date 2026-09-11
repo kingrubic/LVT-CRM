@@ -57,7 +57,7 @@ enum DutyListRules {
         return list.filter { duty in
             let queryText = [duty.title, duty.content].joined(separator: " ")
             let departmentText = duty.departmentNames.joined(separator: " ")
-            let personText = (duty.participantNames + duty.departmentParticipants.flatMap(\.participantNames))
+            let personText = (duty.participantNames + duty.departmentParticipants.flatMap(\.participantNames) + [duty.otherParticipants])
                 .joined(separator: " ")
             let locationText = (duty.locationNames + [duty.locationText]).joined(separator: " ")
             if !query.isEmpty && !ListSearch.includes(queryText, query) { return false }

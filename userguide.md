@@ -401,6 +401,7 @@ Mỗi công tác có:
 - Nội dung.
 - Địa điểm.
 - Phòng ban và cá nhân tham gia.
+- Thành phần khác (text tự do, tối đa 500 ký tự; có thể đứng một mình).
 - Trạng thái sắp diễn ra, đang diễn ra hoặc đã quá hạn.
 
 ### Import Excel công tác
@@ -414,7 +415,7 @@ Người được phép **Tạo công tác** (Administrator, Moderator, tổ tr�
 5. Nếu có lỗi, hệ thống **không nhập dòng nào** và liệt kê từng dòng. Sửa file rồi tải lại.
 6. Khi mọi dòng hợp lệ, xem trước rồi chọn **Xác nhận import**.
 
-Cột bắt buộc: tên, nội dung, địa điểm, ngày bắt đầu. Người tham gia ghi bằng **mã phòng ban** và/hoặc **email**, nhiều giá trị cách nhau dấu phẩy. Tổ trưởng/tổ phó không điền mã phòng ban — chỉ email cấp dưới cùng phòng. Cột `ca_ngay` dùng `1`/`0` hoặc `có`/`không`.
+Cột bắt buộc: tên, nội dung, địa điểm, ngày bắt đầu. Người tham gia ghi bằng **mã phòng ban** và/hoặc **email**, nhiều giá trị cách nhau dấu phẩy. Có thể chỉ điền **thành phần khác** (tối đa 500 ký tự) khi không gán user — lịch chung vẫn hiện, không gửi thông báo. Tổ trưởng/tổ phó không điền mã phòng ban — chỉ email cấp dưới cùng phòng hoặc thành phần khác. Cột `ca_ngay` dùng `1`/`0` hoặc `có`/`không`.
 
 ### Xác nhận tham gia
 

@@ -85,6 +85,13 @@ class DutyFilterTest {
         assertEquals(listOf("b"), filterDutiesBySearch(list, ListSearchState(query = "thực tế")).map { it.id })
         assertEquals(listOf("a"), filterDutiesBySearch(list, ListSearchState(department = "giao vien")).map { it.id })
         assertEquals(listOf("a"), filterDutiesBySearch(list, ListSearchState(person = "anh vu")).map { it.id })
+        assertEquals(
+            listOf("g"),
+            filterDutiesBySearch(
+                listOf(duty(id = "g", otherParticipants = "Đoàn Sở GD")),
+                ListSearchState(person = "doan so"),
+            ).map { it.id },
+        )
         assertEquals(listOf("b"), filterDutiesBySearch(list, ListSearchState(location = "san truong")).map { it.id })
         assertEquals(
             listOf("b"),
@@ -119,6 +126,7 @@ class DutyFilterTest {
         participantNames: List<String> = emptyList(),
         locationNames: List<String> = emptyList(),
         locationText: String = "",
+        otherParticipants: String = "",
     ) = DutyItem(
         id = id,
         content = content,
@@ -140,5 +148,6 @@ class DutyFilterTest {
         title = title,
         createdBy = createdBy,
         locationText = locationText,
+        otherParticipants = otherParticipants,
     )
 }

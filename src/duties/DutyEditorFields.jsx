@@ -92,6 +92,18 @@ export default function DutyEditorFields({ form, onField, onStartDateTime, onEnd
       </label>
 
       {children}
+
+      <label className="duty-content-field">
+        Thành phần khác
+        <textarea
+          maxLength={500}
+          rows={3}
+          value={form.otherParticipants || ''}
+          onChange={(event) => onField('otherParticipants', event.target.value)}
+          placeholder="Đoàn công tác, khách mời… (có thể đứng một mình)"
+        />
+        <small>{String(form.otherParticipants || '').length}/500</small>
+      </label>
     </>
   );
 }

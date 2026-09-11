@@ -27,6 +27,7 @@ async function assertRefs(
   input: {
     departmentIds: string[];
     participantUserIds: string[];
+    otherParticipants?: string;
   },
   actor: { user: any; isOps: boolean; positions: any[] },
 ) {
@@ -61,6 +62,7 @@ export async function insertCreatedDuty(
     locationIds: string[];
     departmentIds: string[];
     participantUserIds: string[];
+    otherParticipants: string;
   },
 ) {
   const now = Date.now();
@@ -390,6 +392,7 @@ export const listMine = query({
             participantNames: duty.participantUserIds
               .map((id) => userNameMap.get(String(id)))
               .filter((name): name is string => Boolean(name)),
+            otherParticipants: String(duty.otherParticipants || "").trim(),
             // For user view: show individual assignees as selected; department members implied by dept list
             myStatus:
               (attMap.get(`${String(duty._id)}:${String(user._id)}`) as string) ||
@@ -456,6 +459,7 @@ export const sharedSchedule = query({
         participantNames: duty.participantUserIds
           .map((id) => userNameMap.get(String(id)))
           .filter((name): name is string => Boolean(name)),
+        otherParticipants: String(duty.otherParticipants || "").trim(),
       }))
       .sort(
         (a, b) =>
@@ -479,6 +483,7 @@ export const create = mutation({
     locationText: v.string(),
     departmentIds: v.array(v.string()),
     participantUserIds: v.array(v.string()),
+    otherParticipants: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const actor = await requireDutyWrite(ctx);
@@ -501,6 +506,7 @@ export const update = mutation({
     locationText: v.string(),
     departmentIds: v.array(v.string()),
     participantUserIds: v.array(v.string()),
+    otherParticipants: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const actor = await requireDutyWrite(ctx);

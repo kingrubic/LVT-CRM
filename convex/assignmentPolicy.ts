@@ -12,6 +12,7 @@ export type WorkVisibilityMode =
 export const DUTY_LOCATION_MAX_LENGTH = 200;
 export const DUTY_TITLE_MAX_LENGTH = 200;
 export const DUTY_CONTENT_MAX_LENGTH = 200;
+export const DUTY_OTHER_PARTICIPANTS_MAX_LENGTH = 500;
 export const WORK_TITLE_MAX_LENGTH = 200;
 export const WORK_COMPLETION_NOTE_MAX_LENGTH = 500;
 
@@ -97,6 +98,15 @@ export function cleanDutyLocationText(value: string) {
   if (!locationText) throw new Error("INVALID_LOCATION");
   if (locationText.length > DUTY_LOCATION_MAX_LENGTH) throw new Error("INVALID_LOCATION");
   return locationText;
+}
+
+/** Free-text guests; empty is allowed. Does not create notification recipients. */
+export function cleanDutyOtherParticipants(value: string | null | undefined) {
+  const otherParticipants = String(value || "").trim();
+  if (otherParticipants.length > DUTY_OTHER_PARTICIPANTS_MAX_LENGTH) {
+    throw new Error("INVALID_OTHER_PARTICIPANTS");
+  }
+  return otherParticipants;
 }
 
 export function dutyLocationLabel(

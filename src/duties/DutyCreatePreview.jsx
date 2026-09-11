@@ -44,6 +44,10 @@ export default function DutyCreatePreview({ form, catalogs, pending, onCancel, o
             <dt>Người tham gia</dt>
             <dd>{preview.participants}</dd>
           </div>
+          <div>
+            <dt>Thành phần khác</dt>
+            <dd>{preview.otherParticipants}</dd>
+          </div>
         </dl>
         <div className="work-modal-actions">
           <button type="button" className="work-ghost-button" onClick={onCancel} disabled={Boolean(pending)}>

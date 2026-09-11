@@ -71,7 +71,9 @@ export function formatParticipantCell(event) {
     const label = String(name || '').trim();
     if (label && !parts.includes(label)) parts.push(label);
   }
-  return parts.join('; ');
+  const other = String(event?.otherParticipants || '').trim();
+  if (other && !parts.includes(other)) parts.push(other);
+  return parts.join(', ');
 }
 
 export function scheduleRange(mode, anchorIso) {

@@ -292,11 +292,11 @@ UI: trang **Công tác** — nút *Import Excel* cạnh *Tạo công tác* (`src
 
 **Cột file mẫu (không dấu)**
 
-`ten_cong_tac`, `noi_dung`, `dia_diem`, `ngay_bat_dau`, `gio_bat_dau`, `ngay_ket_thuc`, `gio_ket_thuc`, `ca_ngay`, `ma_phong_ban`, `email_tham_gia`
+`ten_cong_tac`, `noi_dung`, `dia_diem`, `ngay_bat_dau`, `gio_bat_dau`, `ngay_ket_thuc`, `gio_ket_thuc`, `ca_ngay`, `ma_phong_ban`, `email_tham_gia`, `thanh_phan_khac`
 
 - Ngày: `YYYY-MM-DD` hoặc `dd/mm/yyyy`.
 - `ca_ngay`: `1`/`0`, `có`/`không`, `true`/`false`; trống = không cả ngày. Khi cả ngày: ngày kết thúc = ngày bắt đầu, giờ mặc định `08:00`–`17:00`.
-- `ma_phong_ban` / `email_tham_gia`: nhiều giá trị cách nhau dấu phẩy; được để trống một cột; **phải có ít nhất một** phòng hoặc một email.
+- `ma_phong_ban` / `email_tham_gia` / `thanh_phan_khac`: mã phòng và email nhiều giá trị cách nhau dấu phẩy; được để trống từng cột; **phải có ít nhất một** phòng, email, hoặc thành phần khác (tối đa 500 ký tự). Thành phần khác không nhận thông báo nhưng vẫn hiện trên Lịch công tác chung.
 
 **Flow server-first**
 
