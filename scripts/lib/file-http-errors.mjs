@@ -20,6 +20,9 @@ export function classifyFileError(error) {
     return new FileHttpError(409, 'UPLOAD_CONFLICT', error);
   }
   if (/TOO_LARGE/i.test(message)) return new FileHttpError(413, 'FILE_TOO_LARGE', error);
+  if (/INVALID_DATE_RANGE/i.test(message)) {
+    return new FileHttpError(400, 'INVALID_DATE_RANGE', error);
+  }
   if (/INVALID_FILE|SIZE_MISMATCH|INVALID_UPLOAD|ArgumentValidation|Invalid argument/i.test(message)) {
     return new FileHttpError(400, 'INVALID_FILE', error);
   }

@@ -15,6 +15,7 @@ import {
 import { dutiesPathname, parseDutyPath } from '../src/duties/dutyRoutes.js';
 import { buildSharedDutySchedulePdf } from '../src/duties/sharedDutySchedulePdf.js';
 import { VIETNAMESE_PDF_FONT } from '../src/homeroom/homeroomExport.js';
+import { parseSharedScheduleQuery } from '../scripts/lib/shared-duty-schedule-pdf.mjs';
 
 const sampleEvents = [
   {
@@ -126,6 +127,19 @@ test('format lịch chung khớp file Word mẫu tuần 07/9–12/9', () => {
   );
 });
 
+test('query PDF lịch chung chỉ nhận tuần/tháng và ngày ISO', () => {
+  assert.deepEqual(
+    parseSharedScheduleQuery(new URLSearchParams('mode=week&anchor=2026-09-11')),
+    { mode: 'week', anchor: '2026-09-11' },
+  );
+  assert.deepEqual(
+    parseSharedScheduleQuery(new URLSearchParams('mode=month&anchor=2026-09-01')),
+    { mode: 'month', anchor: '2026-09-01' },
+  );
+  assert.throws(() => parseSharedScheduleQuery(new URLSearchParams('mode=year&anchor=2026-09-11')), /INVALID_DATE_RANGE/);
+  assert.throws(() => parseSharedScheduleQuery(new URLSearchParams('mode=week')), /INVALID_DATE_RANGE/);
+});
+
 test('PDF lịch chung nhúng font tiếng Việt và giữ tiêu đề/cột của mẫu', async () => {
   const payload = buildSharedScheduleRows('week', '2026-09-09', sampleEvents);
   const built = buildSharedDutySchedulePdf(payload);
@@ -182,4 +196,28 @@ test('UI Lịch công tác có 2 tab, lịch cá nhân dạng lịch, trang tạ
   assert.match(personal, /DutyListSearch/);
   assert.match(personal, /DutyListTabs/);
   assert.match(personal, /report-calendar-search/);
+});
+
+test('gateway PDF lịch chung dùng cùng builder web và bắt buộc query hợp lệ', () => {
+  const server = readFileSync(new URL('../scripts/serve-production.mjs', import.meta.url), 'utf8');
+  const helper = readFileSync(new URL('../scripts/lib/shared-duty-schedule-pdf.mjs', import.meta.url), 'utf8');
+  assert.match(server, /\/api\/duties\/shared-schedule\.pdf/);
+  assert.match(helper, /duties\.sharedSchedule/);
+  assert.match(helper, /buildSharedDutySchedulePdf/);
+});
+
+test('native Lịch CT mở hub trên tab, PDF qua cùng gateway, deep link vào lịch cá nhân', () => {
+  const androidRoot = readFileSync(new URL('../android-app/app/src/main/java/lvt/crm/ui/LvtRoot.kt', import.meta.url), 'utf8');
+  const androidRepo = readFileSync(new URL('../android-app/app/src/main/java/lvt/crm/data/duties/DutiesRepository.kt', import.meta.url), 'utf8');
+  const androidStrings = readFileSync(new URL('../android-app/app/src/main/res/values/strings.xml', import.meta.url), 'utf8');
+  const iosRoot = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/RootTabBarController.swift', import.meta.url), 'utf8');
+  const iosRepo = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/DutiesRepository.swift', import.meta.url), 'utf8');
+  assert.match(androidStrings, /Lịch CT/);
+  assert.match(androidRoot, /dutiesSkipHub/);
+  assert.match(androidRoot, /DutiesTabHost/);
+  assert.match(androidRepo, /\/api\/duties\/shared-schedule\.pdf/);
+  assert.match(iosRoot, /title: "Lịch CT"/);
+  assert.match(iosRoot, /shouldSelect/);
+  assert.match(iosRoot, /openPersonal/);
+  assert.match(iosRepo, /\/api\/duties\/shared-schedule\.pdf/);
 });

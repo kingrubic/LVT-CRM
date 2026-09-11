@@ -43,6 +43,9 @@
 		200000000000000000000026 /* ChangelogViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000026 /* ChangelogViewController.swift */; };
 		200000000000000000000027 /* WorkCreate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000027 /* WorkCreate.swift */; };
 		200000000000000000000028 /* WorkCreateViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000028 /* WorkCreateViewController.swift */; };
+		200000000000000000000029 /* DutyScheduleRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000029 /* DutyScheduleRange.swift */; };
+		20000000000000000000002A /* DutiesHubViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002A /* DutiesHubViewController.swift */; };
+		20000000000000000000002B /* SharedDutyScheduleViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002B /* SharedDutyScheduleViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +89,9 @@
 		300000000000000000000026 /* ChangelogViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangelogViewController.swift; sourceTree = "<group>"; };
 		300000000000000000000027 /* WorkCreate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkCreate.swift; sourceTree = "<group>"; };
 		300000000000000000000028 /* WorkCreateViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkCreateViewController.swift; sourceTree = "<group>"; };
+		300000000000000000000029 /* DutyScheduleRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutyScheduleRange.swift; sourceTree = "<group>"; };
+		30000000000000000000002A /* DutiesHubViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutiesHubViewController.swift; sourceTree = "<group>"; };
+		30000000000000000000002B /* SharedDutyScheduleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedDutyScheduleViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +136,9 @@
 				30000000000000000000001F /* NotificationSyncService.swift */,
 				300000000000000000000020 /* PushEvents.swift */,
 				300000000000000000000019 /* DutiesViewController.swift */,
+				30000000000000000000002A /* DutiesHubViewController.swift */,
+				30000000000000000000002B /* SharedDutyScheduleViewController.swift */,
+				300000000000000000000029 /* DutyScheduleRange.swift */,
 				300000000000000000000018 /* DutiesViewModel.swift */,
 				300000000000000000000017 /* DutiesRepository.swift */,
 				300000000000000000000022 /* ListSearch.swift */,
@@ -251,6 +260,9 @@
 				200000000000000000000017 /* DutiesRepository.swift in Sources */,
 				200000000000000000000018 /* DutiesViewModel.swift in Sources */,
 				200000000000000000000019 /* DutiesViewController.swift in Sources */,
+				20000000000000000000002A /* DutiesHubViewController.swift in Sources */,
+				20000000000000000000002B /* SharedDutyScheduleViewController.swift in Sources */,
+				200000000000000000000029 /* DutyScheduleRange.swift in Sources */,
 				20000000000000000000001A /* WorkRepository.swift in Sources */,
 				20000000000000000000001B /* WorkViewModel.swift in Sources */,
 				20000000000000000000001C /* WorkViewController.swift in Sources */,
@@ -310,7 +322,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = 42ZDDJ2B8M;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -318,7 +330,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.0;
+				MARKETING_VERSION = 1.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -335,7 +347,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKitRelease.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = 42ZDDJ2B8M;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -343,7 +355,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.0;
+				MARKETING_VERSION = 1.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

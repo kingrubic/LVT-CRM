@@ -30,7 +30,7 @@ final class AppContainer {
         sessionsRepository = SessionsRepository(convex: convex)
         let notificationsRepository = NotificationsRepository(convex: convex)
         self.notificationsRepository = notificationsRepository
-        dutiesRepository = DutiesRepository(convex: convex)
+        dutiesRepository = DutiesRepository(convex: convex, tokenProvider: { tokenStore.accessToken })
         workRepository = WorkRepository(convex: convex, tokenProvider: { tokenStore.accessToken })
         notificationSync = NotificationSyncService(
             tokenStore: tokenStore,

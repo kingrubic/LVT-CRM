@@ -63,13 +63,16 @@ fun DutiesScreen(
     tabOpenToken: Int,
     openTab: DutyListTab? = null,
     openFilterToken: Int = 0,
+    onBackToHub: (() -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     var selectedDutyId by remember { mutableStateOf<String?>(null) }
     val selectedDuty = currentDuty(state.duties, selectedDutyId)
 
-    BackHandler(enabled = selectedDutyId != null) { selectedDutyId = null }
+    BackHandler(enabled = selectedDutyId != null || onBackToHub != null) {
+        if (selectedDutyId != null) selectedDutyId = null else onBackToHub?.invoke()
+    }
 
     LaunchedEffect(selectedDutyId, selectedDuty) {
         if (selectedDutyId != null && selectedDuty == null && !state.loading) selectedDutyId = null
@@ -112,9 +115,16 @@ fun DutiesScreen(
     }
 
     LvtScreen(
-        title = "Công tác",
+        title = "Lịch công tác cá nhân",
         refreshing = state.refreshing,
         onRefresh = { viewModel.refresh() },
+        navigationIcon = onBackToHub?.let { back ->
+            {
+                IconButton(onClick = back) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại")
+                }
+            }
+        },
     ) {
         Column(
             modifier = Modifier
