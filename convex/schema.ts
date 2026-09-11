@@ -262,6 +262,26 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_key", ["userId", "notificationKey"]),
+  /**
+   * Per-user personal reminders on a duty or work item they own.
+   * Independent of admin school-wide notification toggles/milestones.
+   */
+  personalReminders: defineTable({
+    userId: v.string(),
+    kind: v.union(v.literal("duty"), v.literal("work")),
+    sourceType: v.union(
+      v.literal("duty"),
+      v.literal("department_work"),
+      v.literal("personal_task"),
+    ),
+    sourceId: v.string(),
+    enabled: v.boolean(),
+    milestonesHours: v.array(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_kind_source", ["userId", "kind", "sourceId"]),
   /** FCM registration tokens, one row per Android app installation. */
   pushTokens: defineTable({
     userId: v.string(),

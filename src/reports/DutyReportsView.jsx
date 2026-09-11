@@ -10,6 +10,10 @@ import {
   filterDutiesBySearch,
   filterDutiesByTab,
 } from '../duties/dutyDisplay';
+import PersonalReminderPanel, {
+  PersonalReminderLayout,
+  reminderMapFromList,
+} from '../notifications/PersonalReminderPanel';
 import './dutyCalendar.css';
 
 const VIEW_OPTIONS = [
@@ -427,6 +431,10 @@ export default function DutyReportsView({
         }),
   };
   const data = useQuery(anyApi.reports.dutyCalendar, queryArgs);
+  const myDutyReminders = useQuery(
+    anyApi.personalReminders.listMine,
+    data?.isSelectedSelf ? { kind: 'duty' } : 'skip',
+  );
 
   useEffect(() => {
     if (data?.selectedUserId && !selectedUserId) {
@@ -486,6 +494,8 @@ export default function DutyReportsView({
   const attendanceEnabled = data?.attendanceConfirmationEnabled !== false;
   const attendedCount = events.filter((event) => event.attendanceStatus === 'attended').length;
   const pendingCount = events.filter((event) => event.attendanceStatus === 'pending').length;
+  const dutyReminderMap = useMemo(() => reminderMapFromList(myDutyReminders), [myDutyReminders]);
+  const showDutyReminders = Boolean(data?.isSelectedSelf) && mode === 'list' && listTab === DUTY_LIST_TAB_UPCOMING;
   const peopleGroups = useMemo(() => {
     const groups = new Map();
     for (const person of data?.people || []) {
@@ -614,9 +624,22 @@ export default function DutyReportsView({
                   <div className="duty-modern-list report-duty-list">
                     {events.map((event) => (
                       <article className="duty-modern-card" key={event._id}>
-                        <button type="button" className="duty-card-toggle" onClick={() => setSelectedEvent(event)}>
-                          <DutyListSummary item={event} />
-                        </button>
+                        <PersonalReminderLayout
+                          show={showDutyReminders}
+                          panel={(
+                            <PersonalReminderPanel
+                              kind="duty"
+                              sourceType="duty"
+                              sourceId={event._id}
+                              label="Công tác"
+                              reminder={dutyReminderMap.get(String(event._id))}
+                            />
+                          )}
+                        >
+                          <button type="button" className="duty-card-toggle" onClick={() => setSelectedEvent(event)}>
+                            <DutyListSummary item={event} />
+                          </button>
+                        </PersonalReminderLayout>
                       </article>
                     ))}
                   </div>

@@ -17,7 +17,7 @@ import {
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
 import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
-import { createMilestones, unionMilestoneHours } from "./notificationSettings";
+import { createMilestones, mergeMilestoneItems, unionMilestoneHours } from "./notificationSettings";
 
 const HOUR_MS = 60 * 60 * 1000;
 const VN_OFFSET_MS = 7 * HOUR_MS;
@@ -86,12 +86,21 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   const canUseWork =
     workEnabled &&
     (isOperationalManagerRole(user.role) || menuAccess.work !== "hidden");
+  const personalRows = await ctx.db
+    .query("personalReminders")
+    .withIndex("by_user", (q: any) => q.eq("userId", String(user._id)))
+    .collect();
+  const enabledPersonal = personalRows.filter(
+    (row: any) => row.enabled && Array.isArray(row.milestonesHours) && row.milestonesHours.length,
+  );
+  const needDuties = canUseDuties || enabledPersonal.some((row: any) => row.kind === "duty");
+  const needWork = canUseWork || enabledPersonal.some((row: any) => row.kind === "work");
 
   const [duties, documents, workItems, personalTasks, positions, departments] = await Promise.all([
-    canUseDuties ? ctx.db.query("duties").collect() : Promise.resolve([]),
-    canUseWork ? ctx.db.query("officeDocuments").collect() : Promise.resolve([]),
-    canUseWork ? ctx.db.query("workItems").collect() : Promise.resolve([]),
-    canUseWork ? ctx.db.query("personalTasks").collect() : Promise.resolve([]),
+    needDuties ? ctx.db.query("duties").collect() : Promise.resolve([]),
+    needWork ? ctx.db.query("officeDocuments").collect() : Promise.resolve([]),
+    needWork ? ctx.db.query("workItems").collect() : Promise.resolve([]),
+    needWork ? ctx.db.query("personalTasks").collect() : Promise.resolve([]),
     ctx.db.query("positions").collect(),
     ctx.db.query("departments").collect(),
   ]);
@@ -114,7 +123,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     tasksByWorkItem.set(String(task.workItemId), list);
   }
 
-  const dutySources: NotificationSource[] = canUseDuties
+  const dutySources: NotificationSource[] = needDuties
     ? duties
         .filter(
           (duty: any) =>
@@ -154,7 +163,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     }
   }
 
-  if (canUseWork && assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
+  if (needWork && assignerMode === WORK_ASSIGNER_MODE_ADMIN_MOD) {
     for (const item of activeWorkItems) {
       const document = documentsById.get(String(item.documentId)) as any;
       if (document?.status !== "approved") continue;
@@ -198,7 +207,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
         dueAt: workDueAt(item.deadline),
       });
     }
-  } else if (canUseWork && level >= 4) {
+  } else if (needWork && level >= 4) {
     for (const item of activeWorkItems) {
       const document = documentsById.get(String(item.documentId)) as any;
       const isApprover = document?.approverUserIds.some(
@@ -219,7 +228,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
         });
       }
     }
-  } else if (canUseWork && (level === 2 || level === 3)) {
+  } else if (needWork && (level === 2 || level === 3)) {
     for (const item of activeWorkItems) {
       const document = documentsById.get(String(item.documentId)) as any;
       if (
@@ -237,7 +246,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
         });
       }
     }
-  } else if (canUseWork && level === 1) {
+  } else if (needWork && level === 1) {
     for (const task of activeTasks) {
       const isAssigned = task.assigneeUserIds.some(
         (id: string) => String(id) === String(user._id),
@@ -377,10 +386,20 @@ async function notificationItems(ctx: any, requestedNow?: number) {
           };
         })
     : [];
-  const scheduledMilestones = [
-    ...createMilestones(dutySources, dutyMilestonesHours, now),
-    ...createMilestones(workSources, workMilestonesHours, now),
-  ];
+  const sourceByKindId = new Map(
+    [...dutySources, ...workSources].map((source) => [`${source.kind}:${source.sourceId}`, source]),
+  );
+  const personalScheduled = enabledPersonal.flatMap((row: any) => {
+    const source = sourceByKindId.get(`${row.kind}:${row.sourceId}`);
+    if (!source) return [];
+    return createMilestones([source], row.milestonesHours, now);
+  });
+  const noMilestones: ReturnType<typeof createMilestones> = [];
+  const scheduledMilestones = mergeMilestoneItems([
+    canUseDuties ? createMilestones(dutySources, dutyMilestonesHours, now) : noMilestones,
+    canUseWork ? createMilestones(workSources, workMilestonesHours, now) : noMilestones,
+    personalScheduled,
+  ]);
   const approvalIdsWithMilestone = new Set(
     scheduledMilestones
       .filter((item) => item.sourceType === "approval")
