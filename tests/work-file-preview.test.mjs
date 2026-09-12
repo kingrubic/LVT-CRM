@@ -4,7 +4,10 @@ import * as XLSX from 'xlsx';
 
 import {
   canPreviewWorkFile,
+  shouldUseWorkFilePreviewSplit,
   spreadsheetPreviewFromArrayBuffer,
+  WORK_FILE_PREVIEW_SPLIT_CLASS,
+  WORK_FILE_PREVIEW_SPLIT_MEDIA,
   WORK_SPREADSHEET_PREVIEW_MAX_COLS,
   WORK_SPREADSHEET_PREVIEW_MAX_ROWS,
   workFilePreviewKind,
@@ -19,6 +22,13 @@ test('work file preview kinds include office files', () => {
   assert.equal(workFilePreviewKind('ghi-chu.txt'), '');
   assert.equal(canPreviewWorkFile('bao-cao.docx'), true);
   assert.equal(canPreviewWorkFile('ghi-chu.txt'), false);
+});
+
+test('desktop work file preview splits at the web/mobile shell breakpoint', () => {
+  assert.equal(WORK_FILE_PREVIEW_SPLIT_CLASS, 'work-file-preview-split');
+  assert.equal(WORK_FILE_PREVIEW_SPLIT_MEDIA, '(min-width: 681px)');
+  assert.equal(shouldUseWorkFilePreviewSplit(true), true);
+  assert.equal(shouldUseWorkFilePreviewSplit(false), false);
 });
 
 test('spreadsheet preview renders cell text and truncates oversized sheets', () => {

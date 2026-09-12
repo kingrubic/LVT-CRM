@@ -2,6 +2,28 @@ import * as XLSX from 'xlsx';
 
 export const WORK_SPREADSHEET_PREVIEW_MAX_ROWS = 2000;
 export const WORK_SPREADSHEET_PREVIEW_MAX_COLS = 40;
+export const WORK_FILE_PREVIEW_SPLIT_CLASS = 'work-file-preview-split';
+export const WORK_FILE_PREVIEW_SPLIT_MEDIA = '(min-width: 681px)';
+export const WORK_FILE_PREVIEW_OPEN_EVENT = 'lvt-work-file-preview-open';
+
+let activeSplitPreviewId = null;
+
+export function shouldUseWorkFilePreviewSplit(matches) {
+  return Boolean(matches);
+}
+
+export function syncWorkFilePreviewSplitClass(previewId, enabled) {
+  if (typeof document === 'undefined' || !previewId) return;
+  if (enabled) {
+    activeSplitPreviewId = previewId;
+    document.documentElement.classList.add(WORK_FILE_PREVIEW_SPLIT_CLASS);
+    return;
+  }
+  if (activeSplitPreviewId === previewId) {
+    activeSplitPreviewId = null;
+    document.documentElement.classList.remove(WORK_FILE_PREVIEW_SPLIT_CLASS);
+  }
+}
 
 export function workFileExtension(fileName) {
   return String(fileName || '').trim().toLowerCase().split('.').pop() || '';

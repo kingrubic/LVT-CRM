@@ -23,7 +23,14 @@ import {
   WORK_COMPLETION_NOTE_MAX_LENGTH,
   workAssignmentPayload,
 } from './workDisplay';
-import { canPreviewWorkFile, spreadsheetPreviewFromArrayBuffer, workFilePreviewKind } from './workFilePreview';
+import {
+  canPreviewWorkFile,
+  spreadsheetPreviewFromArrayBuffer,
+  syncWorkFilePreviewSplitClass,
+  workFilePreviewKind,
+  WORK_FILE_PREVIEW_OPEN_EVENT,
+  WORK_FILE_PREVIEW_SPLIT_MEDIA,
+} from './workFilePreview';
 import { filterByPickerSearch, personPickerHaystack } from '../lib/pickerSearch';
 import PersonalReminderPanel, {
   PersonalReminderLayout,
@@ -105,6 +112,8 @@ function CloseIcon() {
   );
 }
 
+let nextWorkFilePreviewId = 0;
+
 function PrivateFileLink({
   documentId,
   fileName,
@@ -116,29 +125,61 @@ function PrivateFileLink({
   const { fetchAccessToken } = useConvexAuth();
   const [busyAction, setBusyAction] = useState('');
   const [preview, setPreview] = useState(null);
+  const [splitPreview, setSplitPreview] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia(WORK_FILE_PREVIEW_SPLIT_MEDIA).matches
+  ));
   const closeButtonRef = useRef(null);
+  const previewIdRef = useRef(`work-file-preview-${++nextWorkFilePreviewId}`);
   const kind = workFilePreviewKind(fileName);
   const canPreview = canPreviewWorkFile(fileName);
   const previewUrl = preview?.url || '';
+  const previewOpen = Boolean(preview);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
   useEffect(() => {
-    if (!preview) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setPreview(null);
+    if (!previewOpen) return undefined;
+    const previewId = previewIdRef.current;
+    const media = window.matchMedia(WORK_FILE_PREVIEW_SPLIT_MEDIA);
+    const syncSplit = () => {
+      const nextSplit = media.matches;
+      setSplitPreview(nextSplit);
+      syncWorkFilePreviewSplitClass(previewId, nextSplit);
+    };
+    const closeFromEscape = (event) => {
+      if (event.key === 'Escape') {
+        setPreview((current) => {
+          if (current?.url) URL.revokeObjectURL(current.url);
+          return null;
+        });
+      }
+    };
+    const closeIfOtherPreview = (event) => {
+      if (event.detail === previewId) return;
+      setPreview((current) => {
+        if (current?.url) URL.revokeObjectURL(current.url);
+        return null;
+      });
     };
     const previousOverflow = window.document.body.style.overflow;
     window.document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', onKeyDown);
+    syncSplit();
+    media.addEventListener('change', syncSplit);
+    window.addEventListener(WORK_FILE_PREVIEW_OPEN_EVENT, closeIfOtherPreview);
+    window.dispatchEvent(new CustomEvent(WORK_FILE_PREVIEW_OPEN_EVENT, { detail: previewId }));
+    window.addEventListener('keydown', closeFromEscape);
     window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     return () => {
+      syncWorkFilePreviewSplitClass(previewId, false);
+      setSplitPreview(false);
       window.document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
+      media.removeEventListener('change', syncSplit);
+      window.removeEventListener(WORK_FILE_PREVIEW_OPEN_EVENT, closeIfOtherPreview);
+      window.removeEventListener('keydown', closeFromEscape);
     };
-  }, [preview]);
+  }, [previewOpen]);
 
   if (!documentId || !privateFile) return null;
 
@@ -196,6 +237,9 @@ function PrivateFileLink({
         } else if (kind === 'docx') {
           nextPreview = { ...nextPreview, buffer: await blob.arrayBuffer() };
         }
+        const nextSplit = window.matchMedia(WORK_FILE_PREVIEW_SPLIT_MEDIA).matches;
+        setSplitPreview(nextSplit);
+        syncWorkFilePreviewSplitClass(previewIdRef.current, nextSplit);
         setPreview((current) => {
           if (current?.url) URL.revokeObjectURL(current.url);
           return nextPreview;
@@ -252,9 +296,15 @@ function PrivateFileLink({
       </span>
       {preview ? createPortal((
         <div className="work-file-preview-backdrop" role="presentation" onMouseDown={(event) => {
+          if (splitPreview) return;
           if (event.target === event.currentTarget) closePreview();
         }}>
-          <section className="work-file-preview-dialog" role="dialog" aria-modal="true" aria-label={`Xem trước ${fileName}`}>
+          <section
+            className="work-file-preview-dialog"
+            role="dialog"
+            aria-modal={splitPreview ? 'false' : 'true'}
+            aria-label={`Xem trước ${fileName}`}
+          >
             <header>
               <strong>{fileName}</strong>
               <div>

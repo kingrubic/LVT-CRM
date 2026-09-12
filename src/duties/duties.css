@@ -1132,3 +1132,44 @@
     animation: none;
   }
 }
+
+@media (min-width: 681px) {
+  html.work-file-preview-split .duty-modern-list,
+  html.work-file-preview-split .duty-card-layout,
+  html.work-file-preview-split .duty-card-body,
+  html.work-file-preview-split .duty-list-search-advanced,
+  html.work-file-preview-split .duty-workspace .duty-card-toggle,
+  html.work-file-preview-split .duty-workspace .duty-title-row,
+  html.work-file-preview-split .duty-workspace .member-list {
+    grid-template-columns: 1fr;
+  }
+
+  html.work-file-preview-split .personal-reminder-panel {
+    border-left: 0;
+    border-top: 1px solid var(--duty-line, #dce5eb);
+  }
+
+  html.work-file-preview-split .duty-list-search-row {
+    flex-wrap: wrap;
+  }
+
+  html.work-file-preview-split .duty-list-search-advanced-toggle,
+  html.work-file-preview-split .duty-list-search-location,
+  html.work-file-preview-split .duty-list-search-clear {
+    width: 100%;
+    grid-column: 1;
+  }
+
+  html.work-file-preview-split .duty-workspace .duty-card-toggle {
+    gap: 11px;
+    padding: 15px 14px 13px 17px;
+  }
+
+  html.work-file-preview-split .duty-expand-hint {
+    justify-self: start;
+  }
+
+  html.work-file-preview-split .work-list-tabs button {
+    flex: 1 1 100%;
+  }
+}
