@@ -110,6 +110,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 - Chuông trên header (và **Xem toàn bộ**); đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` cho phép thao tác. Trang `/thong-bao` vẫn mở được; không còn mục Thông báo trên sidebar.
 - **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác; `work_assigned` cùng `department_work` / `personal_task` focus thẻ công việc. Công việc mới (giống công tác mới) hiện ngay trên feed với nhãn **Mới phân công**, không chờ mốc hạn. Công tác mới/cập nhật cũng gửi APNs/FCM tới người tham gia (phòng ban hoặc cá nhân), kể cả khi người tạo tự thêm mình. Người được giao công việc nhận thông báo kể cả khi tự tạo việc cho mình; người tạo không nhận nếu chỉ giao cho người khác. Android nhận FCM data-only (không gắn `android.notification` rỗng) rồi hiện banner từ feed; mở lại app cũng sync ngay. iOS lock screen cần APNs alert (`APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`; `APNS_BUNDLE_ID` mặc định `vn.lvt.crm.uikit`; `APNS_PRODUCTION=true` khi cài Ad Hoc/TestFlight).
 - Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; **Ai nhìn thấy công việc?** (chỉ người tạo / người tạo+người nhận+4/5★+admin/mod); bật/tắt nguồn thông báo Công tác/Công việc; chỉnh **mốc giờ riêng** cho từng nguồn.
+- User tự đặt **nhắc nhở cá nhân** trên từng công tác chưa diễn ra / công việc còn phải làm của chính mình (list 1 cột, toggle bên phải thẻ). Nhắc này độc lập với mốc Admin: tắt nguồn toàn trường không tắt nhắc cá nhân. Web trước; native app sau.
 
 ## Schema chính
 
@@ -128,6 +129,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `userImportUploads` | File Excel import user tạm (Convex Storage, TTL 1 giờ) |
 | `dutyImportUploads` | File Excel import công tác tạm (Convex Storage, TTL 1 giờ) |
 | `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |
+| `personalReminders` | Nhắc nhở cá nhân theo user + công tác/công việc |
 | `boardingPeriods` | Kỳ bán trú (menu đang ẩn) |
 | `officeDocuments` | Công việc đã giao, tên, tệp đính kèm tùy chọn |
 | `workItems` | Phân công phòng ban / cá nhân và tiến độ nộp |
@@ -138,7 +140,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `notificationSettings.ts`, `personalReminders.ts`, `personalReminderPolicy.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
 
 Cấu trúc frontend gợi ý:
 

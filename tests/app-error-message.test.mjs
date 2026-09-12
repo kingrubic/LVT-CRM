@@ -46,4 +46,10 @@ test('messageFor đọc được lỗi Convex bị bọc trong data object', () 
     }),
     'Máy chủ chưa cập nhật chức năng Ghi nhận lỗi. Vui lòng tải lại trang sau khi hệ thống cập nhật, rồi thử lại.',
   );
+  assert.equal(
+    messageFor({
+      message: '[CONVEX Q(personalReminders:listMine)] [Request ID: abc] Server Error\nCould not find public function',
+    }),
+    'Máy chủ chưa cập nhật chức năng nhắc nhở. Vui lòng tải lại trang sau khi hệ thống cập nhật, rồi thử lại.',
+  );
 });

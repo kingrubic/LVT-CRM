@@ -24,6 +24,32 @@ export function cleanNotificationMilestones(values: number[]): number[] {
   return cleaned;
 }
 
+/** Personal reminders may be enabled with no hours yet; empty is valid. */
+export function cleanPersonalReminderMilestones(values: number[]): number[] {
+  if (!Array.isArray(values) || values.length === 0) return [];
+  return cleanNotificationMilestones(values);
+}
+
+export function mergeMilestoneItems<T extends {
+  key: string;
+  availableAt: number;
+  title: string;
+  sourceType: string;
+  sourceId: string;
+}>(
+  groups: T[][],
+): T[] {
+  const byKey = new Map<string, T>();
+  for (const group of groups) {
+    for (const item of group) {
+      if (!byKey.has(item.key)) byKey.set(item.key, item);
+    }
+  }
+  return [...byKey.values()].sort(
+    (a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"),
+  );
+}
+
 export function resolveSourceMilestones(
   specific: number[] | null | undefined,
   shared: number[] | null | undefined,

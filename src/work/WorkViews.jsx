@@ -17,12 +17,19 @@ import {
   filterWorksByTab,
   formatWorkDate,
   workListTabCounts,
+  workReminderSourceType,
+  workTabAllowsPersonalReminder,
   WORK_LIST_TAB_TODO,
   WORK_COMPLETION_NOTE_MAX_LENGTH,
   workAssignmentPayload,
 } from './workDisplay';
 import { canPreviewWorkFile, spreadsheetPreviewFromArrayBuffer, workFilePreviewKind } from './workFilePreview';
 import { filterByPickerSearch, personPickerHaystack } from '../lib/pickerSearch';
+import PersonalReminderPanel, {
+  PersonalReminderLayout,
+  reminderMapFromList,
+} from '../notifications/PersonalReminderPanel';
+import { PersonalReminderQueryBoundary } from '../notifications/personalReminderQuery';
 import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
@@ -1243,7 +1250,15 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
   );
 }
 
-export function WorkUserView({ focusTarget = null }) {
+export function WorkUserView(props) {
+  return (
+    <PersonalReminderQueryBoundary fallback={<WorkUserViewBody {...props} reminderFailed />}>
+      <WorkUserViewBody {...props} />
+    </PersonalReminderQueryBoundary>
+  );
+}
+
+function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
   const data = useQuery(anyApi.work.listMine);
   const { fetchAccessToken } = useConvexAuth();
   const approveDocument = useMutation(anyApi.work.approveDocument);
@@ -1269,6 +1284,12 @@ export function WorkUserView({ focusTarget = null }) {
   const isAssigner = data?.level === 2 || data?.level === 3;
   const isAdminMod = (data?.assignerMode || 'admin_mod') === 'admin_mod';
   const pendingCompletionReviews = data?.pendingCompletionReviews || [];
+  const myWorkReminders = useQuery(
+    anyApi.personalReminders.listMine,
+    reminderFailed ? 'skip' : { kind: 'work' },
+  );
+  const workReminderMap = useMemo(() => reminderMapFromList(myWorkReminders), [myWorkReminders]);
+  const showWorkReminders = !reminderFailed && workTabAllowsPersonalReminder(listTab);
 
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: WORK_NOTIFICATION_FOCUS_TYPES,
@@ -1537,6 +1558,18 @@ export function WorkUserView({ focusTarget = null }) {
                   const cardOpen = String(expanded || '') === String(task._id);
                   return (
                     <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id}>
+                      <PersonalReminderLayout
+                        show={showWorkReminders}
+                        panel={(
+                          <PersonalReminderPanel
+                            kind="work"
+                            sourceType={workReminderSourceType(task)}
+                            sourceId={task._id}
+                            label="Công việc"
+                            reminder={workReminderMap.get(String(task._id))}
+                          />
+                        )}
+                      >
                       <button type="button" className="duty-card-toggle" onClick={() => setExpanded(cardOpen ? null : task._id)}>
                         <WorkListSummary
                           item={task}
@@ -1607,6 +1640,7 @@ export function WorkUserView({ focusTarget = null }) {
                           ) : null}
                         </div>
                       ) : null}
+                      </PersonalReminderLayout>
                     </article>
                   );
                 })}
@@ -1664,6 +1698,18 @@ export function WorkUserView({ focusTarget = null }) {
                   const cardOpen = String(expanded || '') === String(task._id);
                   return (
                     <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id}>
+                      <PersonalReminderLayout
+                        show={showWorkReminders}
+                        panel={(
+                          <PersonalReminderPanel
+                            kind="work"
+                            sourceType="personal_task"
+                            sourceId={task._id}
+                            label="Công việc"
+                            reminder={workReminderMap.get(String(task._id))}
+                          />
+                        )}
+                      >
                       <button type="button" className="duty-card-toggle" onClick={() => setExpanded(cardOpen ? null : task._id)}>
                         <WorkListSummary
                           item={task}
@@ -1710,6 +1756,7 @@ export function WorkUserView({ focusTarget = null }) {
                           ) : null}
                         </div>
                       ) : null}
+                      </PersonalReminderLayout>
                     </article>
                   );
                 })}

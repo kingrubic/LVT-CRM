@@ -5,6 +5,14 @@ export const WORK_LIST_TAB_COMPLETED = 'completed';
 /** Keep in sync with WORK_COMPLETION_NOTE_MAX_LENGTH in convex/assignmentPolicy.ts */
 export const WORK_COMPLETION_NOTE_MAX_LENGTH = 500;
 
+export function workTabAllowsPersonalReminder(tab) {
+  return tab === WORK_LIST_TAB_TODO || tab === WORK_LIST_TAB_OVERDUE;
+}
+
+export function workReminderSourceType(item) {
+  return item?.type === 'department' ? 'department_work' : 'personal_task';
+}
+
 const COMPLETED_STATUSES = new Set(['completed', 'completed_late']);
 const PENDING_REVIEW_STATUSES = new Set(['pending_completion', 'pending_approval']);
 
