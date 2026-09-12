@@ -14,6 +14,7 @@ import PersonalReminderPanel, {
   PersonalReminderLayout,
   reminderMapFromList,
 } from '../notifications/PersonalReminderPanel';
+import { PersonalReminderQueryBoundary } from '../notifications/personalReminderQuery';
 import './dutyCalendar.css';
 
 const VIEW_OPTIONS = [
@@ -400,11 +401,20 @@ function EventDetail({
   );
 }
 
-export default function DutyReportsView({
+export default function DutyReportsView(props) {
+  return (
+    <PersonalReminderQueryBoundary fallback={<DutyReportsViewBody {...props} reminderFailed />}>
+      <DutyReportsViewBody {...props} />
+    </PersonalReminderQueryBoundary>
+  );
+}
+
+function DutyReportsViewBody({
   onCreate = null,
   onImport = null,
   onEdit = null,
   focusDutyId = null,
+  reminderFailed = false,
 } = {}) {
   const [mode, setMode] = useState('week');
   const [anchor, setAnchor] = useState(() => new Date());
@@ -433,7 +443,7 @@ export default function DutyReportsView({
   const data = useQuery(anyApi.reports.dutyCalendar, queryArgs);
   const myDutyReminders = useQuery(
     anyApi.personalReminders.listMine,
-    data?.isSelectedSelf ? { kind: 'duty' } : 'skip',
+    !reminderFailed && data?.isSelectedSelf ? { kind: 'duty' } : 'skip',
   );
 
   useEffect(() => {
@@ -495,7 +505,10 @@ export default function DutyReportsView({
   const attendedCount = events.filter((event) => event.attendanceStatus === 'attended').length;
   const pendingCount = events.filter((event) => event.attendanceStatus === 'pending').length;
   const dutyReminderMap = useMemo(() => reminderMapFromList(myDutyReminders), [myDutyReminders]);
-  const showDutyReminders = Boolean(data?.isSelectedSelf) && mode === 'list' && listTab === DUTY_LIST_TAB_UPCOMING;
+  const showDutyReminders = !reminderFailed
+    && Boolean(data?.isSelectedSelf)
+    && mode === 'list'
+    && listTab === DUTY_LIST_TAB_UPCOMING;
   const peopleGroups = useMemo(() => {
     const groups = new Map();
     for (const person of data?.people || []) {

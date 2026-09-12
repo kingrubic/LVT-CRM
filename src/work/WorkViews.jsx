@@ -29,6 +29,7 @@ import PersonalReminderPanel, {
   PersonalReminderLayout,
   reminderMapFromList,
 } from '../notifications/PersonalReminderPanel';
+import { PersonalReminderQueryBoundary } from '../notifications/personalReminderQuery';
 import './work.css';
 
 const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'xls', 'png', 'jpg', 'jpeg'];
@@ -1249,7 +1250,15 @@ function PersonalTaskAssignModal({ work, users, onClose, onSubmit, saving }) {
   );
 }
 
-export function WorkUserView({ focusTarget = null }) {
+export function WorkUserView(props) {
+  return (
+    <PersonalReminderQueryBoundary fallback={<WorkUserViewBody {...props} reminderFailed />}>
+      <WorkUserViewBody {...props} />
+    </PersonalReminderQueryBoundary>
+  );
+}
+
+function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
   const data = useQuery(anyApi.work.listMine);
   const { fetchAccessToken } = useConvexAuth();
   const approveDocument = useMutation(anyApi.work.approveDocument);
@@ -1275,9 +1284,12 @@ export function WorkUserView({ focusTarget = null }) {
   const isAssigner = data?.level === 2 || data?.level === 3;
   const isAdminMod = (data?.assignerMode || 'admin_mod') === 'admin_mod';
   const pendingCompletionReviews = data?.pendingCompletionReviews || [];
-  const myWorkReminders = useQuery(anyApi.personalReminders.listMine, { kind: 'work' });
+  const myWorkReminders = useQuery(
+    anyApi.personalReminders.listMine,
+    reminderFailed ? 'skip' : { kind: 'work' },
+  );
   const workReminderMap = useMemo(() => reminderMapFromList(myWorkReminders), [myWorkReminders]);
-  const showWorkReminders = workTabAllowsPersonalReminder(listTab);
+  const showWorkReminders = !reminderFailed && workTabAllowsPersonalReminder(listTab);
 
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: WORK_NOTIFICATION_FOCUS_TYPES,

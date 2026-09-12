@@ -15,6 +15,7 @@ import {
   mergeMilestoneItems,
 } from '../convex/notificationSettings.ts';
 import { workReminderSourceType, workTabAllowsPersonalReminder, WORK_LIST_TAB_COMPLETED, WORK_LIST_TAB_OVERDUE, WORK_LIST_TAB_PENDING, WORK_LIST_TAB_TODO } from '../src/work/workDisplay.js';
+import { personalReminderQueryBoundaryState } from '../src/notifications/personalReminderQuery.js';
 
 test('nhắc cá nhân chỉ cho công tác chưa kết thúc của chính mình', () => {
   assert.equal(dutyAllowsPersonalReminder({ isOverdue: false }), true);
@@ -109,13 +110,26 @@ test('công việc chỉ nhắc ở tab Việc cần làm và Quá hạn', () =>
   assert.equal(workReminderSourceType({ type: 'individual' }), 'personal_task');
 });
 
+test('lỗi query nhắc nhở không được làm trắng trang, trừ lỗi auth', () => {
+  assert.deepEqual(
+    personalReminderQueryBoundaryState(new Error('[CONVEX Q(personalReminders:listMine)] Server Error')),
+    { failed: true },
+  );
+  assert.throws(
+    () => personalReminderQueryBoundaryState(new Error('PASSWORD_CHANGE_REQUIRED')),
+    /PASSWORD_CHANGE_REQUIRED/,
+  );
+});
+
 test('list công tác/công việc gắn panel nhắc cá nhân và xếp 1 cột', () => {
   const dutyView = readFileSync(new URL('../src/reports/DutyReportsView.jsx', import.meta.url), 'utf8');
   const workView = readFileSync(new URL('../src/work/WorkViews.jsx', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/duties/duties.css', import.meta.url), 'utf8');
   assert.match(dutyView, /PersonalReminderPanel/);
+  assert.match(dutyView, /PersonalReminderQueryBoundary/);
   assert.match(dutyView, /isSelectedSelf/);
   assert.match(workView, /PersonalReminderPanel/);
+  assert.match(workView, /PersonalReminderQueryBoundary/);
   assert.match(workView, /workTabAllowsPersonalReminder/);
   assert.match(css, /grid-template-columns: minmax\(0, 1fr\);/);
   assert.match(css, /\.duty-card-layout/);
