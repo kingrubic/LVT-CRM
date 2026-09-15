@@ -1,5 +1,7 @@
 package lvt.crm.data.duties
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import lvt.crm.data.convex.ConvexConfig
 import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.convex.ConvexHttpClient
@@ -125,7 +127,7 @@ class DutiesRepository(
         )
     }
 
-    suspend fun downloadSharedSchedulePdf(mode: String, anchorIso: String): SharedSchedulePdf {
+    suspend fun downloadSharedSchedulePdf(mode: String, anchorIso: String): SharedSchedulePdf = withContext(Dispatchers.IO) {
         val token = tokenProvider()?.takeIf { it.isNotBlank() }
             ?: throw ConvexException("UNAUTHORIZED", "Bạn cần đăng nhập để xem lịch công tác chung.")
         val encodedMode = URLEncoder.encode(mode, Charsets.UTF_8.name())
@@ -156,7 +158,7 @@ class DutiesRepository(
                 }
                 val fileName = dispositionFileName(response.header("Content-Disposition"))
                     ?: "LCT.pdf"
-                return SharedSchedulePdf(file = downloaded, fileName = fileName)
+                return@withContext SharedSchedulePdf(file = downloaded, fileName = fileName)
             }
         } catch (error: ConvexException) {
             downloaded.delete()

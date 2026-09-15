@@ -32,7 +32,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LVTConvexURL</key>
-	<string>https://lvt-convex.vscgroup.io.vn</string>
+	<string>https://confident-guanaco-953.convex.cloud</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>vn.lvt.crm.notifications.refresh</string>

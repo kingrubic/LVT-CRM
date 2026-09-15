@@ -98,6 +98,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
+        // Mandatory App Store update (fail-open) — mirrors Android Play IMMEDIATE onResume.
+        AppStoreUpdater.shared.checkOnResume(window: window)
         Task { @MainActor in
             if case .loading = appDelegate.container.authRepository.state {
                 await appDelegate.container.authRepository.restoreSession()

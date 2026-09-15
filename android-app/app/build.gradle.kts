@@ -19,8 +19,8 @@ fun localProperty(name: String): String? {
     return (project.findProperty(name) as String?)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
-val lvtVersionCode = 37
-val lvtVersionName = "0.16.1"
+val lvtVersionCode = 39
+val lvtVersionName = "0.16.3"
 
 android {
     namespace = "lvt.crm"
@@ -60,12 +60,12 @@ android {
             buildConfigField(
                 "String",
                 "CONVEX_URL",
-                "\"${project.findProperty("lvt.convex.debug.url") ?: "http://10.0.2.2:3210"}\"",
+                "\"${localProperty("lvt.convex.debug.url") ?: project.findProperty("lvt.convex.debug.url") ?: "https://confident-guanaco-953.convex.cloud"}\"",
             )
             buildConfigField(
                 "String",
                 "WEB_URL",
-                "\"${project.findProperty("lvt.web.debug.url") ?: "https://lvt.vscgroup.io.vn"}\"",
+                "\"${localProperty("lvt.web.debug.url") ?: project.findProperty("lvt.web.debug.url") ?: "https://lvt.vscgroup.io.vn"}\"",
             )
         }
         release {
@@ -82,12 +82,12 @@ android {
             buildConfigField(
                 "String",
                 "CONVEX_URL",
-                "\"${project.findProperty("lvt.convex.release.url") ?: "https://lvt-convex.vscgroup.io.vn"}\"",
+                "\"${localProperty("lvt.convex.release.url") ?: project.findProperty("lvt.convex.release.url") ?: "https://confident-guanaco-953.convex.cloud"}\"",
             )
             buildConfigField(
                 "String",
                 "WEB_URL",
-                "\"${project.findProperty("lvt.web.release.url") ?: "https://lvt.vscgroup.io.vn"}\"",
+                "\"${localProperty("lvt.web.release.url") ?: project.findProperty("lvt.web.release.url") ?: "https://lvt.vscgroup.io.vn"}\"",
             )
         }
     }

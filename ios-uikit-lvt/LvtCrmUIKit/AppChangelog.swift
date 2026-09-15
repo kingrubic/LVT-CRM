@@ -8,6 +8,19 @@ struct AppChangelogEntry: Equatable {
 enum AppChangelog {
     static let entries: [AppChangelogEntry] = [
         AppChangelogEntry(
+            version: "1.8.3",
+            highlights: [
+                "Bắt buộc cập nhật khi App Store có bản mới hơn (giống Android).",
+            ]
+        ),
+        AppChangelogEntry(
+            version: "1.8.2",
+            highlights: [
+                "Chuyển kết nối backend sang Convex Cloud (ổn định hơn bản self-hosted).",
+                "Giữ webURL production https://lvt.vscgroup.io.vn.",
+            ]
+        ),
+        AppChangelogEntry(
             version: "1.8.1",
             highlights: ["Màn Lịch CT hiện đủ hai nút lịch cá nhân và lịch chung."]
         ),

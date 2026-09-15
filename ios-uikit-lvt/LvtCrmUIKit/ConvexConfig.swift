@@ -10,9 +10,9 @@ enum ConvexConfig {
         }
         #if DEBUG
         return ProcessInfo.processInfo.environment["LVT_CONVEX_URL"]
-            ?? "https://lvt-convex.vscgroup.io.vn"
+            ?? "https://confident-guanaco-953.convex.cloud"
         #else
-        return "https://lvt-convex.vscgroup.io.vn"
+        return "https://confident-guanaco-953.convex.cloud"
         #endif
     }
 

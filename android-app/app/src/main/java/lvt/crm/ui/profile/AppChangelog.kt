@@ -8,6 +8,17 @@ data class AppChangelogEntry(
 object AppChangelog {
     val entries: List<AppChangelogEntry> = listOf(
         AppChangelogEntry(
+            "0.16.3",
+            listOf(
+                "Chuyển kết nối backend sang Convex Cloud (ổn định hơn bản self-hosted).",
+                "Giữ webURL production https://lvt.vscgroup.io.vn.",
+            ),
+        ),
+        AppChangelogEntry(
+            "0.16.2",
+            listOf("Tải được lịch công tác chung trên Android."),
+        ),
+        AppChangelogEntry(
             "0.16.1",
             listOf("Màn Lịch CT hiện đủ hai nút lịch cá nhân và lịch chung."),
         ),

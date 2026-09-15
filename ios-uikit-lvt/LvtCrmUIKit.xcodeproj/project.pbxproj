@@ -46,6 +46,7 @@
 		200000000000000000000029 /* DutyScheduleRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000029 /* DutyScheduleRange.swift */; };
 		20000000000000000000002A /* DutiesHubViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002A /* DutiesHubViewController.swift */; };
 		20000000000000000000002B /* SharedDutyScheduleViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002B /* SharedDutyScheduleViewController.swift */; };
+		20000000000000000000002C /* AppStoreUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002C /* AppStoreUpdater.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -92,6 +93,7 @@
 		300000000000000000000029 /* DutyScheduleRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutyScheduleRange.swift; sourceTree = "<group>"; };
 		30000000000000000000002A /* DutiesHubViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutiesHubViewController.swift; sourceTree = "<group>"; };
 		30000000000000000000002B /* SharedDutyScheduleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedDutyScheduleViewController.swift; sourceTree = "<group>"; };
+		30000000000000000000002C /* AppStoreUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreUpdater.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +128,7 @@
 				300000000000000000000011 /* ProfileViewController.swift */,
 				300000000000000000000012 /* DevicesViewController.swift */,
 				300000000000000000000025 /* AppChangelog.swift */,
+				30000000000000000000002C /* AppStoreUpdater.swift */,
 				300000000000000000000026 /* ChangelogViewController.swift */,
 				300000000000000000000016 /* NotificationsViewController.swift */,
 				300000000000000000000015 /* NotificationsViewModel.swift */,
@@ -252,6 +255,7 @@
 				200000000000000000000011 /* ProfileViewController.swift in Sources */,
 				200000000000000000000012 /* DevicesViewController.swift in Sources */,
 				200000000000000000000025 /* AppChangelog.swift in Sources */,
+				20000000000000000000002C /* AppStoreUpdater.swift in Sources */,
 				200000000000000000000026 /* ChangelogViewController.swift in Sources */,
 				200000000000000000000013 /* NotificationModels.swift in Sources */,
 				200000000000000000000014 /* NotificationsRepository.swift in Sources */,
@@ -322,7 +326,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 42ZDDJ2B8M;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -330,7 +334,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.8.1;
+				MARKETING_VERSION = 1.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -347,7 +351,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKitRelease.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 42ZDDJ2B8M;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -355,7 +359,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.8.1;
+				MARKETING_VERSION = 1.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
