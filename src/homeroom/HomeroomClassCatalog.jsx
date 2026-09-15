@@ -19,6 +19,7 @@ import {
   classStatusLabel,
   filterHomeroomTeacherClassAssignments,
   groupAssignmentsByEffect,
+  schoolYearWindow,
   userRoleLabel,
 } from './classCatalog';
 
@@ -39,6 +40,8 @@ function ClassForm({
   title,
   submitLabel,
   initial = { code: '', name: '', gradeLevel: 6, notes: '' },
+  schoolYears = undefined,
+  defaultSchoolYearId = '',
   pending,
   error,
   success,
@@ -49,6 +52,7 @@ function ClassForm({
   const [name, setName] = useState(initial.name || '');
   const [gradeLevel, setGradeLevel] = useState(String(initial.gradeLevel || 6));
   const [notes, setNotes] = useState(initial.notes || '');
+  const [schoolYearId, setSchoolYearId] = useState(defaultSchoolYearId);
 
   return (
     <form
@@ -56,10 +60,20 @@ function ClassForm({
       onSubmit={(event) => {
         event.preventDefault();
         if (pending) return;
-        onSubmit({ code, name, gradeLevel, notes });
+        onSubmit({ schoolYearId, code, name, gradeLevel, notes });
       }}
     >
       <h3>{title}</h3>
+      {schoolYears ? (
+        <label>
+          Năm học
+          <select value={schoolYearId} onChange={(event) => setSchoolYearId(event.target.value)} required>
+            {schoolYears.map((year) => (
+              <option key={year._id} value={year._id}>{year.name}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <label>
         Mã lớp
         <input
@@ -109,7 +123,7 @@ function ClassForm({
   );
 }
 
-export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
+export function ClassCatalogPanel({ session, yearId, schoolYears = [], onOpenClass }) {
   const canManage = canManageCatalog(session);
   const classes = useQuery(
     anyApi.homeroomClasses.listCatalog,
@@ -128,6 +142,7 @@ export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
   const empty = classes !== undefined && !classes.length;
   const active = (classes || []).filter((row) => row.status === 'active');
   const archived = (classes || []).filter((row) => row.status === 'archived');
+  const createSchoolYears = schoolYearWindow(schoolYears, yearId);
 
   return (
     <section className="homeroom-panel homeroom-catalog-panel" aria-labelledby="homeroom-catalog-title">
@@ -160,6 +175,8 @@ export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
         <ClassForm
           title="Tạo lớp"
           submitLabel="Lưu lớp"
+          schoolYears={createSchoolYears}
+          defaultSchoolYearId={yearId}
           pending={pending}
           error={error}
           success={success}
@@ -168,13 +185,13 @@ export function ClassCatalogPanel({ session, yearId, onOpenClass }) {
             setOpen(false);
             setError('');
           }}
-          onSubmit={async ({ code, name, gradeLevel, notes }) => {
+          onSubmit={async ({ schoolYearId, code, name, gradeLevel, notes }) => {
             setPending(true);
             setError('');
             setSuccess('');
             try {
               await createClass(buildClassCreatePayload({
-                schoolYearId: yearId,
+                schoolYearId,
                 code,
                 name,
                 gradeLevel,

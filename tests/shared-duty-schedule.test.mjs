@@ -225,6 +225,7 @@ test('native Lịch CT mở hub trên tab, PDF qua cùng gateway, deep link vào
   assert.match(androidRoot, /dutiesSkipHub/);
   assert.match(androidRoot, /DutiesTabHost/);
   assert.match(androidRepo, /\/api\/duties\/shared-schedule\.pdf/);
+  assert.match(androidRepo, /withContext\(Dispatchers\.IO\)/);
   assert.match(iosRoot, /title: "Lịch CT"/);
   assert.match(iosRoot, /shouldSelect/);
   assert.match(iosRoot, /openPersonal/);

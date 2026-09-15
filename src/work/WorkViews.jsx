@@ -1617,6 +1617,7 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                             sourceId={task._id}
                             label="Công việc"
                             reminder={workReminderMap.get(String(task._id))}
+                            locked={task.status === 'overdue'}
                           />
                         )}
                       >
@@ -1757,6 +1758,7 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                             sourceId={task._id}
                             label="Công việc"
                             reminder={workReminderMap.get(String(task._id))}
+                            locked={task.status === 'overdue'}
                           />
                         )}
                       >

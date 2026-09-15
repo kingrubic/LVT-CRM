@@ -140,6 +140,7 @@ export default function HomeroomRouter({ session }) {
           <ClassCatalogPanel
             session={session}
             yearId={selectedYearId}
+            schoolYears={years}
             onOpenClass={(id) => go(homeroomPathname({ classId: id }))}
           />
         ) : (

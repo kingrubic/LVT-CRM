@@ -31,6 +31,7 @@ import {
   isCurrentAssignment,
   isEndedAssignment,
   isUpcomingAssignment,
+  schoolYearWindow,
   userRoleLabel,
 } from '../src/homeroom/classCatalog.js';
 
@@ -155,6 +156,24 @@ test('create, update, archive, and assignment payloads match existing Convex con
   assert.match(catalogUiSource, /gradeLevel/);
   assert.match(catalogUiSource, /option value="6"/);
   assert.match(catalogUiSource, /option value="9"/);
+});
+
+test('create-class form offers two years before and after the selected current year', () => {
+  const years = [2023, 2024, 2025, 2026, 2027, 2028].map((start) => ({
+    _id: `year-${start}`,
+    name: `${start}-${start + 1}`,
+  }));
+  assert.deepEqual(
+    schoolYearWindow(years, 'year-2025').map((year) => year.name),
+    ['2023-2024', '2024-2025', '2025-2026', '2026-2027', '2027-2028'],
+  );
+  assert.deepEqual(schoolYearWindow(years, 'missing'), []);
+  assert.match(catalogUiSource, /schoolYears=\{createSchoolYears\}/);
+  assert.match(catalogUiSource, /defaultSchoolYearId=\{yearId\}/);
+  assert.match(catalogUiSource, /schoolYears\.map\(\(year\) =>/);
+  assert.match(catalogUiSource, /<option key=\{year\._id\} value=\{year\._id\}>\{year\.name\}<\/option>/);
+  assert.match(catalogUiSource, /onSubmit\(\{ schoolYearId, code, name, gradeLevel, notes \}\)/);
+  assert.match(routerSource, /schoolYears=\{years\}/);
 });
 
 test('assignment UI is class-scope only and warns that a new GVCN closes the old row the day before', () => {

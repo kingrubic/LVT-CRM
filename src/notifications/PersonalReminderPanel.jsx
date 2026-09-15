@@ -42,9 +42,10 @@ export default function PersonalReminderPanel({
   sourceId,
   label,
   reminder = null,
+  locked = false,
 }) {
   const upsert = useMutation(anyApi.personalReminders.upsert);
-  const enabled = Boolean(reminder?.enabled);
+  const enabled = !locked && Boolean(reminder?.enabled);
   const hours = reminder?.milestonesHours || [];
   const [inputValue, setInputValue] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -55,10 +56,12 @@ export default function PersonalReminderPanel({
       noun,
       off: kind === 'work' ? 'Đã tắt nhắc nhở công việc.' : 'Đã tắt nhắc nhở công tác.',
       on: 'Đang nhắc trước hạn.',
+      overdueLocked: 'Việc quá hạn không thể đặt nhắc nhở',
     };
   }, [kind, label]);
 
   const save = async (nextEnabled, nextHours) => {
+    if (locked) return;
     setSaving(true);
     setFeedback('');
     try {
@@ -77,6 +80,7 @@ export default function PersonalReminderPanel({
   };
 
   const addHours = () => {
+    if (locked) return;
     const result = addMilestoneHours(hours, inputValue);
     if (result.error) {
       setFeedback(result.error);
@@ -88,24 +92,31 @@ export default function PersonalReminderPanel({
 
   return (
     <aside
-      className="personal-reminder-panel"
+      className={`personal-reminder-panel${locked ? ' is-locked' : ''}`}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
       <button
         type="button"
-        className={`display-toggle ${enabled ? 'is-on' : 'is-off'}`}
-        onClick={() => void save(!enabled, hours)}
+        className={`display-toggle ${enabled ? 'is-on' : 'is-off'}${locked ? ' is-locked' : ''}`}
+        onClick={() => {
+          if (locked || saving) return;
+          void save(!enabled, hours);
+        }}
         aria-pressed={enabled}
-        disabled={saving}
+        aria-disabled={locked || saving}
+        disabled={locked || saving}
       >
         <span className="display-toggle-track"><span /></span>
         <span className="display-toggle-copy">
           <strong>{copy.noun}</strong>
-          <small>{enabled ? copy.on : copy.off}</small>
+          <small>{locked ? copy.off : (enabled ? copy.on : copy.off)}</small>
         </span>
       </button>
-      {enabled ? (
+      {locked ? (
+        <p className="personal-reminder-locked-note" role="status">{copy.overdueLocked}</p>
+      ) : null}
+      {!locked && enabled ? (
         <div className="notification-milestone-editor">
           <div className="notification-milestone-heading">
             <div>

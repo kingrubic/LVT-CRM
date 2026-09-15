@@ -715,6 +715,23 @@
   font-weight: 700;
 }
 
+.personal-reminder-panel.is-locked .display-toggle,
+.personal-reminder-panel .display-toggle.is-locked,
+.personal-reminder-panel .display-toggle.is-locked:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+
+.personal-reminder-locked-note {
+  margin: 0;
+  color: #b42318;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .duty-workspace .duty-card-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

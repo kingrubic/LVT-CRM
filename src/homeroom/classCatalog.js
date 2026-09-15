@@ -17,6 +17,20 @@ function trimmedText(value) {
   return String(value ?? '').trim();
 }
 
+export function schoolYearWindow(schoolYears, currentSchoolYearId, radius = 2) {
+  const current = (schoolYears || []).find((year) => year._id === currentSchoolYearId);
+  const startYear = Number.parseInt(current?.name?.match(/^(\d{4})-(\d{4})$/)?.[1] || '', 10);
+  if (!Number.isInteger(startYear)) return current ? [current] : [];
+  const minimum = startYear - radius;
+  const maximum = startYear + radius;
+  return (schoolYears || [])
+    .filter((year) => {
+      const yearStart = Number.parseInt(year?.name?.match(/^(\d{4})-(\d{4})$/)?.[1] || '', 10);
+      return Number.isInteger(yearStart) && yearStart >= minimum && yearStart <= maximum;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+}
+
 export function buildClassCreatePayload({ schoolYearId, code, name, gradeLevel, notes }) {
   const payload = {
     schoolYearId,

@@ -131,6 +131,16 @@ test('list công tác/công việc gắn panel nhắc cá nhân và xếp 1 cộ
   assert.match(workView, /PersonalReminderPanel/);
   assert.match(workView, /PersonalReminderQueryBoundary/);
   assert.match(workView, /workTabAllowsPersonalReminder/);
+  assert.match(workView, /locked=\{task\.status === 'overdue'\}/);
   assert.match(css, /grid-template-columns: minmax\(0, 1fr\);/);
   assert.match(css, /\.duty-card-layout/);
+  assert.match(css, /\.personal-reminder-locked-note/);
+});
+
+test('việc quá hạn khóa toggle nhắc và hiện đúng chuỗi tiếng Việt', () => {
+  const panel = readFileSync(new URL('../src/notifications/PersonalReminderPanel.jsx', import.meta.url), 'utf8');
+  assert.match(panel, /locked = false/);
+  assert.match(panel, /Việc quá hạn không thể đặt nhắc nhở/);
+  assert.match(panel, /personal-reminder-locked-note/);
+  assert.match(panel, /if \(locked\) return/);
 });
