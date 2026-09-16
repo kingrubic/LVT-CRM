@@ -79,7 +79,7 @@ fun DutiesHubScreen(
     onOpenPersonal: () -> Unit,
     onOpenShared: () -> Unit,
 ) {
-    LvtScreen(title = "Lịch CT") {
+    LvtScreen(title = "Lịch CT", showAccountHeader = true) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier

@@ -13,6 +13,8 @@ data class UserSession(
     val departmentName: String? = null,
     val positionName: String? = null,
     val positionLevel: Int? = null,
+    val hasAvatar: Boolean = false,
+    val avatarVersion: String? = null,
 ) {
     val isOperationalManager: Boolean
         get() = role == "admin" || role == "moderator"

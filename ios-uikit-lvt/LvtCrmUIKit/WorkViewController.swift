@@ -17,6 +17,7 @@ final class WorkViewController: UITableViewController {
 
     private let viewModel: WorkViewModel
     private let downloadDocument: (WorkApprovalItem) async throws -> URL
+    var trailingAccessoryBarButtonItems: [UIBarButtonItem] = []
     private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
     private var pendingUploadTask: WorkTaskItem?
@@ -305,9 +306,7 @@ final class WorkViewController: UITableViewController {
     }
 
     private func render() {
-        navigationItem.rightBarButtonItem = viewModel.canCreate
-            ? UIBarButtonItem(title: "Tạo", style: .done, target: self, action: #selector(openCreate))
-            : nil
+        applyTrailingBarButtonItems()
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
         searchHeader.configure(
             values: viewModel.search,
@@ -318,6 +317,14 @@ final class WorkViewController: UITableViewController {
         sizeSearchHeader()
         tableView.reloadData()
         processPendingFocusIfPossible()
+    }
+
+    private func applyTrailingBarButtonItems() {
+        var items = trailingAccessoryBarButtonItems
+        if viewModel.canCreate {
+            items.append(UIBarButtonItem(title: "Tạo", style: .done, target: self, action: #selector(openCreate)))
+        }
+        navigationItem.rightBarButtonItems = items.isEmpty ? nil : items
     }
 
     @objc private func openCreate() {

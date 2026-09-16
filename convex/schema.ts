@@ -19,6 +19,13 @@ export default defineSchema({
   users: defineTable({
     name: v.optional(v.string()),
     image: v.optional(v.string()),
+    /** Private Convex Storage object for the signed-in user's profile photo. Never return this id to clients. */
+    avatarStorageId: v.optional(v.id("_storage")),
+    avatarFileName: v.optional(v.string()),
+    avatarContentType: v.optional(v.string()),
+    avatarSize: v.optional(v.number()),
+    avatarChecksum: v.optional(v.string()),
+    avatarUpdatedAt: v.optional(v.number()),
     email: v.optional(v.string()),
     emailVerificationTime: v.optional(v.number()),
     phone: v.optional(v.string()),

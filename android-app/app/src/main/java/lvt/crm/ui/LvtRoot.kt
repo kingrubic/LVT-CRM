@@ -12,13 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.WorkOutline
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,6 +55,9 @@ import lvt.crm.push.NotificationMarkReadWorker
 import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.auth.LoginScreen
 import lvt.crm.ui.auth.LoginViewModel
+import lvt.crm.ui.components.AccountHeaderState
+import lvt.crm.ui.components.LocalAccountHeader
+import lvt.crm.ui.components.accountInitials
 import lvt.crm.ui.duties.DutiesTabHost
 import lvt.crm.ui.duties.DutiesViewModel
 import lvt.crm.ui.duties.DutyListTab
@@ -119,9 +119,12 @@ fun LvtRoot(
                 role = state.session.role,
                 departmentName = state.session.departmentName,
                 positionName = state.session.positionName,
+                hasAvatar = state.session.hasAvatar,
+                avatarVersion = state.session.avatarVersion,
                 notificationDestination = notificationDestination,
                 onNotificationDestinationHandled = onNotificationDestinationHandled,
                 onSignOut = {
+                    container.avatarRepository.clearLocal()
                     container.authRepository.signOut()
                     container.notificationScheduler.cancel()
                 },
@@ -139,6 +142,8 @@ private fun MainShell(
     role: String,
     departmentName: String?,
     positionName: String?,
+    hasAvatar: Boolean,
+    avatarVersion: String?,
     notificationDestination: NotificationDestination?,
     onNotificationDestinationHandled: () -> Unit,
     onSignOut: () -> Unit,
@@ -165,13 +170,59 @@ private fun MainShell(
     var fileError by remember { mutableStateOf<String?>(null) }
     var filePreview by remember { mutableStateOf<WorkFilePreviewState?>(null) }
     var openingFile by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(Routes.Overview) }
+    val avatarBitmap by container.avatarRepository.bitmap.collectAsState()
+
+    LaunchedEffect(sessionUserId, hasAvatar, avatarVersion) {
+        container.avatarRepository.sync(sessionUserId, hasAvatar, avatarVersion)
+    }
 
     val tabs = listOf(
         Triple(Routes.Overview, R.string.nav_overview, Icons.Outlined.Dashboard),
-        Triple(Routes.Notifications, R.string.nav_notifications, Icons.Outlined.Notifications),
         Triple(Routes.Duties, R.string.nav_duties, Icons.Outlined.WorkOutline),
         Triple(Routes.Work, R.string.nav_work, Icons.Outlined.TaskAlt),
-        Triple(Routes.Profile, R.string.nav_profile, Icons.Outlined.Person),
+    )
+    val mainTabRoutes = setOf(Routes.Overview, Routes.Duties, Routes.Work)
+    val highlightedTab = if (current in mainTabRoutes) current else selectedTab
+
+    LaunchedEffect(current) {
+        if (current in mainTabRoutes) selectedTab = current
+    }
+
+    fun navigateToTab(route: String, restore: Boolean = true, extra: () -> Unit = {}) {
+        selectedTab = route
+        extra()
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = restore
+            }
+            launchSingleTop = true
+            restoreState = restore
+        }
+    }
+
+    fun openNotifications() {
+        if (current != Routes.Notifications) {
+            navController.navigate(Routes.Notifications) {
+                launchSingleTop = true
+            }
+        }
+    }
+
+    fun openProfile() {
+        if (current != Routes.Profile) {
+            navController.navigate(Routes.Profile) {
+                launchSingleTop = true
+            }
+        }
+    }
+
+    val accountHeader = AccountHeaderState(
+        unreadCount = notificationState.unreadCount,
+        initials = accountInitials(sessionName, sessionEmail),
+        avatarBitmap = avatarBitmap,
+        onOpenNotifications = { openNotifications() },
+        onOpenProfile = { openProfile() },
     )
 
     fun openDocument(document: WorkApprovalItem) {
@@ -201,6 +252,7 @@ private fun MainShell(
         )
         if (destination.route == Routes.Duties) dutiesSkipHub = true
         focusTarget = destination
+        selectedTab = destination.route
         navController.navigate(destination.route) {
             launchSingleTop = true
         }
@@ -210,6 +262,7 @@ private fun MainShell(
         val destination = notificationDestination ?: return@LaunchedEffect
         if (destination.route == Routes.Duties) dutiesSkipHub = true
         focusTarget = destination
+        selectedTab = destination.route
         navController.navigate(destination.route) {
             launchSingleTop = true
         }
@@ -227,48 +280,26 @@ private fun MainShell(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalAccountHeader provides accountHeader) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar {
                 tabs.forEach { (route, labelRes, icon) ->
                     NavigationBarItem(
-                        selected = current == route,
+                        selected = highlightedTab == route,
                         onClick = {
                             tabOpenToken += 1
                             focusTarget = null
-                            if (route == Routes.Duties) {
-                                dutiesSkipHub = false
-                                dutyOpenTab = null
-                            }
-                            navController.navigate(route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            navigateToTab(route) {
+                                if (route == Routes.Duties) {
+                                    dutiesSkipHub = false
+                                    dutyOpenTab = null
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         icon = {
-                            if (route == Routes.Notifications && notificationState.unreadCount > 0) {
-                                BadgedBox(
-                                    badge = {
-                                        Badge {
-                                            Text(
-                                                if (notificationState.unreadCount > 99) {
-                                                    "99+"
-                                                } else {
-                                                    notificationState.unreadCount.toString()
-                                                },
-                                            )
-                                        }
-                                    },
-                                ) {
-                                    Icon(icon, contentDescription = stringResource(labelRes))
-                                }
-                            } else {
-                                Icon(icon, contentDescription = stringResource(labelRes))
-                            }
+                            Icon(icon, contentDescription = stringResource(labelRes))
                         },
                         label = { Text(stringResource(labelRes)) },
                     )
@@ -303,27 +334,17 @@ private fun MainShell(
                     tabOpenToken = tabOpenToken,
                     onOpenDuties = { tab ->
                         focusTarget = null
-                        dutiesSkipHub = true
-                        dutyOpenTab = tab
-                        dutyFilterToken += 1
-                        navController.navigate(Routes.Duties) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
+                        navigateToTab(Routes.Duties) {
+                            dutiesSkipHub = true
+                            dutyOpenTab = tab
+                            dutyFilterToken += 1
                         }
                     },
                     onOpenWork = { filter ->
                         focusTarget = null
-                        workOpenFilter = filter
-                        workFilterToken += 1
-                        navController.navigate(Routes.Work) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
+                        navigateToTab(Routes.Work) {
+                            workOpenFilter = filter
+                            workFilterToken += 1
                         }
                     },
                 )
@@ -333,6 +354,7 @@ private fun MainShell(
                     viewModel = notificationsViewModel,
                     onOpenItem = ::openNotification,
                     tabOpenToken = tabOpenToken,
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(Routes.Duties) {
@@ -373,13 +395,16 @@ private fun MainShell(
                     role = role,
                     departmentName = departmentName,
                     positionName = positionName,
+                    avatarRepository = container.avatarRepository,
                     authRepository = container.authRepository,
                     sessionsRepository = container.sessionsRepository,
                     appearanceStore = container.appearanceStore,
                     onSignOut = onSignOut,
+                    onBack = { navController.popBackStack() },
                 )
             }
         }
+    }
     }
 
         if (openingFile && filePreview == null) {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.Icons
@@ -69,6 +70,7 @@ fun NotificationsScreen(
     viewModel: NotificationsViewModel,
     onOpenItem: (NotificationItem) -> Unit,
     tabOpenToken: Int,
+    onBack: (() -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     var unreadOnly by rememberSaveable { mutableStateOf(false) }
@@ -83,6 +85,13 @@ fun NotificationsScreen(
         title = "Thông báo",
         refreshing = state.refreshing,
         onRefresh = { viewModel.refresh() },
+        navigationIcon = onBack?.let { back ->
+            {
+                IconButton(onClick = back) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại")
+                }
+            }
+        },
         actions = {
             if (state.unreadCount > 0) {
                 Badge {

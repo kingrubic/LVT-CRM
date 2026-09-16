@@ -38,10 +38,15 @@ test('auth flow leaves the loading spinner after a watchdog timeout', () => {
   assert.match(login, /authRepository\.bootstrapError/);
 });
 
-test('iOS 1.8.4 records the splash hang fix and bumps marketing plus build numbers', () => {
+test('iOS 1.8.4 records the splash hang fix', () => {
   assert.match(changelog, /version: "1\.8\.4"/);
   assert.match(changelog, /treo màn hình tải/);
-  assert.match(pbx, /MARKETING_VERSION = 1\.8\.4;/);
-  assert.match(pbx, /CURRENT_PROJECT_VERSION = 27;/);
-  assert.doesNotMatch(pbx, /MARKETING_VERSION = 1\.8\.3;/);
+});
+
+test('iOS 1.9.0 is the current marketing version after the header-cluster change', () => {
+  assert.match(changelog, /version: "1\.9\.0"/);
+  assert.match(changelog, /Đổi ảnh đại diện/);
+  assert.match(pbx, /MARKETING_VERSION = 1\.9\.0;/);
+  assert.match(pbx, /CURRENT_PROJECT_VERSION = 28;/);
+  assert.doesNotMatch(pbx, /MARKETING_VERSION = 1\.8\.4;/);
 });

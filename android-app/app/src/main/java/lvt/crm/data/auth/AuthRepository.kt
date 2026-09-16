@@ -205,6 +205,17 @@ class AuthRepository(
         }
     }
 
+    suspend fun refreshSession() {
+        val generation = authGeneration.get()
+        val credentials = tokenStore.snapshot() ?: return
+        try {
+            val session = fetchSession() ?: return
+            publish(session, generation, credentials)
+        } catch (_: Exception) {
+            // Avatar/header refresh is best-effort; keep the current signed-in session.
+        }
+    }
+
     fun signOut() {
         val accessToken = synchronized(credentialTransitionLock) {
             val captured = tokenStore.accessToken
@@ -273,6 +284,8 @@ class AuthRepository(
             departmentName = result.optJSONObject("department")?.optString("name"),
             positionName = result.optJSONObject("position")?.optString("name"),
             positionLevel = result.optJSONObject("position")?.optInt("level"),
+            hasAvatar = user.optBoolean("hasAvatar", false),
+            avatarVersion = user.optString("avatarVersion").takeIf { it.isNotBlank() },
         )
     }
 

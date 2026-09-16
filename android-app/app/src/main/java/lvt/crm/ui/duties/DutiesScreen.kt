@@ -118,6 +118,7 @@ fun DutiesScreen(
         title = "Lịch công tác cá nhân",
         refreshing = state.refreshing,
         onRefresh = { viewModel.refresh() },
+        showAccountHeader = true,
         navigationIcon = onBackToHub?.let { back ->
             {
                 IconButton(onClick = back) {

@@ -71,9 +71,11 @@ fun LvtScreen(
     refreshing: Boolean = false,
     onRefresh: (() -> Unit)? = null,
     navigationIcon: @Composable (() -> Unit)? = null,
+    showAccountHeader: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val accountHeader = if (showAccountHeader) LocalAccountHeader.current else null
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(title) },
@@ -92,6 +94,9 @@ fun LvtScreen(
                     }
                 }
                 actions()
+                if (accountHeader != null) {
+                    AccountHeaderCluster(accountHeader)
+                }
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface,

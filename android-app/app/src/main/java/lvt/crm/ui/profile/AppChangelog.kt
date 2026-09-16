@@ -8,6 +8,13 @@ data class AppChangelogEntry(
 object AppChangelog {
     val entries: List<AppChangelogEntry> = listOf(
         AppChangelogEntry(
+            "0.17.0",
+            listOf(
+                "Thông báo và Cá nhân chuyển lên góc phải (chuông + ảnh đại diện); thanh dưới còn Tổng quan, Lịch CT và Công việc.",
+                "Đổi ảnh đại diện ngay trên Cá nhân; ảnh hiện ở góc phải và đồng bộ với web.",
+            ),
+        ),
+        AppChangelogEntry(
             "0.16.3",
             listOf(
                 "Chuyển kết nối backend sang Convex Cloud (ổn định hơn bản self-hosted).",

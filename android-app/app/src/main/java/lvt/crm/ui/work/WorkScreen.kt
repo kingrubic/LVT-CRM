@@ -272,6 +272,7 @@ fun WorkScreen(
             title = "Công việc",
             refreshing = state.refreshing,
             onRefresh = { viewModel.refresh() },
+            showAccountHeader = true,
         ) {
             Column(
                 modifier = Modifier
@@ -663,6 +664,7 @@ private fun AdminWorkScreen(
             } else {
                 null
             },
+            showAccountHeader = selectedDocument == null && selectedTask == null,
             actions = {
                 if (selectedDocument == null && selectedTask == null) {
                     TextButton(onClick = onCreate) { Text("Tạo") }

@@ -16,7 +16,7 @@ import { AsyncSemaphore, DriveFileCache, DRIVE_CACHE_TTL_MS, workFileCacheIdenti
 import { retryDriveDownload } from './lib/drive-download-retry.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from './lib/file-content-policy.mjs';
 import { FileHttpError, classifyFileError } from './lib/file-http-errors.mjs';
-import { matchDriveMutationRoute } from './lib/file-route-policy.mjs';
+import { matchAvatarFileRoute, matchDriveMutationRoute } from './lib/file-route-policy.mjs';
 import {
   buildAuthorizedSharedSchedulePdf,
   parseSharedScheduleQuery,
@@ -438,6 +438,41 @@ async function downloadFromDrive(request, response, documentId) {
   await serveAuthorizedDriveFile(request, response, file, `work:${documentId}`);
 }
 
+async function avatarFileMetadata(request, response) {
+  const client = await authorizedClient(request);
+  const file = await client.query(anyApi.userAvatar.authorizeAvatarDownload, {});
+  response.writeHead(200, {
+    'Cache-Control': 'private, no-store',
+    'Content-Type': 'application/json; charset=utf-8',
+  });
+  response.end(`${JSON.stringify({
+    fileName: file.fileName,
+    fileSize: file.fileSize,
+    fileVersion: file.fileVersion,
+  })}\n`);
+}
+
+async function downloadAvatar(request, response) {
+  const client = await authorizedClient(request);
+  const file = await client.query(anyApi.userAvatar.authorizeAvatarDownload, {});
+  if (!file.storageUrl) throw new Error('AVATAR_NOT_FOUND');
+  const etag = `"${String(file.fileVersion || file.fileSize)}"`;
+  if (request.headers['if-none-match'] === etag) {
+    applyPrivateDownloadHeaders(response, file.fileName, file.fileSize, etag, 'REVALIDATED');
+    response.removeHeader('Content-Length');
+    response.writeHead(304);
+    response.end();
+    return;
+  }
+  const upstream = await fetch(file.storageUrl);
+  if (!upstream.ok) throw new Error('AVATAR_NOT_FOUND');
+  const bytes = Buffer.from(await upstream.arrayBuffer());
+  if (!bytes.length) throw new Error('AVATAR_NOT_FOUND');
+  applyPrivateDownloadHeaders(response, file.fileName, bytes.length, etag, 'MISS');
+  response.writeHead(200);
+  response.end(bytes);
+}
+
 async function downloadSharedDutySchedulePdf(request, response) {
   const url = new URL(request.url || '/', 'http://localhost');
   const { mode, anchor } = parseSharedScheduleQuery(url.searchParams);
@@ -502,6 +537,15 @@ const server = createServer(async (request, response) => {
     const privatePath = request.method === 'GET'
       ? new URL(request.url || '/', 'http://localhost').pathname
       : '';
+    const avatarRoute = matchAvatarFileRoute(request.method, request.url);
+    if (avatarRoute?.kind === 'metadata') {
+      await avatarFileMetadata(request, response);
+      return;
+    }
+    if (avatarRoute?.kind === 'download') {
+      await downloadAvatar(request, response);
+      return;
+    }
     const privateMetadata = privatePath.match(/^\/api\/files\/([^/]+)\/metadata$/);
     if (privateMetadata) {
       await workFileMetadata(request, response, privateMetadata[1]);
