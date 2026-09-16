@@ -178,7 +178,7 @@ actor ConvexHttpClient {
             "PASSWORD_CHANGE_REQUIRED", "PASSWORD_RESET_FAILED", "PASSWORD_RESET_EMAIL_FAILED",
             "MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PUBLIC_SIGNUP_DISABLED", "INVALID_EMAIL",
             "INVALID_AUTH_FLOW", "FORBIDDEN", "UNAUTHENTICATED", "CANNOT_REVOKE_CURRENT_SESSION",
-            "SESSION_NOT_FOUND", "DOCUMENT_TYPE_REQUIRED", "INVALID_DOCUMENT_TYPE",
+            "SESSION_NOT_FOUND", "DOCUMENT_TYPE_REQUIRED", "INVALID_DOCUMENT_TYPE", "SESSION_TIMEOUT",
         ]
         return known.first { message.localizedCaseInsensitiveContains($0) } ?? message
     }
@@ -195,6 +195,8 @@ actor ConvexHttpClient {
         case code == "PASSWORD_CHANGE_FAILED": return "Không đổi được mật khẩu. Thử lại sau."
         case code == "PASSWORD_CHANGED_SYNC_PENDING": return "Mật khẩu đã đổi nhưng hồ sơ chưa đồng bộ. Đăng nhập lại."
         case code == "PASSWORD_CHANGE_REQUIRED": return "Bạn cần đổi mật khẩu trước khi tiếp tục."
+        case code == "SESSION_TIMEOUT":
+            return "Không kết nối được máy chủ. Thử mở lại ứng dụng."
         case code == "PASSWORD_RESET_FAILED": return "Không thể đặt lại mật khẩu. Thử lại sau."
         case code == "PASSWORD_RESET_EMAIL_FAILED":
             return "Đã tạo mật khẩu tạm nhưng chưa gửi được email. Liên hệ quản trị viên."

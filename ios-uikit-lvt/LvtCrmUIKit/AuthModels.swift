@@ -24,6 +24,27 @@ struct UserSession: Equatable, Sendable {
     }
 }
 
+extension UserSession {
+    init?(sessionContext result: [String: Any]) {
+        guard let user = result["user"] as? [String: Any], !user.isEmpty else { return nil }
+        let department = result["department"] as? [String: Any]
+        let position = result["position"] as? [String: Any]
+        let email = (user["email"] as? String) ?? ""
+        let rawName = (user["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.init(
+            userId: (user["_id"] as? String) ?? "",
+            email: email,
+            name: rawName.isEmpty ? email : rawName,
+            role: (user["role"] as? String) ?? "user",
+            status: (user["status"] as? String) ?? "active",
+            mustChangePassword: (user["mustChangePassword"] as? Bool) ?? false,
+            departmentName: department?["name"] as? String,
+            positionName: position?["name"] as? String,
+            positionLevel: position?["level"] as? Int
+        )
+    }
+}
+
 enum AuthState: Equatable, Sendable {
     case loading
     case signedOut

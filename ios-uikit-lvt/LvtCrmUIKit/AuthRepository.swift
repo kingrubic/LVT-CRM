@@ -4,13 +4,12 @@ import Foundation
 @MainActor
 final class AuthRepository: ObservableObject {
     @Published private(set) var state: AuthState = .loading
+    @Published private(set) var bootstrapError: String?
 
     private let tokenStore: CredentialStore
     private let convex: ConvexHttpClient
     private let beforeSignOut: ((String) async -> Void)?
     private var authGeneration: Int64 = 0
-
-    private var restoreRetryScheduled = false
 
     init(
         tokenStore: CredentialStore,
@@ -25,12 +24,13 @@ final class AuthRepository: ObservableObject {
 
     func restoreSession() async {
         let generation = authGeneration
-        guard let credentials = tokenStore.snapshot() else {
+        let credentials = await readStoredCredentials()
+        guard let credentials else {
             if authGeneration == generation { state = .signedOut }
             return
         }
         do {
-            if let session = try await fetchSession() {
+            if let session = try await fetchSession(timeoutSeconds: 12) {
                 _ = publish(session, generation: generation, expectedCredentials: credentials)
             } else {
                 _ = clearCurrentCredentialsAndSignOut(credentials, generation: generation)
@@ -38,8 +38,21 @@ final class AuthRepository: ObservableObject {
         } catch let error as ConvexException where isAuthenticationFailure(error) {
             _ = clearCurrentCredentialsAndSignOut(credentials, generation: generation)
         } catch {
-            scheduleRestoreRetry()
+            // Fail-open like Android: keep tokens for a later retry, but never stay on .loading.
+            if authGeneration == generation, case .loading = state {
+                bootstrapError = (error as? ConvexException)?.message
+                    ?? "Không kết nối được máy chủ. Kiểm tra mạng rồi đăng nhập lại."
+                state = .signedOut
+            }
         }
+    }
+
+    func failOpenIfStillLoading() {
+        guard case .loading = state else { return }
+        if bootstrapError == nil {
+            bootstrapError = "Không kết nối được máy chủ. Kiểm tra mạng rồi đăng nhập lại."
+        }
+        state = .signedOut
     }
 
     func signIn(email: String, password: String) async -> Result<UserSession, Error> {
@@ -80,7 +93,8 @@ final class AuthRepository: ObservableObject {
                 refreshToken: refresh,
                 revision: credentialRevision
             )
-            guard let session = try await fetchSession() else {
+            bootstrapError = nil
+            guard let session = try await fetchSession(timeoutSeconds: 45) else {
                 throw ConvexException(code: "NO_SESSION", message: "Không tải được phiên đăng nhập.")
             }
             guard publish(session, generation: generation) else {
@@ -131,7 +145,7 @@ final class AuthRepository: ObservableObject {
             return .failure(error)
         }
         do {
-            if let session = try await fetchSession() {
+            if let session = try await fetchSession(timeoutSeconds: 45) {
                 _ = publish(session, generation: generation)
             } else if authGeneration == generation {
                 authGeneration += 1
@@ -180,57 +194,45 @@ final class AuthRepository: ObservableObject {
         return true
     }
 
-    private func fetchSession() async throws -> UserSession? {
-        try await withThrowingTaskGroup(of: UserSession?.self) { group in
+    private func readStoredCredentials() async -> CredentialSnapshot? {
+        let store = tokenStore
+        return await withTaskGroup(of: CredentialSnapshot?.self) { group in
             group.addTask {
-                try await self.loadSessionContext()
+                store.snapshot()
             }
             group.addTask {
-                try await Task.sleep(for: .seconds(20))
-                throw ConvexException(code: "SESSION_TIMEOUT", message: "Không kết nối được máy chủ. Thử mở lại ứng dụng.")
+                try? await Task.sleep(for: .seconds(5))
+                return nil
             }
-            let session = try await group.next() ?? nil
+            let first = await group.next() ?? nil
             group.cancelAll()
-            return session
+            return first
         }
     }
 
-    private func loadSessionContext() async throws -> UserSession? {
-        let result = try await convex.query("users:sessionContext")
-        guard let user = result["user"] as? [String: Any], !user.isEmpty else { return nil }
-        let department = result["department"] as? [String: Any]
-        let position = result["position"] as? [String: Any]
-        let email = (user["email"] as? String) ?? ""
-        return UserSession(
-            userId: (user["_id"] as? String) ?? "",
-            email: email,
-            name: ((user["name"] as? String)?.nilIfBlank) ?? email,
-            role: (user["role"] as? String) ?? "user",
-            status: (user["status"] as? String) ?? "active",
-            mustChangePassword: (user["mustChangePassword"] as? Bool) ?? false,
-            departmentName: department?["name"] as? String,
-            positionName: position?["name"] as? String,
-            positionLevel: position?["level"] as? Int
-        )
+    private func fetchSession(timeoutSeconds: Double) async throws -> UserSession? {
+        let client = convex
+        return try await withThrowingTaskGroup(of: UserSession?.self) { group in
+            group.addTask {
+                let result = try await client.query("users:sessionContext")
+                return UserSession(sessionContext: result)
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeoutSeconds))
+                throw ConvexException(
+                    code: "SESSION_TIMEOUT",
+                    message: "Không kết nối được máy chủ. Thử mở lại ứng dụng."
+                )
+            }
+            defer { group.cancelAll() }
+            return try await group.next() ?? nil
+        }
     }
 
     private func isAuthenticationFailure(_ error: ConvexException) -> Bool {
         error.code.localizedCaseInsensitiveContains("Unauthenticated")
             || error.code.localizedCaseInsensitiveContains("Authentication")
             || error.code == "UNAUTHENTICATED"
-    }
-
-    private func scheduleRestoreRetry() {
-        guard !restoreRetryScheduled else { return }
-        restoreRetryScheduled = true
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(3))
-            guard let self else { return }
-            self.restoreRetryScheduled = false
-            if case .loading = self.state {
-                await self.restoreSession()
-            }
-        }
     }
 
     private func invalidatesCredentials(_ error: Error) -> Bool {
@@ -273,12 +275,5 @@ final class AuthRepository: ObservableObject {
 private extension CredentialSnapshot {
     func hasSameTokens(as other: CredentialSnapshot) -> Bool {
         accessToken == other.accessToken && refreshToken == other.refreshToken
-    }
-}
-
-private extension String {
-    var nilIfBlank: String? {
-        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 }

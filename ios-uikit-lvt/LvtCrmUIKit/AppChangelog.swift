@@ -8,6 +8,12 @@ struct AppChangelogEntry: Equatable {
 enum AppChangelog {
     static let entries: [AppChangelogEntry] = [
         AppChangelogEntry(
+            version: "1.8.4",
+            highlights: [
+                "Hết treo màn hình tải khi mở app lần đầu; nếu máy chủ không trả lời thì hiện đăng nhập để thử lại.",
+            ]
+        ),
+        AppChangelogEntry(
             version: "1.8.3",
             highlights: [
                 "Bắt buộc cập nhật khi App Store có bản mới hơn (giống Android).",
