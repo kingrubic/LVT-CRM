@@ -249,6 +249,13 @@ final class ProfileViewController: UITableViewController {
         present(alert, animated: true)
     }
 
+    private func presentCrop(_ image: UIImage) {
+        let crop = AvatarCropViewController(image: image) { [weak self] cropped in
+            self?.uploadAvatar(cropped)
+        }
+        present(crop, animated: true)
+    }
+
     private func presentPhotoLibrary() {
         var configuration = PHPickerConfiguration()
         configuration.filter = .images
@@ -369,7 +376,7 @@ extension ProfileViewController: PHPickerViewControllerDelegate {
         guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else { return }
         provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
             guard let image = object as? UIImage else { return }
-            DispatchQueue.main.async { self?.uploadAvatar(image) }
+            DispatchQueue.main.async { self?.presentCrop(image) }
         }
     }
 }
@@ -381,7 +388,7 @@ extension ProfileViewController: UIImagePickerControllerDelegate, UINavigationCo
     ) {
         let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
         picker.dismiss(animated: true) { [weak self] in
-            if let image { self?.uploadAvatar(image) }
+            if let image { self?.presentCrop(image) }
         }
     }
 

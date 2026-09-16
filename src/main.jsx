@@ -27,7 +27,8 @@ import HomeroomRouter from './homeroom/HomeroomRouter';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
-import { AVATAR_ACCEPT, prepareAvatarFile } from './lib/prepareAvatarFile.js';
+import { AVATAR_ACCEPT, isAllowedAvatarFile } from './lib/prepareAvatarFile.js';
+import AvatarCropModal from './profile/AvatarCropModal.jsx';
 import { filterByPickerSearch, personPickerHaystack } from './lib/pickerSearch';
 import './management/managementTheme.css';
 import './duties/duties.css';
@@ -2274,6 +2275,7 @@ function ProfileView({ session }) {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarFeedback, setAvatarFeedback] = useState('');
+  const [avatarCropFile, setAvatarCropFile] = useState(null);
   const avatarInputRef = useRef(null);
 
   const submit = async (event) => {
@@ -2340,15 +2342,35 @@ function ProfileView({ session }) {
     };
   }, [hasAvatar, avatarVersion, fetchAccessToken]);
 
-  const uploadAvatar = async (file) => {
+  const resetAvatarPicker = () => {
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
+  };
+
+  const openAvatarCrop = (file) => {
+    setAvatarFeedback('');
+    if (!isAllowedAvatarFile(file)) {
+      setAvatarFeedback(messageFor(new Error('INVALID_AVATAR_FILE')));
+      resetAvatarPicker();
+      return;
+    }
+    setAvatarCropFile(file);
+    resetAvatarPicker();
+  };
+
+  const cancelAvatarCrop = () => {
+    setAvatarCropFile(null);
+    resetAvatarPicker();
+  };
+
+  const uploadPreparedAvatar = async (prepared) => {
+    setAvatarCropFile(null);
     setAvatarFeedback('');
     setAvatarBusy(true);
     try {
-      const prepared = await prepareAvatarFile(file);
       const uploadUrl = await generateAvatarUploadUrl({});
       const uploaded = await fetch(uploadUrl, {
         method: 'POST',
-        headers: { 'Content-Type': prepared.type || 'image/jpeg' },
+        headers: { 'Content-Type': prepared.type || 'image/webp' },
         body: prepared,
       });
       if (!uploaded.ok) throw new Error('AVATAR_UPLOAD_FAILED');
@@ -2360,7 +2382,7 @@ function ProfileView({ session }) {
       setAvatarFeedback(messageFor(error));
     } finally {
       setAvatarBusy(false);
-      if (avatarInputRef.current) avatarInputRef.current.value = '';
+      resetAvatarPicker();
     }
   };
 
@@ -2379,6 +2401,7 @@ function ProfileView({ session }) {
   };
 
   return (
+    <>
     <section className="work-user-view profile-workspace">
       <div className="profile-modern-grid">
         <article className="profile-paper profile-overview">
@@ -2399,7 +2422,7 @@ function ProfileView({ session }) {
               accept={AVATAR_ACCEPT}
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) uploadAvatar(file);
+                if (file) openAvatarCrop(file);
               }}
             />
             <div>
@@ -2511,6 +2534,14 @@ function ProfileView({ session }) {
 
       <DevicesPanel mode="self" />
     </section>
+    {avatarCropFile ? (
+      <AvatarCropModal
+        file={avatarCropFile}
+        onCancel={cancelAvatarCrop}
+        onSave={uploadPreparedAvatar}
+      />
+    ) : null}
+    </>
   );
 }
 

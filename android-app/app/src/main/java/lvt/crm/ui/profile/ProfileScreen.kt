@@ -1,5 +1,6 @@
 package lvt.crm.ui.profile
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -65,8 +66,8 @@ import lvt.crm.R
 import lvt.crm.data.auth.AuthRepository
 import lvt.crm.data.auth.AvatarRepository
 import lvt.crm.data.auth.SessionsRepository
-import lvt.crm.data.auth.decodeAvatarBitmap
-import lvt.crm.data.auth.prepareAvatarJpeg
+import lvt.crm.data.auth.decodeAvatarBitmapForCrop
+import lvt.crm.data.auth.prepareAvatarWebP
 import lvt.crm.data.convex.ConvexException
 import lvt.crm.data.convex.ConvexHttpClient
 import kotlinx.coroutines.launch
@@ -99,6 +100,7 @@ fun ProfileScreen(
     var confirmRemoveAvatar by rememberSaveable { mutableStateOf(false) }
     var avatarBusy by remember { mutableStateOf(false) }
     var avatarError by remember { mutableStateOf<String?>(null) }
+    var cropBitmap by remember { mutableStateOf<Bitmap?>(null) }
     val appearance by appearanceStore.mode.collectAsState()
     val avatarBitmap by avatarRepository.bitmap.collectAsState()
     val appVersion = currentAppVersion(LocalContext.current)
@@ -109,25 +111,47 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        avatarBusy = true
         avatarError = null
         scope.launch {
-            val result = runCatching {
+            val loaded = runCatching {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: throw ConvexException("INVALID_AVATAR_FILE", "INVALID_AVATAR_FILE")
-                val bitmap = decodeAvatarBitmap(bytes)
+                decodeAvatarBitmapForCrop(bytes)
                     ?: BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     ?: throw ConvexException("INVALID_AVATAR_FILE", "INVALID_AVATAR_FILE")
-                val jpeg = prepareAvatarJpeg(bitmap)
-                avatarRepository.uploadJpeg(jpeg).getOrThrow()
-                authRepository.refreshSession()
             }
-            avatarBusy = false
-            avatarError = result.exceptionOrNull()?.let { failure ->
+            loaded.exceptionOrNull()?.let { failure ->
                 val code = (failure as? ConvexException)?.code ?: failure.message
-                ConvexHttpClient.humanize(code ?: "AVATAR_UPLOAD_FAILED")
+                avatarError = ConvexHttpClient.humanize(code ?: "INVALID_AVATAR_FILE")
+                return@launch
             }
+            cropBitmap = loaded.getOrNull()
         }
+    }
+
+    if (cropBitmap != null) {
+        AvatarCropScreen(
+            bitmap = cropBitmap!!,
+            onCancel = { cropBitmap = null },
+            onConfirm = { square ->
+                cropBitmap = null
+                avatarBusy = true
+                avatarError = null
+                scope.launch {
+                    val result = runCatching {
+                        val webp = prepareAvatarWebP(square)
+                        avatarRepository.upload(webp).getOrThrow()
+                        authRepository.refreshSession()
+                    }
+                    avatarBusy = false
+                    avatarError = result.exceptionOrNull()?.let { failure ->
+                        val code = (failure as? ConvexException)?.code ?: failure.message
+                        ConvexHttpClient.humanize(code ?: "AVATAR_UPLOAD_FAILED")
+                    }
+                }
+            },
+        )
+        return
     }
 
     if (changingPassword) {

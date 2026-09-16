@@ -77,38 +77,45 @@ class AvatarRepository(
         _bitmap.value = decodeAvatarBitmap(bytes)
     }
 
-    suspend fun uploadJpeg(bytes: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            if (bytes.isEmpty()) throw ConvexException("INVALID_AVATAR_FILE", "INVALID_AVATAR_FILE")
-            if (bytes.size > AvatarFile.MAX_BYTES) {
-                throw ConvexException("AVATAR_FILE_TOO_LARGE", "AVATAR_FILE_TOO_LARGE")
-            }
-            val uploadUrl = convex.mutation("userAvatar:generateUploadUrl").optString("value")
-            if (uploadUrl.isBlank()) throw ConvexException("AVATAR_UPLOAD_FAILED", "AVATAR_UPLOAD_FAILED")
-            val uploaded = http.newCall(
-                Request.Builder()
-                    .url(uploadUrl)
-                    .post(bytes.toRequestBody("image/jpeg".toMediaType()))
-                    .build(),
-            ).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    throw ConvexException("AVATAR_UPLOAD_FAILED", "AVATAR_UPLOAD_FAILED")
+    suspend fun upload(bytes: ByteArray, fileName: String = "avatar.webp"): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                if (bytes.isEmpty()) throw ConvexException("INVALID_AVATAR_FILE", "INVALID_AVATAR_FILE")
+                if (bytes.size > AvatarFile.MAX_BYTES) {
+                    throw ConvexException("AVATAR_FILE_TOO_LARGE", "AVATAR_FILE_TOO_LARGE")
                 }
-                JSONObject(body)
+                val contentType = when {
+                    fileName.endsWith(".png", ignoreCase = true) -> "image/png"
+                    fileName.endsWith(".jpg", ignoreCase = true) ||
+                        fileName.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+                    else -> "image/webp"
+                }
+                val uploadUrl = convex.mutation("userAvatar:generateUploadUrl").optString("value")
+                if (uploadUrl.isBlank()) throw ConvexException("AVATAR_UPLOAD_FAILED", "AVATAR_UPLOAD_FAILED")
+                val uploaded = http.newCall(
+                    Request.Builder()
+                        .url(uploadUrl)
+                        .post(bytes.toRequestBody(contentType.toMediaType()))
+                        .build(),
+                ).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        throw ConvexException("AVATAR_UPLOAD_FAILED", "AVATAR_UPLOAD_FAILED")
+                    }
+                    JSONObject(body)
+                }
+                val storageId = uploaded.optString("storageId")
+                if (storageId.isBlank()) throw ConvexException("AVATAR_UPLOAD_FAILED", "AVATAR_UPLOAD_FAILED")
+                convex.action(
+                    "userAvatar:setOwnAvatar",
+                    JSONObject()
+                        .put("storageId", storageId)
+                        .put("fileName", fileName)
+                        .put("fileSize", bytes.size),
+                )
+                _bitmap.value = decodeAvatarBitmap(bytes)
             }
-            val storageId = uploaded.optString("storageId")
-            if (storageId.isBlank()) throw ConvexException("AVATAR_UPLOAD_FAILED", "AVATAR_UPLOAD_FAILED")
-            convex.action(
-                "userAvatar:setOwnAvatar",
-                JSONObject()
-                    .put("storageId", storageId)
-                    .put("fileName", "avatar.jpg")
-                    .put("fileSize", bytes.size),
-            )
-            _bitmap.value = decodeAvatarBitmap(bytes)
         }
-    }
 
     suspend fun clear(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {

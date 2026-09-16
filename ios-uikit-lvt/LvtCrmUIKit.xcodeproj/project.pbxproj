@@ -49,6 +49,8 @@
 		20000000000000000000002C /* AppStoreUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002C /* AppStoreUpdater.swift */; };
 		20000000000000000000002D /* AccountHeaderCluster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002D /* AccountHeaderCluster.swift */; };
 		20000000000000000000002E /* AvatarRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002E /* AvatarRepository.swift */; };
+		20000000000000000000002F /* AvatarCrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002F /* AvatarCrop.swift */; };
+		200000000000000000000030 /* AvatarCropViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000030 /* AvatarCropViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -98,6 +100,8 @@
 		30000000000000000000002C /* AppStoreUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreUpdater.swift; sourceTree = "<group>"; };
 		30000000000000000000002D /* AccountHeaderCluster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountHeaderCluster.swift; sourceTree = "<group>"; };
 		30000000000000000000002E /* AvatarRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarRepository.swift; sourceTree = "<group>"; };
+		30000000000000000000002F /* AvatarCrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarCrop.swift; sourceTree = "<group>"; };
+		300000000000000000000030 /* AvatarCropViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarCropViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,6 +133,8 @@
 				300000000000000000000003 /* RootTabBarController.swift */,
 				30000000000000000000002D /* AccountHeaderCluster.swift */,
 				30000000000000000000002E /* AvatarRepository.swift */,
+				30000000000000000000002F /* AvatarCrop.swift */,
+				300000000000000000000030 /* AvatarCropViewController.swift */,
 				30000000000000000000000D /* LoginViewController.swift */,
 				30000000000000000000000E /* ChangePasswordViewController.swift */,
 				300000000000000000000011 /* ProfileViewController.swift */,
@@ -249,6 +255,8 @@
 				200000000000000000000003 /* RootTabBarController.swift in Sources */,
 				20000000000000000000002D /* AccountHeaderCluster.swift in Sources */,
 				20000000000000000000002E /* AvatarRepository.swift in Sources */,
+				20000000000000000000002F /* AvatarCrop.swift in Sources */,
+				200000000000000000000030 /* AvatarCropViewController.swift in Sources */,
 				200000000000000000000006 /* AuthModels.swift in Sources */,
 				200000000000000000000007 /* CredentialStore.swift in Sources */,
 				200000000000000000000008 /* TokenStore.swift in Sources */,
@@ -334,7 +342,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = 42ZDDJ2B8M;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -342,7 +350,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9.0;
+				MARKETING_VERSION = 1.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -359,7 +367,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = LvtCrmUIKit/LvtCrmUIKitRelease.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_TEAM = 42ZDDJ2B8M;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = LvtCrmUIKit/Info.plist;
@@ -367,7 +375,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9.0;
+				MARKETING_VERSION = 1.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = vn.lvt.crm.uikit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

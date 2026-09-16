@@ -8,6 +8,13 @@ import {
   hexFromBuffer,
   publicSessionUser,
 } from '../convex/userAvatarPolicy.ts';
+import {
+  centeredOffset,
+  clampOffset,
+  displaySize,
+  offsetAfterZoom,
+  sourceCropRect,
+} from '../src/lib/avatarCrop.js';
 import { isAllowedAvatarFile } from '../src/lib/prepareAvatarFile.js';
 import { matchAvatarFileRoute } from '../scripts/lib/file-route-policy.mjs';
 import { messageFor } from '../src/lib/appErrorMessage.js';
@@ -28,6 +35,7 @@ test('detectAvatarKind reads JPEG, PNG and WEBP magic bytes', () => {
 test('avatarStoredFile uses a stable private filename', () => {
   assert.deepEqual(avatarStoredFile('jpeg'), { fileName: 'avatar.jpg', contentType: 'image/jpeg' });
   assert.deepEqual(avatarStoredFile('png'), { fileName: 'avatar.png', contentType: 'image/png' });
+  assert.deepEqual(avatarStoredFile('webp'), { fileName: 'avatar.webp', contentType: 'image/webp' });
   assert.equal(AVATAR_MAX_BYTES, 2 * 1024 * 1024);
 });
 
@@ -37,8 +45,8 @@ test('publicSessionUser strips storage ids and exposes cache version', () => {
     name: 'Lan',
     email: 'lan@school.vn',
     avatarStorageId: 'kg123',
-    avatarFileName: 'avatar.jpg',
-    avatarContentType: 'image/jpeg',
+    avatarFileName: 'avatar.webp',
+    avatarContentType: 'image/webp',
     avatarSize: 1200,
     avatarChecksum: 'abc123',
     avatarUpdatedAt: 99,
@@ -61,6 +69,50 @@ test('web picker accepts image files only', () => {
   assert.equal(isAllowedAvatarFile({ name: 'notes.pdf', type: 'application/pdf' }), false);
 });
 
+test('1:1 cover crop is a centered square', () => {
+  const cropSize = 200;
+  const shown = displaySize(800, 400, cropSize, 1);
+  const offset = centeredOffset(shown.width, shown.height, cropSize);
+  const rect = sourceCropRect(800, 400, cropSize, 1, offset.x, offset.y);
+  assert.equal(shown.width, 400);
+  assert.equal(shown.height, 200);
+  assert.equal(offset.x, -100);
+  assert.equal(offset.y, 0);
+  assert.equal(rect.x, 200);
+  assert.equal(rect.y, 0);
+  assert.equal(rect.size, 400);
+});
+
+test('zoom keeps a 1:1 source rect inside the image', () => {
+  const cropSize = 200;
+  const shown = displaySize(800, 400, cropSize, 2);
+  const offset = centeredOffset(shown.width, shown.height, cropSize);
+  const rect = sourceCropRect(800, 400, cropSize, 2, offset.x, offset.y);
+  assert.equal(rect.size, 200);
+  assert.equal(rect.x, 300);
+  assert.equal(rect.y, 100);
+  const clamped = clampOffset(80, 40, shown.width, shown.height, cropSize);
+  assert.equal(clamped.x, 0);
+  assert.equal(clamped.y, 0);
+});
+
+test('zoom around the crop center keeps the same image point', () => {
+  const before = centeredOffset(400, 200, 200);
+  const after = offsetAfterZoom({
+    imageWidth: 800,
+    imageHeight: 400,
+    cropSize: 200,
+    oldZoom: 1,
+    newZoom: 2,
+    offsetX: before.x,
+    offsetY: before.y,
+  });
+  const rect = sourceCropRect(800, 400, 200, 2, after.x, after.y);
+  assert.equal(rect.size, 200);
+  assert.equal(rect.x, 300);
+  assert.equal(rect.y, 100);
+});
+
 test('gateway matches /api/files/avatar before a document id', () => {
   assert.deepEqual(matchAvatarFileRoute('GET', '/api/files/avatar'), { kind: 'download' });
   assert.deepEqual(matchAvatarFileRoute('GET', '/api/files/avatar/metadata'), { kind: 'metadata' });
@@ -77,14 +129,25 @@ test('avatar error codes have Vietnamese copy', () => {
   );
 });
 
-test('web profile uploads through Convex Storage then setOwnAvatar', () => {
+test('web profile crops 1:1 then uploads WebP through Convex Storage', () => {
   const profile = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const cropModal = readFileSync(new URL('../src/profile/AvatarCropModal.jsx', import.meta.url), 'utf8');
+  const prepare = readFileSync(new URL('../src/lib/prepareAvatarFile.js', import.meta.url), 'utf8');
   assert.match(profile, /anyApi\.userAvatar\.generateUploadUrl/);
   assert.match(profile, /useAction\(anyApi\.userAvatar\.setOwnAvatar\)/);
   assert.match(profile, /anyApi\.userAvatar\.clearOwnAvatar/);
   assert.match(profile, /fetch\('\/api\/files\/avatar'/);
-  assert.match(profile, /prepareAvatarFile/);
+  assert.match(profile, /AvatarCropModal/);
+  assert.match(profile, /openAvatarCrop/);
+  assert.match(profile, /cancelAvatarCrop/);
+  assert.match(profile, /image\/webp/);
   assert.doesNotMatch(profile, /storage\.getUrl/);
+  assert.match(cropModal, /Cắt ảnh/);
+  assert.match(cropModal, /Hủy/);
+  assert.match(cropModal, /Lưu/);
+  assert.match(cropModal, /encodeCroppedAvatar/);
+  assert.match(prepare, /image\/webp/);
+  assert.match(prepare, /avatar\.webp/);
 });
 
 test('sessionContext sanitizes the user row', () => {
@@ -92,12 +155,17 @@ test('sessionContext sanitizes the user row', () => {
   assert.match(users, /publicSessionUser\(user/);
 });
 
-test('native apps upload avatars through the same Convex Storage mutation', () => {
+test('native apps crop 1:1 then upload WebP through the same Convex Storage mutation', () => {
   const android = readFileSync(
     new URL('../android-app/app/src/main/java/lvt/crm/data/auth/AvatarRepository.kt', import.meta.url),
     'utf8',
   );
+  const androidCrop = readFileSync(
+    new URL('../android-app/app/src/main/java/lvt/crm/ui/profile/AvatarCropScreen.kt', import.meta.url),
+    'utf8',
+  );
   const ios = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/AvatarRepository.swift', import.meta.url), 'utf8');
+  const iosCrop = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/AvatarCrop.swift', import.meta.url), 'utf8');
   const androidProfile = readFileSync(
     new URL('../android-app/app/src/main/java/lvt/crm/ui/profile/ProfileScreen.kt', import.meta.url),
     'utf8',
@@ -110,12 +178,44 @@ test('native apps upload avatars through the same Convex Storage mutation', () =
   assert.match(android, /userAvatar:setOwnAvatar/);
   assert.match(android, /convex\.action\(\s*"userAvatar:setOwnAvatar"/);
   assert.match(android, /\/api\/files\/avatar/);
+  assert.match(android, /image\/webp/);
+  assert.match(android, /avatar\.webp/);
   assert.match(ios, /userAvatar:generateUploadUrl/);
   assert.match(ios, /convex\.action\("userAvatar:setOwnAvatar"/);
   assert.match(ios, /\/api\/files\/avatar/);
+  assert.match(ios, /AvatarCrop\.encodeWebP/);
+  assert.match(iosCrop, /UTType\.webP|public\.webp/);
   assert.match(androidProfile, /PickVisualMedia/);
+  assert.match(androidProfile, /AvatarCropScreen/);
+  assert.match(androidCrop, /Cắt ảnh/);
+  assert.match(androidCrop, /Hủy/);
+  assert.match(androidCrop, /Lưu/);
+  assert.doesNotMatch(androidProfile, /prepareAvatarJpeg/);
+  assert.doesNotMatch(androidProfile, /uploadJpeg/);
   assert.match(iosProfile, /PHPickerViewController/);
   assert.match(iosProfile, /UIImagePickerController/);
+  assert.match(iosProfile, /AvatarCropViewController/);
+  assert.match(iosProfile, /presentCrop/);
   assert.doesNotMatch(android, /storage\.getUrl/);
   assert.doesNotMatch(ios, /storage\.getUrl/);
+});
+
+test('native changelogs mention crop plus WebP and bump versions', () => {
+  const androidChangelog = readFileSync(
+    new URL('../android-app/app/src/main/java/lvt/crm/ui/profile/AppChangelog.kt', import.meta.url),
+    'utf8',
+  );
+  const iosChangelog = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/AppChangelog.swift', import.meta.url), 'utf8');
+  const androidGradle = readFileSync(new URL('../android-app/app/build.gradle.kts', import.meta.url), 'utf8');
+  const iosPbx = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
+  assert.match(androidChangelog, /"0\.18\.0"/);
+  assert.match(androidChangelog, /cắt khung 1:1/);
+  assert.match(androidChangelog, /WebP/);
+  assert.match(androidGradle, /val lvtVersionCode = 41/);
+  assert.match(androidGradle, /val lvtVersionName = "0\.18\.0"/);
+  assert.match(iosChangelog, /version: "1\.10\.0"/);
+  assert.match(iosChangelog, /cắt khung 1:1/);
+  assert.match(iosChangelog, /WebP/);
+  assert.match(iosPbx, /MARKETING_VERSION = 1\.10\.0;/);
+  assert.match(iosPbx, /CURRENT_PROJECT_VERSION = 29;/);
 });
