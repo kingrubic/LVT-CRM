@@ -7,7 +7,7 @@ import {
   detectAvatarKind,
   hexFromBuffer,
   publicSessionUser,
-} from '../convex/userAvatar.ts';
+} from '../convex/userAvatarPolicy.ts';
 import { isAllowedAvatarFile } from '../src/lib/prepareAvatarFile.js';
 import { matchAvatarFileRoute } from '../scripts/lib/file-route-policy.mjs';
 import { messageFor } from '../src/lib/appErrorMessage.js';

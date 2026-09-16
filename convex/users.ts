@@ -27,7 +27,7 @@ import {
   resolveUserMenuAccess,
   SYSTEM_ROLES,
 } from "./lib";
-import { publicSessionUser } from "./userAvatar";
+import { publicSessionUser } from "./userAvatarPolicy";
 
 const userArgs = {
   email: v.string(),
