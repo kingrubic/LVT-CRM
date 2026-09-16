@@ -52,6 +52,7 @@ fun DashboardScreen(
         title = stringResource(R.string.nav_overview),
         refreshing = state.refreshing || state.loading,
         onRefresh = { viewModel.refresh() },
+        showAccountHeader = true,
     ) {
         Column(
             modifier = Modifier

@@ -8,10 +8,14 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
     private let notificationsRepository: NotificationsRepository
     private let dutiesRepository: DutiesRepository
     private let workRepository: WorkRepository
+    private let notificationsViewModel: NotificationsViewModel
     private var tabControllers: [AppTab: UINavigationController] = [:]
-    private weak var notificationsViewController: NotificationsViewController?
+    private var headerClusters: [AccountHeaderClusterView] = []
+    private var notificationsViewController: NotificationsViewController?
+    private var profileViewController: ProfileViewController?
     private weak var dutiesHubViewController: DutiesHubViewController?
     private weak var workViewController: WorkViewController?
+    private var pushObserver: NSObjectProtocol?
 
     init(
         session: UserSession,
@@ -27,41 +31,58 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         self.notificationsRepository = notificationsRepository
         self.dutiesRepository = dutiesRepository
         self.workRepository = workRepository
+        self.notificationsViewModel = NotificationsViewModel(repository: notificationsRepository)
         super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    deinit {
+        if let pushObserver {
+            NotificationCenter.default.removeObserver(pushObserver)
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         delegate = self
+        let previousOnChange = notificationsViewModel.onChange
+        notificationsViewModel.onChange = { [weak self] in
+            previousOnChange?()
+            self?.updateHeaderClusters()
+        }
+        let notificationsViewController = NotificationsViewController(
+            viewModel: notificationsViewModel,
+            onOpenDestination: { [weak self] destination in
+                self?.route(destination, markNotificationRead: false)
+            }
+        )
+        let profileViewController = ProfileViewController(
+            session: session,
+            authRepository: authRepository,
+            sessionsRepository: sessionsRepository
+        )
+        self.notificationsViewController = notificationsViewController
+        self.profileViewController = profileViewController
         let overviewViewController = DashboardViewController(
             dutiesRepository: dutiesRepository,
             workRepository: workRepository,
             onOpenDuties: { [weak self] tab in self?.openDuties(tab: tab) },
             onOpenWork: { [weak self] filter in self?.openWork(filter: filter) }
         )
+        overviewViewController.navigationItem.rightBarButtonItem = makeAccountHeaderItem()
         let overview = navigationController(
             title: "Tổng quan",
             systemImage: "rectangle.grid.2x2",
             viewController: overviewViewController
         )
-        let notificationsViewController = NotificationsViewController(
-            viewModel: NotificationsViewModel(repository: notificationsRepository),
-            onOpenDestination: { [weak self] destination in
-                self?.route(destination, markNotificationRead: false)
-            }
-        )
-        let notifications = navigationController(
-            title: "Thông báo",
-            systemImage: "bell",
-            viewController: notificationsViewController
-        )
         let dutiesHubViewController = DutiesHubViewController(
             dutiesViewModel: DutiesViewModel(repository: dutiesRepository, currentUserId: session.userId),
             dutiesRepository: dutiesRepository
         )
+        dutiesHubViewController.navigationItem.rightBarButtonItem = makeAccountHeaderItem()
+        dutiesHubViewController.dutiesListController.trailingAccessoryBarButtonItems = [makeAccountHeaderItem()]
         let duties = navigationController(
             title: "Lịch CT",
             systemImage: "briefcase",
@@ -72,30 +93,28 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
             viewModel: WorkViewModel(repository: repository),
             downloadDocument: { document in try await repository.downloadDocument(document) }
         )
+        workViewController.trailingAccessoryBarButtonItems = [makeAccountHeaderItem()]
         let work = navigationController(
             title: "Công việc",
             systemImage: "checkmark.seal",
             viewController: workViewController
         )
-        let profile = navigationController(
-                title: "Cá nhân",
-                systemImage: "person.crop.circle",
-                viewController: ProfileViewController(
-                    session: session,
-                    authRepository: authRepository,
-                    sessionsRepository: sessionsRepository
-                )
-            )
         tabControllers = [
-            .notifications: notifications,
+            .overview: overview,
             .duties: duties,
             .work: work,
-            .profile: profile,
         ]
-        self.notificationsViewController = notificationsViewController
         self.dutiesHubViewController = dutiesHubViewController
         self.workViewController = workViewController
-        viewControllers = [overview, notifications, duties, work, profile]
+        viewControllers = [overview, duties, work]
+        pushObserver = NotificationCenter.default.addObserver(
+            forName: .pushReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.notificationsViewModel.refresh() }
+        }
+        notificationsViewModel.refresh(initial: true)
         Task { await sessionsRepository.registerCurrentDevice() }
     }
 
@@ -105,6 +124,9 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
 
     private func openDuties(tab: DutyListTab) {
         selectTab(.duties)
+        if let navigationController = tabControllers[.duties] {
+            detachAuxiliary(from: navigationController)
+        }
         dutiesHubViewController?.openPersonal(animated: false)
         dutiesHubViewController?.dutiesListController.applyListTab(tab)
     }
@@ -115,10 +137,22 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         workViewController?.applyDashboardFilter(filter)
     }
 
+    func openNotifications() {
+        guard let controller = notificationsViewController else { return }
+        presentAuxiliary(controller)
+        controller.refreshAfterDestination()
+    }
+
+    func openProfile() {
+        guard let controller = profileViewController else { return }
+        presentAuxiliary(controller)
+    }
+
     func route(_ destination: NotificationDestination, markNotificationRead: Bool = true) {
         let tab = destination.route
         guard let navigationController = tabControllers[tab] else { return }
         selectedViewController = navigationController
+        detachAuxiliary(from: navigationController)
         if tab == .duties {
             dutiesHubViewController?.openPersonal(animated: false)
             dutiesHubViewController?.dutiesListController.focus(dutyId: destination.sourceId)
@@ -133,7 +167,51 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
                 guard let self else { return }
                 try? await notificationsRepository.markRead(notificationKey: key)
                 notificationsViewController?.refreshAfterDestination()
+                updateHeaderClusters()
             }
+        }
+    }
+
+    private func makeAccountHeaderItem() -> UIBarButtonItem {
+        let cluster = AccountHeaderClusterView(
+            initials: accountInitials(name: session.name, email: session.email),
+            unreadCount: notificationsViewModel.unreadCount
+        )
+        cluster.onBell = { [weak self] in self?.openNotifications() }
+        cluster.onAvatar = { [weak self] in self?.openProfile() }
+        headerClusters.append(cluster)
+        return UIBarButtonItem(customView: cluster)
+    }
+
+    private func updateHeaderClusters() {
+        let count = notificationsViewModel.unreadCount
+        headerClusters.forEach { $0.unreadCount = count }
+    }
+
+    private func presentAuxiliary(_ controller: UIViewController) {
+        guard let navigationController = selectedViewController as? UINavigationController else { return }
+        if let existing = navigationController.viewControllers.first(where: { $0 === controller }) {
+            navigationController.popToViewController(existing, animated: !UIAccessibility.isReduceMotionEnabled)
+            return
+        }
+        detachAuxiliary(controller)
+        navigationController.pushViewController(controller, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
+    private func detachAuxiliary(_ controller: UIViewController) {
+        guard let host = controller.navigationController else { return }
+        let remaining = host.viewControllers.filter { $0 !== controller }
+        if remaining.count != host.viewControllers.count {
+            host.setViewControllers(remaining, animated: false)
+        }
+    }
+
+    private func detachAuxiliary(from navigationController: UINavigationController) {
+        let remaining = navigationController.viewControllers.filter {
+            $0 !== notificationsViewController && $0 !== profileViewController
+        }
+        if remaining.count != navigationController.viewControllers.count {
+            navigationController.setViewControllers(remaining, animated: false)
         }
     }
 

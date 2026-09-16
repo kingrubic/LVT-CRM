@@ -8,6 +8,12 @@ struct AppChangelogEntry: Equatable {
 enum AppChangelog {
     static let entries: [AppChangelogEntry] = [
         AppChangelogEntry(
+            version: "1.9.0",
+            highlights: [
+                "Thông báo và Cá nhân chuyển lên góc phải (chuông + ảnh đại diện); thanh dưới còn Tổng quan, Lịch CT và Công việc.",
+            ]
+        ),
+        AppChangelogEntry(
             version: "1.8.4",
             highlights: [
                 "Hết treo màn hình tải khi mở app lần đầu; nếu máy chủ không trả lời thì hiện đăng nhập để thử lại.",

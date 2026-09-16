@@ -57,7 +57,11 @@ final class NotificationsViewController: UITableViewController {
         refreshControl?.accessibilityLabel = "Tải lại thông báo"
         refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
 
-        viewModel.onChange = { [weak self] in self?.render() }
+        let previousOnChange = viewModel.onChange
+        viewModel.onChange = { [weak self] in
+            previousOnChange?()
+            self?.render()
+        }
         pushObserver = NotificationCenter.default.addObserver(
             forName: .pushReceived,
             object: nil,
@@ -66,7 +70,7 @@ final class NotificationsViewController: UITableViewController {
             Task { @MainActor in self?.viewModel.refresh() }
         }
         render()
-        viewModel.refresh(initial: true)
+        viewModel.refresh(initial: viewModel.items.isEmpty)
     }
 
     func refreshAfterDestination() {
@@ -298,9 +302,6 @@ final class NotificationsViewController: UITableViewController {
         unreadSwitch.isOn = viewModel.unreadOnly
         markAllItem.isEnabled = viewModel.unreadCount > 0 && viewModel.busyKey == nil
         markAllItem.accessibilityLabel = "Đánh dấu tất cả thông báo là đã đọc"
-        navigationController?.tabBarItem.badgeValue = viewModel.unreadCount > 0
-            ? (viewModel.unreadCount > 99 ? "99+" : "\(viewModel.unreadCount)")
-            : nil
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
         tableView.reloadData()
     }

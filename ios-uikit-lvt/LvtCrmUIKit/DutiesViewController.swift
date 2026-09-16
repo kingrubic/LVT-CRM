@@ -11,6 +11,7 @@ final class DutiesViewController: UITableViewController {
     }
 
     private let viewModel: DutiesViewModel
+    var trailingAccessoryBarButtonItems: [UIBarButtonItem] = []
     private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
     private weak var detailViewController: DutyDetailViewController?
@@ -251,7 +252,9 @@ final class DutiesViewController: UITableViewController {
     }
 
     private func render() {
-        navigationItem.rightBarButtonItem = nil
+        navigationItem.rightBarButtonItems = trailingAccessoryBarButtonItems.isEmpty
+            ? nil
+            : trailingAccessoryBarButtonItems
         if !viewModel.refreshing { refreshControl?.endRefreshing() }
         searchHeader.configure(
             values: viewModel.search,

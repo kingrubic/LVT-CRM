@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Business
@@ -30,6 +31,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -70,6 +72,7 @@ fun ProfileScreen(
     sessionsRepository: SessionsRepository,
     appearanceStore: AppearanceStore,
     onSignOut: () -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     var changingPassword by rememberSaveable { mutableStateOf(false) }
     var showingDevices by rememberSaveable { mutableStateOf(false) }
@@ -110,7 +113,16 @@ fun ProfileScreen(
         return
     }
 
-    LvtScreen(title = stringResource(R.string.nav_profile)) {
+    LvtScreen(
+        title = stringResource(R.string.nav_profile),
+        navigationIcon = onBack?.let { back ->
+            {
+                IconButton(onClick = back) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại")
+                }
+            }
+        },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

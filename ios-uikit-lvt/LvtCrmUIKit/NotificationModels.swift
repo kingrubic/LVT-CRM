@@ -28,10 +28,9 @@ struct NotificationsSnapshot: Equatable, Sendable {
 }
 
 enum AppTab: Hashable {
-    case notifications
+    case overview
     case duties
     case work
-    case profile
 }
 
 struct NotificationDestination: Equatable, Sendable, Hashable {
