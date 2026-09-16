@@ -1,3 +1,11 @@
+export function matchAvatarFileRoute(method, requestUrl) {
+  if (method !== 'GET' && method !== 'HEAD') return null;
+  const pathname = new URL(requestUrl || '/', 'http://localhost').pathname;
+  if (pathname === '/api/files/avatar/metadata') return { kind: 'metadata' };
+  if (pathname === '/api/files/avatar') return { kind: 'download' };
+  return null;
+}
+
 export function matchDriveMutationRoute(method, requestUrl) {
   const pathname = new URL(requestUrl || '/', 'http://localhost').pathname;
   if (method === 'POST' || method === 'DELETE') {

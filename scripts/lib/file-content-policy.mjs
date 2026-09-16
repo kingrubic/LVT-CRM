@@ -6,6 +6,7 @@ const uploadMimeTypes = new Map([
   ['.jpg', 'image/jpeg'],
   ['.pdf', 'application/pdf'],
   ['.png', 'image/png'],
+  ['.webp', 'image/webp'],
   ['.xls', 'application/vnd.ms-excel'],
   ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
 ]);
@@ -16,6 +17,8 @@ export function canonicalUploadMime(fileName) {
 
 export function downloadContentPolicy(fileName) {
   const mimeType = canonicalUploadMime(fileName) || 'application/octet-stream';
-  const disposition = mimeType === 'image/jpeg' || mimeType === 'image/png' ? 'inline' : 'attachment';
+  const disposition = mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/webp'
+    ? 'inline'
+    : 'attachment';
   return { mimeType, disposition };
 }

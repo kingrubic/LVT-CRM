@@ -1,5 +1,11 @@
 package lvt.crm.ui.profile
 
+import android.graphics.BitmapFactory
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +35,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,19 +48,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import lvt.crm.R
 import lvt.crm.data.auth.AuthRepository
+import lvt.crm.data.auth.AvatarRepository
 import lvt.crm.data.auth.SessionsRepository
+import lvt.crm.data.auth.decodeAvatarBitmap
+import lvt.crm.data.auth.prepareAvatarJpeg
+import lvt.crm.data.convex.ConvexException
+import lvt.crm.data.convex.ConvexHttpClient
+import kotlinx.coroutines.launch
 import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatusPill
@@ -68,6 +84,7 @@ fun ProfileScreen(
     role: String,
     departmentName: String?,
     positionName: String?,
+    avatarRepository: AvatarRepository,
     authRepository: AuthRepository,
     sessionsRepository: SessionsRepository,
     appearanceStore: AppearanceStore,
@@ -79,8 +96,39 @@ fun ProfileScreen(
     var showingChangelog by rememberSaveable { mutableStateOf(false) }
     var confirmSignOut by rememberSaveable { mutableStateOf(false) }
     var pickingAppearance by rememberSaveable { mutableStateOf(false) }
+    var confirmRemoveAvatar by rememberSaveable { mutableStateOf(false) }
+    var avatarBusy by remember { mutableStateOf(false) }
+    var avatarError by remember { mutableStateOf<String?>(null) }
     val appearance by appearanceStore.mode.collectAsState()
+    val avatarBitmap by avatarRepository.bitmap.collectAsState()
     val appVersion = currentAppVersion(LocalContext.current)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        avatarBusy = true
+        avatarError = null
+        scope.launch {
+            val result = runCatching {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: throw ConvexException("INVALID_AVATAR_FILE", "INVALID_AVATAR_FILE")
+                val bitmap = decodeAvatarBitmap(bytes)
+                    ?: BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?: throw ConvexException("INVALID_AVATAR_FILE", "INVALID_AVATAR_FILE")
+                val jpeg = prepareAvatarJpeg(bitmap)
+                avatarRepository.uploadJpeg(jpeg).getOrThrow()
+                authRepository.refreshSession()
+            }
+            avatarBusy = false
+            avatarError = result.exceptionOrNull()?.let { failure ->
+                val code = (failure as? ConvexException)?.code ?: failure.message
+                ConvexHttpClient.humanize(code ?: "AVATAR_UPLOAD_FAILED")
+            }
+        }
+    }
 
     if (changingPassword) {
         BackHandler { changingPassword = false }
@@ -144,15 +192,36 @@ fun ProfileScreen(
                     modifier = Modifier
                         .size(68.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable(enabled = !avatarBusy) {
+                            photoPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        name.trim().firstOrNull()?.uppercase() ?: "L",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
+                    if (avatarBitmap != null) {
+                        Image(
+                            bitmap = avatarBitmap!!.asImageBitmap(),
+                            contentDescription = "Ảnh đại diện",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    } else {
+                        Text(
+                            name.trim().firstOrNull()?.uppercase() ?: "L",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                    if (avatarBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp,
+                        )
+                    }
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -170,6 +239,31 @@ fun ProfileScreen(
                         label = roleLabel(role),
                         tone = StatusTone.Positive,
                     )
+                    Text(
+                        if (avatarBusy) "Đang cập nhật ảnh…" else "Nhấn ảnh để đổi ảnh đại diện",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.76f),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (avatarBitmap != null) {
+                        Text(
+                            "Gỡ ảnh đại diện",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable(enabled = !avatarBusy) { confirmRemoveAvatar = true },
+                        )
+                    }
+                    avatarError?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
             }
         }
@@ -264,6 +358,36 @@ fun ProfileScreen(
         }
     }
 
+    if (confirmRemoveAvatar) {
+        AlertDialog(
+            onDismissRequest = { confirmRemoveAvatar = false },
+            title = { Text("Gỡ ảnh đại diện?") },
+            text = { Text("Hồ sơ sẽ hiện chữ cái tên của bạn cho đến khi bạn chọn ảnh mới.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRemoveAvatar = false
+                    avatarBusy = true
+                    avatarError = null
+                    scope.launch {
+                        val result = runCatching {
+                            avatarRepository.clear().getOrThrow()
+                            authRepository.refreshSession()
+                        }
+                        avatarBusy = false
+                        avatarError = result.exceptionOrNull()?.let { failure ->
+                            val code = (failure as? ConvexException)?.code ?: failure.message
+                            ConvexHttpClient.humanize(code ?: "AVATAR_UPLOAD_FAILED")
+                        }
+                    }
+                }) { Text("Gỡ ảnh") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRemoveAvatar = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
     if (confirmSignOut) {
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },

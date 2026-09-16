@@ -27,6 +27,7 @@ import {
   resolveUserMenuAccess,
   SYSTEM_ROLES,
 } from "./lib";
+import { publicSessionUser } from "./userAvatar";
 
 const userArgs = {
   email: v.string(),
@@ -150,7 +151,7 @@ export const sessionContext = query({
       : undefined;
 
     return {
-      user,
+      user: publicSessionUser(user as unknown as Record<string, unknown>),
       isAdmin: user.role === "admin",
       isModerator: user.role === "moderator",
       isOperationalManager: isOperationalManagerRole(user.role),
@@ -200,6 +201,37 @@ export const list = query({
 export const requireAdmin = internalQuery({
   args: { permission: v.string() },
   handler: async (ctx, args) => (await adminPermissionOrThrow(ctx, args.permission)).user._id,
+});
+
+export const requireCurrentUser = internalQuery({
+  args: {},
+  handler: async (ctx) => currentUserOrThrow(ctx),
+});
+
+export const commitOwnAvatar = internalMutation({
+  args: {
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    contentType: v.string(),
+    fileSize: v.number(),
+    checksum: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await currentUserOrThrow(ctx);
+    const now = Date.now();
+    const previousId = user.avatarStorageId;
+    await ctx.db.patch(user._id, {
+      avatarStorageId: args.storageId,
+      avatarFileName: args.fileName,
+      avatarContentType: args.contentType,
+      avatarSize: args.fileSize,
+      avatarChecksum: args.checksum,
+      avatarUpdatedAt: now,
+      updatedAt: now,
+      updatedBy: String(user._id),
+    });
+    return { previousId: previousId ?? null, avatarVersion: args.checksum };
+  },
 });
 
 export const byId = internalQuery({

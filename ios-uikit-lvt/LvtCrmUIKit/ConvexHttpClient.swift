@@ -179,6 +179,8 @@ actor ConvexHttpClient {
             "MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PUBLIC_SIGNUP_DISABLED", "INVALID_EMAIL",
             "INVALID_AUTH_FLOW", "FORBIDDEN", "UNAUTHENTICATED", "CANNOT_REVOKE_CURRENT_SESSION",
             "SESSION_NOT_FOUND", "DOCUMENT_TYPE_REQUIRED", "INVALID_DOCUMENT_TYPE", "SESSION_TIMEOUT",
+            "INVALID_AVATAR_FILE", "AVATAR_FILE_TOO_LARGE", "AVATAR_UPLOAD_NOT_FOUND", "AVATAR_NOT_FOUND",
+            "AVATAR_UPLOAD_FAILED",
         ]
         return known.first { message.localizedCaseInsensitiveContains($0) } ?? message
     }
@@ -186,6 +188,16 @@ actor ConvexHttpClient {
     static func humanize(_ message: String) -> String {
         let code = extractCode(message)
         switch true {
+        case code == "INVALID_AVATAR_FILE":
+            return "Ảnh đại diện phải là PNG, JPG hoặc WEBP."
+        case code == "AVATAR_FILE_TOO_LARGE":
+            return "Ảnh đại diện không được vượt quá 2MB."
+        case code == "AVATAR_UPLOAD_NOT_FOUND":
+            return "Không tìm thấy ảnh vừa tải lên. Vui lòng chọn lại."
+        case code == "AVATAR_NOT_FOUND":
+            return "Chưa có ảnh đại diện."
+        case code == "AVATAR_UPLOAD_FAILED":
+            return "Không thể cập nhật ảnh đại diện. Vui lòng thử lại."
         case code.localizedCaseInsensitiveContains("Invalid"), code.localizedCaseInsensitiveContains("credentials"):
             return "Email hoặc mật khẩu không đúng."
         case code == "ACCOUNT_LOCKED":

@@ -37,9 +37,12 @@ final class AccountHeaderClusterView: UIView {
     private let pill = UIView()
     private let bellButton = UIButton(type: .system)
     private let avatarButton = UIButton(type: .system)
+    private let avatarImageView = UIImageView()
     private let badgeLabel = UILabel()
+    private let initials: String
 
     init(initials: String, unreadCount: Int = 0) {
+        self.initials = initials
         super.init(frame: CGRect(x: 0, y: 0, width: 92, height: 36))
         configure(initials: initials)
         self.unreadCount = unreadCount
@@ -78,6 +81,13 @@ final class AccountHeaderClusterView: UIView {
         avatarButton.accessibilityLabel = "Cá nhân"
         avatarButton.addAction(UIAction { [weak self] _ in self?.onAvatar?() }, for: .touchUpInside)
 
+        avatarImageView.translatesAutoresizingMaskIntoConstraints = false
+        avatarImageView.contentMode = .scaleAspectFill
+        avatarImageView.clipsToBounds = true
+        avatarImageView.isUserInteractionEnabled = false
+        avatarImageView.isHidden = true
+        avatarButton.addSubview(avatarImageView)
+
         badgeLabel.translatesAutoresizingMaskIntoConstraints = false
         badgeLabel.font = .systemFont(ofSize: 9, weight: .bold)
         badgeLabel.textColor = .white
@@ -108,6 +118,10 @@ final class AccountHeaderClusterView: UIView {
             stack.bottomAnchor.constraint(equalTo: pill.bottomAnchor),
             avatarButton.widthAnchor.constraint(equalToConstant: 28),
             avatarButton.heightAnchor.constraint(equalToConstant: 28),
+            avatarImageView.leadingAnchor.constraint(equalTo: avatarButton.leadingAnchor),
+            avatarImageView.trailingAnchor.constraint(equalTo: avatarButton.trailingAnchor),
+            avatarImageView.topAnchor.constraint(equalTo: avatarButton.topAnchor),
+            avatarImageView.bottomAnchor.constraint(equalTo: avatarButton.bottomAnchor),
             badgeLabel.topAnchor.constraint(equalTo: bellButton.topAnchor, constant: 1),
             badgeLabel.trailingAnchor.constraint(equalTo: bellButton.trailingAnchor, constant: 2),
             badgeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 16),
@@ -135,5 +149,11 @@ final class AccountHeaderClusterView: UIView {
         bellButton.tintColor = dark ? UIColor.white.withAlphaComponent(0.92) : UIColor.label
         avatarButton.backgroundColor = .systemIndigo
         avatarButton.setTitleColor(.white, for: .normal)
+    }
+
+    func setAvatarImage(_ image: UIImage?) {
+        avatarImageView.image = image
+        avatarImageView.isHidden = image == nil
+        avatarButton.setTitle(image == nil ? initials : nil, for: .normal)
     }
 }

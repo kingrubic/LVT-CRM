@@ -10,6 +10,8 @@ struct UserSession: Equatable, Sendable {
     let departmentName: String?
     let positionName: String?
     let positionLevel: Int?
+    let hasAvatar: Bool
+    let avatarVersion: String?
 
     var isOperationalManager: Bool {
         role == "admin" || role == "moderator"
@@ -40,7 +42,9 @@ extension UserSession {
             mustChangePassword: (user["mustChangePassword"] as? Bool) ?? false,
             departmentName: department?["name"] as? String,
             positionName: position?["name"] as? String,
-            positionLevel: position?["level"] as? Int
+            positionLevel: position?["level"] as? Int,
+            hasAvatar: (user["hasAvatar"] as? Bool) ?? false,
+            avatarVersion: user["avatarVersion"] as? String
         )
     }
 }

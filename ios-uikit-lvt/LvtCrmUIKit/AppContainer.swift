@@ -9,6 +9,7 @@ final class AppContainer {
     let notificationsRepository: NotificationsRepository
     let dutiesRepository: DutiesRepository
     let workRepository: WorkRepository
+    let avatarRepository: AvatarRepository
     let notificationSync: NotificationSyncService
     let apnsRegistrar: APNsTokenRegistrar
 
@@ -32,6 +33,7 @@ final class AppContainer {
         self.notificationsRepository = notificationsRepository
         dutiesRepository = DutiesRepository(convex: convex, tokenProvider: { tokenStore.accessToken })
         workRepository = WorkRepository(convex: convex, tokenProvider: { tokenStore.accessToken })
+        avatarRepository = AvatarRepository(convex: convex, tokenProvider: { tokenStore.accessToken })
         notificationSync = NotificationSyncService(
             tokenStore: tokenStore,
             repository: notificationsRepository

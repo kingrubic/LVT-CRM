@@ -2,6 +2,7 @@ package lvt.crm
 
 import android.content.Context
 import lvt.crm.data.auth.AuthRepository
+import lvt.crm.data.auth.AvatarRepository
 import lvt.crm.data.auth.SessionsRepository
 import lvt.crm.data.auth.TokenStore
 import lvt.crm.data.convex.ConvexConfig
@@ -41,6 +42,11 @@ class AppContainer(context: Context) {
     )
     val notificationsRepository = NotificationsRepository(convex)
     val workRepository = WorkRepository(
+        convex,
+        tokenProvider = { tokenStore.accessToken },
+        cacheDir = appContext.cacheDir,
+    )
+    val avatarRepository = AvatarRepository(
         convex,
         tokenProvider = { tokenStore.accessToken },
         cacheDir = appContext.cacheDir,

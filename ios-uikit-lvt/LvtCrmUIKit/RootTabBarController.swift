@@ -8,6 +8,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
     private let notificationsRepository: NotificationsRepository
     private let dutiesRepository: DutiesRepository
     private let workRepository: WorkRepository
+    private let avatarRepository: AvatarRepository
     private let notificationsViewModel: NotificationsViewModel
     private var tabControllers: [AppTab: UINavigationController] = [:]
     private var headerClusters: [AccountHeaderClusterView] = []
@@ -16,6 +17,8 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
     private weak var dutiesHubViewController: DutiesHubViewController?
     private weak var workViewController: WorkViewController?
     private var pushObserver: NSObjectProtocol?
+    private var avatarObserver: NSObjectProtocol?
+    private var avatarImage: UIImage?
 
     init(
         session: UserSession,
@@ -23,7 +26,8 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         sessionsRepository: SessionsRepository,
         notificationsRepository: NotificationsRepository,
         dutiesRepository: DutiesRepository,
-        workRepository: WorkRepository
+        workRepository: WorkRepository,
+        avatarRepository: AvatarRepository
     ) {
         self.session = session
         self.authRepository = authRepository
@@ -31,6 +35,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         self.notificationsRepository = notificationsRepository
         self.dutiesRepository = dutiesRepository
         self.workRepository = workRepository
+        self.avatarRepository = avatarRepository
         self.notificationsViewModel = NotificationsViewModel(repository: notificationsRepository)
         super.init(nibName: nil, bundle: nil)
     }
@@ -41,6 +46,9 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
     deinit {
         if let pushObserver {
             NotificationCenter.default.removeObserver(pushObserver)
+        }
+        if let avatarObserver {
+            NotificationCenter.default.removeObserver(avatarObserver)
         }
     }
 
@@ -61,7 +69,8 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         let profileViewController = ProfileViewController(
             session: session,
             authRepository: authRepository,
-            sessionsRepository: sessionsRepository
+            sessionsRepository: sessionsRepository,
+            avatarRepository: avatarRepository
         )
         self.notificationsViewController = notificationsViewController
         self.profileViewController = profileViewController
@@ -116,6 +125,15 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         }
         notificationsViewModel.refresh(initial: true)
         Task { await sessionsRepository.registerCurrentDevice() }
+        avatarObserver = NotificationCenter.default.addObserver(
+            forName: .accountAvatarDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let image = notification.object as? UIImage
+            Task { @MainActor in self?.applyAvatarImage(image) }
+        }
+        Task { await reloadAvatar() }
     }
 
     private func selectTab(_ tab: AppTab) {
@@ -179,8 +197,24 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         )
         cluster.onBell = { [weak self] in self?.openNotifications() }
         cluster.onAvatar = { [weak self] in self?.openProfile() }
+        cluster.setAvatarImage(avatarImage)
         headerClusters.append(cluster)
         return UIBarButtonItem(customView: cluster)
+    }
+
+    private func applyAvatarImage(_ image: UIImage?) {
+        avatarImage = image
+        headerClusters.forEach { $0.setAvatarImage(image) }
+        profileViewController?.applyAvatarImage(image)
+    }
+
+    private func reloadAvatar() async {
+        let image = await avatarRepository.image(
+            userId: session.userId,
+            hasAvatar: session.hasAvatar,
+            version: session.avatarVersion
+        )
+        applyAvatarImage(image)
     }
 
     private func updateHeaderClusters() {

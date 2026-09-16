@@ -198,6 +198,11 @@ export function messageFor(error) {
     TRANSFER_BEFORE_START: 'Ngày chuyển lớp không được trước ngày bắt đầu học ở lớp hiện tại.',
     ASSIGNMENT_BEFORE_START: 'Ngày thay GVCN không được trước ngày phân công hiện tại bắt đầu.',
     ENROLLMENT_NOT_ACTIVE: 'Chỉ chuyển được học sinh đang học.',
+    INVALID_AVATAR_FILE: 'Ảnh đại diện phải là PNG, JPG hoặc WEBP.',
+    AVATAR_FILE_TOO_LARGE: 'Ảnh đại diện không được vượt quá 2MB.',
+    AVATAR_UPLOAD_NOT_FOUND: 'Không tìm thấy ảnh vừa tải lên. Vui lòng chọn lại.',
+    AVATAR_NOT_FOUND: 'Chưa có ảnh đại diện.',
+    AVATAR_UPLOAD_FAILED: 'Không thể cập nhật ảnh đại diện. Vui lòng thử lại.',
   };
 
   const knownCodes = Object.keys(messages).sort((a, b) => b.length - a.length);

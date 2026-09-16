@@ -45,6 +45,7 @@ test('iOS 1.8.4 records the splash hang fix', () => {
 
 test('iOS 1.9.0 is the current marketing version after the header-cluster change', () => {
   assert.match(changelog, /version: "1\.9\.0"/);
+  assert.match(changelog, /Đổi ảnh đại diện/);
   assert.match(pbx, /MARKETING_VERSION = 1\.9\.0;/);
   assert.match(pbx, /CURRENT_PROJECT_VERSION = 28;/);
   assert.doesNotMatch(pbx, /MARKETING_VERSION = 1\.8\.4;/);

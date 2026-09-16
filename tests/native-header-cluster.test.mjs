@@ -43,6 +43,7 @@ test('iOS push destinations still route to Lịch CT or Công việc', () => {
 test('iOS 1.9.0 records the header cluster and bumps marketing plus build numbers', () => {
   assert.match(iosChangelog, /version: "1\.9\.0"/);
   assert.match(iosChangelog, /chuông \+ ảnh đại diện/);
+  assert.match(iosChangelog, /Đổi ảnh đại diện/);
   assert.match(iosPbx, /MARKETING_VERSION = 1\.9\.0;/);
   assert.match(iosPbx, /CURRENT_PROJECT_VERSION = 28;/);
   assert.doesNotMatch(iosPbx, /MARKETING_VERSION = 1\.8\.4;/);
@@ -78,6 +79,7 @@ test('Android notification destinations still navigate to duties or work', () =>
 test('Android 0.17.0 records the header cluster and bumps versionCode', () => {
   assert.match(androidChangelog, /"0\.17\.0"/);
   assert.match(androidChangelog, /chuông \+ ảnh đại diện/);
+  assert.match(androidChangelog, /Đổi ảnh đại diện/);
   assert.match(androidGradle, /val lvtVersionCode = 40/);
   assert.match(androidGradle, /val lvtVersionName = "0\.17\.0"/);
 });

@@ -119,9 +119,12 @@ fun LvtRoot(
                 role = state.session.role,
                 departmentName = state.session.departmentName,
                 positionName = state.session.positionName,
+                hasAvatar = state.session.hasAvatar,
+                avatarVersion = state.session.avatarVersion,
                 notificationDestination = notificationDestination,
                 onNotificationDestinationHandled = onNotificationDestinationHandled,
                 onSignOut = {
+                    container.avatarRepository.clearLocal()
                     container.authRepository.signOut()
                     container.notificationScheduler.cancel()
                 },
@@ -139,6 +142,8 @@ private fun MainShell(
     role: String,
     departmentName: String?,
     positionName: String?,
+    hasAvatar: Boolean,
+    avatarVersion: String?,
     notificationDestination: NotificationDestination?,
     onNotificationDestinationHandled: () -> Unit,
     onSignOut: () -> Unit,
@@ -166,6 +171,11 @@ private fun MainShell(
     var filePreview by remember { mutableStateOf<WorkFilePreviewState?>(null) }
     var openingFile by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(Routes.Overview) }
+    val avatarBitmap by container.avatarRepository.bitmap.collectAsState()
+
+    LaunchedEffect(sessionUserId, hasAvatar, avatarVersion) {
+        container.avatarRepository.sync(sessionUserId, hasAvatar, avatarVersion)
+    }
 
     val tabs = listOf(
         Triple(Routes.Overview, R.string.nav_overview, Icons.Outlined.Dashboard),
@@ -210,6 +220,7 @@ private fun MainShell(
     val accountHeader = AccountHeaderState(
         unreadCount = notificationState.unreadCount,
         initials = accountInitials(sessionName, sessionEmail),
+        avatarBitmap = avatarBitmap,
         onOpenNotifications = { openNotifications() },
         onOpenProfile = { openProfile() },
     )
@@ -384,6 +395,7 @@ private fun MainShell(
                     role = role,
                     departmentName = departmentName,
                     positionName = positionName,
+                    avatarRepository = container.avatarRepository,
                     authRepository = container.authRepository,
                     sessionsRepository = container.sessionsRepository,
                     appearanceStore = container.appearanceStore,

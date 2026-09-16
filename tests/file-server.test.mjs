@@ -8,7 +8,7 @@ import { isTransientDriveDownloadError, retryDriveDownload } from '../scripts/li
 import { canMutateWorkDocument, canRejectWorkDocument } from '../convex/workDocumentPolicy.ts';
 import { FileHttpError, classifyFileError } from '../scripts/lib/file-http-errors.mjs';
 import { canonicalUploadMime, downloadContentPolicy } from '../scripts/lib/file-content-policy.mjs';
-import { matchDriveMutationRoute } from '../scripts/lib/file-route-policy.mjs';
+import { matchAvatarFileRoute, matchDriveMutationRoute } from '../scripts/lib/file-route-policy.mjs';
 import {
   assertStagedUploadOwner,
   settleClaimedUpload,
@@ -104,6 +104,10 @@ test('upload and download MIME policy ignores a spoofed request or stored conten
     mimeType: 'image/png',
     disposition: 'inline',
   });
+  assert.deepEqual(downloadContentPolicy('avatar.webp'), {
+    mimeType: 'image/webp',
+    disposition: 'inline',
+  });
 });
 
 test('Drive mutation routes accept only scoped upload tokens or trusted cleanup jobs', () => {
@@ -119,6 +123,12 @@ test('Drive mutation routes accept only scoped upload tokens or trusted cleanup 
     id: 'record-id',
   });
   assert.deepEqual(matchDriveMutationRoute('DELETE', '/api/files/cleanup-jobs/record-id'), null);
+});
+
+test('avatar routes are purpose-scoped and are not treated as work document ids', () => {
+  assert.deepEqual(matchAvatarFileRoute('GET', '/api/files/avatar'), { kind: 'download' });
+  assert.deepEqual(matchAvatarFileRoute('GET', '/api/files/avatar/metadata'), { kind: 'metadata' });
+  assert.equal(matchAvatarFileRoute('DELETE', '/api/files/avatar'), null);
 });
 
 test('work uploads never fall back to people-review authorization', async () => {

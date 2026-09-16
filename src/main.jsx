@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
+import { ConvexAuthProvider, useAuthActions, useConvexAuth } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
 import { anyApi } from 'convex/server';
 import '@fontsource-variable/montserrat';
@@ -27,6 +27,7 @@ import HomeroomRouter from './homeroom/HomeroomRouter';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
+import { AVATAR_ACCEPT, prepareAvatarFile } from './lib/prepareAvatarFile.js';
 import { filterByPickerSearch, personPickerHaystack } from './lib/pickerSearch';
 import './management/managementTheme.css';
 import './duties/duties.css';
@@ -2260,12 +2261,20 @@ function PositionManagement() {
 
 function ProfileView({ session }) {
   const changeOwnPassword = useAction(anyApi.users.changeOwnPassword);
+  const generateAvatarUploadUrl = useMutation(anyApi.userAvatar.generateUploadUrl);
+  const setOwnAvatar = useAction(anyApi.userAvatar.setOwnAvatar);
+  const clearOwnAvatar = useMutation(anyApi.userAvatar.clearOwnAvatar);
+  const { fetchAccessToken } = useConvexAuth();
   const { user, department, permissionGroup, position, isOperationalManager } = session;
   const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarFeedback, setAvatarFeedback] = useState('');
+  const avatarInputRef = useRef(null);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -2296,17 +2305,122 @@ function ProfileView({ session }) {
     .join('');
   const roleLabel = ROLE_LABELS[user.role] || user.role;
   const feedbackType = feedback === 'Đã đổi mật khẩu thành công.' ? 'success' : 'error';
+  const hasAvatar = Boolean(user.hasAvatar);
+  const avatarVersion = user.avatarVersion || '';
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = '';
+    if (!hasAvatar) {
+      setAvatarUrl('');
+      return undefined;
+    }
+    (async () => {
+      try {
+        const token = await fetchAccessToken({ forceRefreshToken: false });
+        if (!token || cancelled) return;
+        const response = await fetch('/api/files/avatar', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        setAvatarUrl(objectUrl);
+      } catch {
+        /* Keep initials fallback. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [hasAvatar, avatarVersion, fetchAccessToken]);
+
+  const uploadAvatar = async (file) => {
+    setAvatarFeedback('');
+    setAvatarBusy(true);
+    try {
+      const prepared = await prepareAvatarFile(file);
+      const uploadUrl = await generateAvatarUploadUrl({});
+      const uploaded = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': prepared.type || 'image/jpeg' },
+        body: prepared,
+      });
+      if (!uploaded.ok) throw new Error('AVATAR_UPLOAD_FAILED');
+      const { storageId } = await uploaded.json();
+      if (!storageId) throw new Error('AVATAR_UPLOAD_FAILED');
+      await setOwnAvatar({ storageId, fileName: prepared.name, fileSize: prepared.size });
+      setAvatarFeedback('Đã cập nhật ảnh đại diện.');
+    } catch (error) {
+      setAvatarFeedback(messageFor(error));
+    } finally {
+      setAvatarBusy(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const removeAvatar = async () => {
+    setAvatarFeedback('');
+    setAvatarBusy(true);
+    try {
+      await clearOwnAvatar({});
+      setAvatarUrl('');
+      setAvatarFeedback('Đã gỡ ảnh đại diện.');
+    } catch (error) {
+      setAvatarFeedback(messageFor(error));
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   return (
     <section className="work-user-view profile-workspace">
       <div className="profile-modern-grid">
         <article className="profile-paper profile-overview">
           <header className="profile-identity">
-            <span className="profile-avatar" aria-hidden="true">{initials || 'LV'}</span>
+            <button
+              type="button"
+              className={`profile-avatar ${avatarUrl ? 'has-photo' : ''}`}
+              disabled={avatarBusy}
+              onClick={() => avatarInputRef.current?.click()}
+              aria-label="Đổi ảnh đại diện"
+            >
+              {avatarUrl ? <img src={avatarUrl} alt="" /> : (initials || 'LV')}
+            </button>
+            <input
+              ref={avatarInputRef}
+              className="profile-avatar-input"
+              type="file"
+              accept={AVATAR_ACCEPT}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) uploadAvatar(file);
+              }}
+            />
             <div>
               <span className="profile-eyebrow">HỒ SƠ NỘI BỘ</span>
               <h3>{displayName}</h3>
               <p>{user.email || 'Chưa có email đăng nhập'}</p>
+              <div className="profile-avatar-actions">
+                <button type="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
+                  {avatarBusy ? 'Đang cập nhật…' : 'Đổi ảnh đại diện'}
+                </button>
+                {hasAvatar ? (
+                  <button type="button" disabled={avatarBusy} onClick={removeAvatar}>
+                    Gỡ ảnh
+                  </button>
+                ) : null}
+              </div>
+              {avatarFeedback ? (
+                <p className={`profile-avatar-feedback ${avatarFeedback.startsWith('Đã') ? 'success' : 'error'}`} role="status">
+                  {avatarFeedback}
+                </p>
+              ) : null}
             </div>
             <span className={`profile-role profile-role-${user.role}`}>{roleLabel}</span>
           </header>

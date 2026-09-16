@@ -1,4 +1,5 @@
 import UIKit
+import PhotosUI
 
 @MainActor
 final class ProfileViewController: UITableViewController {
@@ -36,15 +37,20 @@ final class ProfileViewController: UITableViewController {
     private let session: UserSession
     private let authRepository: AuthRepository
     private let sessionsRepository: SessionsRepository
+    private let avatarRepository: AvatarRepository
+    private var avatarImage: UIImage?
+    private var avatarBusy = false
 
     init(
         session: UserSession,
         authRepository: AuthRepository,
-        sessionsRepository: SessionsRepository
+        sessionsRepository: SessionsRepository,
+        avatarRepository: AvatarRepository
     ) {
         self.session = session
         self.authRepository = authRepository
         self.sessionsRepository = sessionsRepository
+        self.avatarRepository = avatarRepository
         super.init(style: .insetGrouped)
         title = "Cá nhân"
     }
@@ -103,12 +109,19 @@ final class ProfileViewController: UITableViewController {
         case .identity:
             if indexPath.row == 0 {
                 content.text = session.name
-                content.secondaryText = session.email
+                content.secondaryText = avatarBusy
+                    ? "Đang cập nhật ảnh đại diện…"
+                    : session.email
                 content.textProperties.font = .preferredFont(forTextStyle: .title3)
-                content.image = UIImage(systemName: "person.crop.circle.fill")
-                content.imageProperties.tintColor = .systemIndigo
-                cell.accessibilityLabel = "(session.name), (session.email)"
-                cell.accessibilityTraits = .header
+                content.image = avatarImage ?? UIImage(systemName: "person.crop.circle.fill")
+                content.imageProperties.tintColor = avatarImage == nil ? .systemIndigo : .clear
+                content.imageProperties.cornerRadius = 22
+                content.imageProperties.maximumSize = CGSize(width: 44, height: 44)
+                content.imageProperties.reservedLayoutSize = CGSize(width: 44, height: 44)
+                cell.selectionStyle = avatarBusy ? .none : .default
+                cell.accessibilityLabel = "\(session.name), \(session.email)"
+                cell.accessibilityHint = "Đổi ảnh đại diện"
+                cell.accessibilityTraits = .button
             } else {
                 content.text = "Vai trò"
                 content.secondaryText = session.roleLabel
@@ -181,6 +194,8 @@ final class ProfileViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         switch Section(rawValue: indexPath.section) {
+        case .identity where indexPath.row == 0:
+            showAvatarActions()
         case .account where indexPath.row == 0:
             navigationController?.pushViewController(
                 DevicesViewController(sessionsRepository: sessionsRepository),
@@ -197,6 +212,101 @@ final class ProfileViewController: UITableViewController {
         default:
             break
         }
+    }
+
+    func applyAvatarImage(_ image: UIImage?) {
+        avatarImage = image
+        if isViewLoaded {
+            tableView.reloadRows(at: [IndexPath(row: 0, section: Section.identity.rawValue)], with: .none)
+        }
+    }
+
+    private func showAvatarActions() {
+        guard !avatarBusy else { return }
+        let alert = UIAlertController(
+            title: "Ảnh đại diện",
+            message: session.email,
+            preferredStyle: .actionSheet
+        )
+        alert.addAction(UIAlertAction(title: "Chọn từ thư viện", style: .default) { [weak self] _ in
+            self?.presentPhotoLibrary()
+        })
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            alert.addAction(UIAlertAction(title: "Chụp ảnh", style: .default) { [weak self] _ in
+                self?.presentCamera()
+            })
+        }
+        if avatarImage != nil {
+            alert.addAction(UIAlertAction(title: "Gỡ ảnh đại diện", style: .destructive) { [weak self] _ in
+                self?.removeAvatar()
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Hủy", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = tableView
+            popover.sourceRect = tableView.rectForRow(at: IndexPath(row: 0, section: Section.identity.rawValue))
+        }
+        present(alert, animated: true)
+    }
+
+    private func presentPhotoLibrary() {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    private func presentCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.allowsEditing = false
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    private func uploadAvatar(_ image: UIImage) {
+        avatarBusy = true
+        tableView.reloadRows(at: [IndexPath(row: 0, section: Section.identity.rawValue)], with: .none)
+        Task {
+            do {
+                let saved = try await avatarRepository.upload(image: image)
+                avatarBusy = false
+                applyAvatarImage(saved)
+                NotificationCenter.default.post(name: .accountAvatarDidChange, object: saved)
+            } catch {
+                avatarBusy = false
+                tableView.reloadRows(at: [IndexPath(row: 0, section: Section.identity.rawValue)], with: .none)
+                presentAvatarError(error)
+            }
+        }
+    }
+
+    private func removeAvatar() {
+        avatarBusy = true
+        tableView.reloadRows(at: [IndexPath(row: 0, section: Section.identity.rawValue)], with: .none)
+        Task {
+            do {
+                try await avatarRepository.clear()
+                avatarBusy = false
+                applyAvatarImage(nil)
+                NotificationCenter.default.post(name: .accountAvatarDidChange, object: nil)
+            } catch {
+                avatarBusy = false
+                tableView.reloadRows(at: [IndexPath(row: 0, section: Section.identity.rawValue)], with: .none)
+                presentAvatarError(error)
+            }
+        }
+    }
+
+    private func presentAvatarError(_ error: Error) {
+        let message = (error as? ConvexException)?.message
+            ?? ConvexHttpClient.humanize((error as NSError).localizedDescription)
+        let alert = UIAlertController(title: "Không đổi được ảnh", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Đóng", style: .default))
+        present(alert, animated: true)
     }
 
     private var currentAppearance: Appearance {
@@ -250,5 +360,32 @@ final class ProfileViewController: UITableViewController {
             self?.authRepository.signOut()
         })
         present(alert, animated: true)
+    }
+}
+
+extension ProfileViewController: PHPickerViewControllerDelegate {
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else { return }
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+            guard let image = object as? UIImage else { return }
+            DispatchQueue.main.async { self?.uploadAvatar(image) }
+        }
+    }
+}
+
+extension ProfileViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(
+        _ picker: UIImagePickerController,
+        didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+    ) {
+        let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
+        picker.dismiss(animated: true) { [weak self] in
+            if let image { self?.uploadAvatar(image) }
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
     }
 }

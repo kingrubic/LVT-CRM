@@ -178,6 +178,11 @@ class ConvexHttpClient(
                 "Invalid credentials",
                 "USER_NOT_ACTIVE",
                 "ACCOUNT_LOCKED",
+                "INVALID_AVATAR_FILE",
+                "AVATAR_FILE_TOO_LARGE",
+                "AVATAR_UPLOAD_NOT_FOUND",
+                "AVATAR_NOT_FOUND",
+                "AVATAR_UPLOAD_FAILED",
                 "PASSWORD_TOO_SHORT",
                 "PASSWORD_CHANGE_FAILED",
                 "PASSWORD_CHANGED_SYNC_PENDING",
@@ -200,6 +205,11 @@ class ConvexHttpClient(
         fun humanize(message: String): String {
             val code = extractCode(message)
             return when {
+                code == "INVALID_AVATAR_FILE" -> "Ảnh đại diện phải là PNG, JPG hoặc WEBP."
+                code == "AVATAR_FILE_TOO_LARGE" -> "Ảnh đại diện không được vượt quá 2MB."
+                code == "AVATAR_UPLOAD_NOT_FOUND" -> "Không tìm thấy ảnh vừa tải lên. Vui lòng chọn lại."
+                code == "AVATAR_NOT_FOUND" -> "Chưa có ảnh đại diện."
+                code == "AVATAR_UPLOAD_FAILED" -> "Không thể cập nhật ảnh đại diện. Vui lòng thử lại."
                 code.contains("Invalid", ignoreCase = true) ||
                     code.contains("credentials", ignoreCase = true) ->
                     "Email hoặc mật khẩu không đúng."

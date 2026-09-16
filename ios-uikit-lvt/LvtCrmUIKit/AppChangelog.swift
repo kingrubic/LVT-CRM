@@ -11,6 +11,7 @@ enum AppChangelog {
             version: "1.9.0",
             highlights: [
                 "Thông báo và Cá nhân chuyển lên góc phải (chuông + ảnh đại diện); thanh dưới còn Tổng quan, Lịch CT và Công việc.",
+                "Đổi ảnh đại diện ngay trên Cá nhân; ảnh hiện ở góc phải và đồng bộ với web.",
             ]
         ),
         AppChangelogEntry(

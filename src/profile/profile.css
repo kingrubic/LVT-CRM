@@ -83,6 +83,8 @@
   place-items: center;
   width: 58px;
   height: 58px;
+  padding: 0;
+  border: 0;
   border-radius: 17px 17px 17px 5px;
   color: #fff;
   background:
@@ -92,6 +94,66 @@
   font-weight: 900;
   letter-spacing: -.04em;
   box-shadow: 5px 6px 0 rgba(20, 53, 95, .11);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.profile-avatar:disabled {
+  cursor: wait;
+  opacity: .72;
+}
+
+.profile-avatar.has-photo {
+  background: #d7e0e6;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-input {
+  display: none;
+}
+
+.profile-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.profile-avatar-actions button {
+  padding: 0;
+  border: 0;
+  color: #177568;
+  background: transparent;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.profile-avatar-actions button:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
+.profile-avatar-feedback {
+  margin: 6px 0 0;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.profile-avatar-feedback.success {
+  color: #166152;
+}
+
+.profile-avatar-feedback.error {
+  color: #9b493d;
 }
 
 .profile-identity > div {

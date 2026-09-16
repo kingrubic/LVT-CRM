@@ -1,10 +1,12 @@
 package lvt.crm.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -20,6 +22,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -27,10 +31,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Bitmap
 
 data class AccountHeaderState(
     val unreadCount: Int,
     val initials: String,
+    val avatarBitmap: Bitmap? = null,
     val onOpenNotifications: () -> Unit,
     val onOpenProfile: () -> Unit,
 )
@@ -110,13 +116,22 @@ fun AccountHeaderCluster(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                state.initials,
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
-                maxLines = 1,
-            )
+            if (state.avatarBitmap != null) {
+                Image(
+                    bitmap = state.avatarBitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Text(
+                    state.initials,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

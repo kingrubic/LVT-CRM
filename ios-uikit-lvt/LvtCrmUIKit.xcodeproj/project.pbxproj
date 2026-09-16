@@ -48,6 +48,7 @@
 		20000000000000000000002B /* SharedDutyScheduleViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002B /* SharedDutyScheduleViewController.swift */; };
 		20000000000000000000002C /* AppStoreUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002C /* AppStoreUpdater.swift */; };
 		20000000000000000000002D /* AccountHeaderCluster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002D /* AccountHeaderCluster.swift */; };
+		20000000000000000000002E /* AvatarRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000002E /* AvatarRepository.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -96,6 +97,7 @@
 		30000000000000000000002B /* SharedDutyScheduleViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedDutyScheduleViewController.swift; sourceTree = "<group>"; };
 		30000000000000000000002C /* AppStoreUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreUpdater.swift; sourceTree = "<group>"; };
 		30000000000000000000002D /* AccountHeaderCluster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountHeaderCluster.swift; sourceTree = "<group>"; };
+		30000000000000000000002E /* AvatarRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarRepository.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +128,7 @@
 				30000000000000000000000F /* AuthFlowCoordinator.swift */,
 				300000000000000000000003 /* RootTabBarController.swift */,
 				30000000000000000000002D /* AccountHeaderCluster.swift */,
+				30000000000000000000002E /* AvatarRepository.swift */,
 				30000000000000000000000D /* LoginViewController.swift */,
 				30000000000000000000000E /* ChangePasswordViewController.swift */,
 				300000000000000000000011 /* ProfileViewController.swift */,
@@ -245,6 +248,7 @@
 				200000000000000000000002 /* SceneDelegate.swift in Sources */,
 				200000000000000000000003 /* RootTabBarController.swift in Sources */,
 				20000000000000000000002D /* AccountHeaderCluster.swift in Sources */,
+				20000000000000000000002E /* AvatarRepository.swift in Sources */,
 				200000000000000000000006 /* AuthModels.swift in Sources */,
 				200000000000000000000007 /* CredentialStore.swift in Sources */,
 				200000000000000000000008 /* TokenStore.swift in Sources */,
