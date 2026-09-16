@@ -28,6 +28,13 @@ import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
 import { AVATAR_ACCEPT, isAllowedAvatarFile } from './lib/prepareAvatarFile.js';
+import {
+  avatarDownloadUrl,
+  avatarSessionFromCommit,
+  nextAvatarObjectUrl,
+  resolveProfileAvatarSession,
+  shouldDropAvatarOverlay,
+} from './lib/profileAvatar.js';
 import AvatarCropModal from './profile/AvatarCropModal.jsx';
 import { filterByPickerSearch, personPickerHaystack } from './lib/pickerSearch';
 import './management/managementTheme.css';
@@ -2276,7 +2283,11 @@ function ProfileView({ session }) {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarFeedback, setAvatarFeedback] = useState('');
   const [avatarCropFile, setAvatarCropFile] = useState(null);
+  const [avatarOverlay, setAvatarOverlay] = useState(null);
   const avatarInputRef = useRef(null);
+  const avatarUrlRef = useRef('');
+  const fetchAccessTokenRef = useRef(fetchAccessToken);
+  fetchAccessTokenRef.current = fetchAccessToken;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -2307,40 +2318,60 @@ function ProfileView({ session }) {
     .join('');
   const roleLabel = ROLE_LABELS[user.role] || user.role;
   const feedbackType = feedback === 'Đã đổi mật khẩu thành công.' ? 'success' : 'error';
-  const hasAvatar = Boolean(user.hasAvatar);
-  const avatarVersion = user.avatarVersion || '';
+  const resolvedAvatar = resolveProfileAvatarSession(user, avatarOverlay);
+  const hasAvatar = resolvedAvatar.hasAvatar;
+  const avatarVersion = resolvedAvatar.avatarVersion;
+
+  const showAvatarBlob = (blob) => {
+    const nextUrl = nextAvatarObjectUrl(avatarUrlRef.current, blob);
+    avatarUrlRef.current = nextUrl;
+    setAvatarUrl(nextUrl);
+  };
+
+  useEffect(() => {
+    if (shouldDropAvatarOverlay(user, avatarOverlay)) {
+      setAvatarOverlay(null);
+    }
+  }, [user, avatarOverlay]);
 
   useEffect(() => {
     let cancelled = false;
-    let objectUrl = '';
     if (!hasAvatar) {
-      setAvatarUrl('');
+      showAvatarBlob(null);
+      return undefined;
+    }
+    if (resolvedAvatar.source === 'overlay' && avatarUrlRef.current) {
       return undefined;
     }
     (async () => {
       try {
-        const token = await fetchAccessToken({ forceRefreshToken: false });
+        const token = await fetchAccessTokenRef.current?.({ forceRefreshToken: false });
         if (!token || cancelled) return;
-        const response = await fetch('/api/files/avatar', {
+        const response = await fetch(avatarDownloadUrl(avatarVersion), {
           headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
         });
-        if (!response.ok) return;
-        const blob = await response.blob();
-        objectUrl = URL.createObjectURL(blob);
-        if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
+        if (!response.ok) {
+          if (!cancelled && (response.status === 404 || response.status === 403)) {
+            showAvatarBlob(null);
+          }
           return;
         }
-        setAvatarUrl(objectUrl);
+        const blob = await response.blob();
+        if (cancelled) return;
+        showAvatarBlob(blob);
       } catch {
         /* Keep initials fallback. */
       }
     })();
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [hasAvatar, avatarVersion, fetchAccessToken]);
+  }, [hasAvatar, avatarVersion, resolvedAvatar.source]);
+
+  useEffect(() => () => {
+    showAvatarBlob(null);
+  }, []);
 
   const resetAvatarPicker = () => {
     if (avatarInputRef.current) avatarInputRef.current.value = '';
@@ -2376,7 +2407,9 @@ function ProfileView({ session }) {
       if (!uploaded.ok) throw new Error('AVATAR_UPLOAD_FAILED');
       const { storageId } = await uploaded.json();
       if (!storageId) throw new Error('AVATAR_UPLOAD_FAILED');
-      await setOwnAvatar({ storageId, fileName: prepared.name, fileSize: prepared.size });
+      const committed = await setOwnAvatar({ storageId, fileName: prepared.name, fileSize: prepared.size });
+      showAvatarBlob(prepared);
+      setAvatarOverlay(avatarSessionFromCommit(committed, `local-${Date.now()}`));
       setAvatarFeedback('Đã cập nhật ảnh đại diện.');
     } catch (error) {
       setAvatarFeedback(messageFor(error));
@@ -2390,8 +2423,9 @@ function ProfileView({ session }) {
     setAvatarFeedback('');
     setAvatarBusy(true);
     try {
-      await clearOwnAvatar({});
-      setAvatarUrl('');
+      const committed = await clearOwnAvatar({});
+      showAvatarBlob(null);
+      setAvatarOverlay(avatarSessionFromCommit(committed));
       setAvatarFeedback('Đã gỡ ảnh đại diện.');
     } catch (error) {
       setAvatarFeedback(messageFor(error));

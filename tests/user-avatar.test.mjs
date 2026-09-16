@@ -16,6 +16,13 @@ import {
   sourceCropRect,
 } from '../src/lib/avatarCrop.js';
 import { isAllowedAvatarFile } from '../src/lib/prepareAvatarFile.js';
+import {
+  avatarDownloadUrl,
+  avatarSessionFromCommit,
+  nextAvatarObjectUrl,
+  resolveProfileAvatarSession,
+  shouldDropAvatarOverlay,
+} from '../src/lib/profileAvatar.js';
 import { matchAvatarFileRoute } from '../scripts/lib/file-route-policy.mjs';
 import { messageFor } from '../src/lib/appErrorMessage.js';
 
@@ -136,7 +143,8 @@ test('web profile crops 1:1 then uploads WebP through Convex Storage', () => {
   assert.match(profile, /anyApi\.userAvatar\.generateUploadUrl/);
   assert.match(profile, /useAction\(anyApi\.userAvatar\.setOwnAvatar\)/);
   assert.match(profile, /anyApi\.userAvatar\.clearOwnAvatar/);
-  assert.match(profile, /fetch\('\/api\/files\/avatar'/);
+  assert.match(profile, /avatarDownloadUrl\(avatarVersion\)/);
+  assert.match(profile, /cache: 'no-store'/);
   assert.match(profile, /AvatarCropModal/);
   assert.match(profile, /openAvatarCrop/);
   assert.match(profile, /cancelAvatarCrop/);
@@ -148,6 +156,90 @@ test('web profile crops 1:1 then uploads WebP through Convex Storage', () => {
   assert.match(cropModal, /encodeCroppedAvatar/);
   assert.match(prepare, /image\/webp/);
   assert.match(prepare, /avatar\.webp/);
+});
+
+test('web profile shows the cropped blob immediately and overlays stale session avatar fields', () => {
+  const profile = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  assert.match(profile, /resolveProfileAvatarSession\(user, avatarOverlay\)/);
+  assert.match(profile, /avatarSessionFromCommit\(committed/);
+  assert.match(profile, /showAvatarBlob\(prepared\)/);
+  assert.match(profile, /showAvatarBlob\(null\)/);
+  assert.match(profile, /setAvatarOverlay\(avatarSessionFromCommit\(committed/);
+  assert.match(profile, /shouldDropAvatarOverlay\(user, avatarOverlay\)/);
+  assert.match(profile, /resolvedAvatar\.source === 'overlay'/);
+});
+
+test('avatarDownloadUrl cache-busts with avatarVersion', () => {
+  assert.equal(avatarDownloadUrl(''), '/api/files/avatar');
+  assert.equal(avatarDownloadUrl('abc123'), '/api/files/avatar?v=abc123');
+  assert.equal(avatarDownloadUrl('a b'), '/api/files/avatar?v=a%20b');
+});
+
+test('avatarSessionFromCommit mirrors set/clear payloads onto session fields', () => {
+  assert.deepEqual(avatarSessionFromCommit({ hasAvatar: true, avatarVersion: 'abc123' }), {
+    hasAvatar: true,
+    avatarVersion: 'abc123',
+  });
+  assert.deepEqual(avatarSessionFromCommit({ hasAvatar: true }, 'local-1'), {
+    hasAvatar: true,
+    avatarVersion: 'local-1',
+  });
+  assert.deepEqual(avatarSessionFromCommit({ hasAvatar: false, avatarVersion: null }), {
+    hasAvatar: false,
+    avatarVersion: '',
+  });
+  assert.deepEqual(avatarSessionFromCommit({}), {
+    hasAvatar: false,
+    avatarVersion: '',
+  });
+});
+
+test('profile avatar overlay keeps the new photo when session hasAvatar/avatarVersion are stale', () => {
+  const stale = { hasAvatar: true, avatarVersion: 'old' };
+  const afterSet = avatarSessionFromCommit({ hasAvatar: true, avatarVersion: 'new' });
+  const shown = resolveProfileAvatarSession(stale, afterSet);
+  assert.equal(shown.hasAvatar, true);
+  assert.equal(shown.avatarVersion, 'new');
+  assert.equal(shown.source, 'overlay');
+  assert.equal(shouldDropAvatarOverlay(stale, afterSet), false);
+
+  const afterClear = avatarSessionFromCommit({ hasAvatar: false, avatarVersion: null });
+  const cleared = resolveProfileAvatarSession(stale, afterClear);
+  assert.equal(cleared.hasAvatar, false);
+  assert.equal(cleared.avatarVersion, '');
+  assert.equal(cleared.source, 'overlay');
+  assert.equal(shouldDropAvatarOverlay(stale, afterClear), false);
+
+  const live = { hasAvatar: true, avatarVersion: 'new' };
+  assert.equal(shouldDropAvatarOverlay(live, afterSet), true);
+  assert.equal(resolveProfileAvatarSession(live, afterSet).source, 'session');
+  assert.equal(shouldDropAvatarOverlay({ hasAvatar: false, avatarVersion: null }, afterClear), true);
+});
+
+test('local overlay fallback stays until session version matches exactly', () => {
+  const overlay = avatarSessionFromCommit({ hasAvatar: true }, 'local-99');
+  assert.equal(shouldDropAvatarOverlay({ hasAvatar: true, avatarVersion: 'old' }, overlay), false);
+  assert.equal(shouldDropAvatarOverlay({ hasAvatar: true, avatarVersion: 'from-server' }, overlay), false);
+  assert.equal(shouldDropAvatarOverlay({ hasAvatar: true, avatarVersion: 'local-99' }, overlay), true);
+});
+
+test('nextAvatarObjectUrl always mints a new object URL and revokes the previous blob', () => {
+  const revoked = [];
+  const created = [];
+  const create = (blob) => {
+    const url = `blob:${created.length}:${blob.type}`;
+    created.push(url);
+    return url;
+  };
+  const revoke = (url) => revoked.push(url);
+  const first = nextAvatarObjectUrl('', { type: 'image/webp' }, create, revoke);
+  const second = nextAvatarObjectUrl(first, { type: 'image/webp' }, create, revoke);
+  const cleared = nextAvatarObjectUrl(second, null, create, revoke);
+  assert.equal(first, 'blob:0:image/webp');
+  assert.equal(second, 'blob:1:image/webp');
+  assert.equal(cleared, '');
+  assert.deepEqual(revoked, ['blob:0:image/webp', 'blob:1:image/webp']);
+  assert.equal(created.length, 2);
 });
 
 test('sessionContext sanitizes the user row', () => {
@@ -187,6 +279,7 @@ test('native apps crop 1:1 then upload WebP through the same Convex Storage muta
   assert.match(iosCrop, /UTType\.webP|public\.webp/);
   assert.match(androidProfile, /PickVisualMedia/);
   assert.match(androidProfile, /AvatarCropScreen/);
+  assert.match(androidProfile, /authRepository\.refreshSession\(\)/);
   assert.match(androidCrop, /Cắt ảnh/);
   assert.match(androidCrop, /Hủy/);
   assert.match(androidCrop, /Lưu/);
