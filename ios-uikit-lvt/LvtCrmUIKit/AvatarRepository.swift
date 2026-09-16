@@ -8,27 +8,6 @@ extension Notification.Name {
 let avatarMaxBytes = 2 * 1024 * 1024
 let avatarMaxEdge: CGFloat = 512
 
-func prepareAvatarJPEG(_ image: UIImage) -> Data? {
-    let size = image.size
-    let largest = max(size.width, size.height)
-    guard largest > 0 else { return nil }
-    let scale = largest > avatarMaxEdge ? avatarMaxEdge / largest : 1
-    let newSize = CGSize(
-        width: max(1, floor(size.width * scale)),
-        height: max(1, floor(size.height * scale))
-    )
-    let renderer = UIGraphicsImageRenderer(size: newSize)
-    let scaled = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
-    var quality: CGFloat = 0.85
-    var data = scaled.jpegData(compressionQuality: quality)
-    while let current = data, current.count > avatarMaxBytes, quality > 0.5 {
-        quality -= 0.1
-        data = scaled.jpegData(compressionQuality: quality)
-    }
-    guard let data, data.count <= avatarMaxBytes, !data.isEmpty else { return nil }
-    return data
-}
-
 actor AvatarRepository {
     private let convex: ConvexHttpClient
     private let tokenProvider: @Sendable () -> String?
@@ -71,9 +50,10 @@ actor AvatarRepository {
     }
 
     func upload(image: UIImage) async throws -> UIImage {
-        guard let jpeg = prepareAvatarJPEG(image) else {
+        guard let payload = AvatarCrop.encodeWebP(image) else {
             throw ConvexException(code: "INVALID_AVATAR_FILE")
         }
+        let stored = AvatarCrop.contentType(for: payload)
         let upload = try await convex.mutation("userAvatar:generateUploadUrl")
         guard let uploadUrlString = upload["value"] as? String,
               let uploadUrl = URL(string: uploadUrlString) else {
@@ -81,21 +61,21 @@ actor AvatarRepository {
         }
         var request = URLRequest(url: uploadUrl)
         request.httpMethod = "POST"
-        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
-        request.httpBody = jpeg
+        request.setValue(stored.mime, forHTTPHeaderField: "Content-Type")
+        request.httpBody = payload
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status >= 200, status < 300,
-              let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let storageId = payload["storageId"] as? String, !storageId.isEmpty else {
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let storageId = json["storageId"] as? String, !storageId.isEmpty else {
             throw ConvexException(code: "AVATAR_UPLOAD_FAILED")
         }
         _ = try await convex.action("userAvatar:setOwnAvatar", args: [
             "storageId": storageId,
-            "fileName": "avatar.jpg",
-            "fileSize": jpeg.count,
+            "fileName": stored.fileName,
+            "fileSize": payload.count,
         ])
-        let saved = UIImage(data: jpeg) ?? image
+        let saved = UIImage(data: payload) ?? image
         cachedKey = nil
         cachedImage = saved
         return saved

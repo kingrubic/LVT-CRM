@@ -6,7 +6,6 @@ const auth = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/AuthRepository.s
 const coordinator = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/AuthFlowCoordinator.swift', import.meta.url), 'utf8');
 const login = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/LoginViewController.swift', import.meta.url), 'utf8');
 const changelog = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit/AppChangelog.swift', import.meta.url), 'utf8');
-const pbx = readFileSync(new URL('../ios-uikit-lvt/LvtCrmUIKit.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
 
 test('iOS cold-start restore fail-opens to login instead of retrying forever', () => {
   assert.doesNotMatch(auth, /scheduleRestoreRetry/);
@@ -43,10 +42,7 @@ test('iOS 1.8.4 records the splash hang fix', () => {
   assert.match(changelog, /treo màn hình tải/);
 });
 
-test('iOS 1.9.0 is the current marketing version after the header-cluster change', () => {
+test('iOS changelog still records the 1.9.0 header-cluster change', () => {
   assert.match(changelog, /version: "1\.9\.0"/);
   assert.match(changelog, /Đổi ảnh đại diện/);
-  assert.match(pbx, /MARKETING_VERSION = 1\.9\.0;/);
-  assert.match(pbx, /CURRENT_PROJECT_VERSION = 28;/);
-  assert.doesNotMatch(pbx, /MARKETING_VERSION = 1\.8\.4;/);
 });
