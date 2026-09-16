@@ -37,6 +37,9 @@ final class LoginViewController: UIViewController, UITextFieldDelegate {
         configureLayout()
         registerForKeyboardChanges()
         updateMode(animated: false)
+        if let warning = authRepository.bootstrapError, !warning.isEmpty {
+            showMessage(warning, color: .systemOrange)
+        }
     }
 
     deinit { keyboardObservers.forEach(NotificationCenter.default.removeObserver) }

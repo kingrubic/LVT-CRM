@@ -17,7 +17,14 @@ final class AuthFlowCoordinator {
     func start() {
         stateObservation = container.authRepository.$state
             .removeDuplicates()
-            .sink { [weak self] state in self?.show(state) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                Task { @MainActor in self?.show(state) }
+            }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            self?.container.authRepository.failOpenIfStillLoading()
+        }
     }
 
     func open(_ destination: NotificationDestination) {
@@ -100,11 +107,23 @@ private final class LoadingViewController: UIViewController {
         let indicator = UIActivityIndicatorView(style: .large)
         indicator.startAnimating()
         indicator.accessibilityLabel = "Đang kiểm tra phiên đăng nhập"
-        indicator.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(indicator)
+        let label = UILabel()
+        label.text = "Đang kiểm tra phiên đăng nhập"
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        label.adjustsFontForContentSizeCategory = true
+        let stack = UIStackView(arrangedSubviews: [indicator, label])
+        stack.axis = .vertical
+        stack.spacing = 12
+        stack.alignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
         NSLayoutConstraint.activate([
-            indicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            indicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor),
         ])
     }
 }
