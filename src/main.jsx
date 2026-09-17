@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ConvexAuthProvider, useAuthActions, useConvexAuth } from '@convex-dev/auth/react';
+import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
 import { anyApi } from 'convex/server';
 import '@fontsource-variable/montserrat';
@@ -16,7 +16,7 @@ import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
-import { isSidebarPrimaryMenu, pathnameForMenu, pathnameForReportSection, routeForPathname, dutiesPathname } from './navigationRoutes';
+import { ACCOUNT_MENU_IDS, isAccountMenu, isSidebarPrimaryMenu, pathnameForMenu, pathnameForReportSection, routeForPathname, dutiesPathname, titleForAccountMenu } from './navigationRoutes';
 import { parseDutyPath } from './duties/dutyRoutes';
 import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
@@ -27,16 +27,11 @@ import HomeroomRouter from './homeroom/HomeroomRouter';
 import DevicesPanel from './profile/DevicesPanel';
 import { describeWebDevice } from './profile/deviceSession';
 import { convexErrorText, messageFor } from './lib/appErrorMessage';
-import { AVATAR_ACCEPT, isAllowedAvatarFile } from './lib/prepareAvatarFile.js';
-import {
-  avatarDownloadUrl,
-  avatarSessionFromCommit,
-  nextAvatarObjectUrl,
-  resolveProfileAvatarSession,
-  shouldDropAvatarOverlay,
-} from './lib/profileAvatar.js';
-import AvatarCropModal from './profile/AvatarCropModal.jsx';
 import { filterByPickerSearch, personPickerHaystack } from './lib/pickerSearch';
+import StarRating from './lib/StarRating.jsx';
+import AccountMenu from './profile/AccountMenu.jsx';
+import { ChangePasswordView, DevicesView, ProfileView } from './profile/ProfilePages.jsx';
+import { OwnAvatarProvider } from './profile/useOwnAvatar.js';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyBulkImport from './duties/DutyBulkImport';
@@ -98,17 +93,6 @@ function signInMessageFor(error) {
     return 'Không thể đăng nhập. Hãy kiểm tra email, mật khẩu rồi thử lại.';
   }
   return messageFor(error);
-}
-
-function StarRating({ level, max = 5 }) {
-  const n = Math.min(max, Math.max(0, Number(level) || 0));
-  return (
-    <span className="star-rating" aria-label={`${n} trên ${max} sao`} title={`Cấp ${n}/${max}`}>
-      {Array.from({ length: max }, (_, i) => (
-        <span key={i} className={i < n ? 'star on' : 'star'}>★</span>
-      ))}
-    </span>
-  );
 }
 
 function AuthenticatedApp() {
@@ -195,7 +179,7 @@ function AppShell({ session }) {
     ...visiblePrimaryMenus.map(([id]) => id),
     ...(canManageOperations ? SYSTEM_MANAGEMENT_MENUS.map(([id]) => id) : []),
     ...(isAdmin ? SUPREME_SETTINGS.map(([id]) => id) : []),
-    'profile',
+    ...ACCOUNT_MENU_IDS,
     'settings',
   ]), [canManageOperations, isAdmin, visiblePrimaryMenus]);
 
@@ -266,7 +250,8 @@ function AppShell({ session }) {
   }, [mobileOpen]);
 
   const title = useMemo(() => {
-    if (active === 'profile' || active === 'settings') return 'Thông tin cá nhân';
+    if (active === 'settings') return titleForAccountMenu('profile');
+    if (isAccountMenu(active)) return titleForAccountMenu(active);
     if (active === 'duties') {
       if (dutyRoute.view === 'create') return 'Tạo lịch công tác';
       if (dutyRoute.view === 'edit') return 'Sửa lịch công tác';
@@ -321,6 +306,7 @@ function AppShell({ session }) {
   const activeFocusTarget = focusTarget?.menu === active ? focusTarget : null;
 
   return (
+    <OwnAvatarProvider user={user}>
     <div className={`shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside
         className={`shell-sidebar ${mobileOpen ? 'is-open' : ''}`}
@@ -355,7 +341,6 @@ function AppShell({ session }) {
               </React.Fragment>
             ))
           )}
-          <NavButton id="profile" label="Thông tin cá nhân" active={active} onClick={choose} />
           {canManageOperations && SYSTEM_MANAGEMENT_MENUS.length ? (
             <>
               <p className="nav-label admin-label">Quản trị hệ thống</p>
@@ -419,10 +404,7 @@ function AppShell({ session }) {
                 onOpenItem={openFromNotification}
               />
             ) : null}
-            <span className="user-greeting">{user.name || user.email || 'Người dùng'}</span>
-            <button type="button" className="text-button" onClick={() => void signOut()}>
-              Đăng xuất
-            </button>
+            <AccountMenu onChoose={choose} onSignOut={() => void signOut()} />
           </div>
         </header>
         {active === 'users' && isAdmin ? (
@@ -475,6 +457,10 @@ function AppShell({ session }) {
           <HomeroomRouter session={session} />
         ) : active === 'profile' || (active === 'settings' && !isAdmin) ? (
           <ProfileView session={session} />
+        ) : active === 'change-password' ? (
+          <ChangePasswordView />
+        ) : active === 'devices' ? (
+          <DevicesView />
         ) : (
           <PlaceholderView
             title={title}
@@ -484,6 +470,7 @@ function AppShell({ session }) {
         )}
       </main>
     </div>
+    </OwnAvatarProvider>
   );
 }
 
@@ -2264,318 +2251,6 @@ function PositionManagement() {
         ))}
       </div>
     </section>
-  );
-}
-
-function ProfileView({ session }) {
-  const changeOwnPassword = useAction(anyApi.users.changeOwnPassword);
-  const generateAvatarUploadUrl = useMutation(anyApi.userAvatar.generateUploadUrl);
-  const setOwnAvatar = useAction(anyApi.userAvatar.setOwnAvatar);
-  const clearOwnAvatar = useMutation(anyApi.userAvatar.clearOwnAvatar);
-  const { fetchAccessToken } = useConvexAuth();
-  const { user, department, permissionGroup, position, isOperationalManager } = session;
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmation, setConfirmation] = useState('');
-  const [pending, setPending] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [avatarBusy, setAvatarBusy] = useState(false);
-  const [avatarFeedback, setAvatarFeedback] = useState('');
-  const [avatarCropFile, setAvatarCropFile] = useState(null);
-  const [avatarOverlay, setAvatarOverlay] = useState(null);
-  const avatarInputRef = useRef(null);
-  const avatarUrlRef = useRef('');
-  const fetchAccessTokenRef = useRef(fetchAccessToken);
-  fetchAccessTokenRef.current = fetchAccessToken;
-
-  const submit = async (event) => {
-    event.preventDefault();
-    setFeedback('');
-    if (!currentPassword) return setFeedback('Vui lòng nhập mật khẩu hiện tại.');
-    if (password.length < 8) return setFeedback('Mật khẩu mới phải có ít nhất 8 ký tự.');
-    if (password !== confirmation) return setFeedback('Xác nhận mật khẩu không khớp.');
-    setPending(true);
-    try {
-      await changeOwnPassword({ currentPassword, newPassword: password });
-      setFeedback('Đã đổi mật khẩu thành công.');
-      setCurrentPassword('');
-      setPassword('');
-      setConfirmation('');
-    } catch (error) {
-      setFeedback(messageFor(error));
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const displayName = user.name || user.email || 'Chưa đặt tên';
-  const initials = displayName
-    .trim()
-    .split(/\s+/)
-    .slice(-2)
-    .map((part) => part.slice(0, 1).toUpperCase())
-    .join('');
-  const roleLabel = ROLE_LABELS[user.role] || user.role;
-  const feedbackType = feedback === 'Đã đổi mật khẩu thành công.' ? 'success' : 'error';
-  const resolvedAvatar = resolveProfileAvatarSession(user, avatarOverlay);
-  const hasAvatar = resolvedAvatar.hasAvatar;
-  const avatarVersion = resolvedAvatar.avatarVersion;
-
-  const showAvatarBlob = (blob) => {
-    const nextUrl = nextAvatarObjectUrl(avatarUrlRef.current, blob);
-    avatarUrlRef.current = nextUrl;
-    setAvatarUrl(nextUrl);
-  };
-
-  useEffect(() => {
-    if (shouldDropAvatarOverlay(user, avatarOverlay)) {
-      setAvatarOverlay(null);
-    }
-  }, [user, avatarOverlay]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!hasAvatar) {
-      showAvatarBlob(null);
-      return undefined;
-    }
-    if (resolvedAvatar.source === 'overlay' && avatarUrlRef.current) {
-      return undefined;
-    }
-    (async () => {
-      try {
-        const token = await fetchAccessTokenRef.current?.({ forceRefreshToken: false });
-        if (!token || cancelled) return;
-        const response = await fetch(avatarDownloadUrl(avatarVersion), {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        });
-        if (!response.ok) {
-          if (!cancelled && (response.status === 404 || response.status === 403)) {
-            showAvatarBlob(null);
-          }
-          return;
-        }
-        const blob = await response.blob();
-        if (cancelled) return;
-        showAvatarBlob(blob);
-      } catch {
-        /* Keep initials fallback. */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [hasAvatar, avatarVersion, resolvedAvatar.source]);
-
-  useEffect(() => () => {
-    showAvatarBlob(null);
-  }, []);
-
-  const resetAvatarPicker = () => {
-    if (avatarInputRef.current) avatarInputRef.current.value = '';
-  };
-
-  const openAvatarCrop = (file) => {
-    setAvatarFeedback('');
-    if (!isAllowedAvatarFile(file)) {
-      setAvatarFeedback(messageFor(new Error('INVALID_AVATAR_FILE')));
-      resetAvatarPicker();
-      return;
-    }
-    setAvatarCropFile(file);
-    resetAvatarPicker();
-  };
-
-  const cancelAvatarCrop = () => {
-    setAvatarCropFile(null);
-    resetAvatarPicker();
-  };
-
-  const uploadPreparedAvatar = async (prepared) => {
-    setAvatarCropFile(null);
-    setAvatarFeedback('');
-    setAvatarBusy(true);
-    try {
-      const uploadUrl = await generateAvatarUploadUrl({});
-      const uploaded = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': prepared.type || 'image/webp' },
-        body: prepared,
-      });
-      if (!uploaded.ok) throw new Error('AVATAR_UPLOAD_FAILED');
-      const { storageId } = await uploaded.json();
-      if (!storageId) throw new Error('AVATAR_UPLOAD_FAILED');
-      const committed = await setOwnAvatar({ storageId, fileName: prepared.name, fileSize: prepared.size });
-      showAvatarBlob(prepared);
-      setAvatarOverlay(avatarSessionFromCommit(committed, `local-${Date.now()}`));
-      setAvatarFeedback('Đã cập nhật ảnh đại diện.');
-    } catch (error) {
-      setAvatarFeedback(messageFor(error));
-    } finally {
-      setAvatarBusy(false);
-      resetAvatarPicker();
-    }
-  };
-
-  const removeAvatar = async () => {
-    setAvatarFeedback('');
-    setAvatarBusy(true);
-    try {
-      const committed = await clearOwnAvatar({});
-      showAvatarBlob(null);
-      setAvatarOverlay(avatarSessionFromCommit(committed));
-      setAvatarFeedback('Đã gỡ ảnh đại diện.');
-    } catch (error) {
-      setAvatarFeedback(messageFor(error));
-    } finally {
-      setAvatarBusy(false);
-    }
-  };
-
-  return (
-    <>
-    <section className="work-user-view profile-workspace">
-      <div className="profile-modern-grid">
-        <article className="profile-paper profile-overview">
-          <header className="profile-identity">
-            <button
-              type="button"
-              className={`profile-avatar ${avatarUrl ? 'has-photo' : ''}`}
-              disabled={avatarBusy}
-              onClick={() => avatarInputRef.current?.click()}
-              aria-label="Đổi ảnh đại diện"
-            >
-              {avatarUrl ? <img src={avatarUrl} alt="" /> : (initials || 'LV')}
-            </button>
-            <input
-              ref={avatarInputRef}
-              className="profile-avatar-input"
-              type="file"
-              accept={AVATAR_ACCEPT}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) openAvatarCrop(file);
-              }}
-            />
-            <div>
-              <span className="profile-eyebrow">HỒ SƠ NỘI BỘ</span>
-              <h3>{displayName}</h3>
-              <p>{user.email || 'Chưa có email đăng nhập'}</p>
-              <div className="profile-avatar-actions">
-                <button type="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
-                  {avatarBusy ? 'Đang cập nhật…' : 'Đổi ảnh đại diện'}
-                </button>
-                {hasAvatar ? (
-                  <button type="button" disabled={avatarBusy} onClick={removeAvatar}>
-                    Gỡ ảnh
-                  </button>
-                ) : null}
-              </div>
-              {avatarFeedback ? (
-                <p className={`profile-avatar-feedback ${avatarFeedback.startsWith('Đã') ? 'success' : 'error'}`} role="status">
-                  {avatarFeedback}
-                </p>
-              ) : null}
-            </div>
-            <span className={`profile-role profile-role-${user.role}`}>{roleLabel}</span>
-          </header>
-
-          <dl className="profile-modern-dl">
-            <div>
-              <dt><i>01</i> Họ tên</dt>
-              <dd>{displayName}</dd>
-            </div>
-            <div>
-              <dt><i>02</i> Email đăng nhập</dt>
-              <dd>{user.email || '—'}</dd>
-            </div>
-            <div>
-              <dt><i>03</i> Vai trò</dt>
-              <dd>{roleLabel}</dd>
-            </div>
-            <div>
-              <dt><i>04</i> Phòng ban</dt>
-              <dd>{department?.name || 'Chưa gán'}</dd>
-            </div>
-            <div>
-              <dt><i>05</i> Chức vụ</dt>
-              <dd>
-                {position ? (
-                  <span className="profile-position">
-                    {position.name}
-                    <StarRating level={position.level} />
-                  </span>
-                ) : (
-                  'Chưa gán'
-                )}
-              </dd>
-            </div>
-            {!isOperationalManager && (
-              <div>
-                <dt><i>06</i> Nhóm quyền</dt>
-                <dd>{permissionGroup?.name || 'Chưa gán'}</dd>
-              </div>
-            )}
-          </dl>
-
-          <footer className="profile-help">
-            <span aria-hidden="true">?</span>
-            <p><strong>Cần hỗ trợ tài khoản?</strong> Liên hệ Administrator để được đặt lại mật khẩu an toàn.</p>
-          </footer>
-        </article>
-
-        <form className="profile-paper profile-security" onSubmit={submit}>
-          <header className="profile-panel-heading">
-            <span className="profile-shield" aria-hidden="true">✓</span>
-            <div>
-              <span className="profile-eyebrow">BẢO MẬT TÀI KHOẢN</span>
-              <h3>Đổi mật khẩu</h3>
-              <p>Sử dụng ít nhất 8 ký tự và không chia sẻ mật khẩu qua kênh công khai.</p>
-            </div>
-          </header>
-
-          <label className="profile-field">
-            <span>Mật khẩu hiện tại</span>
-            <input required type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-          </label>
-          <label className="profile-field">
-            <span>Mật khẩu mới</span>
-            <input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </label>
-          <label className="profile-field">
-            <span>Xác nhận mật khẩu</span>
-            <input required minLength={8} type="password" autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
-          </label>
-
-          <div className="profile-password-hint">
-            <span className={password.length >= 8 ? 'is-ready' : ''} />
-            <p>{password.length >= 8 ? 'Độ dài mật khẩu đã đạt yêu cầu.' : 'Mật khẩu cần có tối thiểu 8 ký tự.'}</p>
-          </div>
-
-          {feedback ? (
-            <p className={`profile-feedback ${feedbackType}`} role="status" aria-live="polite">
-              {feedback}
-            </p>
-          ) : null}
-
-          <button className="work-primary-button profile-submit" disabled={pending}>
-            {pending ? 'Đang cập nhật…' : 'Đổi mật khẩu'}
-          </button>
-        </form>
-      </div>
-
-      <DevicesPanel mode="self" />
-    </section>
-    {avatarCropFile ? (
-      <AvatarCropModal
-        file={avatarCropFile}
-        onCancel={cancelAvatarCrop}
-        onSave={uploadPreparedAvatar}
-      />
-    ) : null}
-    </>
   );
 }
 

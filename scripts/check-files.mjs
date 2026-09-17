@@ -107,6 +107,13 @@ if (schema.includes("clerkUserId") || schema.includes("actorClerkUserId")) {
 }
 
 const client = readFileSync("src/main.jsx", "utf8");
+const profileUi = [
+  client,
+  readFileSync("src/profile/InternalProfilePanel.jsx", "utf8"),
+  readFileSync("src/profile/ChangePasswordPanel.jsx", "utf8"),
+  readFileSync("src/profile/AccountMenu.jsx", "utf8"),
+  readFileSync("src/profile/ProfilePages.jsx", "utf8"),
+].join("\n");
 for (const marker of [
   "ConvexAuthProvider",
   "useAuthActions",
@@ -127,7 +134,8 @@ for (const marker of [
   "Cài đặt tối cao",
   "Nhóm quyền",
   "Chức vụ",
-  "Thông tin cá nhân",
+  "Hồ sơ nội bộ",
+  "AccountMenu",
   "DepartmentManagement",
   "LocationManagement",
   "DutiesAdminView",
@@ -142,7 +150,10 @@ for (const marker of [
   "hidden",
   "ProfileView",
 ]) {
-  if (!client.includes(marker)) throw new Error(`Admin/password UI marker missing: ${marker}`);
+  if (!profileUi.includes(marker)) throw new Error(`Admin/password UI marker missing: ${marker}`);
+}
+if (client.includes('id="profile" label="Thông tin cá nhân"')) {
+  throw new Error("Sidebar must not list Thông tin cá nhân");
 }
 
 // Component names live in their modules, not in the shell. Check only labels

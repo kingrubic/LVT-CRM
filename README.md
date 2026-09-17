@@ -24,7 +24,7 @@ Vận hành production:
 
 - Xác thực **email + password only**. Không public signup, không email verification. Sai email/mật khẩu, tài khoản **khóa đăng nhập**, và tài khoản **disable** mỗi loại một thông báo rõ, không cho login.
 - Quên mật khẩu tự phục vụ: gửi mật khẩu tạm **trước**, chỉ xoay credential khi mail thành công; cooldown 5 phút/user, **không** rate-limit IP. Sau đó bắt buộc đổi MK (`mustChangePassword`).
-- Đổi MK trên hồ sơ (**Thông tin cá nhân**) phải nhập **mật khẩu hiện tại**. Cổng đổi MK bắt buộc (lần đầu / admin reset, web + Android/iOS) chỉ hỏi MK mới.
+- Đổi MK trên trang **Đổi mật khẩu** (menu tài khoản góc trên) phải nhập **mật khẩu hiện tại**. Cổng đổi MK bắt buộc (lần đầu / admin reset, web + Android/iOS) chỉ hỏi MK mới.
 - **Ba vai trò hệ thống** trên `users.role`:
   - `admin` — **Administrator**: toàn quyền, bao gồm **Thiết lập tối cao** và quản lý tài khoản.
   - `moderator` — **Moderator**: toàn quyền nghiệp vụ và **Quản trị hệ thống**, không thấy/không truy cập **Thiết lập tối cao**.
@@ -100,7 +100,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công việc; Bán trú đang ẩn), **Lịch công tác** (tab **cá nhân** = lịch tuần/tháng/quý/năm kèm cột nhân sự như Báo cáo Công việc; tab **chung** = mẫu Word/PDF; nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★ — tạo mở trang riêng `/cong-tac/tao`), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi, Thông tin cá nhân. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**. `/bao-cao/cong-tac` chuyển vào tab lịch chung.
+1. **Chức năng chính**: Báo cáo (submenu: Công việc; Bán trú đang ẩn), **Lịch công tác** (tab **cá nhân** = lịch tuần/tháng/quý/năm kèm cột nhân sự như Báo cáo Công việc; tab **chung** = mẫu Word/PDF; nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★ — tạo mở trang riêng `/cong-tac/tao`), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**. **Hồ sơ nội bộ / Đổi mật khẩu / Quản lý thiết bị đăng nhập** mở từ avatar tròn góc trên (không còn mục Thông tin cá nhân trên sidebar). `/bao-cao/cong-tac` chuyển vào tab lịch chung.
 2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
 3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **loại văn bản**, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 

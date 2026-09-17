@@ -43,8 +43,17 @@
   gap: 16px;
 }
 
+.profile-page-single .profile-overview,
+.profile-page-single .devices-panel {
+  max-width: 760px;
+}
+
+.profile-page-single .profile-security {
+  max-width: 480px;
+}
+
 .profile-workspace > .devices-panel {
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .profile-paper {

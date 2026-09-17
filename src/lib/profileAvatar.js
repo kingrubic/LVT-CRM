@@ -1,3 +1,25 @@
+/** Visible name for header/menu; profile fields may pass a different fallback. */
+export function userDisplayName(user, fallback = 'Người dùng') {
+  const name = String(user?.name || '').trim();
+  if (name) return name;
+  const email = String(user?.email || '').trim();
+  if (email) return email;
+  return fallback;
+}
+
+/** Initials from the last two name parts, matching the current profile avatar fallback. */
+export function userInitials(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return 'LV';
+  return parts
+    .slice(-2)
+    .map((part) => part.slice(0, 1).toUpperCase())
+    .join('') || 'LV';
+}
+
 /** Cache-bust private avatar downloads when the session version changes. */
 export function avatarDownloadUrl(avatarVersion) {
   const version = String(avatarVersion || '').trim();
