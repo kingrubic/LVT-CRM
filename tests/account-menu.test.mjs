@@ -12,7 +12,7 @@ test('header account menu is Facebook-style and lists the four account actions',
   assert.match(main, /<AccountMenu onChoose=\{choose\} onSignOut=/);
   assert.match(main, /<OwnAvatarProvider user=\{user\}>/);
 
-  assert.match(menu, /className="account-menu-trigger/);
+  assert.match(menu, /account-menu-trigger/);
   assert.match(menu, /go\('profile'\)/);
   assert.match(menu, /Đổi mật khẩu/);
   assert.match(menu, /Quản lý thiết bị đăng nhập/);

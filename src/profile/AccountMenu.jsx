@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useOwnAvatarContext } from './useOwnAvatar.js';
+import { useOwnAvatarContext } from './useOwnAvatar.jsx';
 import './accountMenu.css';
 
 function MenuGlyph({ children }) {

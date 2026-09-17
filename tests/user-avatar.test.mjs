@@ -160,7 +160,7 @@ test('web profile crops 1:1 then uploads WebP through Convex Storage', () => {
 
 test('web profile shows the cropped blob immediately and overlays stale session avatar fields', () => {
   const profile = readFileSync(new URL('../src/profile/InternalProfilePanel.jsx', import.meta.url), 'utf8');
-  const avatarHook = readFileSync(new URL('../src/profile/useOwnAvatar.js', import.meta.url), 'utf8');
+  const avatarHook = readFileSync(new URL('../src/profile/useOwnAvatar.jsx', import.meta.url), 'utf8');
   assert.match(avatarHook, /resolveProfileAvatarSession\(user, avatarOverlay\)/);
   assert.match(avatarHook, /avatarDownloadUrl\(avatarVersion\)/);
   assert.match(avatarHook, /cache: 'no-store'/);

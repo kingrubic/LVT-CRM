@@ -6,7 +6,7 @@ import { avatarSessionFromCommit } from '../lib/profileAvatar.js';
 import { messageFor } from '../lib/appErrorMessage.js';
 import StarRating from '../lib/StarRating.jsx';
 import AvatarCropModal from './AvatarCropModal.jsx';
-import { useOwnAvatarContext } from './useOwnAvatar.js';
+import { useOwnAvatarContext } from './useOwnAvatar.jsx';
 
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
 

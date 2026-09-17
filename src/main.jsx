@@ -31,7 +31,7 @@ import { filterByPickerSearch, personPickerHaystack } from './lib/pickerSearch';
 import StarRating from './lib/StarRating.jsx';
 import AccountMenu from './profile/AccountMenu.jsx';
 import { ChangePasswordView, DevicesView, ProfileView } from './profile/ProfilePages.jsx';
-import { OwnAvatarProvider } from './profile/useOwnAvatar.js';
+import { OwnAvatarProvider } from './profile/useOwnAvatar.jsx';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyBulkImport from './duties/DutyBulkImport';
