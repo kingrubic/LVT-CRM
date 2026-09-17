@@ -22,6 +22,8 @@ import {
   nextAvatarObjectUrl,
   resolveProfileAvatarSession,
   shouldDropAvatarOverlay,
+  userDisplayName,
+  userInitials,
 } from '../src/lib/profileAvatar.js';
 import { matchAvatarFileRoute } from '../scripts/lib/file-route-policy.mjs';
 import { messageFor } from '../src/lib/appErrorMessage.js';
@@ -137,14 +139,12 @@ test('avatar error codes have Vietnamese copy', () => {
 });
 
 test('web profile crops 1:1 then uploads WebP through Convex Storage', () => {
-  const profile = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  const profile = readFileSync(new URL('../src/profile/InternalProfilePanel.jsx', import.meta.url), 'utf8');
   const cropModal = readFileSync(new URL('../src/profile/AvatarCropModal.jsx', import.meta.url), 'utf8');
   const prepare = readFileSync(new URL('../src/lib/prepareAvatarFile.js', import.meta.url), 'utf8');
   assert.match(profile, /anyApi\.userAvatar\.generateUploadUrl/);
   assert.match(profile, /useAction\(anyApi\.userAvatar\.setOwnAvatar\)/);
   assert.match(profile, /anyApi\.userAvatar\.clearOwnAvatar/);
-  assert.match(profile, /avatarDownloadUrl\(avatarVersion\)/);
-  assert.match(profile, /cache: 'no-store'/);
   assert.match(profile, /AvatarCropModal/);
   assert.match(profile, /openAvatarCrop/);
   assert.match(profile, /cancelAvatarCrop/);
@@ -159,20 +159,32 @@ test('web profile crops 1:1 then uploads WebP through Convex Storage', () => {
 });
 
 test('web profile shows the cropped blob immediately and overlays stale session avatar fields', () => {
-  const profile = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
-  assert.match(profile, /resolveProfileAvatarSession\(user, avatarOverlay\)/);
+  const profile = readFileSync(new URL('../src/profile/InternalProfilePanel.jsx', import.meta.url), 'utf8');
+  const avatarHook = readFileSync(new URL('../src/profile/useOwnAvatar.jsx', import.meta.url), 'utf8');
+  assert.match(avatarHook, /resolveProfileAvatarSession\(user, avatarOverlay\)/);
+  assert.match(avatarHook, /avatarDownloadUrl\(avatarVersion\)/);
+  assert.match(avatarHook, /cache: 'no-store'/);
+  assert.match(avatarHook, /resolvedAvatar\.source === 'overlay'/);
   assert.match(profile, /avatarSessionFromCommit\(committed/);
   assert.match(profile, /showAvatarBlob\(prepared\)/);
   assert.match(profile, /showAvatarBlob\(null\)/);
   assert.match(profile, /setAvatarOverlay\(avatarSessionFromCommit\(committed/);
-  assert.match(profile, /shouldDropAvatarOverlay\(user, avatarOverlay\)/);
-  assert.match(profile, /resolvedAvatar\.source === 'overlay'/);
+  assert.match(avatarHook, /shouldDropAvatarOverlay\(user, avatarOverlay\)/);
 });
 
 test('avatarDownloadUrl cache-busts with avatarVersion', () => {
   assert.equal(avatarDownloadUrl(''), '/api/files/avatar');
   assert.equal(avatarDownloadUrl('abc123'), '/api/files/avatar?v=abc123');
   assert.equal(avatarDownloadUrl('a b'), '/api/files/avatar?v=a%20b');
+});
+
+test('userDisplayName and userInitials match the current profile fallback', () => {
+  assert.equal(userDisplayName({ name: 'Admin' }), 'Admin');
+  assert.equal(userDisplayName({ email: 'admin@example.school' }), 'admin@example.school');
+  assert.equal(userDisplayName({}, 'Chưa đặt tên'), 'Chưa đặt tên');
+  assert.equal(userInitials('Nguyễn Năng Quốc Bảo'), 'QB');
+  assert.equal(userInitials('Admin'), 'A');
+  assert.equal(userInitials(''), 'LV');
 });
 
 test('avatarSessionFromCommit mirrors set/clear payloads onto session fields', () => {

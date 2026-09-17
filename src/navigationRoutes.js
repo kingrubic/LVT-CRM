@@ -9,6 +9,8 @@ const MENU_PATHS = Object.freeze({
   'people-review': '/danh-gia-nhan-su',
   'staff-faults': '/ghi-nhan-loi',
   profile: '/thong-tin-ca-nhan',
+  'change-password': '/doi-mat-khau',
+  devices: '/quan-ly-thiet-bi-dang-nhap',
   'duties-management': '/quan-ly-cong-tac',
   boarding: '/quan-ly-ban-tru',
   'work-management': '/quan-ly-cong-viec',
@@ -29,8 +31,28 @@ const REPORT_PATHS = Object.freeze({
 /** Primary menus kept off the left sidebar; still reachable (e.g. header bell). */
 const SIDEBAR_HIDDEN_MENUS = Object.freeze(['notifications']);
 
+/** Account pages live in the header avatar menu, not the left sidebar. */
+const ACCOUNT_MENU_IDS = Object.freeze(['profile', 'change-password', 'devices']);
+
+const ACCOUNT_MENU_TITLES = Object.freeze({
+  profile: 'Hồ sơ nội bộ',
+  'change-password': 'Đổi mật khẩu',
+  devices: 'Quản lý thiết bị đăng nhập',
+});
+
+export function isAccountMenu(menuId) {
+  return ACCOUNT_MENU_IDS.some((id) => id === menuId);
+}
+
 export function isSidebarPrimaryMenu(menuId) {
-  return !SIDEBAR_HIDDEN_MENUS.includes(menuId);
+  return !SIDEBAR_HIDDEN_MENUS.includes(menuId) && !isAccountMenu(menuId);
+}
+
+export function titleForAccountMenu(menuId) {
+  if (menuId === 'change-password' || menuId === 'devices') {
+    return ACCOUNT_MENU_TITLES[menuId];
+  }
+  return ACCOUNT_MENU_TITLES.profile;
 }
 
 const HIDDEN_MENU_ALIASES = Object.freeze({
@@ -40,6 +62,7 @@ const HIDDEN_MENU_ALIASES = Object.freeze({
   '/bao-cao/ban-tru': { menu: 'reports', reportSection: 'work' },
   '/bao-cao/cong-tac': { menu: 'duties', dutyPath: '/cong-tac/chung' },
   '/thiet-lap-dia-diem': { menu: 'departments' },
+  '/ho-so-noi-bo': { menu: 'profile' },
 });
 
 /** @type {Map<string, { menu: string, reportSection?: string }>} */
@@ -105,4 +128,11 @@ export function pathnameForReportSection(reportSection) {
   return REPORT_PATHS[reportSection] || REPORT_PATHS.work;
 }
 
-export { MENU_PATHS, REPORT_PATHS, HIDDEN_MENU_ALIASES, dutiesPathname };
+export {
+  ACCOUNT_MENU_IDS,
+  ACCOUNT_MENU_TITLES,
+  MENU_PATHS,
+  REPORT_PATHS,
+  HIDDEN_MENU_ALIASES,
+  dutiesPathname,
+};

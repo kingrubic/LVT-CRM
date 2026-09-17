@@ -573,28 +573,28 @@ Khi thêm:
 4. Đính kèm ảnh hoặc PDF làm căn cứ, tối đa 20 MB.
 5. Chọn **Ghi nhận**.
 
-## 6. Thông tin cá nhân
+## 6. Tài khoản (avatar góc trên)
 
-Vào **Thông tin cá nhân** để xem:
+Bấm **ảnh đại diện** góc trên bên phải để mở menu tài khoản:
 
-- Họ tên.
-- Email đăng nhập.
-- Vai trò.
-- Phòng ban.
-- Chức vụ.
-- Nhóm quyền, nếu là User.
+- **Họ tên** → **Hồ sơ nội bộ**: họ tên, email, vai trò, phòng ban, chức vụ, nhóm quyền (nếu là User), đổi ảnh đại diện.
+- **Đổi mật khẩu** → trang đổi mật khẩu riêng.
+- **Quản lý thiết bị đăng nhập** → danh sách phiên và **Đăng xuất tất cả phiên khác**.
+- **Đăng xuất** → thoát phiên hiện tại.
 
 ### Đổi mật khẩu
 
-1. Nhập mật khẩu mới ít nhất 8 ký tự.
-2. Nhập lại mật khẩu để xác nhận.
-3. Chọn **Đổi mật khẩu**.
+1. Mở menu tài khoản → **Đổi mật khẩu**.
+2. Nhập mật khẩu hiện tại.
+3. Nhập mật khẩu mới ít nhất 8 ký tự.
+4. Nhập lại mật khẩu để xác nhận.
+5. Chọn **Đổi mật khẩu**.
 
 Nếu quên mật khẩu và không đăng nhập được, liên hệ Admin để được đặt lại mật khẩu tạm thời.
 
 ## 7. Đăng xuất
 
-Chọn **Đăng xuất** ở góc trên bên phải khi kết thúc làm việc, đặc biệt khi sử dụng máy tính dùng chung.
+Chọn **Đăng xuất** trong menu avatar góc trên bên phải khi kết thúc làm việc, đặc biệt khi sử dụng máy tính dùng chung.
 
 ## 8. Khi không thấy nút hoặc dữ liệu
 

@@ -43,8 +43,27 @@
   gap: 16px;
 }
 
+.profile-page-single {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.profile-page-single .profile-overview,
+.profile-page-single .devices-panel {
+  width: min(100%, 760px);
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.profile-page-single .profile-security {
+  width: min(100%, 480px);
+  max-width: 480px;
+  margin-inline: auto;
+}
+
 .profile-workspace > .devices-panel {
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .profile-paper {
@@ -218,7 +237,7 @@
 
 .profile-modern-dl {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   margin: 0;
   padding: 17px 20px 18px 23px;
@@ -242,25 +261,57 @@
 .profile-modern-dl dt {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: #8596a2;
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
 
-.profile-modern-dl dt i {
+.profile-field-icon {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px 7px 7px 2px;
-  color: #177568;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+}
+
+.profile-field-icon svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.profile-field-icon.is-name {
+  color: #14355f;
+  background: #e6eef6;
+}
+
+.profile-field-icon.is-email {
+  color: #138f7b;
   background: #e3f2ee;
-  font-size: 7px;
-  font-style: normal;
-  letter-spacing: 0;
+}
+
+.profile-field-icon.is-role {
+  color: #7c631e;
+  background: #fff1c4;
+}
+
+.profile-field-icon.is-department {
+  color: #c45a46;
+  background: #ffebe6;
+}
+
+.profile-field-icon.is-position {
+  color: #28639a;
+  background: #e6f0fb;
+}
+
+.profile-field-icon.is-group {
+  color: #6b4ea3;
+  background: #efe8fb;
 }
 
 .profile-modern-dl dd {
@@ -268,7 +319,7 @@
   margin: 8px 0 0;
   overflow: hidden;
   color: #36536a;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 760;
   line-height: 1.45;
   text-overflow: ellipsis;

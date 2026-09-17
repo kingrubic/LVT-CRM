@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  ACCOUNT_MENU_IDS,
   MENU_PATHS,
+  isAccountMenu,
   isSidebarPrimaryMenu,
   pathnameForMenu,
   pathnameForReportSection,
   routeForPathname,
+  titleForAccountMenu,
 } from '../src/navigationRoutes.js';
 import {
   ACCOUNT_DELETION_CANONICAL_PATH,
@@ -93,4 +96,22 @@ test('Ghi nhận lỗi có đường dẫn riêng trên sidebar', () => {
   assert.equal(pathnameForMenu('staff-faults'), '/ghi-nhan-loi');
   assert.deepEqual(routeForPathname('/ghi-nhan-loi'), { menu: 'staff-faults', reportSection: undefined });
   assert.equal(isSidebarPrimaryMenu('staff-faults'), true);
+});
+
+test('hồ sơ / mật khẩu / thiết bị là 3 trang tài khoản, không nằm trên sidebar', () => {
+  assert.equal(pathnameForMenu('profile'), '/thong-tin-ca-nhan');
+  assert.equal(pathnameForMenu('change-password'), '/doi-mat-khau');
+  assert.equal(pathnameForMenu('devices'), '/quan-ly-thiet-bi-dang-nhap');
+  assert.deepEqual(routeForPathname('/thong-tin-ca-nhan'), { menu: 'profile', reportSection: undefined });
+  assert.deepEqual(routeForPathname('/doi-mat-khau'), { menu: 'change-password', reportSection: undefined });
+  assert.deepEqual(routeForPathname('/quan-ly-thiet-bi-dang-nhap'), { menu: 'devices', reportSection: undefined });
+  assert.deepEqual(routeForPathname('/ho-so-noi-bo'), { menu: 'profile', reportSection: undefined });
+  assert.equal(titleForAccountMenu('profile'), 'Hồ sơ nội bộ');
+  assert.equal(titleForAccountMenu('change-password'), 'Đổi mật khẩu');
+  assert.equal(titleForAccountMenu('devices'), 'Quản lý thiết bị đăng nhập');
+  assert.deepEqual([...ACCOUNT_MENU_IDS], ['profile', 'change-password', 'devices']);
+  for (const menuId of ACCOUNT_MENU_IDS) {
+    assert.equal(isAccountMenu(menuId), true);
+    assert.equal(isSidebarPrimaryMenu(menuId), false);
+  }
 });
