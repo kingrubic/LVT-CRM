@@ -272,6 +272,7 @@
   .report-event-detail,
   .report-panel-toggle,
   .duty-edit-modal,
+  .duty-edit-backdrop,
   .work-modal-backdrop {
     display: none !important;
   }

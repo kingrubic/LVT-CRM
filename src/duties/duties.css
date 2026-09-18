@@ -491,18 +491,63 @@
   width: min(100%, 520px);
 }
 
-.duty-edit-modal.work-modal {
+.duty-edit-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(13, 32, 58, 0.58);
+}
+
+.duty-edit-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(100%, 760px);
-  max-height: min(90vh, 880px);
-  padding: 20px 22px 16px;
+  max-height: min(90vh, calc(100vh - 40px));
+  overflow: hidden;
+  border: 1px solid #d8e3e8;
+  border-radius: 17px;
+  background: #fff;
+  color: var(--lvt-ink, #16243e);
+  box-shadow: 0 27px 80px rgba(8, 29, 53, 0.3);
 }
 
-.duty-edit-modal .work-editor-title {
+.duty-edit-modal-header {
   align-items: flex-start;
+  margin: 0;
+  padding: 20px 22px 14px;
+  background: #fff;
 }
 
-.duty-edit-modal .duty-editor-actions {
-  margin-top: 4px;
+.duty-edit-modal-header h3 {
+  color: var(--lvt-navy, #14355f);
+}
+
+.duty-edit-modal-body {
+  min-height: 0;
+  margin: 0;
+  padding: 16px 22px 12px;
+  overflow: auto;
+  background: #fff;
+}
+
+.duty-edit-modal-body.duty-modern-editor {
+  max-width: none;
+}
+
+.duty-edit-modal-body > .duty-content-field > small {
+  display: block;
+  position: static;
+  margin: 0;
+  color: #7a8d9c;
+}
+
+.duty-edit-modal-footer {
+  margin: 0;
+  padding: 14px 22px 18px;
+  background: #fff;
 }
 
 .duty-preview-list {

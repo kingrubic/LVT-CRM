@@ -193,15 +193,22 @@ test('admin/mod bấm Nội dung trên bảng tuần/tháng để sửa tại ch
   assert.match(modal, /duties\.update/);
   assert.match(modal, /DutyEditorFields/);
   assert.match(modal, /Sửa công tác/);
+  assert.match(modal, /duty-edit-backdrop/);
+  assert.match(modal, /duty-edit-modal-body duty-modern-editor/);
+  assert.match(modal, /duty-edit-modal-footer/);
+  assert.doesNotMatch(modal, /className="work-modal /);
+  const dutyCss = readFileSync(new URL('../src/duties/duties.css', import.meta.url), 'utf8');
+  assert.match(dutyCss, /\.duty-edit-backdrop[\s\S]*background:\s*rgba\(13,\s*32,\s*58,\s*0\.58\)/);
+  assert.match(dutyCss, /\.duty-edit-modal \{[\s\S]*background:\s*#fff/);
+  assert.match(dutyCss, /\.duty-edit-modal-body \{[\s\S]*overflow:\s*auto/);
+  assert.doesNotMatch(dutyCss, /\.duty-edit-modal[\s\S]{0,200}backdrop-filter/);
   assert.match(personal, /DutyScheduleTable/);
   assert.match(personal, /DutyEditModal/);
   assert.match(personal, /onEditContent/);
   assert.match(personal, /openDutyEditor/);
   assert.match(personal, /report-content-edit/);
   assert.match(personal, /event\.canManage/);
-  assert.match(tabCss, /lct-content-button/);
-  assert.match(tabCss, /@media print/);
-  assert.match(tabCss, /text-decoration: none/);
+  assert.match(tabCss, /duty-edit-backdrop/);
 });
 
 test('UI Lịch công tác có 2 tab, lịch cá nhân dạng lịch, trang tạo riêng, và gỡ Báo cáo Công tác', () => {

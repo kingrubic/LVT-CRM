@@ -76,19 +76,19 @@ export default function DutyEditModal({ duty, onClose, onSaved = null }) {
   return (
     <>
       <div
-        className="work-modal-backdrop duty-preview-backdrop"
+        className="duty-edit-backdrop"
         role="presentation"
         onClick={pending ? undefined : onClose}
       >
         <form
-          className="work-modal duty-edit-modal duty-modern-editor"
+          className="duty-edit-modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={(event) => event.stopPropagation()}
           onSubmit={submit}
         >
-          <div className="work-editor-title">
+          <div className="work-editor-title duty-edit-modal-header">
             <div>
               <span>CẬP NHẬT LỊCH</span>
               <h3 id={titleId}>Sửa công tác</h3>
@@ -98,51 +98,53 @@ export default function DutyEditModal({ duty, onClose, onSaved = null }) {
             </button>
           </div>
 
-          {options === undefined ? (
-            <p className="lct-loading">Đang tải biểu mẫu sửa công tác…</p>
-          ) : (
-            <DutyEditorFields
-              form={form}
-              onField={setField}
-              onStartDateTime={(date, time) => setForm((prev) => applyDutyStartDateTime(prev, date, time))}
-              onEndDateTime={(date, time) => setForm((prev) => applyDutyEndDateTime(prev, date, time))}
-            >
-              {includeDepartments ? (
+          <div className="duty-edit-modal-body duty-modern-editor">
+            {options === undefined ? (
+              <p className="lct-loading">Đang tải biểu mẫu sửa công tác…</p>
+            ) : (
+              <DutyEditorFields
+                form={form}
+                onField={setField}
+                onStartDateTime={(date, time) => setForm((prev) => applyDutyStartDateTime(prev, date, time))}
+                onEndDateTime={(date, time) => setForm((prev) => applyDutyEndDateTime(prev, date, time))}
+              >
+                {includeDepartments ? (
+                  <div className="duty-field">
+                    <span className="duty-field-label">Phòng ban tham gia</span>
+                    <CollapsibleMultiCheckList
+                      title="Chọn phòng ban"
+                      options={options.departments}
+                      values={form.departmentIds}
+                      onChange={(ids) => setField('departmentIds', ids)}
+                      getLabel={(department) => `${department.name}${department.code ? ` (${department.code})` : ''}`}
+                      searchPlaceholder="Tìm phòng ban…"
+                      emptyText="Chưa có phòng ban."
+                    />
+                  </div>
+                ) : null}
                 <div className="duty-field">
-                  <span className="duty-field-label">Phòng ban tham gia</span>
+                  <span className="duty-field-label">{includeDepartments ? 'Cá nhân tham gia' : 'Người tham gia'}</span>
                   <CollapsibleMultiCheckList
-                    title="Chọn phòng ban"
-                    options={options.departments}
-                    values={form.departmentIds}
-                    onChange={(ids) => setField('departmentIds', ids)}
-                    getLabel={(department) => `${department.name}${department.code ? ` (${department.code})` : ''}`}
-                    searchPlaceholder="Tìm phòng ban…"
-                    emptyText="Chưa có phòng ban."
+                    title={includeDepartments ? 'Chọn cá nhân' : 'Chọn người tham gia'}
+                    options={options.users}
+                    values={form.participantUserIds}
+                    onChange={(ids) => setField('participantUserIds', ids)}
+                    getLabel={(user) => `${user.name || '—'} · ${user.email || ''}`}
+                    searchPlaceholder="Tìm theo tên, email…"
+                    emptyText={includeDepartments ? 'Chưa có người dùng.' : 'Chưa có người tham gia trong phòng ban.'}
                   />
                 </div>
-              ) : null}
-              <div className="duty-field">
-                <span className="duty-field-label">{includeDepartments ? 'Cá nhân tham gia' : 'Người tham gia'}</span>
-                <CollapsibleMultiCheckList
-                  title={includeDepartments ? 'Chọn cá nhân' : 'Chọn người tham gia'}
-                  options={options.users}
-                  values={form.participantUserIds}
-                  onChange={(ids) => setField('participantUserIds', ids)}
-                  getLabel={(user) => `${user.name || '—'} · ${user.email || ''}`}
-                  searchPlaceholder="Tìm theo tên, email…"
-                  emptyText={includeDepartments ? 'Chưa có người dùng.' : 'Chưa có người tham gia trong phòng ban.'}
-                />
+              </DutyEditorFields>
+            )}
+
+            {feedback.text ? (
+              <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
+                {feedback.text}
               </div>
-            </DutyEditorFields>
-          )}
+            ) : null}
+          </div>
 
-          {feedback.text ? (
-            <div className={`work-feedback ${feedback.type}`} role="status" aria-live="polite">
-              {feedback.text}
-            </div>
-          ) : null}
-
-          <div className="work-editor-actions duty-editor-actions">
+          <div className="work-editor-actions duty-editor-actions duty-edit-modal-footer">
             <button type="button" className="work-ghost-button" onClick={() => setEditConfirm('cancel')} disabled={Boolean(pending)}>
               Hủy sửa
             </button>
