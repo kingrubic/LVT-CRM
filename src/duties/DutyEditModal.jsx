@@ -14,7 +14,7 @@ import {
   dutyPayloadFromForm,
 } from './dutyDisplay';
 
-export default function DutyEditModal({ duty, onClose, onSaved }) {
+export default function DutyEditModal({ duty, onClose, onSaved = null }) {
   const titleId = useId();
   const options = useQuery(anyApi.duties.formOptions);
   const update = useMutation(anyApi.duties.update);

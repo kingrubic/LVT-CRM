@@ -4,8 +4,8 @@ import { canOpenDutyContentEditor } from './sharedDutySchedule.js';
 export default function DutyScheduleTable({
   title,
   rows,
-  onEditContent,
-  onSelectEvent,
+  onEditContent = null,
+  onSelectEvent = null,
 }) {
   return (
     <article className="lct-sheet" aria-label={title}>
