@@ -168,6 +168,7 @@ export function buildSharedScheduleRows(mode, anchorIso, events) {
         showDay: true,
         rowSpan: 1,
         eventId: null,
+        canManage: false,
       });
       continue;
     }
@@ -177,16 +178,21 @@ export function buildSharedScheduleRows(mode, anchorIso, events) {
         dayLabel: formatDayCell(day),
         time: formatTimeCell(event),
         content: String(event.title || event.content || '').trim(),
-        location: String(event.location || '').trim(),
+        location: String(event.location || event.locationText || (event.locationNames || []).join(', ') || '').trim(),
         participants: formatParticipantCell(event),
         showDay: index === 0,
         rowSpan: index === 0 ? list.length : 0,
         eventId: event._id || null,
+        canManage: Boolean(event.canManage),
       });
     });
   }
 
   return { range, rows };
+}
+
+export function canOpenDutyContentEditor(row) {
+  return Boolean(row?.eventId) && row?.canManage === true;
 }
 
 export function sharedScheduleFilename(range) {

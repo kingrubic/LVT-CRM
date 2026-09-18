@@ -958,6 +958,35 @@
   line-height: 1.35;
 }
 
+.report-content-edit {
+  appearance: none;
+  display: inline;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.report-content-edit:hover,
+.report-content-edit:focus-visible {
+  color: #14355f;
+  text-decoration-color: currentColor;
+}
+
+.report-content-edit:focus-visible {
+  outline: 2px solid #14355f;
+  outline-offset: 2px;
+}
+
 .report-detail-attendance,
 .report-detail-actions {
   display: flex;

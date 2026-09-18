@@ -176,6 +176,54 @@
 .lct-col-place { width: 21%; }
 .lct-col-people { width: 20%; }
 
+.lct-row-selectable {
+  cursor: pointer;
+}
+
+.lct-row-selectable:hover td,
+.lct-row-selectable:hover th {
+  background: #f7fafb;
+}
+
+.lct-content-cell.is-editable {
+  cursor: pointer;
+}
+
+.lct-content-button {
+  appearance: none;
+  display: inline;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.lct-content-button:hover,
+.lct-content-button:focus-visible {
+  color: #14355f;
+  text-decoration-color: currentColor;
+}
+
+.lct-content-button:focus-visible {
+  outline: 2px solid #14355f;
+  outline-offset: 2px;
+}
+
+.lct-content-button.is-empty {
+  display: block;
+  min-height: 1.35em;
+}
+
 .duty-editor-page-bar {
   display: flex;
   flex-wrap: wrap;
@@ -211,5 +259,47 @@
   .lct-download {
     grid-column: auto;
     justify-self: center;
+  }
+}
+
+@media print {
+  .duty-workspace-tabs,
+  .lct-shared-toolbar,
+  .report-people-panel,
+  .report-calendar-toolbar,
+  .report-calendar-search,
+  .report-summary-row,
+  .report-event-detail,
+  .report-panel-toggle,
+  .duty-edit-modal,
+  .work-modal-backdrop {
+    display: none !important;
+  }
+
+  .lct-sheet {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .lct-row-selectable,
+  .lct-content-cell.is-editable,
+  .lct-content-button {
+    cursor: default;
+  }
+
+  .lct-row-selectable:hover td,
+  .lct-row-selectable:hover th {
+    background: transparent;
+  }
+
+  .lct-content-button,
+  .lct-content-button:hover,
+  .lct-content-button:focus-visible {
+    color: inherit;
+    text-decoration: none;
+    outline: none;
   }
 }

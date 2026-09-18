@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   buildSharedScheduleRows,
+  canOpenDutyContentEditor,
   formatDayCell,
   formatDutyClock,
   formatParticipantCell,
@@ -162,6 +163,45 @@ test('PDF lịch chung nhúng font tiếng Việt và giữ tiêu đề/cột c�
   assert.match(visible, /Thứ Bảy/);
   assert.match(visible, /12\/9/);
   assert.match(visible, /Thứ Năm/);
+});
+
+test('admin/mod bấm Nội dung trên bảng tuần/tháng để sửa tại chỗ, user thường thì không', () => {
+  const { rows } = buildSharedScheduleRows('week', '2026-09-09', [
+    { ...sampleEvents[0], canManage: true },
+    { ...sampleEvents[1], canManage: false },
+  ]);
+  const monday = rows.filter((row) => row.dayIso === '2026-09-07');
+  assert.equal(monday[0].canManage, true);
+  assert.equal(monday[0].eventId, 'a');
+  assert.equal(canOpenDutyContentEditor(monday[0]), true);
+  assert.equal(canOpenDutyContentEditor(monday[1]), false);
+  assert.equal(canOpenDutyContentEditor(rows.find((row) => row.dayIso === '2026-09-12')), false);
+  assert.equal(canOpenDutyContentEditor({ eventId: 'x' }), false);
+  assert.equal(canOpenDutyContentEditor({ eventId: 'x', canManage: true }), true);
+
+  const shared = readFileSync(new URL('../src/duties/SharedDutyScheduleView.jsx', import.meta.url), 'utf8');
+  const table = readFileSync(new URL('../src/duties/DutyScheduleTable.jsx', import.meta.url), 'utf8');
+  const modal = readFileSync(new URL('../src/duties/DutyEditModal.jsx', import.meta.url), 'utf8');
+  const personal = readFileSync(new URL('../src/reports/DutyReportsView.jsx', import.meta.url), 'utf8');
+  const tabCss = readFileSync(new URL('../src/duties/sharedDutySchedule.css', import.meta.url), 'utf8');
+  assert.match(shared, /DutyScheduleTable/);
+  assert.match(shared, /DutyEditModal/);
+  assert.match(shared, /onEditContent/);
+  assert.match(table, /lct-content-button/);
+  assert.match(table, /canOpenDutyContentEditor/);
+  assert.match(table, /Sửa công tác/);
+  assert.match(modal, /duties\.update/);
+  assert.match(modal, /DutyEditorFields/);
+  assert.match(modal, /Sửa công tác/);
+  assert.match(personal, /DutyScheduleTable/);
+  assert.match(personal, /DutyEditModal/);
+  assert.match(personal, /onEditContent/);
+  assert.match(personal, /openDutyEditor/);
+  assert.match(personal, /report-content-edit/);
+  assert.match(personal, /event\.canManage/);
+  assert.match(tabCss, /lct-content-button/);
+  assert.match(tabCss, /@media print/);
+  assert.match(tabCss, /text-decoration: none/);
 });
 
 test('UI Lịch công tác có 2 tab, lịch cá nhân dạng lịch, trang tạo riêng, và gỡ Báo cáo Công tác', () => {

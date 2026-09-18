@@ -491,6 +491,20 @@
   width: min(100%, 520px);
 }
 
+.duty-edit-modal.work-modal {
+  width: min(100%, 760px);
+  max-height: min(90vh, 880px);
+  padding: 20px 22px 16px;
+}
+
+.duty-edit-modal .work-editor-title {
+  align-items: flex-start;
+}
+
+.duty-edit-modal .duty-editor-actions {
+  margin-top: 4px;
+}
+
 .duty-preview-list {
   display: grid;
   gap: 8px;

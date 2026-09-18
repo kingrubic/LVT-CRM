@@ -261,6 +261,8 @@ export const dutyCalendar = query({
           allDay: duty.allDay,
           locationNames: [dutyLocationLabel(duty, mapNames(duty.locationIds, locations))].filter(Boolean),
           locationText: duty.locationText || "",
+          departmentIds: duty.departmentIds || [],
+          participantUserIds: duty.participantUserIds || [],
           departmentNames: mapNames(duty.departmentIds, departments),
           participantNames: participants.map(
             (participant) => participant.name || participant.email || "",
