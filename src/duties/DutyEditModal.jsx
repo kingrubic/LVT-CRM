@@ -74,7 +74,7 @@ export default function DutyEditModal({ duty, onClose, onSaved = null }) {
   };
 
   return (
-    <>
+    <div className="duty-edit-scope">
       <div
         className="duty-edit-backdrop"
         role="presentation"
@@ -164,6 +164,6 @@ export default function DutyEditModal({ duty, onClose, onSaved = null }) {
           void persistDuty();
         }}
       />
-    </>
+    </div>
   );
 }
