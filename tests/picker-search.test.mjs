@@ -42,8 +42,10 @@ test('filterByPickerSearch keeps the original order and empty query returns all'
 });
 
 test('duty and work person pickers include a small search field', () => {
-  assert.match(mainSource, /function CollapsibleMultiCheckList/);
-  assert.match(mainSource, /multi-check-search/);
+  const pickerSource = readFileSync(new URL('../src/lib/CollapsibleMultiCheckList.jsx', import.meta.url), 'utf8');
+  assert.match(mainSource, /CollapsibleMultiCheckList/);
+  assert.match(pickerSource, /export default function CollapsibleMultiCheckList/);
+  assert.match(pickerSource, /multi-check-search/);
   assert.match(mainSource, /Tìm theo tên, email/);
   assert.match(assignmentSource, /SearchablePersonSelect/);
   assert.match(assignmentSource, /Tìm theo tên, email/);

@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
-import DutyWorkspaceTabs, { OfficialDutyHeader } from './DutyWorkspaceTabs';
+import DutyWorkspaceTabs from './DutyWorkspaceTabs';
+import DutyEditModal from './DutyEditModal';
+import DutyScheduleTable from './DutyScheduleTable';
 import {
   buildSharedScheduleRows,
   shiftScheduleAnchor,
@@ -12,20 +14,35 @@ import './sharedDutySchedule.css';
 export default function SharedDutyScheduleView({ onChooseView }) {
   const [mode, setMode] = useState('week');
   const [anchorIso, setAnchorIso] = useState(() => toIsoDate(new Date()));
+  const [editingEvent, setEditingEvent] = useState(null);
   const rangePreview = useMemo(() => buildSharedScheduleRows(mode, anchorIso, []).range, [mode, anchorIso]);
   const data = useQuery(anyApi.duties.sharedSchedule, {
     startDate: rangePreview.startIso,
     endDate: rangePreview.endIso,
   });
+  const events = data?.events || [];
   const built = useMemo(
-    () => buildSharedScheduleRows(mode, anchorIso, data?.events || []),
-    [mode, anchorIso, data?.events],
+    () => buildSharedScheduleRows(mode, anchorIso, events),
+    [mode, anchorIso, events],
   );
 
   const downloading = async () => {
     const { downloadSharedDutySchedulePdf: savePdf } = await import('./sharedDutySchedulePdf.js');
     savePdf(built);
   };
+
+  const openEditor = (row) => {
+    const event = events.find((item) => String(item._id) === String(row.eventId));
+    if (!event?.canManage) return;
+    setEditingEvent(event);
+  };
+
+  useEffect(() => {
+    if (!editingEvent?._id) return;
+    const next = events.find((item) => String(item._id) === String(editingEvent._id));
+    if (next && next !== editingEvent) setEditingEvent(next);
+    if (data !== undefined && !next) setEditingEvent(null);
+  }, [data, events, editingEvent?._id]);
 
   return (
     <section className="duty-workspace lct-shared-view">
@@ -65,41 +82,16 @@ export default function SharedDutyScheduleView({ onChooseView }) {
       {data === undefined ? (
         <p className="lct-loading">Đang dựng lịch công tác chung…</p>
       ) : (
-        <article className="lct-sheet" aria-label={built.range.title}>
-          <OfficialDutyHeader title={built.range.title} />
-          <table className="lct-table">
-            <colgroup>
-              <col className="lct-col-day" />
-              <col className="lct-col-time" />
-              <col className="lct-col-content" />
-              <col className="lct-col-place" />
-              <col className="lct-col-people" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>Ngày</th>
-                <th>Thời gian</th>
-                <th>Nội dung</th>
-                <th>Địa điểm</th>
-                <th>Thành phần</th>
-              </tr>
-            </thead>
-            <tbody>
-              {built.rows.map((row, index) => (
-                <tr key={`${row.dayIso}-${row.eventId || 'empty'}-${index}`}>
-                  {row.showDay ? (
-                    <th scope="row" rowSpan={row.rowSpan}>{row.dayLabel}</th>
-                  ) : null}
-                  <td>{row.time}</td>
-                  <td>{row.content}</td>
-                  <td>{row.location}</td>
-                  <td>{row.participants}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </article>
+        <DutyScheduleTable
+          title={built.range.title}
+          rows={built.rows}
+          onEditContent={openEditor}
+        />
       )}
+
+      {editingEvent ? (
+        <DutyEditModal duty={editingEvent} onClose={() => setEditingEvent(null)} />
+      ) : null}
     </section>
   );
 }

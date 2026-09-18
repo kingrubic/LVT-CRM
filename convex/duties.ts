@@ -430,7 +430,7 @@ export const sharedSchedule = query({
     if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate) {
       throw new Error("INVALID_DATE_RANGE");
     }
-    await requireDutiesAccess(ctx);
+    const { user, isAdmin } = await requireDutiesAccess(ctx);
     const [duties, locations, departments, users] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
@@ -455,11 +455,15 @@ export const sharedSchedule = query({
         endTime: duty.endTime,
         allDay: duty.allDay,
         location: dutyLocationLabel(duty, mapNames(duty.locationIds, locations)),
+        locationText: duty.locationText || dutyLocationLabel(duty, mapNames(duty.locationIds, locations)),
+        departmentIds: duty.departmentIds || [],
+        participantUserIds: duty.participantUserIds || [],
         departmentNames: mapNames(duty.departmentIds, departments),
         participantNames: duty.participantUserIds
           .map((id) => userNameMap.get(String(id)))
           .filter((name): name is string => Boolean(name)),
         otherParticipants: String(duty.otherParticipants || "").trim(),
+        canManage: isAdmin || String(duty.createdBy || "") === String(user._id),
       }))
       .sort(
         (a, b) =>

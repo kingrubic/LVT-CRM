@@ -10,6 +10,13 @@ import {
   filterDutiesBySearch,
   filterDutiesByTab,
 } from '../duties/dutyDisplay';
+import DutyEditModal from '../duties/DutyEditModal';
+import DutyScheduleTable from '../duties/DutyScheduleTable';
+import {
+  buildSharedScheduleRows,
+  toIsoDate as toSharedIsoDate,
+} from '../duties/sharedDutySchedule.js';
+import '../duties/sharedDutySchedule.css';
 import PersonalReminderPanel, {
   PersonalReminderLayout,
   reminderMapFromList,
@@ -23,7 +30,6 @@ const VIEW_OPTIONS = [
   ['month', 'Tháng'],
   ['year', 'Năm'],
 ];
-const WEEKDAYS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'];
 const MINI_WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 function pad(value) {
@@ -32,11 +38,6 @@ function pad(value) {
 
 function toIsoDate(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-function fromIsoDate(value) {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year, month - 1, day);
 }
 
 function addDays(date, amount) {
@@ -65,14 +66,6 @@ function startOfMonth(date) {
 
 function endOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-}
-
-function daysBetween(start, end) {
-  const days = [];
-  for (let current = new Date(start); current <= end; current = addDays(current, 1)) {
-    days.push(current);
-  }
-  return days;
 }
 
 function monthGridDays(date) {
@@ -123,85 +116,6 @@ function statusLabel(status) {
 
 function eventTime(event) {
   return event.allDay ? 'Cả ngày' : `${event.startTime}–${event.endTime}`;
-}
-
-function CalendarEvent({ event, compact = false, onSelect }) {
-  return (
-    <button
-      type="button"
-      className={`report-event ${compact ? 'compact' : ''} status-${event.attendanceStatus}`}
-      onClick={() => onSelect(event)}
-      title={`${event.title || event.content} · ${eventTime(event)}`}
-    >
-      <span className="report-event-time">{eventTime(event)}</span>
-      <strong>{event.title || event.content}</strong>
-      {!compact && event.locationNames?.length ? (
-        <span className="report-event-location">⌖ {event.locationNames.join(', ')}</span>
-      ) : null}
-    </button>
-  );
-}
-
-function WeekCalendar({ range, events, onSelect }) {
-  const today = toIsoDate(new Date());
-  return (
-    <div className="report-week-grid">
-      {daysBetween(range.start, range.end).map((date) => {
-        const dailyEvents = eventsForDay(events, date);
-        const isoDate = toIsoDate(date);
-        return (
-          <section className={`report-week-day ${isoDate === today ? 'is-today' : ''}`} key={isoDate}>
-            <header>
-              <span>{WEEKDAYS[(date.getDay() + 6) % 7]}</span>
-              <strong>{date.getDate()}</strong>
-            </header>
-            <div className="report-day-events">
-              {dailyEvents.length ? (
-                dailyEvents.map((event) => (
-                  <CalendarEvent key={event._id} event={event} onSelect={onSelect} />
-                ))
-              ) : (
-                <span className="report-day-empty">Trống lịch</span>
-              )}
-            </div>
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
-function MonthCalendar({ anchor, events, onSelect }) {
-  const today = toIsoDate(new Date());
-  const days = monthGridDays(anchor);
-  return (
-    <div className="report-month-calendar">
-      <div className="report-month-weekdays">
-        {WEEKDAYS.map((day) => <span key={day}>{day}</span>)}
-      </div>
-      <div className="report-month-grid">
-        {days.map((date) => {
-          const dailyEvents = eventsForDay(events, date);
-          const isoDate = toIsoDate(date);
-          const outside = date.getMonth() !== anchor.getMonth();
-          return (
-            <section
-              className={`report-month-day ${outside ? 'is-outside' : ''} ${isoDate === today ? 'is-today' : ''}`}
-              key={isoDate}
-            >
-              <span className="report-month-number">{date.getDate()}</span>
-              <div className="report-month-events">
-                {dailyEvents.slice(0, 3).map((event) => (
-                  <CalendarEvent compact key={event._id} event={event} onSelect={onSelect} />
-                ))}
-                {dailyEvents.length > 3 ? <span className="report-more-events">+{dailyEvents.length - 3} lịch khác</span> : null}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function MiniMonth({ date, events, onSelect }) {
@@ -306,7 +220,22 @@ function EventDetail({
         <div><dt>Thời gian</dt><dd>{eventTime(event)}</dd></div>
         <div><dt>Ngày</dt><dd>{event.startDate === event.endDate ? event.startDate : `${event.startDate} → ${event.endDate}`}</dd></div>
         <div><dt>Địa điểm</dt><dd>{event.locationNames?.length ? event.locationNames.join(', ') : 'Chưa chỉ định'}</dd></div>
-        {event.content ? <div><dt>Nội dung</dt><dd>{event.content}</dd></div> : null}
+        {event.content ? (
+          <div>
+            <dt>Nội dung</dt>
+            <dd>
+              {event.canManage && onEdit ? (
+                <button
+                  type="button"
+                  className="report-content-edit"
+                  onClick={() => onEdit(event)}
+                >
+                  {event.content}
+                </button>
+              ) : event.content}
+            </dd>
+          </div>
+        ) : null}
         <div><dt>Hình thức gán</dt><dd>{event.assignmentType === 'individual' ? 'Gán cá nhân' : 'Theo phòng ban'}</dd></div>
       </dl>
       {showAttendance && onMarkAttendance ? (
@@ -424,6 +353,7 @@ function DutyReportsViewBody({
   const [pending, setPending] = useState('');
   const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [search, setSearch] = useState(() => emptyDutySearch());
+  const [editingEvent, setEditingEvent] = useState(null);
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setAttendanceForUser = useMutation(anyApi.duties.setAttendanceForUser);
   const removeDuty = useMutation(anyApi.duties.remove);
@@ -471,11 +401,11 @@ function DutyReportsViewBody({
   }, [focusDutyId, data?.events]);
 
   useEffect(() => {
-    if (!selectedEvent?._id) return;
-    const next = data?.events?.find((event) => String(event._id) === String(selectedEvent._id));
-    if (next && next !== selectedEvent) setSelectedEvent(next);
-    if (data?.events && !next) setSelectedEvent(null);
-  }, [data?.events, selectedEvent?._id]);
+    if (!editingEvent?._id) return;
+    const next = data?.events?.find((event) => String(event._id) === String(editingEvent._id));
+    if (next && next !== editingEvent) setEditingEvent(next);
+    if (data?.events && !next) setEditingEvent(null);
+  }, [data?.events, editingEvent?._id]);
 
   const runMutation = async (name, operation) => {
     setPending(name);
@@ -509,6 +439,19 @@ function DutyReportsViewBody({
     && Boolean(data?.isSelectedSelf)
     && mode === 'list'
     && listTab === DUTY_LIST_TAB_UPCOMING;
+  const scheduleSheet = useMemo(
+    () => (mode === 'week' || mode === 'month'
+      ? buildSharedScheduleRows(mode, toSharedIsoDate(anchor), events)
+      : null),
+    [mode, anchor, events],
+  );
+  const openDutyEditor = (event) => {
+    if (!event?.canManage) return;
+    setEditingEvent(event);
+  };
+  const eventFromScheduleRow = (row) => (
+    events.find((item) => String(item._id) === String(row.eventId)) || null
+  );
   const peopleGroups = useMemo(() => {
     const groups = new Map();
     for (const person of data?.people || []) {
@@ -662,14 +605,20 @@ function DutyReportsViewBody({
                     filtered={Boolean((data.events || []).length) && searchedEvents.length === 0}
                   />
                 )
-              ) : mode === 'week' ? (
-                <WeekCalendar range={calendarRange} events={events} onSelect={setSelectedEvent} />
-              ) : mode === 'month' ? (
-                <MonthCalendar anchor={anchor} events={events} onSelect={setSelectedEvent} />
+              ) : mode === 'week' || mode === 'month' ? (
+                <DutyScheduleTable
+                  title={scheduleSheet.range.title}
+                  rows={scheduleSheet.rows}
+                  onEditContent={(row) => openDutyEditor(eventFromScheduleRow(row))}
+                  onSelectEvent={(row) => {
+                    const event = eventFromScheduleRow(row);
+                    if (event) setSelectedEvent(event);
+                  }}
+                />
               ) : (
                 <PeriodCalendar mode="year" anchor={anchor} events={events} onSelect={setSelectedEvent} />
               )}
-              {mode !== 'list' && !events.length ? (
+              {mode === 'year' && !events.length ? (
                 <div className="report-empty-overlay">
                   <span>✦</span>
                   <strong>Kỳ này đang trống lịch</strong>
@@ -685,7 +634,7 @@ function DutyReportsViewBody({
             showAttendance={attendanceEnabled}
             pending={pending}
             canManageSubordinates={Boolean(data.canManageSubordinates)}
-            onEdit={onEdit}
+            onEdit={openDutyEditor}
             onDelete={(event) => {
               if (!window.confirm('Xóa công tác này?')) return;
               void runMutation(`del-${event._id}`, async () => {
@@ -714,6 +663,9 @@ function DutyReportsViewBody({
             }
             onClose={() => setSelectedEvent(null)}
           />
+          {editingEvent ? (
+            <DutyEditModal duty={editingEvent} onClose={() => setEditingEvent(null)} />
+          ) : null}
         </div>
       )}
     </section>
