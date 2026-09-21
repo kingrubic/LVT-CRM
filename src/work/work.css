@@ -1998,12 +1998,35 @@
   background: #e2eef8;
 }
 
+.work-modal-backdrop.work-chat-backdrop {
+  z-index: 40;
+  background: rgba(13, 32, 58, 0.58);
+  backdrop-filter: none;
+  --work-ink: var(--lvt-ink, #16243e);
+  --work-navy: var(--lvt-navy, #14355f);
+  --work-teal: var(--lvt-teal, #138f7b);
+  --work-paper: #fff;
+}
+
 .work-chat-modal {
   width: min(100%, 560px);
   display: flex;
   flex-direction: column;
   max-height: min(760px, calc(100vh - 32px));
   overflow: hidden;
+  border: 1px solid #d8e3e8;
+  background: #fff;
+  color: var(--lvt-ink, #16243e);
+  box-shadow: 0 27px 80px rgba(8, 29, 53, 0.3);
+}
+
+.work-chat-modal .work-kicker {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 10px;
+  padding: 5px 10px;
 }
 
 .work-chat-modal .work-modal-context {
@@ -2186,6 +2209,18 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 8px;
+}
+
+.work-chat-composer-actions .work-primary-button {
+  border: 0;
+  color: #fff;
+  background: var(--lvt-navy, #14355f);
+}
+
+.work-chat-composer-actions .work-primary-button:disabled {
+  color: #fff;
+  background: var(--lvt-navy, #14355f);
+  opacity: 0.55;
 }
 
 @media (max-width: 560px) {

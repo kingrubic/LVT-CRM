@@ -17,6 +17,7 @@ const messagesSource = readFileSync(new URL('../convex/workMessages.ts', import.
 const viewsSource = readFileSync(new URL('../src/work/WorkViews.jsx', import.meta.url), 'utf8');
 const iconsSource = readFileSync(new URL('../src/work/WorkCardIcons.jsx', import.meta.url), 'utf8');
 const modalSource = readFileSync(new URL('../src/work/WorkTaskChatModal.jsx', import.meta.url), 'utf8');
+const cssSource = readFileSync(new URL('../src/work/work.css', import.meta.url), 'utf8');
 
 const liveDoc = { active: true, createdBy: 'lead', status: 'approved' };
 const individualItem = {
@@ -272,4 +273,12 @@ test('work cards use icon controls and open document chat', () => {
   assert.match(modalSource, /anyApi\.workMessages\.create/);
   assert.match(modalSource, /Trao đổi công việc/);
   assert.match(modalSource, /dangerouslySetInnerHTML/);
+  assert.match(modalSource, /work-chat-backdrop/);
+  assert.match(cssSource, /\.work-chat-modal\s*\{[^}]*background:\s*#fff/s);
+  assert.match(cssSource, /\.work-modal-backdrop\.work-chat-backdrop\s*\{[^}]*background:\s*rgba\(13, 32, 58, 0\.58\)/s);
+  assert.match(cssSource, /\.work-chat-modal \.work-kicker\s*\{[^}]*align-self:\s*flex-start/s);
+  assert.match(cssSource, /\.work-chat-modal \.work-kicker\s*\{[^}]*padding:\s*5px 10px/s);
+  assert.match(cssSource, /\.work-chat-composer-actions \.work-primary-button\s*\{[^}]*color:\s*#fff/s);
+  assert.match(cssSource, /\.work-chat-composer-actions \.work-primary-button\s*\{[^}]*background:\s*var\(--lvt-navy, #14355f\)/s);
+  assert.match(cssSource, /\.work-chat-composer-actions \.work-primary-button:disabled\s*\{[^}]*color:\s*#fff/s);
 });

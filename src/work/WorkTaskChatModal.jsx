@@ -177,7 +177,7 @@ export default function WorkTaskChatModal({ documentId, title, onClose }) {
   const heading = title || data?.documentTitle || 'Công việc';
 
   return createPortal(
-    <div className="work-modal-backdrop" role="presentation" onClick={sending ? undefined : onClose}>
+    <div className="work-modal-backdrop work-chat-backdrop" role="presentation" onClick={sending ? undefined : onClose}>
       <section
         className="work-modal work-chat-modal"
         role="dialog"
