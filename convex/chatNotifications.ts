@@ -1,5 +1,5 @@
 import type { Id } from "./_generated/dataModel";
-import { CHAT_NOTIFICATION_LIST_LIMIT, CHAT_NOTIFICATION_TTL_MS } from "./chatMessagePolicy";
+import { CHAT_NOTIFICATION_LIST_LIMIT, CHAT_NOTIFICATION_TTL_MS } from "./chatMessagePolicy.ts";
 
 export async function insertChatNotificationEvents(
   ctx: { db: any },

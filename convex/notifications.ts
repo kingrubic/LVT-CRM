@@ -487,7 +487,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
                   isWorkNotificationAssignee({
                     user,
                     item,
-                    document,
+                    document: document as { approverUserIds?: string[] } | undefined,
                   }),
                 );
                 workChatAccess.set(
