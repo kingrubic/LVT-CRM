@@ -46,6 +46,11 @@ function WorkChatComposer({ disabled, sending, onSend }) {
     if (!editor || disabled) return;
     editor.focus();
     try {
+      document.execCommand('styleWithCSS', false, 'false');
+    } catch {
+      /* older browsers ignore styleWithCSS */
+    }
+    try {
       document.execCommand(command, false);
     } catch {
       /* execCommand is the lightweight composer already used by browsers */

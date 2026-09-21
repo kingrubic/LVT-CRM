@@ -57,7 +57,7 @@ function styleWrapFromAttrs(attrs: string): string[] {
   const style = String(attrs || "");
   const wraps: string[] = [];
   if (/font-weight\s*:\s*(bold|[7-9]00)/i.test(style)) wraps.push("b");
-  if (/font-style\s*:\s*italic/i.test(style)) wraps.push("i");
+  if (/font-style\s*:\s*(italic|oblique)/i.test(style)) wraps.push("i");
   if (/text-decoration[^;"']*underline/i.test(style)) wraps.push("u");
   return wraps;
 }

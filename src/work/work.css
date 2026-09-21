@@ -2106,6 +2106,7 @@
   font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  font-synthesis: weight style;
 }
 
 .work-chat-html p,
@@ -2186,6 +2187,14 @@
   background: #fbfdfc;
   font-size: 13px;
   line-height: 1.45;
+  font-synthesis: weight style;
+}
+
+.work-chat-editor i,
+.work-chat-editor em,
+.work-chat-html i,
+.work-chat-html em {
+  font-style: italic;
 }
 
 .work-chat-editor:focus {

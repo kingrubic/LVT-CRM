@@ -18,6 +18,7 @@ const viewsSource = readFileSync(new URL('../src/work/WorkViews.jsx', import.met
 const iconsSource = readFileSync(new URL('../src/work/WorkCardIcons.jsx', import.meta.url), 'utf8');
 const modalSource = readFileSync(new URL('../src/work/WorkTaskChatModal.jsx', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/work/work.css', import.meta.url), 'utf8');
+const mainSource = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 
 const liveDoc = { active: true, createdBy: 'lead', status: 'approved' };
 const individualItem = {
@@ -43,6 +44,11 @@ test('sanitize strips scripts and attributes but keeps basic rich text', () => {
   );
   assert.equal(fromSpan, '<b><i><u>Ok</u></i></b>');
   assert.equal(sanitizeWorkMessageHtml('<ul><li>Một</li><li>Hai</li></ul>'), '<ul><li>Một</li><li>Hai</li></ul>');
+  assert.equal(sanitizeWorkMessageHtml('<p><em>nghiêng</em></p>'), '<p><em>nghiêng</em></p>');
+  assert.equal(
+    sanitizeWorkMessageHtml('<span style="font-style: oblique">nghiêng</span>'),
+    '<i>nghiêng</i>',
+  );
 });
 
 test('prepareWorkMessageBody rejects empty and overlong messages', () => {
@@ -281,4 +287,9 @@ test('work cards use icon controls and open document chat', () => {
   assert.match(cssSource, /\.work-chat-composer-actions \.work-primary-button\s*\{[^}]*color:\s*#fff/s);
   assert.match(cssSource, /\.work-chat-composer-actions \.work-primary-button\s*\{[^}]*background:\s*var\(--lvt-navy, #14355f\)/s);
   assert.match(cssSource, /\.work-chat-composer-actions \.work-primary-button:disabled\s*\{[^}]*color:\s*#fff/s);
+  assert.match(modalSource, /command: 'italic'/);
+  assert.match(modalSource, /styleWithCSS/);
+  assert.match(cssSource, /\.work-chat-editor i/);
+  assert.match(cssSource, /font-style:\s*italic/);
+  assert.match(mainSource, /@fontsource-variable\/montserrat\/wght-italic\.css/);
 });

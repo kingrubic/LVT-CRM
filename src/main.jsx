@@ -4,6 +4,7 @@ import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
 import { anyApi } from 'convex/server';
 import '@fontsource-variable/montserrat';
+import '@fontsource-variable/montserrat/wght-italic.css';
 import './styles.css';
 import WorkReportsView from './reports/WorkReportsView';
 import DutyReportsView from './reports/DutyReportsView';
