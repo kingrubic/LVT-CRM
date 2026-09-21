@@ -13,7 +13,7 @@ import {
   shouldNotifyChatViewer,
 } from '../convex/chatMessagePolicy.ts';
 import { chatEventToFeedItem, mergeChatFeedItems } from '../convex/chatNotifications.ts';
-import { notificationOpensChat } from '../src/lib/chatAutoOpen.jsx';
+import { notificationOpensChat } from '../src/lib/chatNotificationOpen.js';
 
 const schemaSource = readFileSync(new URL('../convex/schema.ts', import.meta.url), 'utf8');
 const workMessagesSource = readFileSync(new URL('../convex/workMessages.ts', import.meta.url), 'utf8');

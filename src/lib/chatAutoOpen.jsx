@@ -1,4 +1,7 @@
 import { createContext, useContext, useState } from 'react';
+import { notificationOpensChat } from './chatNotificationOpen';
+
+export { chatNotificationOpensThread, notificationOpensChat } from './chatNotificationOpen';
 
 const ChatAutoOpenContext = createContext(null);
 
@@ -23,23 +26,6 @@ export function claimChatAutoOpen(token, entityId) {
   return true;
 }
 
-export function chatNotificationOpensThread(target, { idField, entityId }) {
-  if (!target?.openChat || !entityId) return false;
-  if (String(target.sourceId) !== String(entityId)) return false;
-  if (idField === 'documentId') return target.sourceType === 'work_chat';
-  if (idField === 'dutyId') return target.sourceType === 'duty_chat';
-  return false;
-}
-
-export function notificationOpensChat(focusTarget, sourceType) {
-  return Boolean(
-    focusTarget?.openChat
-    && focusTarget?.sourceType === sourceType
-    && focusTarget?.sourceId,
-  );
-}
-
-/** Open Trao đổi from the work/duty view so it does not depend on the card button being mounted. */
 export function useNotificationChatModal(focusTarget, sourceType) {
   const [dismissedToken, setDismissedToken] = useState(null);
   const entityId = notificationOpensChat(focusTarget, sourceType)
