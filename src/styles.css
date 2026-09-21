@@ -244,6 +244,7 @@ button { font: inherit; cursor: pointer; }
 .duty-card-main { flex: 1; min-width: 0; }
 .duty-card-main strong { display: block; margin-bottom: 6px; font-size: 15px; color: var(--lvt-ink); }
 .duty-expand-hint { flex: 0 0 auto; color: #5a6b8a; font-size: 11px; font-weight: 700; }
+.duty-expand-hint.is-icon { display: inline-grid; place-items: center; width: 28px; min-height: 28px; }
 .duty-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 14px; margin-top: 8px; color: #5a6b8a; font-size: 12px; }
 .duty-meta-grid.view-only { margin-top: 12px; }
 .duty-meta-grid.view-only div { display: grid; gap: 2px; }

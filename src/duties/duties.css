@@ -947,8 +947,10 @@
 .duty-expand-hint {
   display: inline-flex;
   align-items: center;
-  min-height: 27px;
-  padding: 0 9px;
+  justify-content: center;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0 7px;
   border: 1px solid #dce6e9;
   border-radius: 8px;
   color: #557082;
@@ -957,12 +959,24 @@
   font-weight: 850;
 }
 
+.duty-expand-hint.is-icon {
+  width: 28px;
+  padding: 0;
+}
+
+.duty-expand-hint svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 .duty-modern-card.is-open .duty-expand-hint {
   color: #126e66;
   background: #e8f5f1;
 }
 
-.duty-workspace .duty-actions {
+.duty-workspace .duty-actions,
+.duty-modern-card > .duty-actions {
   display: flex;
   justify-content: flex-end;
   gap: 7px;

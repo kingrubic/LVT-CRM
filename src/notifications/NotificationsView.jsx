@@ -34,7 +34,11 @@ function NotificationItem({ item, onOpen, onDismiss, canDelete, pending }) {
         <span className="notification-copy">
           <span className="notification-meta">
             <strong>{item.milestoneLabel}</strong>
-            <small>Hạn {formatDueAt(item.dueAt)}</small>
+            <small>
+              {item.sourceType === 'work_chat' || item.sourceType === 'duty_chat'
+                ? `Lúc ${formatDueAt(item.dueAt)}`
+                : `Hạn ${formatDueAt(item.dueAt)}`}
+            </small>
           </span>
           <strong className="notification-title">{item.title}</strong>
           <span className="notification-description">{item.description}</span>

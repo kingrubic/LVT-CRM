@@ -4,6 +4,7 @@ import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
 import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
 import { anyApi } from 'convex/server';
 import '@fontsource-variable/montserrat';
+import '@fontsource-variable/montserrat/wght-italic.css';
 import './styles.css';
 import WorkReportsView from './reports/WorkReportsView';
 import DutyReportsView from './reports/DutyReportsView';
@@ -32,6 +33,7 @@ import StarRating from './lib/StarRating.jsx';
 import AccountMenu from './profile/AccountMenu.jsx';
 import { ChangePasswordView, DevicesView, ProfileView } from './profile/ProfilePages.jsx';
 import { OwnAvatarProvider } from './profile/useOwnAvatar.jsx';
+import { ChatAutoOpenProvider } from './lib/chatAutoOpen.jsx';
 import './management/managementTheme.css';
 import './duties/duties.css';
 import DutyBulkImport from './duties/DutyBulkImport';
@@ -298,6 +300,7 @@ function AppShell({ session }) {
       menu,
       sourceType: item.sourceType,
       sourceId: String(item.sourceId),
+      openChat: item.sourceType === 'work_chat' || item.sourceType === 'duty_chat',
       token: Date.now(),
     });
     choose(menu);
@@ -307,6 +310,7 @@ function AppShell({ session }) {
 
   return (
     <OwnAvatarProvider user={user}>
+    <ChatAutoOpenProvider target={activeFocusTarget}>
     <div className={`shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside
         className={`shell-sidebar ${mobileOpen ? 'is-open' : ''}`}
@@ -470,6 +474,7 @@ function AppShell({ session }) {
         )}
       </main>
     </div>
+    </ChatAutoOpenProvider>
     </OwnAvatarProvider>
   );
 }

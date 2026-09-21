@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
 
-export const DUTY_NOTIFICATION_FOCUS_TYPES = ['duty', 'duty_assigned'];
+export const DUTY_NOTIFICATION_FOCUS_TYPES = ['duty', 'duty_assigned', 'duty_chat'];
 export const WORK_NOTIFICATION_FOCUS_TYPES = [
   'approval',
   'department_work',
   'personal_task',
   'completion_rejected',
   'work_assigned',
+  'work_chat',
 ];
 
 /**
@@ -33,7 +34,9 @@ export function useNotificationFocus(focusTarget, options = {}) {
     let clearHighlight;
 
     const tryFocus = () => {
-      const el = document.querySelector(`[data-focus-id="${String(focusTarget.sourceId)}"]`);
+      const el = document.querySelector(
+        `[data-focus-id="${String(focusTarget.sourceId)}"], [data-chat-entity="${String(focusTarget.sourceId)}"]`,
+      );
       if (!el) {
         if (attempts < 25) {
           attempts += 1;

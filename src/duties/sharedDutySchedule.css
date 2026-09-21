@@ -189,6 +189,37 @@
   cursor: pointer;
 }
 
+.lct-content-with-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lct-content-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.lct-row-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.lct-row-actions .work-icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+.lct-row-actions .work-icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
 .lct-content-button {
   appearance: none;
   display: inline;
