@@ -15,8 +15,10 @@ import {
 const schemaSource = readFileSync(new URL('../convex/schema.ts', import.meta.url), 'utf8');
 const messagesSource = readFileSync(new URL('../convex/workMessages.ts', import.meta.url), 'utf8');
 const viewsSource = readFileSync(new URL('../src/work/WorkViews.jsx', import.meta.url), 'utf8');
-const iconsSource = readFileSync(new URL('../src/work/WorkCardIcons.jsx', import.meta.url), 'utf8');
-const modalSource = readFileSync(new URL('../src/work/WorkTaskChatModal.jsx', import.meta.url), 'utf8');
+const iconsSource = readFileSync(new URL('../src/lib/CardActionIcons.jsx', import.meta.url), 'utf8');
+const workIconsSource = readFileSync(new URL('../src/work/WorkCardIcons.jsx', import.meta.url), 'utf8');
+const modalSource = readFileSync(new URL('../src/lib/DiscussionModal.jsx', import.meta.url), 'utf8');
+const workModalSource = readFileSync(new URL('../src/work/WorkTaskChatModal.jsx', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/work/work.css', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 
@@ -263,6 +265,8 @@ test('work cards use icon controls and open document chat', () => {
   assert.match(iconsSource, /function TrashIcon/);
   assert.match(iconsSource, /function ChevronRightIcon/);
   assert.match(iconsSource, /function ChevronDownIcon/);
+  assert.match(workIconsSource, /CardExpandHint as WorkExpandHint/);
+  assert.match(workIconsSource, /CardIconButton as WorkIconButton/);
   assert.match(viewsSource, /WorkExpandHint/);
   assert.match(viewsSource, /aria-label=\{cardOpen \? 'Thu gọn' : 'Chi tiết'\}/);
   assert.match(viewsSource, /title="Sửa"/);
@@ -275,9 +279,9 @@ test('work cards use icon controls and open document chat', () => {
   assert.doesNotMatch(viewsSource, /disabled=\{saving\}>Xóa<\/button>/);
   assert.match(modalSource, /contentEditable/);
   assert.match(modalSource, /insertUnorderedList/);
-  assert.match(modalSource, /anyApi\.workMessages\.list/);
-  assert.match(modalSource, /anyApi\.workMessages\.create/);
-  assert.match(modalSource, /Trao đổi công việc/);
+  assert.match(workModalSource, /anyApi\.workMessages\.list/);
+  assert.match(workModalSource, /anyApi\.workMessages\.create/);
+  assert.match(workModalSource, /Trao đổi công việc/);
   assert.match(modalSource, /dangerouslySetInnerHTML/);
   assert.match(modalSource, /work-chat-backdrop/);
   assert.match(cssSource, /\.work-chat-modal\s*\{[^}]*background:\s*#fff/s);

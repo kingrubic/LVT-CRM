@@ -1,5 +1,8 @@
 import { OfficialDutyHeader } from './DutyWorkspaceTabs';
 import { canOpenDutyContentEditor } from './sharedDutySchedule.js';
+import { DutyChatButton } from './DutyChatButton';
+import { CardIconButton, PencilIcon } from '../lib/CardActionIcons';
+import '../work/work.css';
 
 export default function DutyScheduleTable({
   title,
@@ -42,22 +45,43 @@ export default function DutyScheduleTable({
                 ) : null}
                 <td>{row.time}</td>
                 <td className={editable ? 'lct-content-cell is-editable' : 'lct-content-cell'}>
-                  {editable ? (
-                    <button
-                      type="button"
-                      className={`lct-content-button${row.content ? '' : ' is-empty'}`}
-                      title="Sửa công tác"
-                      aria-label={row.content ? `Sửa công tác: ${row.content}` : 'Sửa công tác'}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onEditContent(row);
-                      }}
-                    >
-                      {row.content}
-                    </button>
-                  ) : (
-                    row.content
-                  )}
+                  <div className="lct-content-with-actions">
+                    <div className="lct-content-text">
+                      {editable ? (
+                        <button
+                          type="button"
+                          className={`lct-content-button${row.content ? '' : ' is-empty'}`}
+                          title="Sửa công tác"
+                          aria-label={row.content ? `Sửa công tác: ${row.content}` : 'Sửa công tác'}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onEditContent(row);
+                          }}
+                        >
+                          {row.content}
+                        </button>
+                      ) : (
+                        row.content
+                      )}
+                    </div>
+                    {row.eventId ? (
+                      <span
+                        className="lct-row-actions"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <DutyChatButton dutyId={row.eventId} title={row.content} />
+                        {editable ? (
+                          <CardIconButton
+                            className="work-edit-button"
+                            title="Sửa"
+                            onClick={() => onEditContent(row)}
+                          >
+                            <PencilIcon />
+                          </CardIconButton>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
                 <td>{row.location}</td>
                 <td>{row.participants}</td>

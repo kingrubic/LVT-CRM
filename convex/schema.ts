@@ -447,6 +447,20 @@ export default defineSchema({
     .index("by_document", ["documentId"])
     .index("by_document_created", ["documentId", "createdAt"]),
   /**
+   * Threaded messages on a duty (công tác).
+   * Anyone who can already see the duty on the personal list may read and send.
+   */
+  dutyMessages: defineTable({
+    dutyId: v.string(),
+    authorUserId: v.string(),
+    bodyHtml: v.string(),
+    bodyText: v.string(),
+    active: v.boolean(),
+    ...timestamps,
+  })
+    .index("by_duty", ["dutyId"])
+    .index("by_duty_created", ["dutyId", "createdAt"]),
+  /**
    * Personnel fault records (Ghi nhận lỗi) with evidence on Google Drive.
    */
   personnelFaults: defineTable({

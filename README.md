@@ -100,7 +100,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 ### Cấu trúc menu
 
-1. **Chức năng chính**: Báo cáo (submenu: Công việc; Bán trú đang ẩn), **Lịch công tác** (tab **cá nhân** = lịch tuần/tháng/quý/năm kèm cột nhân sự như Báo cáo Công việc; tab **chung** = mẫu Word/PDF; nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★ — tạo mở trang riêng `/cong-tac/tao`), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**. **Hồ sơ nội bộ / Đổi mật khẩu / Quản lý thiết bị đăng nhập** mở từ avatar tròn góc trên (không còn mục Thông tin cá nhân trên sidebar). `/bao-cao/cong-tac` chuyển vào tab lịch chung.
+1. **Chức năng chính**: Báo cáo (submenu: Công việc; Bán trú đang ẩn), **Lịch công tác** (tab **cá nhân** = lịch tuần/tháng/quý/năm kèm cột nhân sự như Báo cáo Công việc; tab **chung** = mẫu Word/PDF; nút **Tạo công tác** / **Import Excel** cho admin/mod và tổ trưởng/tổ phó 2/3★ — tạo mở trang riêng `/cong-tac/tao`; thẻ/hàng công tác dùng icon Thu gọn/Chi tiết/Sửa/Xóa và icon chat trao đổi trên Convex — quyền chat = quyền thấy công tác trên lịch cá nhân: admin/mod, `view_all`, người tạo, người tham gia, cấp dưới cùng phòng), Công việc (nút **Tạo công việc** cùng nhóm), Lớp chủ nhiệm, Đánh giá nhân sự, Ghi nhận lỗi. **Thông báo** không nằm trên sidebar; mở từ chuông góc trên → **Xem toàn bộ**. **Hồ sơ nội bộ / Đổi mật khẩu / Quản lý thiết bị đăng nhập** mở từ avatar tròn góc trên (không còn mục Thông tin cá nhân trên sidebar). `/bao-cao/cong-tac` chuyển vào tab lịch chung.
 2. **Quản trị hệ thống**: đang ẩn (Quản lý công tác / bán trú / công việc đã gộp hoặc tạm tắt).
 3. **Thiết lập tối cao** (chỉ Administrator): Thiết lập người dùng, phòng ban, nhóm quyền, chức vụ, **loại văn bản**, **Thiết lập hiển thị**. Thiết lập địa điểm đã gỡ; địa điểm công tác nhập text tự do.
 
@@ -129,6 +129,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `userImportUploads` | File Excel import user tạm (Convex Storage, TTL 1 giờ) |
 | `dutyImportUploads` | File Excel import công tác tạm (Convex Storage, TTL 1 giờ) |
 | `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |
+| `dutyMessages` | Chat theo công tác (HTML đã lọc, quyền xem = quyền thấy công tác trên lịch cá nhân) |
 | `personalReminders` | Nhắc nhở cá nhân theo user + công tác/công việc |
 | `boardingPeriods` | Kỳ bán trú (menu đang ẩn) |
 | `officeDocuments` | Công việc đã giao, tên, tệp đính kèm tùy chọn |
@@ -141,7 +142,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `workMessages.ts`, `workMessagePolicy.ts`, `notifications.ts`, `notificationSettings.ts`, `personalReminders.ts`, `personalReminderPolicy.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `dutyMessages.ts`, `dutyMessagePolicy.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `workMessages.ts`, `workMessagePolicy.ts`, `notifications.ts`, `notificationSettings.ts`, `personalReminders.ts`, `personalReminderPolicy.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
 
 Cấu trúc frontend gợi ý:
 

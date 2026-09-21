@@ -975,7 +975,8 @@
   background: #e8f5f1;
 }
 
-.duty-workspace .duty-actions {
+.duty-workspace .duty-actions,
+.duty-modern-card > .duty-actions {
   display: flex;
   justify-content: flex-end;
   gap: 7px;

@@ -12,11 +12,19 @@ import {
 } from '../duties/dutyDisplay';
 import DutyEditModal from '../duties/DutyEditModal';
 import DutyScheduleTable from '../duties/DutyScheduleTable';
+import { DutyChatButton } from '../duties/DutyChatButton';
+import {
+  CardExpandHint,
+  CardIconButton,
+  PencilIcon,
+  TrashIcon,
+} from '../lib/CardActionIcons';
 import {
   buildSharedScheduleRows,
   toIsoDate as toSharedIsoDate,
 } from '../duties/sharedDutySchedule.js';
 import '../duties/sharedDutySchedule.css';
+import '../work/work.css';
 import PersonalReminderPanel, {
   PersonalReminderLayout,
   reminderMapFromList,
@@ -312,20 +320,29 @@ function EventDetail({
           </ul>
         </div>
       ) : null}
-      {event.canManage && (onEdit || onDelete) ? (
-        <div className="report-detail-actions">
-          {onEdit ? (
-            <button type="button" className="work-outline-button" disabled={Boolean(pending)} onClick={() => onEdit(event)}>
-              Sửa
-            </button>
-          ) : null}
-          {onDelete ? (
-            <button type="button" className="work-reject-button" disabled={Boolean(pending)} onClick={() => onDelete(event)}>
-              Xóa
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="report-detail-actions">
+        <DutyChatButton dutyId={event._id} title={event.title || event.content} />
+        {event.canManage && onEdit ? (
+          <CardIconButton
+            className="work-edit-button"
+            title="Sửa"
+            disabled={Boolean(pending)}
+            onClick={() => onEdit(event)}
+          >
+            <PencilIcon />
+          </CardIconButton>
+        ) : null}
+        {event.canManage && onDelete ? (
+          <CardIconButton
+            className="work-delete-button"
+            title="Xóa"
+            disabled={Boolean(pending)}
+            onClick={() => onDelete(event)}
+          >
+            <TrashIcon />
+          </CardIconButton>
+        ) : null}
+      </div>
     </aside>
   );
 }
@@ -448,6 +465,17 @@ function DutyReportsViewBody({
   const openDutyEditor = (event) => {
     if (!event?.canManage) return;
     setEditingEvent(event);
+  };
+  const deleteDuty = (event) => {
+    if (!event?.canManage) return;
+    if (!window.confirm('Xóa công tác này?')) return;
+    void runMutation(`del-${event._id}`, async () => {
+      await removeDuty({ id: event._id });
+      setSelectedEvent((current) => (String(current?._id) === String(event._id) ? null : current));
+    });
+  };
+  const toggleSelectedEvent = (event) => {
+    setSelectedEvent((current) => (String(current?._id) === String(event._id) ? null : event));
   };
   const eventFromScheduleRow = (row) => (
     events.find((item) => String(item._id) === String(row.eventId)) || null
@@ -578,8 +606,10 @@ function DutyReportsViewBody({
               {mode === 'list' ? (
                 events.length ? (
                   <div className="duty-modern-list report-duty-list">
-                    {events.map((event) => (
-                      <article className="duty-modern-card" key={event._id}>
+                    {events.map((event) => {
+                      const cardOpen = String(selectedEvent?._id || '') === String(event._id);
+                      return (
+                      <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={event._id}>
                         <PersonalReminderLayout
                           show={showDutyReminders}
                           panel={(
@@ -592,12 +622,44 @@ function DutyReportsViewBody({
                             />
                           )}
                         >
-                          <button type="button" className="duty-card-toggle" onClick={() => setSelectedEvent(event)}>
+                          <button
+                            type="button"
+                            className="duty-card-toggle"
+                            onClick={() => toggleSelectedEvent(event)}
+                            aria-expanded={cardOpen}
+                            aria-label={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                            title={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                          >
                             <DutyListSummary item={event} />
+                            <CardExpandHint open={cardOpen} />
                           </button>
                         </PersonalReminderLayout>
+                        <div className="row-actions duty-actions">
+                          <DutyChatButton dutyId={event._id} title={event.title || event.content} />
+                          {event.canManage ? (
+                            <>
+                              <CardIconButton
+                                className="work-edit-button"
+                                title="Sửa"
+                                disabled={Boolean(pending)}
+                                onClick={() => openDutyEditor(event)}
+                              >
+                                <PencilIcon />
+                              </CardIconButton>
+                              <CardIconButton
+                                className="work-delete-button"
+                                title="Xóa"
+                                disabled={Boolean(pending)}
+                                onClick={() => deleteDuty(event)}
+                              >
+                                <TrashIcon />
+                              </CardIconButton>
+                            </>
+                          ) : null}
+                        </div>
                       </article>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <DutyListEmpty
@@ -635,13 +697,7 @@ function DutyReportsViewBody({
             pending={pending}
             canManageSubordinates={Boolean(data.canManageSubordinates)}
             onEdit={openDutyEditor}
-            onDelete={(event) => {
-              if (!window.confirm('Xóa công tác này?')) return;
-              void runMutation(`del-${event._id}`, async () => {
-                await removeDuty({ id: event._id });
-                setSelectedEvent(null);
-              });
-            }}
+            onDelete={deleteDuty}
             onMarkAttendance={
               attendanceEnabled && (data.isSelectedSelf ? data.canEdit : data.canManageSubordinates)
                 ? (event, status) => {
