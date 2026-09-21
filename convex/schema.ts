@@ -465,6 +465,23 @@ export default defineSchema({
     .index("by_duty_created", ["dutyId", "createdAt"])
     .index("by_created", ["createdAt"]),
   /**
+   * Per-recipient bell rows for work/duty chat. Written on message create
+   * so the header feed does not depend on deadline-source toggles.
+   */
+  chatNotificationEvents: defineTable({
+    userId: v.string(),
+    kind: v.union(v.literal("work"), v.literal("duty")),
+    sourceType: v.union(v.literal("work_chat"), v.literal("duty_chat")),
+    sourceId: v.string(),
+    messageId: v.string(),
+    title: v.string(),
+    description: v.string(),
+    active: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_message", ["messageId"]),
+  /**
    * Personnel fault records (Ghi nhận lỗi) with evidence on Google Drive.
    */
   personnelFaults: defineTable({

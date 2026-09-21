@@ -10,11 +10,13 @@ import {
   resolveUserMenuAccess,
 } from "./lib";
 import {
+  buildChatNotificationItem,
   canRecallChatMessage,
   evaluateChatRecall,
   isChatMessageRecalled,
   recallErrorCode,
 } from "./chatMessagePolicy";
+import { deactivateChatNotificationEvents, insertChatNotificationEvents } from "./chatNotifications";
 import {
   canAccessWorkChat,
   prepareWorkMessageBody,
@@ -194,10 +196,28 @@ export const create = mutation({
       recipientIds.push(String(user._id));
     }
     if (recipientIds.length) {
+      const feedItem = buildChatNotificationItem({
+        kind: "work",
+        messageId: String(messageId),
+        entityId: String(args.documentId),
+        entityTitle: String(document?.title || document?.fileName || "Công việc"),
+        authorName: displayName(actor.user),
+        bodyText: prepared.bodyText,
+        createdAt: now,
+      });
+      await insertChatNotificationEvents(ctx, {
+        recipientUserIds: recipientIds,
+        kind: "work",
+        sourceId: String(args.documentId),
+        messageId: String(messageId),
+        title: feedItem.title,
+        description: feedItem.description,
+        createdAt: now,
+      });
       await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
         userIds: recipientIds,
-        title: `${displayName(actor.user)} đã trao đổi`,
-        body: String(document?.title || document?.fileName || prepared.bodyText || "Công việc"),
+        title: feedItem.title,
+        body: feedItem.description,
         kind: "work",
         sourceType: "work_chat",
         sourceId: String(args.documentId),
@@ -227,6 +247,7 @@ export const recall = mutation({
     if (!decision.ok) throw new Error(recallErrorCode("work", decision.code));
     const now = Date.now();
     await ctx.db.patch(row._id, { recalledAt: now, updatedAt: now });
+    await deactivateChatNotificationEvents(ctx, String(row._id));
     return { recalled: true };
   },
 });

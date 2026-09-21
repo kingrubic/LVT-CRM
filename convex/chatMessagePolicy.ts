@@ -81,17 +81,23 @@ export function buildChatNotificationItem(args: {
     milestoneHours: 0,
     milestoneLabel: "Tin nhắn mới",
     availableAt: args.createdAt,
+    createdAt: args.createdAt,
   };
 }
 
-export function selectVisibleChatNotifications<T extends { createdAt: number }>(
+function chatNotificationTime(item: { createdAt?: number; availableAt?: number; dueAt?: number }) {
+  const value = Number(item.availableAt ?? item.createdAt ?? item.dueAt);
+  return Number.isFinite(value) ? value : 0;
+}
+
+export function selectVisibleChatNotifications<T extends { createdAt?: number; availableAt?: number; dueAt?: number }>(
   items: T[],
   now = Date.now(),
 ): T[] {
   const cutoff = now - CHAT_NOTIFICATION_TTL_MS;
   return items
-    .filter((item) => item.createdAt >= cutoff)
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .filter((item) => chatNotificationTime(item) >= cutoff)
+    .sort((a, b) => chatNotificationTime(b) - chatNotificationTime(a))
     .slice(0, CHAT_NOTIFICATION_LIST_LIMIT);
 }
 

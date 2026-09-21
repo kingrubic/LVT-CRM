@@ -4,11 +4,13 @@ import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { dutyListTitle, isDutyParticipant } from "./assignmentPolicy";
 import {
+  buildChatNotificationItem,
   canRecallChatMessage,
   evaluateChatRecall,
   isChatMessageRecalled,
   recallErrorCode,
 } from "./chatMessagePolicy";
+import { deactivateChatNotificationEvents, insertChatNotificationEvents } from "./chatNotifications";
 import { requireDutiesAccess } from "./duties";
 import { isOperationalManagerRole, isSameDepartmentSubordinate, resolveUserMenuAccess } from "./lib";
 import { canAccessDutyChat, prepareDutyMessageBody } from "./dutyMessagePolicy";
@@ -152,10 +154,28 @@ export const create = mutation({
       recipientIds.push(String(candidate._id));
     }
     if (recipientIds.length) {
+      const feedItem = buildChatNotificationItem({
+        kind: "duty",
+        messageId: String(messageId),
+        entityId: String(args.dutyId),
+        entityTitle: dutyListTitle(duty),
+        authorName: displayName(user),
+        bodyText: prepared.bodyText,
+        createdAt: now,
+      });
+      await insertChatNotificationEvents(ctx, {
+        recipientUserIds: recipientIds,
+        kind: "duty",
+        sourceId: String(args.dutyId),
+        messageId: String(messageId),
+        title: feedItem.title,
+        description: feedItem.description,
+        createdAt: now,
+      });
       await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
         userIds: recipientIds,
-        title: `${displayName(user)} đã trao đổi`,
-        body: dutyListTitle(duty),
+        title: feedItem.title,
+        body: feedItem.description,
         kind: "duty",
         sourceType: "duty_chat",
         sourceId: String(args.dutyId),
@@ -185,6 +205,7 @@ export const recall = mutation({
     if (!decision.ok) throw new Error(recallErrorCode("duty", decision.code));
     const now = Date.now();
     await ctx.db.patch(row._id, { recalledAt: now, updatedAt: now });
+    await deactivateChatNotificationEvents(ctx, String(row._id));
     return { recalled: true };
   },
 });
