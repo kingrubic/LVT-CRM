@@ -12,12 +12,16 @@ import {
   selectVisibleChatNotifications,
   shouldNotifyChatViewer,
 } from '../convex/chatMessagePolicy.ts';
+import { chatEventToFeedItem, mergeChatFeedItems } from '../convex/chatNotifications.ts';
+import { notificationOpensChat } from '../src/lib/chatNotificationOpen.js';
 
 const schemaSource = readFileSync(new URL('../convex/schema.ts', import.meta.url), 'utf8');
 const workMessagesSource = readFileSync(new URL('../convex/workMessages.ts', import.meta.url), 'utf8');
 const dutyMessagesSource = readFileSync(new URL('../convex/dutyMessages.ts', import.meta.url), 'utf8');
 const notificationsSource = readFileSync(new URL('../convex/notifications.ts', import.meta.url), 'utf8');
 const modalSource = readFileSync(new URL('../src/lib/DiscussionModal.jsx', import.meta.url), 'utf8');
+const workViewsSource = readFileSync(new URL('../src/work/WorkViews.jsx', import.meta.url), 'utf8');
+const dutyViewSource = readFileSync(new URL('../src/reports/DutyReportsView.jsx', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/work/work.css', import.meta.url), 'utf8');
 const focusSource = readFileSync(new URL('../src/notifications/useNotificationFocus.js', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -89,21 +93,68 @@ test('chat notifications skip the sender, recalled rows, and people who cannot s
   assert.equal(item.sourceId, 'doc-1');
   assert.match(item.title, /Nguyễn Văn A đã trao đổi: Soạn báo cáo/);
   assert.equal(item.milestoneLabel, 'Tin nhắn mới');
+  assert.equal(item.createdAt, now);
+  assert.equal(item.availableAt, now);
   assert.equal(selectVisibleChatNotifications([{ createdAt: now - 20 * 24 * 60 * 60 * 1000 }], now).length, 0);
   assert.equal(selectVisibleChatNotifications([{ createdAt: now }], now).length, 1);
+  assert.equal(selectVisibleChatNotifications([item], now).length, 1);
+  assert.equal(
+    selectVisibleChatNotifications([{ availableAt: now, dueAt: now }], now).length,
+    1,
+  );
+});
+
+test('stored chat events merge into the same bell feed keys', () => {
+  const stored = chatEventToFeedItem({
+    kind: 'work',
+    sourceType: 'work_chat',
+    sourceId: 'doc-1',
+    messageId: 'm1',
+    title: 'Admin đã trao đổi: Soạn báo cáo',
+    description: 'Nội dung',
+    createdAt: now,
+  });
+  const computed = buildChatNotificationItem({
+    kind: 'work',
+    messageId: 'm1',
+    entityId: 'doc-1',
+    entityTitle: 'Soạn báo cáo',
+    authorName: 'Admin',
+    bodyText: 'Nội dung khác',
+    createdAt: now,
+  });
+  assert.equal(stored.key, computed.key);
+  assert.equal(stored.sourceType, 'work_chat');
+  const merged = mergeChatFeedItems([[stored], [computed]], now);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].description, 'Nội dung');
+  const expired = mergeChatFeedItems(
+    [[{ key: 'old', availableAt: now - 20 * 24 * 60 * 60 * 1000 }]],
+    now,
+  );
+  assert.equal(expired.length, 0);
 });
 
 test('Convex recall and feed wiring stay server-side', () => {
   assert.match(schemaSource, /recalledAt:\s*v\.optional\(v\.number\(\)\)/);
+  assert.match(schemaSource, /chatNotificationEvents:\s*defineTable/);
   assert.match(workMessagesSource, /export const recall = mutation/);
   assert.match(workMessagesSource, /evaluateChatRecall/);
   assert.match(workMessagesSource, /WORK_CHAT_RECALL/);
   assert.match(workMessagesSource, /sourceType: "work_chat"/);
+  assert.match(workMessagesSource, /insertChatNotificationEvents/);
+  assert.match(workMessagesSource, /deactivateChatNotificationEvents/);
   assert.match(dutyMessagesSource, /export const recall = mutation/);
   assert.match(dutyMessagesSource, /DUTY_CHAT_RECALL/);
   assert.match(dutyMessagesSource, /sourceType: "duty_chat"/);
+  assert.match(dutyMessagesSource, /insertChatNotificationEvents/);
+  assert.match(dutyMessagesSource, /deactivateChatNotificationEvents/);
   assert.match(notificationsSource, /buildChatNotificationItem/);
   assert.match(notificationsSource, /shouldNotifyChatViewer/);
+  assert.match(notificationsSource, /canSeeWorkModule/);
+  assert.match(notificationsSource, /canSeeDutiesModule/);
+  assert.match(notificationsSource, /chatNotificationEvents/);
+  assert.match(notificationsSource, /mergeChatFeedItems/);
   assert.match(notificationsSource, /work_chat/);
   assert.match(notificationsSource, /duty_chat/);
 });
@@ -122,4 +173,25 @@ test('shared modal shows recalled placeholder and author-only X', () => {
   assert.match(focusSource, /data-chat-entity/);
   assert.match(mainSource, /openChat:/);
   assert.match(mainSource, /ChatAutoOpenProvider/);
+});
+
+test('bell click opens Trao đổi from the work/duty view, not only the card button', () => {
+  const target = {
+    openChat: true,
+    sourceType: 'work_chat',
+    sourceId: 'doc-1',
+    token: 1,
+  };
+  assert.equal(notificationOpensChat(target, 'work_chat'), true);
+  assert.equal(notificationOpensChat(target, 'duty_chat'), false);
+  assert.equal(notificationOpensChat({ ...target, openChat: false }, 'work_chat'), false);
+  assert.match(workViewsSource, /useNotificationChatModal\(focusTarget, 'work_chat'\)/);
+  assert.match(workViewsSource, /WorkTaskChatModal/);
+  assert.match(workViewsSource, /data-document-id/);
+  assert.match(workViewsSource, /findWorkChatFocusItem/);
+  assert.match(dutyViewSource, /DutyChatModal/);
+  assert.match(dutyViewSource, /useNotificationChatModal/);
+  assert.match(dutyViewSource, /sourceType: 'duty_chat'/);
+  assert.match(mainSource, /sourceType === 'duty_chat'/);
+  assert.match(focusSource, /data-document-id/);
 });

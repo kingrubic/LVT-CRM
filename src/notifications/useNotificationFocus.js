@@ -34,8 +34,9 @@ export function useNotificationFocus(focusTarget, options = {}) {
     let clearHighlight;
 
     const tryFocus = () => {
+      const id = String(focusTarget.sourceId);
       const el = document.querySelector(
-        `[data-focus-id="${String(focusTarget.sourceId)}"], [data-chat-entity="${String(focusTarget.sourceId)}"]`,
+        `[data-focus-id="${id}"], [data-chat-entity="${id}"], [data-document-id="${id}"]`,
       );
       if (!el) {
         if (attempts < 25) {

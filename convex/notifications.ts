@@ -24,6 +24,7 @@ import {
   selectVisibleChatNotifications,
   shouldNotifyChatViewer,
 } from "./chatMessagePolicy";
+import { chatEventToFeedItem, mergeChatFeedItems } from "./chatNotifications";
 import { canAccessDutyChat } from "./dutyMessagePolicy";
 import { canAccessWorkChat } from "./workMessagePolicy";
 import { createMilestones, mergeMilestoneItems, unionMilestoneHours } from "./notificationSettings";
@@ -89,12 +90,12 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     getSourceNotificationMilestones(ctx, NOTIFICATION_DUTY_MILESTONES_SETTING_KEY),
     getSourceNotificationMilestones(ctx, NOTIFICATION_WORK_MILESTONES_SETTING_KEY),
   ]);
-  const canUseDuties =
-    dutiesEnabled &&
-    (isOperationalManagerRole(user.role) || menuAccess.duties !== "hidden");
-  const canUseWork =
-    workEnabled &&
-    (isOperationalManagerRole(user.role) || menuAccess.work !== "hidden");
+  const canSeeDutiesModule =
+    isOperationalManagerRole(user.role) || menuAccess.duties !== "hidden";
+  const canSeeWorkModule =
+    isOperationalManagerRole(user.role) || menuAccess.work !== "hidden";
+  const canUseDuties = dutiesEnabled && canSeeDutiesModule;
+  const canUseWork = workEnabled && canSeeWorkModule;
   const personalRows = await ctx.db
     .query("personalReminders")
     .withIndex("by_user", (q: any) => q.eq("userId", String(user._id)))
@@ -102,19 +103,32 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   const enabledPersonal = personalRows.filter(
     (row: any) => row.enabled && Array.isArray(row.milestonesHours) && row.milestonesHours.length,
   );
-  const needDuties = canUseDuties || enabledPersonal.some((row: any) => row.kind === "duty");
-  const needWork = canUseWork || enabledPersonal.some((row: any) => row.kind === "work");
+  const needDuties =
+    canUseDuties ||
+    canSeeDutiesModule ||
+    enabledPersonal.some((row: any) => row.kind === "duty");
+  const needWork =
+    canUseWork ||
+    canSeeWorkModule ||
+    enabledPersonal.some((row: any) => row.kind === "work");
 
-  const [duties, documents, workItems, personalTasks, positions, departments, users, workMessages, dutyMessages] = await Promise.all([
+  const [duties, documents, workItems, personalTasks, positions, departments, users, workMessages, dutyMessages, storedChatEvents] = await Promise.all([
     needDuties ? ctx.db.query("duties").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("officeDocuments").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("workItems").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("personalTasks").collect() : Promise.resolve([]),
     ctx.db.query("positions").collect(),
     ctx.db.query("departments").collect(),
-    canUseWork || canUseDuties ? ctx.db.query("users").collect() : Promise.resolve([]),
-    canUseWork ? ctx.db.query("workMessages").collect() : Promise.resolve([]),
-    canUseDuties ? ctx.db.query("dutyMessages").collect() : Promise.resolve([]),
+    canSeeWorkModule || canSeeDutiesModule || canUseWork || canUseDuties
+      ? ctx.db.query("users").collect()
+      : Promise.resolve([]),
+    canSeeWorkModule ? ctx.db.query("workMessages").collect() : Promise.resolve([]),
+    canSeeDutiesModule ? ctx.db.query("dutyMessages").collect() : Promise.resolve([]),
+    ctx.db
+      .query("chatNotificationEvents")
+      .withIndex("by_user_created", (q: any) => q.eq("userId", String(user._id)))
+      .order("desc")
+      .take(80),
   ]);
   const departmentMap = new Map(
     departments.map((department: any) => [String(department._id), department.name]),
@@ -435,10 +449,10 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     const row = usersById.get(String(id)) as { name?: string; email?: string } | undefined;
     return String(row?.name || row?.email || "Người dùng").trim() || "Người dùng";
   };
-  const visibilityMode = canUseWork ? await getWorkVisibilityMode(ctx) : null;
+  const visibilityMode = canSeeWorkModule ? await getWorkVisibilityMode(ctx) : null;
   const workItemsByDocument = new Map<string, any[]>();
   const personalTasksByDocument = new Map<string, any[]>();
-  if (canUseWork) {
+  if (canSeeWorkModule) {
     for (const item of activeWorkItems) {
       const list = workItemsByDocument.get(String(item.documentId)) || [];
       list.push(item);
@@ -454,22 +468,31 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   }
   const workChatAccess = new Map<string, boolean>();
   const dutyChatAccess = new Map<string, boolean>();
-  const dutySubordinates = canUseDuties
+  const dutySubordinates = canSeeDutiesModule
     ? users.filter(
         (target: any) =>
           target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
       )
     : [];
-  const chatItems = selectVisibleChatNotifications(
+  const computedChatItems = selectVisibleChatNotifications(
     [
-      ...(canUseWork
+      ...(canSeeWorkModule
         ? workMessages
             .filter((row: any) => {
               const documentId = String(row.documentId || "");
               if (!workChatAccess.has(documentId)) {
                 const document = documentsById.get(documentId);
+                const items = workItemsByDocument.get(documentId) || [];
+                const assigned = items.some((item: any) =>
+                  isWorkNotificationAssignee({
+                    user,
+                    item,
+                    document: document as { approverUserIds?: string[] } | undefined,
+                  }),
+                );
                 workChatAccess.set(
                   documentId,
+                  assigned ||
                   canAccessWorkChat({
                     actorUserId: String(user._id),
                     actorRole: user.role,
@@ -477,7 +500,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
                     actorDepartmentId: String(user.departmentId || ""),
                     visibilityMode: visibilityMode || "school",
                     document: document as { active?: boolean; createdBy?: string; status?: string } | undefined,
-                    workItems: workItemsByDocument.get(documentId) || [],
+                    workItems: items,
                     personalTasks: personalTasksByDocument.get(documentId) || [],
                     usersById: usersById as Map<string, { status?: string }>,
                   }),
@@ -504,7 +527,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
               });
             })
         : []),
-      ...(canUseDuties
+      ...(canSeeDutiesModule
         ? dutyMessages
             .filter((row: any) => {
               const dutyId = String(row.dutyId || "");
@@ -546,6 +569,14 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     ],
     now,
   );
+  const storedChatItems = storedChatEvents
+    .filter((row: any) => {
+      if (row.active === false) return false;
+      if (row.kind === "duty") return canSeeDutiesModule;
+      return canSeeWorkModule;
+    })
+    .map((row: any) => chatEventToFeedItem(row));
+  const chatItems = mergeChatFeedItems([storedChatItems, computedChatItems], now);
   const milestones = [...newDutyAssignments, ...newWorkAssignments, ...pendingApprovalItems, ...chatItems, ...scheduledMilestones]
     .sort((a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"));
   const [reads, dismissals] = await Promise.all([

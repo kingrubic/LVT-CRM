@@ -832,6 +832,8 @@ function DutiesAdminView({
           onImport={openImportPanel}
           onEdit={(event) => startEdit({ _id: event._id })}
           focusDutyId={focusTarget?.sourceId}
+          openChat={Boolean(focusTarget?.openChat && focusTarget?.sourceType === 'duty_chat')}
+          focusToken={focusTarget?.token}
         />
       ) : null}
     </section>
@@ -1053,6 +1055,8 @@ function DutiesUserView({
           onImport={openImportPanel}
           onEdit={(event) => startEdit({ _id: event._id })}
           focusDutyId={focusTarget?.sourceId}
+          openChat={Boolean(focusTarget?.openChat && focusTarget?.sourceType === 'duty_chat')}
+          focusToken={focusTarget?.token}
         />
       ) : null}
     </section>

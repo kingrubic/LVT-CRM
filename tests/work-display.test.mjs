@@ -10,6 +10,7 @@ import {
   emptyWorkSearch,
   filterWorksBySearch,
   filterWorksByTab,
+  findWorkChatFocusItem,
   formatWorkDate,
   isWorkCompleted,
   isWorkPast,
@@ -181,6 +182,18 @@ test('tìm kiếm nâng cao công việc theo phòng ban, cá nhân và hạn ch
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, person: 'anh vu' }).map((item) => item._id), ['a']);
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, dateFrom: '2026-08-22', dateTo: '2026-08-22' }).map((item) => item._id), ['b']);
   assert.deepEqual(filterWorksBySearch([mine, created], { ...base, query: 'hop', department: 'to chuc' }).map((item) => item._id), []);
+});
+
+test('Trao đổi notification matches the work card by document id, not work-item id', () => {
+  const match = findWorkChatFocusItem({
+    myTasks: [{ _id: 'wi-1', documentId: 'doc-9', content: 'Soạn báo cáo', documentTitle: 'Bao_gia.pdf' }],
+    personalTasks: [],
+    departmentWorks: [],
+  }, 'doc-9');
+  assert.equal(match.expandId, 'wi-1');
+  assert.equal(match.title, 'Bao_gia.pdf');
+  assert.equal(findWorkChatFocusItem({ documents: [{ _id: 'doc-9', fileName: 'Bao_gia.pdf' }] }, 'doc-9').expandId, 'doc-9');
+  assert.equal(findWorkChatFocusItem({ myTasks: [{ _id: 'wi-1', documentId: 'other' }] }, 'doc-9'), null);
 });
 
 test('mỗi tab Công việc hiện badge số việc', () => {

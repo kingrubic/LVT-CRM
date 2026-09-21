@@ -1,19 +1,35 @@
 import { anyApi } from 'convex/server';
-import { DiscussionChatButton } from '../lib/DiscussionModal';
+import DiscussionModal, { DiscussionChatButton } from '../lib/DiscussionModal';
+
+const DUTY_CHAT = {
+  listQuery: anyApi.dutyMessages.list,
+  createMutation: anyApi.dutyMessages.create,
+  recallMutation: anyApi.dutyMessages.recall,
+  idField: 'dutyId',
+  titleField: 'dutyTitle',
+  contextText: 'Tin nhắn hiển thị cho người đã thấy công tác này.',
+  fallbackTitle: 'Công tác',
+};
 
 export function DutyChatButton({ dutyId, title }) {
   return (
     <DiscussionChatButton
       entityId={dutyId}
       title={title}
-      listQuery={anyApi.dutyMessages.list}
-      createMutation={anyApi.dutyMessages.create}
-      recallMutation={anyApi.dutyMessages.recall}
-      idField="dutyId"
-      titleField="dutyTitle"
       buttonTitle="Trao đổi công tác"
-      contextText="Tin nhắn hiển thị cho người đã thấy công tác này."
-      fallbackTitle="Công tác"
+      {...DUTY_CHAT}
+    />
+  );
+}
+
+export function DutyChatModal({ dutyId, title, onClose }) {
+  if (!dutyId) return null;
+  return (
+    <DiscussionModal
+      entityId={dutyId}
+      title={title}
+      onClose={onClose}
+      {...DUTY_CHAT}
     />
   );
 }

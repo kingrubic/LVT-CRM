@@ -1,4 +1,7 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useState } from 'react';
+import { notificationOpensChat } from './chatNotificationOpen';
+
+export { chatNotificationOpensThread, notificationOpensChat } from './chatNotificationOpen';
 
 const ChatAutoOpenContext = createContext(null);
 
@@ -23,10 +26,15 @@ export function claimChatAutoOpen(token, entityId) {
   return true;
 }
 
-export function chatNotificationOpensThread(target, { idField, entityId }) {
-  if (!target?.openChat || !entityId) return false;
-  if (String(target.sourceId) !== String(entityId)) return false;
-  if (idField === 'documentId') return target.sourceType === 'work_chat';
-  if (idField === 'dutyId') return target.sourceType === 'duty_chat';
-  return false;
+export function useNotificationChatModal(focusTarget, sourceType) {
+  const [dismissedToken, setDismissedToken] = useState(null);
+  const entityId = notificationOpensChat(focusTarget, sourceType)
+    ? String(focusTarget.sourceId)
+    : '';
+  const open = Boolean(entityId) && dismissedToken !== focusTarget?.token;
+  return {
+    open,
+    entityId: open ? entityId : '',
+    close: () => setDismissedToken(focusTarget?.token ?? null),
+  };
 }

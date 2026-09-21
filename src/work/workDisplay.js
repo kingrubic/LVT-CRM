@@ -147,6 +147,33 @@ export function emptyWorkSearch() {
   };
 }
 
+/** Find the visible work card for a Trao đổi notification (sourceId = officeDocuments id). */
+export function findWorkChatFocusItem(lists, documentId) {
+  const id = String(documentId || '');
+  if (!id) return null;
+  const documents = Array.isArray(lists?.documents) ? lists.documents : [];
+  const document = documents.find((row) => String(row._id) === id);
+  if (document) {
+    return {
+      item: document,
+      expandId: document._id,
+      title: document.title || document.fileName || 'Công việc',
+    };
+  }
+  const assigned = [
+    ...(Array.isArray(lists?.myTasks) ? lists.myTasks : []),
+    ...(Array.isArray(lists?.departmentWorks) ? lists.departmentWorks : []),
+    ...(Array.isArray(lists?.personalTasks) ? lists.personalTasks : []),
+  ];
+  const row = assigned.find((item) => String(item.documentId) === id);
+  if (!row) return null;
+  return {
+    item: row,
+    expandId: row._id,
+    title: row.documentTitle || row.document?.title || row.content || row.title || 'Công việc',
+  };
+}
+
 function normalizeWorkSearchText(value) {
   return String(value || '')
     .normalize('NFD')
