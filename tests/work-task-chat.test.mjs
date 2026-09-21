@@ -281,6 +281,7 @@ test('work cards use icon controls and open document chat', () => {
   assert.match(modalSource, /insertUnorderedList/);
   assert.match(workModalSource, /anyApi\.workMessages\.list/);
   assert.match(workModalSource, /anyApi\.workMessages\.create/);
+  assert.match(workModalSource, /anyApi\.workMessages\.recall/);
   assert.match(workModalSource, /Trao đổi công việc/);
   assert.match(modalSource, /dangerouslySetInnerHTML/);
   assert.match(modalSource, /work-chat-backdrop/);

@@ -6,7 +6,9 @@ import {
   getBooleanSystemSetting,
   getSourceNotificationMilestones,
   getWorkAssignerMode,
+  getWorkVisibilityMode,
   isOperationalManagerRole,
+  isSameDepartmentSubordinate,
   NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
   NOTIFICATION_DUTY_MILESTONES_SETTING_KEY,
   NOTIFICATION_SOURCE_DEFAULT,
@@ -17,6 +19,13 @@ import {
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
 import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
+import {
+  buildChatNotificationItem,
+  selectVisibleChatNotifications,
+  shouldNotifyChatViewer,
+} from "./chatMessagePolicy";
+import { canAccessDutyChat } from "./dutyMessagePolicy";
+import { canAccessWorkChat } from "./workMessagePolicy";
 import { createMilestones, mergeMilestoneItems, unionMilestoneHours } from "./notificationSettings";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -24,7 +33,7 @@ const VN_OFFSET_MS = 7 * HOUR_MS;
 
 type NotificationSource = {
   kind: "duty" | "work";
-  sourceType: "duty" | "duty_assigned" | "approval" | "department_work" | "personal_task" | "completion_rejected" | "work_assigned";
+  sourceType: "duty" | "duty_assigned" | "approval" | "department_work" | "personal_task" | "completion_rejected" | "work_assigned" | "work_chat" | "duty_chat";
   sourceId: string;
   title: string;
   description: string;
@@ -96,13 +105,16 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   const needDuties = canUseDuties || enabledPersonal.some((row: any) => row.kind === "duty");
   const needWork = canUseWork || enabledPersonal.some((row: any) => row.kind === "work");
 
-  const [duties, documents, workItems, personalTasks, positions, departments] = await Promise.all([
+  const [duties, documents, workItems, personalTasks, positions, departments, users, workMessages, dutyMessages] = await Promise.all([
     needDuties ? ctx.db.query("duties").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("officeDocuments").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("workItems").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("personalTasks").collect() : Promise.resolve([]),
     ctx.db.query("positions").collect(),
     ctx.db.query("departments").collect(),
+    canUseWork || canUseDuties ? ctx.db.query("users").collect() : Promise.resolve([]),
+    canUseWork ? ctx.db.query("workMessages").collect() : Promise.resolve([]),
+    canUseDuties ? ctx.db.query("dutyMessages").collect() : Promise.resolve([]),
   ]);
   const departmentMap = new Map(
     departments.map((department: any) => [String(department._id), department.name]),
@@ -418,7 +430,123 @@ async function notificationItems(ctx: any, requestedNow?: number) {
       milestoneLabel: "Cần duyệt",
       availableAt: now,
     }));
-  const milestones = [...newDutyAssignments, ...newWorkAssignments, ...pendingApprovalItems, ...scheduledMilestones]
+  const usersById = new Map(users.map((row: any) => [String(row._id), row]));
+  const displayUserName = (id: string) => {
+    const row = usersById.get(String(id)) as { name?: string; email?: string } | undefined;
+    return String(row?.name || row?.email || "Người dùng").trim() || "Người dùng";
+  };
+  const visibilityMode = canUseWork ? await getWorkVisibilityMode(ctx) : null;
+  const workItemsByDocument = new Map<string, any[]>();
+  const personalTasksByDocument = new Map<string, any[]>();
+  if (canUseWork) {
+    for (const item of activeWorkItems) {
+      const list = workItemsByDocument.get(String(item.documentId)) || [];
+      list.push(item);
+      workItemsByDocument.set(String(item.documentId), list);
+    }
+    for (const task of activeTasks) {
+      const parent = activeWorkItems.find((item: any) => String(item._id) === String(task.workItemId));
+      if (!parent) continue;
+      const list = personalTasksByDocument.get(String(parent.documentId)) || [];
+      list.push(task);
+      personalTasksByDocument.set(String(parent.documentId), list);
+    }
+  }
+  const workChatAccess = new Map<string, boolean>();
+  const dutyChatAccess = new Map<string, boolean>();
+  const dutySubordinates = canUseDuties
+    ? users.filter(
+        (target: any) =>
+          target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
+      )
+    : [];
+  const chatItems = selectVisibleChatNotifications(
+    [
+      ...(canUseWork
+        ? workMessages
+            .filter((row: any) => {
+              const documentId = String(row.documentId || "");
+              if (!workChatAccess.has(documentId)) {
+                const document = documentsById.get(documentId);
+                workChatAccess.set(
+                  documentId,
+                  canAccessWorkChat({
+                    actorUserId: String(user._id),
+                    actorRole: user.role,
+                    actorLevel: level,
+                    actorDepartmentId: String(user.departmentId || ""),
+                    visibilityMode: visibilityMode || "school",
+                    document: document as { active?: boolean; createdBy?: string; status?: string } | undefined,
+                    workItems: workItemsByDocument.get(documentId) || [],
+                    personalTasks: personalTasksByDocument.get(documentId) || [],
+                    usersById: usersById as Map<string, { status?: string }>,
+                  }),
+                );
+              }
+              return shouldNotifyChatViewer({
+                viewerUserId: String(user._id),
+                authorUserId: String(row.authorUserId),
+                canSeeChat: Boolean(workChatAccess.get(documentId)),
+                recalledAt: row.recalledAt,
+                active: row.active,
+              });
+            })
+            .map((row: any) => {
+              const document = documentsById.get(String(row.documentId));
+              return buildChatNotificationItem({
+                kind: "work",
+                messageId: String(row._id),
+                entityId: String(row.documentId),
+                entityTitle: workListTitle(document || {}),
+                authorName: displayUserName(row.authorUserId),
+                bodyText: String(row.bodyText || ""),
+                createdAt: row.createdAt,
+              });
+            })
+        : []),
+      ...(canUseDuties
+        ? dutyMessages
+            .filter((row: any) => {
+              const dutyId = String(row.dutyId || "");
+              if (!dutyChatAccess.has(dutyId)) {
+                const duty = duties.find((item: any) => String(item._id) === dutyId);
+                dutyChatAccess.set(
+                  dutyId,
+                  canAccessDutyChat({
+                    actorUserId: String(user._id),
+                    actorRole: String(user.role || ""),
+                    actorAccess: String(menuAccess.duties || ""),
+                    actorDepartmentId: user.departmentId,
+                    duty,
+                    subordinateUsers: dutySubordinates,
+                  }),
+                );
+              }
+              return shouldNotifyChatViewer({
+                viewerUserId: String(user._id),
+                authorUserId: String(row.authorUserId),
+                canSeeChat: Boolean(dutyChatAccess.get(dutyId)),
+                recalledAt: row.recalledAt,
+                active: row.active,
+              });
+            })
+            .map((row: any) => {
+              const duty = duties.find((item: any) => String(item._id) === String(row.dutyId));
+              return buildChatNotificationItem({
+                kind: "duty",
+                messageId: String(row._id),
+                entityId: String(row.dutyId),
+                entityTitle: duty ? dutyListTitle(duty) : "Công tác",
+                authorName: displayUserName(row.authorUserId),
+                bodyText: String(row.bodyText || ""),
+                createdAt: row.createdAt,
+              });
+            })
+        : []),
+    ],
+    now,
+  );
+  const milestones = [...newDutyAssignments, ...newWorkAssignments, ...pendingApprovalItems, ...chatItems, ...scheduledMilestones]
     .sort((a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"));
   const [reads, dismissals] = await Promise.all([
     ctx.db

@@ -2,7 +2,11 @@ import React, { Component, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { ChatBubbleIcon, CardIconButton } from './CardActionIcons';
+import { chatNotificationOpensThread, claimChatAutoOpen, useChatAutoOpen } from './chatAutoOpen';
 import '../work/work.css';
+
+const RECALL_WINDOW_MS = 15 * 60 * 1000;
+const RECALLED_PLACEHOLDER = 'Tin nhắn đã được thu hồi';
 
 class DiscussionQueryBoundary extends Component {
   constructor(props) {
@@ -137,11 +141,71 @@ function DiscussionComposer({ disabled, sending, onSend }) {
   );
 }
 
+function useRecallStillOpen(createdAt, recalled) {
+  const [open, setOpen] = useState(
+    !recalled && Date.now() - Number(createdAt || 0) <= RECALL_WINDOW_MS,
+  );
+  useEffect(() => {
+    if (recalled) {
+      setOpen(false);
+      return undefined;
+    }
+    const remaining = RECALL_WINDOW_MS - (Date.now() - Number(createdAt || 0));
+    if (remaining <= 0) {
+      setOpen(false);
+      return undefined;
+    }
+    setOpen(true);
+    const timer = window.setTimeout(() => setOpen(false), remaining);
+    return () => window.clearTimeout(timer);
+  }, [createdAt, recalled]);
+  return open;
+}
+
+function DiscussionMessage({ item, onRecall, recallingId }) {
+  const recallOpen = useRecallStillOpen(item.createdAt, item.recalled);
+  const showRecall = Boolean(item.canRecall && item.isSelf && recallOpen && onRecall);
+  return (
+    <article
+      className={`work-chat-bubble${item.isSelf ? ' is-self' : ''}${item.recalled ? ' is-recalled' : ''}`}
+    >
+      <span className="work-person-avatar" aria-hidden="true">{item.authorInitials}</span>
+      <div className="work-chat-bubble-body">
+        <header>
+          <strong>{item.authorName}</strong>
+          <time dateTime={new Date(item.createdAt).toISOString()}>{formatChatTime(item.createdAt)}</time>
+        </header>
+        {item.recalled ? (
+          <p className="work-chat-recalled">{RECALLED_PLACEHOLDER}</p>
+        ) : (
+          <div
+            className="work-chat-html"
+            dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
+          />
+        )}
+        {showRecall ? (
+          <button
+            type="button"
+            className="work-chat-recall"
+            title="Thu hồi tin nhắn"
+            aria-label="Thu hồi tin nhắn"
+            disabled={recallingId === item._id}
+            onClick={() => onRecall(item)}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 export function DiscussionChatButton({
   entityId,
   title,
   listQuery,
   createMutation,
+  recallMutation,
   idField,
   buttonTitle,
   contextText,
@@ -149,9 +213,15 @@ export function DiscussionChatButton({
   titleField = 'documentTitle',
 }) {
   const [open, setOpen] = useState(false);
+  const autoOpen = useChatAutoOpen();
+  useEffect(() => {
+    if (!chatNotificationOpensThread(autoOpen, { idField, entityId })) return;
+    if (!claimChatAutoOpen(autoOpen.token, entityId)) return;
+    setOpen(true);
+  }, [autoOpen?.token, autoOpen?.sourceId, autoOpen?.sourceType, entityId, idField]);
   if (!entityId) return null;
   return (
-    <>
+    <span data-chat-entity={entityId}>
       <CardIconButton
         className="work-chat-button"
         title={buttonTitle}
@@ -174,6 +244,7 @@ export function DiscussionChatButton({
             title={title}
             listQuery={listQuery}
             createMutation={createMutation}
+            recallMutation={recallMutation}
             idField={idField}
             contextText={contextText}
             fallbackTitle={fallbackTitle}
@@ -182,7 +253,7 @@ export function DiscussionChatButton({
           />
         </DiscussionQueryBoundary>
       ) : null}
-    </>
+    </span>
   );
 }
 
@@ -212,6 +283,7 @@ export default function DiscussionModal({
   title,
   listQuery,
   createMutation,
+  recallMutation,
   idField,
   contextText,
   fallbackTitle,
@@ -221,8 +293,10 @@ export default function DiscussionModal({
   const titleId = useId();
   const listRef = useRef(null);
   const sendMessage = useMutation(createMutation);
+  const recallMessage = useMutation(recallMutation);
   const data = useQuery(listQuery, entityId ? { [idField]: entityId } : 'skip');
   const [sending, setSending] = useState(false);
+  const [recallingId, setRecallingId] = useState('');
   const [error, setError] = useState('');
   const [composerKey, setComposerKey] = useState(0);
 
@@ -262,6 +336,26 @@ export default function DiscussionModal({
     }
   };
 
+  const handleRecall = async (item) => {
+    if (!recallMessage || !item?._id) return;
+    setRecallingId(item._id);
+    setError('');
+    try {
+      await recallMessage({ messageId: String(item._id) });
+    } catch (err) {
+      const code = String(err?.message || '');
+      if (code.includes('RECALL_TOO_LATE')) {
+        setError('Đã quá 15 phút, không thể thu hồi tin nhắn này.');
+      } else if (code.includes('RECALL_FORBIDDEN')) {
+        setError('Bạn chỉ có thể thu hồi tin nhắn của mình.');
+      } else {
+        setError('Không thu hồi được tin nhắn. Vui lòng thử lại.');
+      }
+    } finally {
+      setRecallingId('');
+    }
+  };
+
   const messages = data?.messages || [];
   const heading = title || data?.[titleField] || fallbackTitle;
 
@@ -287,22 +381,12 @@ export default function DiscussionModal({
             <p className="work-chat-empty">Chưa có tin nhắn. Hãy bắt đầu trao đổi.</p>
           ) : (
             messages.map((item) => (
-              <article
+              <DiscussionMessage
                 key={item._id}
-                className={`work-chat-bubble${item.isSelf ? ' is-self' : ''}`}
-              >
-                <span className="work-person-avatar" aria-hidden="true">{item.authorInitials}</span>
-                <div className="work-chat-bubble-body">
-                  <header>
-                    <strong>{item.authorName}</strong>
-                    <time dateTime={new Date(item.createdAt).toISOString()}>{formatChatTime(item.createdAt)}</time>
-                  </header>
-                  <div
-                    className="work-chat-html"
-                    dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
-                  />
-                </div>
-              </article>
+                item={item}
+                recallingId={recallingId}
+                onRecall={recallMessage ? handleRecall : null}
+              />
             ))
           )}
         </div>

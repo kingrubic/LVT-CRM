@@ -8,6 +8,7 @@ export function DutyChatButton({ dutyId, title }) {
       title={title}
       listQuery={anyApi.dutyMessages.list}
       createMutation={anyApi.dutyMessages.create}
+      recallMutation={anyApi.dutyMessages.recall}
       idField="dutyId"
       titleField="dutyTitle"
       buttonTitle="Trao đổi công tác"

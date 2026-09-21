@@ -609,7 +609,7 @@ function DutyReportsViewBody({
                     {events.map((event) => {
                       const cardOpen = String(selectedEvent?._id || '') === String(event._id);
                       return (
-                      <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={event._id}>
+                      <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={event._id} data-focus-id={event._id}>
                         <PersonalReminderLayout
                           show={showDutyReminders}
                           panel={(

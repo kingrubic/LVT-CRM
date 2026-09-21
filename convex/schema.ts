@@ -442,10 +442,12 @@ export default defineSchema({
     bodyHtml: v.string(),
     bodyText: v.string(),
     active: v.boolean(),
+    recalledAt: v.optional(v.number()),
     ...timestamps,
   })
     .index("by_document", ["documentId"])
-    .index("by_document_created", ["documentId", "createdAt"]),
+    .index("by_document_created", ["documentId", "createdAt"])
+    .index("by_created", ["createdAt"]),
   /**
    * Threaded messages on a duty (công tác).
    * Anyone who can already see the duty on the personal list may read and send.
@@ -456,10 +458,12 @@ export default defineSchema({
     bodyHtml: v.string(),
     bodyText: v.string(),
     active: v.boolean(),
+    recalledAt: v.optional(v.number()),
     ...timestamps,
   })
     .index("by_duty", ["dutyId"])
-    .index("by_duty_created", ["dutyId", "createdAt"]),
+    .index("by_duty_created", ["dutyId", "createdAt"])
+    .index("by_created", ["createdAt"]),
   /**
    * Personnel fault records (Ghi nhận lỗi) with evidence on Google Drive.
    */

@@ -92,7 +92,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 - Công việc **không duyệt công văn**. Tạo xong là giao ngay. User **Nộp** kèm file bằng chứng và có thể gửi thêm nội dung text (không bắt buộc) cho người giao; **người tạo** mới đánh dấu hoàn thành (kèm %) hoặc trả về (kèm lý do, có thể đổi hạn).
 - Badge menu **Công việc** = task chờ duyệt hoàn thành + việc chưa hoàn thành của tôi + việc chưa hoàn thành tôi tạo.
-- Danh sách **Việc của tôi** / **Việc tôi tạo**: bốn tab **Việc cần làm**, **Đang chờ duyệt**, **Quá hạn**, **Đã duyệt hoàn thành** — mỗi tab hiện số việc. Thẻ công việc dùng icon Thu gọn/Chi tiết/Sửa/Xóa; icon chat mở trao đổi (rich text) trên Convex cho mọi người đã thấy việc đó (người giao, người nhận, admin/mod, 4/5★ theo chế độ hiển thị).
+- Danh sách **Việc của tôi** / **Việc tôi tạo**: bốn tab **Việc cần làm**, **Đang chờ duyệt**, **Quá hạn**, **Đã duyệt hoàn thành** — mỗi tab hiện số việc. Thẻ công việc dùng icon Thu gọn/Chi tiết/Sửa/Xóa; icon chat mở trao đổi (rich text) trên Convex cho mọi người đã thấy việc đó (người giao, người nhận, admin/mod, 4/5★ theo chế độ hiển thị). Người gửi có thể **thu hồi** tin của mình trong 15 phút (giữ dòng, hiện *Tin nhắn đã được thu hồi*). Tin nhắn mới (chưa thu hồi) tạo thông báo chuông cho người khác được xem thread; bấm thông báo mở đúng việc và popup Trao đổi.
 - Sửa/xóa: người tạo đến khi user nộp; admin/mod mọi lúc.
 - File đính kèm công việc là tùy chọn. Có file thì **bắt buộc chọn Loại văn bản** (Kế hoạch / Biên bản / Báo cáo, catalog admin). File cũ chưa có loại được gắn mặc định **Biên bản**. Danh sách ưu tiên **tên công việc**.
 - Nộp hoàn thành: bắt buộc file bằng chứng **và** loại văn bản. Bằng chứng cũ chưa có loại cũng gắn **Biên bản**.
@@ -108,7 +108,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 - Feed tính theo mốc giờ trước hạn riêng cho từng nguồn (mặc định `48 · 24 · 12 · 0` / Đến hạn nếu chưa tách). **Công tác** và **Công việc** được gán cho user có thể khác mốc.
 - Chuông trên header (và **Xem toàn bộ**); đánh dấu đã đọc / đọc tất cả; xóa thông báo khi quyền menu `notifications` cho phép thao tác. Trang `/thong-bao` vẫn mở được; không còn mục Thông báo trên sidebar.
-- **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác; `work_assigned` cùng `department_work` / `personal_task` focus thẻ công việc. Công việc mới (giống công tác mới) hiện ngay trên feed với nhãn **Mới phân công**, không chờ mốc hạn. Công tác mới/cập nhật cũng gửi APNs/FCM tới người tham gia (phòng ban hoặc cá nhân), kể cả khi người tạo tự thêm mình. Người được giao công việc nhận thông báo kể cả khi tự tạo việc cho mình; người tạo không nhận nếu chỉ giao cho người khác. Android nhận FCM data-only (không gắn `android.notification` rỗng) rồi hiện banner từ feed; mở lại app cũng sync ngay. iOS lock screen cần APNs alert (`APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`; `APNS_BUNDLE_ID` mặc định `vn.lvt.crm.uikit`; `APNS_PRODUCTION=true` khi cài Ad Hoc/TestFlight).
+- **Click thông báo** → chuyển sang menu Công tác hoặc Công việc và scroll/highlight đúng bản ghi (`sourceType` + `sourceId`). `duty` và `duty_assigned` cùng focus thẻ công tác; `work_assigned` cùng `department_work` / `personal_task` focus thẻ công việc. `work_chat` / `duty_chat` focus bản ghi và mở popup Trao đổi. Công việc mới (giống công tác mới) hiện ngay trên feed với nhãn **Mới phân công**, không chờ mốc hạn. Công tác mới/cập nhật cũng gửi APNs/FCM tới người tham gia (phòng ban hoặc cá nhân), kể cả khi người tạo tự thêm mình. Người được giao công việc nhận thông báo kể cả khi tự tạo việc cho mình; người tạo không nhận nếu chỉ giao cho người khác. Android nhận FCM data-only (không gắn `android.notification` rỗng) rồi hiện banner từ feed; mở lại app cũng sync ngay. iOS lock screen cần APNs alert (`APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`; `APNS_BUNDLE_ID` mặc định `vn.lvt.crm.uikit`; `APNS_PRODUCTION=true` khi cài Ad Hoc/TestFlight).
 - Admin cấu hình trong **Thiết lập hiển thị**: bật/tắt xác nhận tham gia công tác; **Ai nhìn thấy công việc?** (chỉ người tạo / người tạo+người nhận+4/5★+admin/mod); bật/tắt nguồn thông báo Công tác/Công việc; chỉnh **mốc giờ riêng** cho từng nguồn.
 - User tự đặt **nhắc nhở cá nhân** trên từng công tác chưa diễn ra / công việc còn phải làm của chính mình (list 1 cột, toggle bên phải thẻ). Nhắc này độc lập với mốc Admin: tắt nguồn toàn trường không tắt nhắc cá nhân. Web trước; native app sau.
 
@@ -129,20 +129,20 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `userImportUploads` | File Excel import user tạm (Convex Storage, TTL 1 giờ) |
 | `dutyImportUploads` | File Excel import công tác tạm (Convex Storage, TTL 1 giờ) |
 | `duties` / `dutyAttendances` | Lịch công tác + trạng thái tham gia |
-| `dutyMessages` | Chat theo công tác (HTML đã lọc, quyền xem = quyền thấy công tác trên lịch cá nhân) |
+| `dutyMessages` | Chat theo công tác (HTML đã lọc, quyền xem = quyền thấy công tác trên lịch cá nhân; `recalledAt` = thu hồi mềm) |
 | `personalReminders` | Nhắc nhở cá nhân theo user + công tác/công việc |
 | `boardingPeriods` | Kỳ bán trú (menu đang ẩn) |
 | `officeDocuments` | Công việc đã giao, tên, tệp đính kèm tùy chọn |
 | `workItems` | Phân công phòng ban / cá nhân và tiến độ nộp |
 | `personalTasks` | Đầu mục cá nhân, người thực hiện, deadline và trạng thái hoàn thành |
-| `workMessages` | Chat theo công việc (HTML đã lọc, quyền xem = quyền thấy việc) |
+| `workMessages` | Chat theo công việc (HTML đã lọc, quyền xem = quyền thấy việc; `recalledAt` = thu hồi mềm) |
 | `systemSettings` | Cờ hiển thị / cấu hình thông báo |
 | `notificationReads` / `notificationDismissals` | Đã đọc / đã xóa theo `notificationKey` |
 | `roles` | Legacy seed admin permissions (tùy chọn; gate admin thực tế = `role === "admin"`) |
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `dutyMessages.ts`, `dutyMessagePolicy.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `workMessages.ts`, `workMessagePolicy.ts`, `notifications.ts`, `notificationSettings.ts`, `personalReminders.ts`, `personalReminderPolicy.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `dutyMessages.ts`, `dutyMessagePolicy.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `workMessages.ts`, `workMessagePolicy.ts`, `chatMessagePolicy.ts`, `notifications.ts`, `notificationSettings.ts`, `personalReminders.ts`, `personalReminderPolicy.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
 
 Cấu trúc frontend gợi ý:
 

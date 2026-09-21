@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -8,6 +9,12 @@ import {
   isOperationalManagerRole,
   resolveUserMenuAccess,
 } from "./lib";
+import {
+  canRecallChatMessage,
+  evaluateChatRecall,
+  isChatMessageRecalled,
+  recallErrorCode,
+} from "./chatMessagePolicy";
 import {
   canAccessWorkChat,
   prepareWorkMessageBody,
@@ -102,20 +109,31 @@ export const list = query({
       .withIndex("by_document_created", (q: any) => q.eq("documentId", String(args.documentId)))
       .order("desc")
       .take(MESSAGE_LIST_LIMIT);
+    const now = Date.now();
     const messages = [...rows]
       .filter((row: any) => row.active)
       .reverse()
       .map((row: any) => {
         const author = usersById.get(String(row.authorUserId));
         const authorName = displayName(author);
+        const recalled = isChatMessageRecalled(row);
+        const isSelf = String(row.authorUserId) === String(actor.user._id);
         return {
           _id: row._id,
           authorUserId: row.authorUserId,
           authorName,
           authorInitials: workChatAuthorInitials(authorName),
-          bodyHtml: sanitizeWorkMessageHtml(row.bodyHtml),
+          bodyHtml: recalled ? "" : sanitizeWorkMessageHtml(row.bodyHtml),
           createdAt: row.createdAt,
-          isSelf: String(row.authorUserId) === String(actor.user._id),
+          recalled,
+          canRecall: canRecallChatMessage({
+            actorUserId: String(actor.user._id),
+            authorUserId: String(row.authorUserId),
+            createdAt: row.createdAt,
+            recalledAt: row.recalledAt,
+            now,
+          }),
+          isSelf,
         };
       });
     return {
@@ -145,6 +163,70 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    const { document, workItems, personalTasks, usersById } = await loadWorkChatContext(
+      ctx,
+      String(args.documentId),
+    );
+    const visibilityMode = await getWorkVisibilityMode(ctx);
+    const recipientIds: string[] = [];
+    for (const row of usersById.values()) {
+      const user = row as any;
+      if (user.status !== "active" || String(user._id) === String(actor.user._id)) continue;
+      const menuAccess = await resolveUserMenuAccess(ctx, user);
+      if (!isOperationalManagerRole(user.role) && menuAccess.work === "hidden") continue;
+      if (
+        !canAccessWorkChat({
+          actorUserId: String(user._id),
+          actorRole: String(user.role || "user"),
+          actorLevel: isOperationalManagerRole(user.role)
+            ? 5
+            : activePositionLevel(user, actor.positions),
+          actorDepartmentId: String(user.departmentId || ""),
+          visibilityMode,
+          document,
+          workItems,
+          personalTasks,
+          usersById,
+        })
+      ) {
+        continue;
+      }
+      recipientIds.push(String(user._id));
+    }
+    if (recipientIds.length) {
+      await ctx.scheduler.runAfter(0, internal.pushActions.sendToUsers, {
+        userIds: recipientIds,
+        title: `${displayName(actor.user)} đã trao đổi`,
+        body: String(document?.title || document?.fileName || prepared.bodyText || "Công việc"),
+        kind: "work",
+        sourceType: "work_chat",
+        sourceId: String(args.documentId),
+      });
+    }
     return { messageId };
+  },
+});
+
+export const recall = mutation({
+  args: { messageId: v.string() },
+  handler: async (ctx, args) => {
+    let row = null;
+    try {
+      row = await ctx.db.get(args.messageId as Id<"workMessages">);
+    } catch {
+      row = null;
+    }
+    if (!row?.active) throw new Error("WORK_CHAT_RECALL_FORBIDDEN");
+    const { actor } = await authorizeWorkChat(ctx, String(row.documentId));
+    const decision = evaluateChatRecall({
+      actorUserId: String(actor.user._id),
+      authorUserId: String(row.authorUserId),
+      createdAt: row.createdAt,
+      recalledAt: row.recalledAt,
+    });
+    if (!decision.ok) throw new Error(recallErrorCode("work", decision.code));
+    const now = Date.now();
+    await ctx.db.patch(row._id, { recalledAt: now, updatedAt: now });
+    return { recalled: true };
   },
 });

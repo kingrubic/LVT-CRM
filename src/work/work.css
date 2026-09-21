@@ -2075,6 +2075,7 @@
 }
 
 .work-chat-bubble-body {
+  position: relative;
   min-width: 0;
   padding: 8px 10px 9px;
   border: 1px solid #e2e9ec;
@@ -2137,6 +2138,45 @@
 
 .work-chat-html u {
   text-decoration: underline;
+}
+
+.work-chat-recalled {
+  margin: 0;
+  color: #8a9aa8;
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.work-chat-recall {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #7b8794;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.work-chat-bubble:hover .work-chat-recall,
+.work-chat-bubble:focus-within .work-chat-recall,
+.work-chat-recall:focus-visible {
+  opacity: 1;
+}
+
+.work-chat-recall:hover,
+.work-chat-recall:focus-visible {
+  color: #9b4539;
+  background: #ffebe7;
 }
 
 .work-chat-composer {

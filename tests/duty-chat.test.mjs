@@ -161,6 +161,7 @@ test('duty cards and shared rows use icons plus duty chat', () => {
   assert.match(tableSource, /stopPropagation/);
   assert.match(chatButtonSource, /anyApi\.dutyMessages\.list/);
   assert.match(chatButtonSource, /anyApi\.dutyMessages\.create/);
+  assert.match(chatButtonSource, /anyApi\.dutyMessages\.recall/);
   assert.match(chatButtonSource, /Trao đổi công tác/);
   assert.match(modalSource, /contentEditable/);
   assert.match(modalSource, /insertUnorderedList/);

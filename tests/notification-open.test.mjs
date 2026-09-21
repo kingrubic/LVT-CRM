@@ -18,14 +18,17 @@ test('an unread notification opens exactly once even when mark-read fails', asyn
 });
 
 test('new duty assignment notifications focus the same duty card as deadline reminders', () => {
-  assert.deepEqual(DUTY_NOTIFICATION_FOCUS_TYPES, ['duty', 'duty_assigned']);
+  assert.deepEqual(DUTY_NOTIFICATION_FOCUS_TYPES, ['duty', 'duty_assigned', 'duty_chat']);
   assert.equal(menuForNotification({ kind: 'duty', sourceType: 'duty_assigned' }), 'duties');
   assert.equal(DUTY_NOTIFICATION_FOCUS_TYPES.includes('duty_assigned'), true);
+  assert.equal(menuForNotification({ kind: 'duty', sourceType: 'duty_chat' }), 'duties');
 });
 
 test('new work assignment notifications open the work list like other work alerts', () => {
   assert.equal(WORK_NOTIFICATION_FOCUS_TYPES.includes('work_assigned'), true);
+  assert.equal(WORK_NOTIFICATION_FOCUS_TYPES.includes('work_chat'), true);
   assert.equal(menuForNotification({ kind: 'work', sourceType: 'work_assigned' }), 'work');
+  assert.equal(menuForNotification({ kind: 'work', sourceType: 'work_chat' }), 'work');
 });
 
 test('FCM work alerts stay data-only so Android can show the local feed banner', () => {

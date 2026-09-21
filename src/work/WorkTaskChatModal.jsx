@@ -4,6 +4,7 @@ import DiscussionModal, { DiscussionChatButton } from '../lib/DiscussionModal';
 const WORK_CHAT = {
   listQuery: anyApi.workMessages.list,
   createMutation: anyApi.workMessages.create,
+  recallMutation: anyApi.workMessages.recall,
   idField: 'documentId',
   titleField: 'documentTitle',
   contextText: 'Tin nhắn hiển thị cho người đã thấy công việc này.',
