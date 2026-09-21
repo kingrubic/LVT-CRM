@@ -5,7 +5,7 @@ import {
   canSeeLiveWork,
   isWorkItemArchived,
   type WorkVisibilityMode,
-} from "./assignmentPolicy";
+} from "./assignmentPolicy.ts";
 
 export const WORK_MESSAGE_TEXT_MAX_LENGTH = 4000;
 export const WORK_MESSAGE_HTML_MAX_LENGTH = 20_000;
@@ -70,7 +70,7 @@ export function sanitizeWorkMessageHtml(html: string): string {
     .replace(/<style\b[\s\S]*?<\/style>/gi, "");
   let out = "";
   const openStack: string[] = [];
-  const extraStack: string[] = [];
+  const extraStack: string[][] = [];
   const re = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g;
   let last = 0;
   let match: RegExpExecArray | null;
