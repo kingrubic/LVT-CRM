@@ -13,12 +13,15 @@ import {
   shouldNotifyChatViewer,
 } from '../convex/chatMessagePolicy.ts';
 import { chatEventToFeedItem, mergeChatFeedItems } from '../convex/chatNotifications.ts';
+import { notificationOpensChat } from '../src/lib/chatAutoOpen.jsx';
 
 const schemaSource = readFileSync(new URL('../convex/schema.ts', import.meta.url), 'utf8');
 const workMessagesSource = readFileSync(new URL('../convex/workMessages.ts', import.meta.url), 'utf8');
 const dutyMessagesSource = readFileSync(new URL('../convex/dutyMessages.ts', import.meta.url), 'utf8');
 const notificationsSource = readFileSync(new URL('../convex/notifications.ts', import.meta.url), 'utf8');
 const modalSource = readFileSync(new URL('../src/lib/DiscussionModal.jsx', import.meta.url), 'utf8');
+const workViewsSource = readFileSync(new URL('../src/work/WorkViews.jsx', import.meta.url), 'utf8');
+const dutyViewSource = readFileSync(new URL('../src/reports/DutyReportsView.jsx', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../src/work/work.css', import.meta.url), 'utf8');
 const focusSource = readFileSync(new URL('../src/notifications/useNotificationFocus.js', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -170,4 +173,25 @@ test('shared modal shows recalled placeholder and author-only X', () => {
   assert.match(focusSource, /data-chat-entity/);
   assert.match(mainSource, /openChat:/);
   assert.match(mainSource, /ChatAutoOpenProvider/);
+});
+
+test('bell click opens Trao đổi from the work/duty view, not only the card button', () => {
+  const target = {
+    openChat: true,
+    sourceType: 'work_chat',
+    sourceId: 'doc-1',
+    token: 1,
+  };
+  assert.equal(notificationOpensChat(target, 'work_chat'), true);
+  assert.equal(notificationOpensChat(target, 'duty_chat'), false);
+  assert.equal(notificationOpensChat({ ...target, openChat: false }, 'work_chat'), false);
+  assert.match(workViewsSource, /useNotificationChatModal\(focusTarget, 'work_chat'\)/);
+  assert.match(workViewsSource, /WorkTaskChatModal/);
+  assert.match(workViewsSource, /data-document-id/);
+  assert.match(workViewsSource, /findWorkChatFocusItem/);
+  assert.match(dutyViewSource, /DutyChatModal/);
+  assert.match(dutyViewSource, /useNotificationChatModal/);
+  assert.match(dutyViewSource, /sourceType: 'duty_chat'/);
+  assert.match(mainSource, /sourceType === 'duty_chat'/);
+  assert.match(focusSource, /data-document-id/);
 });

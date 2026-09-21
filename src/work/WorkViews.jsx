@@ -11,14 +11,17 @@ import { DutyListHeading } from '../duties/DutyListFilters';
 import { WorkListEmpty, WorkListSearch, WorkListTabs } from './WorkListFilters';
 import WorkListSummary from './WorkListSummary';
 import { PencilIcon, TrashIcon, WorkExpandHint, WorkIconButton } from './WorkCardIcons';
-import { WorkChatButton } from './WorkTaskChatModal';
+import WorkTaskChatModal, { WorkChatButton } from './WorkTaskChatModal';
+import { useNotificationChatModal } from '../lib/chatAutoOpen';
 import {
   assignmentsFromDocument,
   emptyWorkSearch,
   filterWorksBySearch,
   filterWorksByTab,
+  findWorkChatFocusItem,
   formatWorkDate,
   workListTabCounts,
+  workListTabOf,
   workReminderSourceType,
   workTabAllowsPersonalReminder,
   WORK_LIST_TAB_TODO,
@@ -770,6 +773,16 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
 
   const documents = listData?.documents || [];
   const pendingCompletionReviews = listData?.pendingCompletionReviews || [];
+
+  useEffect(() => {
+    if (focusTarget?.sourceType !== 'work_chat' || !focusTarget?.sourceId) return;
+    const match = findWorkChatFocusItem({ documents }, focusTarget.sourceId);
+    if (!match) return;
+    setListTab(workListTabOf(match.item));
+    setListSearch(emptyWorkSearch());
+    setExpanded(match.expandId);
+  }, [focusTarget?.token, focusTarget?.sourceId, focusTarget?.sourceType, documents]);
+
   const visibleDocuments = useMemo(() => filterWorksByTab(documents, listTab), [documents, listTab]);
   const createdTabCounts = useMemo(() => workListTabCounts(documents), [documents]);
   const filteredDocuments = useMemo(
@@ -1169,6 +1182,7 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
                   className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`}
                   key={document._id}
                   data-focus-id={document._id}
+                  data-document-id={document._id}
                 >
                   <button
                     type="button"
@@ -1367,6 +1381,7 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
   useNotificationFocus(focusTarget, {
     acceptSourceTypes: WORK_NOTIFICATION_FOCUS_TYPES,
   });
+  const workChatModal = useNotificationChatModal(focusTarget, 'work_chat');
 
   useEffect(() => {
     void ensureDocumentTypes({}).catch(() => {});
@@ -1402,7 +1417,44 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
     return workListTabCounts(source);
   }, [data, isAdminMod, isAssigner]);
 
-  if (data === undefined) return <div className="work-loading">Đang tải công việc của bạn…</div>;
+  const workChatFocus = useMemo(
+    () => findWorkChatFocusItem({
+      myTasks: data?.myTasks,
+      departmentWorks: data?.departmentWorks,
+      personalTasks: data?.personalTasks,
+    }, workChatModal.entityId || focusTarget?.sourceId),
+    [data?.myTasks, data?.departmentWorks, data?.personalTasks, workChatModal.entityId, focusTarget?.sourceId],
+  );
+
+  useEffect(() => {
+    if (focusTarget?.sourceType !== 'work_chat' || !focusTarget?.sourceId || !data) return;
+    const match = findWorkChatFocusItem({
+      myTasks: data.myTasks,
+      departmentWorks: data.departmentWorks,
+      personalTasks: data.personalTasks,
+    }, focusTarget.sourceId);
+    if (!match) return;
+    setListTab(workListTabOf(match.item));
+    setListSearch(emptyWorkSearch());
+    setExpanded(match.expandId);
+  }, [focusTarget?.token, focusTarget?.sourceId, focusTarget?.sourceType, data]);
+
+  const workChatDialog = workChatModal.open ? (
+    <WorkTaskChatModal
+      documentId={workChatModal.entityId}
+      title={workChatFocus?.title || 'Công việc'}
+      onClose={workChatModal.close}
+    />
+  ) : null;
+
+  if (data === undefined) {
+    return (
+      <>
+        <div className="work-loading">Đang tải công việc của bạn…</div>
+        {workChatDialog}
+      </>
+    );
+  }
 
   const handleAssign = async ({ title, deadline, assigneeUserIds }) => {
     setSaving(true);
@@ -1630,7 +1682,7 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                 {filteredMyTasks.map((task) => {
                   const cardOpen = String(expanded || '') === String(task._id);
                   return (
-                    <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id}>
+                    <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id} data-document-id={task.documentId}>
                       <PersonalReminderLayout
                         show={showWorkReminders}
                         panel={(
@@ -1736,7 +1788,7 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                 {filteredDepartmentWorks.map((work) => {
                   const cardOpen = String(expanded || '') === String(work._id);
                   return (
-                    <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={work._id} data-focus-id={work._id}>
+                    <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={work._id} data-focus-id={work._id} data-document-id={work.documentId}>
                       <button
                         type="button"
                         className="duty-card-toggle"
@@ -1787,7 +1839,7 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                 {filteredPersonalTasks.map((task) => {
                   const cardOpen = String(expanded || '') === String(task._id);
                   return (
-                    <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id}>
+                    <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={task._id} data-focus-id={task._id} data-document-id={task.documentId}>
                       <PersonalReminderLayout
                         show={showWorkReminders}
                         panel={(
@@ -1886,6 +1938,7 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
       ) : null}
     </section>
       {data.canCreate ? <WorkManagement allowCreate hideCompletionQueue focusTarget={focusTarget} /> : null}
+      {workChatDialog}
     </>
   );
 }

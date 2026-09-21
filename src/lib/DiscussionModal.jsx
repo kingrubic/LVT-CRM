@@ -2,7 +2,6 @@ import React, { Component, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { ChatBubbleIcon, CardIconButton } from './CardActionIcons';
-import { chatNotificationOpensThread, claimChatAutoOpen, useChatAutoOpen } from './chatAutoOpen';
 import '../work/work.css';
 
 const RECALL_WINDOW_MS = 15 * 60 * 1000;
@@ -213,12 +212,6 @@ export function DiscussionChatButton({
   titleField = 'documentTitle',
 }) {
   const [open, setOpen] = useState(false);
-  const autoOpen = useChatAutoOpen();
-  useEffect(() => {
-    if (!chatNotificationOpensThread(autoOpen, { idField, entityId })) return;
-    if (!claimChatAutoOpen(autoOpen.token, entityId)) return;
-    setOpen(true);
-  }, [autoOpen?.token, autoOpen?.sourceId, autoOpen?.sourceType, entityId, idField]);
   if (!entityId) return null;
   return (
     <span data-chat-entity={entityId}>

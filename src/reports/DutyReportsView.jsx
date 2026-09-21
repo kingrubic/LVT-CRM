@@ -9,10 +9,11 @@ import {
   emptyDutySearch,
   filterDutiesBySearch,
   filterDutiesByTab,
+  tabForDuty,
 } from '../duties/dutyDisplay';
 import DutyEditModal from '../duties/DutyEditModal';
 import DutyScheduleTable from '../duties/DutyScheduleTable';
-import { DutyChatButton } from '../duties/DutyChatButton';
+import { DutyChatButton, DutyChatModal } from '../duties/DutyChatButton';
 import {
   CardExpandHint,
   CardIconButton,
@@ -30,6 +31,7 @@ import PersonalReminderPanel, {
   reminderMapFromList,
 } from '../notifications/PersonalReminderPanel';
 import { PersonalReminderQueryBoundary } from '../notifications/personalReminderQuery';
+import { useNotificationChatModal } from '../lib/chatAutoOpen';
 import './dutyCalendar.css';
 
 const VIEW_OPTIONS = [
@@ -360,6 +362,8 @@ function DutyReportsViewBody({
   onImport = null,
   onEdit = null,
   focusDutyId = null,
+  openChat = false,
+  focusToken = null,
   reminderFailed = false,
 } = {}) {
   const [mode, setMode] = useState('week');
@@ -371,6 +375,10 @@ function DutyReportsViewBody({
   const [listTab, setListTab] = useState(DUTY_LIST_TAB_UPCOMING);
   const [search, setSearch] = useState(() => emptyDutySearch());
   const [editingEvent, setEditingEvent] = useState(null);
+  const dutyChatFocusTarget = openChat && focusDutyId
+    ? { openChat: true, sourceType: 'duty_chat', sourceId: focusDutyId, token: focusToken }
+    : null;
+  const dutyChatModal = useNotificationChatModal(dutyChatFocusTarget, 'duty_chat');
   const setAttendance = useMutation(anyApi.duties.setAttendance);
   const setAttendanceForUser = useMutation(anyApi.duties.setAttendanceForUser);
   const removeDuty = useMutation(anyApi.duties.remove);
@@ -412,10 +420,18 @@ function DutyReportsViewBody({
   }, [mode, anchor]);
 
   useEffect(() => {
+    if (!focusDutyId || !openChat) return;
+    setMode('list');
+    setSearch(emptyDutySearch());
+  }, [focusDutyId, openChat, focusToken]);
+
+  useEffect(() => {
     if (!focusDutyId || !data?.events?.length) return;
     const focused = data.events.find((event) => String(event._id) === String(focusDutyId));
-    if (focused) setSelectedEvent(focused);
-  }, [focusDutyId, data?.events]);
+    if (!focused) return;
+    if (openChat) setListTab(tabForDuty(focused));
+    setSelectedEvent(focused);
+  }, [focusDutyId, openChat, focusToken, data?.events]);
 
   useEffect(() => {
     if (!editingEvent?._id) return;
@@ -497,6 +513,10 @@ function DutyReportsViewBody({
           a.departmentName.localeCompare(b.departmentName, 'vi');
       });
   }, [data?.people]);
+
+  const dutyChatEvent = (data?.events || []).find(
+    (event) => String(event._id) === String(dutyChatModal.entityId),
+  );
 
   return (
     <section className="duty-reports-view">
@@ -724,6 +744,13 @@ function DutyReportsViewBody({
           ) : null}
         </div>
       )}
+      {dutyChatModal.open ? (
+        <DutyChatModal
+          dutyId={dutyChatModal.entityId}
+          title={dutyChatEvent?.title || dutyChatEvent?.content || 'Công tác'}
+          onClose={dutyChatModal.close}
+        />
+      ) : null}
     </section>
   );
 }
