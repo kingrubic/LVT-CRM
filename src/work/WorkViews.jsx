@@ -10,6 +10,8 @@ import { EditActionConfirm } from '../lib/ConfirmActionModal';
 import { DutyListHeading } from '../duties/DutyListFilters';
 import { WorkListEmpty, WorkListSearch, WorkListTabs } from './WorkListFilters';
 import WorkListSummary from './WorkListSummary';
+import { PencilIcon, TrashIcon, WorkExpandHint, WorkIconButton } from './WorkCardIcons';
+import { WorkChatButton } from './WorkTaskChatModal';
 import {
   assignmentsFromDocument,
   emptyWorkSearch,
@@ -1168,23 +1170,44 @@ export function WorkManagement({ allowCreate = true, hideCompletionQueue = false
                   key={document._id}
                   data-focus-id={document._id}
                 >
-                  <button type="button" className="duty-card-toggle" onClick={() => setExpanded(cardOpen ? null : document._id)}>
+                  <button
+                    type="button"
+                    className="duty-card-toggle"
+                    onClick={() => setExpanded(cardOpen ? null : document._id)}
+                    aria-expanded={cardOpen}
+                    aria-label={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                    title={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                  >
                     <WorkListSummary
                       item={document}
                       status={<WorkStatus status={document.workStatus || document.status} />}
                     />
-                    <span className="duty-expand-hint">{cardOpen ? 'Thu gọn' : 'Chi tiết'}</span>
+                    <WorkExpandHint open={cardOpen} />
                   </button>
-                  {document.canEdit || document.canDelete ? (
-                    <div className="row-actions duty-actions">
-                      {document.canEdit ? (
-                        <button type="button" className="work-outline-button" onClick={() => startEdit(document)} disabled={saving}>Sửa</button>
-                      ) : null}
-                      {document.canDelete ? (
-                        <button type="button" className="work-reject-button" onClick={() => void removeDocument(document)} disabled={saving}>Xóa</button>
-                      ) : null}
-                    </div>
-                  ) : (
+                  <div className="row-actions duty-actions">
+                    <WorkChatButton documentId={document._id} title={document.title || document.fileName} />
+                    {document.canEdit ? (
+                      <WorkIconButton
+                        className="work-edit-button"
+                        title="Sửa"
+                        onClick={() => startEdit(document)}
+                        disabled={saving}
+                      >
+                        <PencilIcon />
+                      </WorkIconButton>
+                    ) : null}
+                    {document.canDelete ? (
+                      <WorkIconButton
+                        className="work-delete-button"
+                        title="Xóa"
+                        onClick={() => void removeDocument(document)}
+                        disabled={saving}
+                      >
+                        <TrashIcon />
+                      </WorkIconButton>
+                    ) : null}
+                  </div>
+                  {document.canEdit || document.canDelete ? null : (
                     <p className="work-document-locked">Đã có người nộp · Không thể sửa hoặc xóa</p>
                   )}
                   {cardOpen ? (
@@ -1621,15 +1644,23 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                           />
                         )}
                       >
-                      <button type="button" className="duty-card-toggle" onClick={() => setExpanded(cardOpen ? null : task._id)}>
+                      <button
+                        type="button"
+                        className="duty-card-toggle"
+                        onClick={() => setExpanded(cardOpen ? null : task._id)}
+                        aria-expanded={cardOpen}
+                        aria-label={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                        title={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                      >
                         <WorkListSummary
                           item={task}
                           status={<WorkStatus status={task.status === 'pending' ? 'pending_task' : task.status} />}
                         />
-                        <span className="duty-expand-hint">{cardOpen ? 'Thu gọn' : 'Chi tiết'}</span>
+                        <WorkExpandHint open={cardOpen} />
                       </button>
-                      {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' || task.status === 'rejected_completion' ? (
-                        <div className="row-actions duty-actions">
+                      <div className="row-actions duty-actions">
+                        <WorkChatButton documentId={task.documentId} title={task.documentTitle || task.content} />
+                        {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' || task.status === 'rejected_completion' ? (
                           <button
                             type="button"
                             className="work-primary-button"
@@ -1639,8 +1670,8 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                               ? 'Nộp lại bằng chứng hoàn thành'
                               : 'Nộp bằng chứng hoàn thành'}
                           </button>
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                       {cardOpen ? (
                         <div className="duty-detail">
                           {task.rejectionReason ? (
@@ -1706,11 +1737,19 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                   const cardOpen = String(expanded || '') === String(work._id);
                   return (
                     <article className={`duty-modern-card ${cardOpen ? 'is-open' : ''}`} key={work._id} data-focus-id={work._id}>
-                      <button type="button" className="duty-card-toggle" onClick={() => setExpanded(cardOpen ? null : work._id)}>
+                      <button
+                        type="button"
+                        className="duty-card-toggle"
+                        onClick={() => setExpanded(cardOpen ? null : work._id)}
+                        aria-expanded={cardOpen}
+                        aria-label={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                        title={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                      >
                         <WorkListSummary item={work} status={<WorkStatus status={work.status} />} />
-                        <span className="duty-expand-hint">{cardOpen ? 'Thu gọn' : 'Chi tiết'}</span>
+                        <WorkExpandHint open={cardOpen} />
                       </button>
                       <div className="row-actions duty-actions">
+                        <WorkChatButton documentId={work.documentId} title={work.document?.title || work.content} />
                         <button type="button" className="work-outline-button" onClick={() => setAssigning(work)}>＋ Chỉ định công việc cá nhân</button>
                       </div>
                       {cardOpen ? (
@@ -1762,15 +1801,23 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                           />
                         )}
                       >
-                      <button type="button" className="duty-card-toggle" onClick={() => setExpanded(cardOpen ? null : task._id)}>
+                      <button
+                        type="button"
+                        className="duty-card-toggle"
+                        onClick={() => setExpanded(cardOpen ? null : task._id)}
+                        aria-expanded={cardOpen}
+                        aria-label={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                        title={cardOpen ? 'Thu gọn' : 'Chi tiết'}
+                      >
                         <WorkListSummary
                           item={task}
                           status={<WorkStatus status={task.status === 'pending' ? 'pending_task' : task.status} />}
                         />
-                        <span className="duty-expand-hint">{cardOpen ? 'Thu gọn' : 'Chi tiết'}</span>
+                        <WorkExpandHint open={cardOpen} />
                       </button>
-                      {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' || task.status === 'rejected_completion' ? (
-                        <div className="row-actions duty-actions">
+                      <div className="row-actions duty-actions">
+                        <WorkChatButton documentId={task.documentId} title={task.documentTitle || task.title} />
+                        {task.status === 'pending' || task.status === 'pending_task' || task.status === 'overdue' || task.status === 'rejected_completion' ? (
                           <button
                             type="button"
                             className="work-primary-button"
@@ -1780,8 +1827,8 @@ function WorkUserViewBody({ focusTarget = null, reminderFailed = false }) {
                               ? 'Nộp lại bằng chứng hoàn thành'
                               : 'Nộp bằng chứng hoàn thành'}
                           </button>
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                       {cardOpen ? (
                         <div className="duty-detail">
                           {task.rejectionReason ? (

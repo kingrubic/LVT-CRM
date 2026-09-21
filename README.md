@@ -92,7 +92,7 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 
 - Công việc **không duyệt công văn**. Tạo xong là giao ngay. User **Nộp** kèm file bằng chứng và có thể gửi thêm nội dung text (không bắt buộc) cho người giao; **người tạo** mới đánh dấu hoàn thành (kèm %) hoặc trả về (kèm lý do, có thể đổi hạn).
 - Badge menu **Công việc** = task chờ duyệt hoàn thành + việc chưa hoàn thành của tôi + việc chưa hoàn thành tôi tạo.
-- Danh sách **Việc của tôi** / **Việc tôi tạo**: bốn tab **Việc cần làm**, **Đang chờ duyệt**, **Quá hạn**, **Đã duyệt hoàn thành** — mỗi tab hiện số việc.
+- Danh sách **Việc của tôi** / **Việc tôi tạo**: bốn tab **Việc cần làm**, **Đang chờ duyệt**, **Quá hạn**, **Đã duyệt hoàn thành** — mỗi tab hiện số việc. Thẻ công việc dùng icon Thu gọn/Chi tiết/Sửa/Xóa; icon chat mở trao đổi (rich text) trên Convex cho mọi người đã thấy việc đó (người giao, người nhận, admin/mod, 4/5★ theo chế độ hiển thị).
 - Sửa/xóa: người tạo đến khi user nộp; admin/mod mọi lúc.
 - File đính kèm công việc là tùy chọn. Có file thì **bắt buộc chọn Loại văn bản** (Kế hoạch / Biên bản / Báo cáo, catalog admin). File cũ chưa có loại được gắn mặc định **Biên bản**. Danh sách ưu tiên **tên công việc**.
 - Nộp hoàn thành: bắt buộc file bằng chứng **và** loại văn bản. Bằng chứng cũ chưa có loại cũng gắn **Biên bản**.
@@ -134,13 +134,14 @@ CRUD chức vụ với **cấp bậc 1–5 sao** (vàng). Cấp bậc dùng cho 
 | `officeDocuments` | Công việc đã giao, tên, tệp đính kèm tùy chọn |
 | `workItems` | Phân công phòng ban / cá nhân và tiến độ nộp |
 | `personalTasks` | Đầu mục cá nhân, người thực hiện, deadline và trạng thái hoàn thành |
+| `workMessages` | Chat theo công việc (HTML đã lọc, quyền xem = quyền thấy việc) |
 | `systemSettings` | Cờ hiển thị / cấu hình thông báo |
 | `notificationReads` / `notificationDismissals` | Đã đọc / đã xóa theo `notificationKey` |
 | `roles` | Legacy seed admin permissions (tùy chọn; gate admin thực tế = `role === "admin"`) |
 | `auditLogs` | Audit thao tác admin |
 | `approvalLogs` | Log duyệt / duyệt thay (nền tảng workflow) |
 
-Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `notifications.ts`, `notificationSettings.ts`, `personalReminders.ts`, `personalReminderPolicy.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
+Backend modules: `convex/users.ts`, `userImport.ts`, `userImportParse.ts`, `userImportValidate.ts`, `userImportSheet.ts`, `entityCodes.ts`, `departments.ts`, `locations.ts`, `permissionGroups.ts`, `positions.ts`, `duties.ts`, `dutyWritePolicy.ts`, `dutyImport.ts`, `dutyImportParse.ts`, `dutyImportValidate.ts`, `dutyImportSheet.ts`, `boarding.ts`, `reports.ts`, `work.ts`, `workMessages.ts`, `workMessagePolicy.ts`, `notifications.ts`, `notificationSettings.ts`, `personalReminders.ts`, `personalReminderPolicy.ts`, `settings.ts`, `lib.ts`, `seed.ts`, `auth.ts`, `http.ts`.
 
 Cấu trúc frontend gợi ý:
 

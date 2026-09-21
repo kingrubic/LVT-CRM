@@ -947,14 +947,27 @@
 .duty-expand-hint {
   display: inline-flex;
   align-items: center;
-  min-height: 27px;
-  padding: 0 9px;
+  justify-content: center;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0 7px;
   border: 1px solid #dce6e9;
   border-radius: 8px;
   color: #557082;
   background: #f8faf9;
   font-size: 12px;
   font-weight: 850;
+}
+
+.duty-expand-hint.is-icon {
+  width: 28px;
+  padding: 0;
+}
+
+.duty-expand-hint svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .duty-modern-card.is-open .duty-expand-hint {

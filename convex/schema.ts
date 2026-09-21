@@ -433,6 +433,20 @@ export default defineSchema({
     .index("by_work_item", ["workItemId"])
     .index("by_deadline", ["active", "deadline"]),
   /**
+   * Threaded messages on a work document (công việc).
+   * Anyone who can already see the document may read and send.
+   */
+  workMessages: defineTable({
+    documentId: v.string(),
+    authorUserId: v.string(),
+    bodyHtml: v.string(),
+    bodyText: v.string(),
+    active: v.boolean(),
+    ...timestamps,
+  })
+    .index("by_document", ["documentId"])
+    .index("by_document_created", ["documentId", "createdAt"]),
+  /**
    * Personnel fault records (Ghi nhận lỗi) with evidence on Google Drive.
    */
   personnelFaults: defineTable({
