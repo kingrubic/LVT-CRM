@@ -7,6 +7,7 @@ import { sanitizeWorkMessageHtml } from '../convex/workMessagePolicy.ts';
 
 const schemaSource = readFileSync(new URL('../convex/schema.ts', import.meta.url), 'utf8');
 const messagesSource = readFileSync(new URL('../convex/dutyMessages.ts', import.meta.url), 'utf8');
+const dutiesSource = readFileSync(new URL('../convex/duties.ts', import.meta.url), 'utf8');
 const personalSource = readFileSync(new URL('../src/reports/DutyReportsView.jsx', import.meta.url), 'utf8');
 const tableSource = readFileSync(new URL('../src/duties/DutyScheduleTable.jsx', import.meta.url), 'utf8');
 const chatButtonSource = readFileSync(new URL('../src/duties/DutyChatButton.jsx', import.meta.url), 'utf8');
@@ -140,6 +141,7 @@ test('Convex duty chat module gates list/create server-side', () => {
   assert.match(messagesSource, /export const list = query/);
   assert.match(messagesSource, /export const create = mutation/);
   assert.match(messagesSource, /requireDutiesAccess/);
+  assert.match(dutiesSource, /canChat:\s*canAccessDutyChat/);
 });
 
 test('duty cards and shared rows use icons plus duty chat', () => {
@@ -153,6 +155,7 @@ test('duty cards and shared rows use icons plus duty chat', () => {
   assert.doesNotMatch(personalSource, />Xóa<\/button>/);
   assert.match(tableSource, /DutyChatButton/);
   assert.match(tableSource, /dutyId=\{row\.eventId\}/);
+  assert.match(tableSource, /row\.canChat !== false/);
   assert.match(tableSource, /title="Sửa"/);
   assert.match(tableSource, /Sửa công tác/);
   assert.match(tableSource, /stopPropagation/);

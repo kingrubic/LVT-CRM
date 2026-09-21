@@ -21,6 +21,7 @@ import {
   dutyPushRecipientIds,
 } from "./assignmentPolicy";
 import { cleanDutyInput, evaluateDutyRefs, parseLocalMs } from "./dutyWritePolicy";
+import { canAccessDutyChat } from "./dutyMessagePolicy";
 
 async function assertRefs(
   ctx: { db: any },
@@ -430,16 +431,23 @@ export const sharedSchedule = query({
     if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate) {
       throw new Error("INVALID_DATE_RANGE");
     }
-    const { user, isAdmin } = await requireDutiesAccess(ctx);
-    const [duties, locations, departments, users] = await Promise.all([
+    const { user, access, isAdmin } = await requireDutiesAccess(ctx);
+    const [duties, locations, departments, users, positions] = await Promise.all([
       ctx.db.query("duties").collect(),
       ctx.db.query("locations").collect(),
       ctx.db.query("departments").collect(),
       ctx.db.query("users").collect(),
+      ctx.db.query("positions").collect(),
     ]);
     const userNameMap = new Map(
       users.map((user) => [String(user._id), String(user.name || user.email || "")]),
     );
+    const subordinateUsers = isAdmin
+      ? []
+      : users.filter(
+          (target) =>
+            target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
+        );
     const events = duties
       .filter(
         (duty) =>
@@ -464,6 +472,14 @@ export const sharedSchedule = query({
           .filter((name): name is string => Boolean(name)),
         otherParticipants: String(duty.otherParticipants || "").trim(),
         canManage: isAdmin || String(duty.createdBy || "") === String(user._id),
+        canChat: canAccessDutyChat({
+          actorUserId: String(user._id),
+          actorRole: String(user.role || ""),
+          actorAccess: String(access || ""),
+          actorDepartmentId: user.departmentId,
+          duty,
+          subordinateUsers,
+        }),
       }))
       .sort(
         (a, b) =>

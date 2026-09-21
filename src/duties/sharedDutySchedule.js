@@ -169,6 +169,7 @@ export function buildSharedScheduleRows(mode, anchorIso, events) {
         rowSpan: 1,
         eventId: null,
         canManage: false,
+        canChat: false,
       });
       continue;
     }
@@ -184,6 +185,7 @@ export function buildSharedScheduleRows(mode, anchorIso, events) {
         rowSpan: index === 0 ? list.length : 0,
         eventId: event._id || null,
         canManage: Boolean(event.canManage),
+        canChat: event.canChat !== false,
       });
     });
   }

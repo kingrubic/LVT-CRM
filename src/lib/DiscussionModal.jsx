@@ -1,8 +1,30 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { Component, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { ChatBubbleIcon, CardIconButton } from './CardActionIcons';
 import '../work/work.css';
+
+class DiscussionQueryBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      const code = String(this.state.error?.message || '');
+      const forbidden = /WORK_CHAT_FORBIDDEN|DUTY_CHAT_FORBIDDEN/.test(code);
+      return this.props.fallback(forbidden
+        ? 'Bạn không có quyền trao đổi mục này.'
+        : 'Không tải được tin nhắn.');
+    }
+    return this.props.children;
+  }
+}
 
 const TOOLBAR = [
   { command: 'bold', label: 'In đậm', hint: 'B' },
@@ -138,19 +160,50 @@ export function DiscussionChatButton({
         <ChatBubbleIcon />
       </CardIconButton>
       {open ? (
-        <DiscussionModal
-          entityId={entityId}
-          title={title}
-          listQuery={listQuery}
-          createMutation={createMutation}
-          idField={idField}
-          contextText={contextText}
-          fallbackTitle={fallbackTitle}
-          titleField={titleField}
-          onClose={() => setOpen(false)}
-        />
+        <DiscussionQueryBoundary
+          fallback={(message) => (
+            <DiscussionErrorPanel
+              title={title || fallbackTitle}
+              message={message}
+              onClose={() => setOpen(false)}
+            />
+          )}
+        >
+          <DiscussionModal
+            entityId={entityId}
+            title={title}
+            listQuery={listQuery}
+            createMutation={createMutation}
+            idField={idField}
+            contextText={contextText}
+            fallbackTitle={fallbackTitle}
+            titleField={titleField}
+            onClose={() => setOpen(false)}
+          />
+        </DiscussionQueryBoundary>
       ) : null}
     </>
+  );
+}
+
+function DiscussionErrorPanel({ title, message, onClose }) {
+  return createPortal(
+    <div className="work-modal-backdrop work-chat-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="work-modal work-chat-modal"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="work-modal-close" onClick={onClose} aria-label="Đóng">
+          ×
+        </button>
+        <span className="work-kicker">TRAO ĐỔI</span>
+        <h3>{title || 'Trao đổi'}</h3>
+        <p className="work-chat-empty">{message}</p>
+      </section>
+    </div>,
+    document.body,
   );
 }
 

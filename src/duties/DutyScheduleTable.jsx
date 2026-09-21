@@ -69,7 +69,9 @@ export default function DutyScheduleTable({
                         className="lct-row-actions"
                         onClick={(event) => event.stopPropagation()}
                       >
-                        <DutyChatButton dutyId={row.eventId} title={row.content} />
+                        {row.canChat !== false ? (
+                          <DutyChatButton dutyId={row.eventId} title={row.content} />
+                        ) : null}
                         {editable ? (
                           <CardIconButton
                             className="work-edit-button"
