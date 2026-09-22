@@ -149,14 +149,18 @@ test('Convex recall and feed wiring stay server-side', () => {
   assert.match(dutyMessagesSource, /sourceType: "duty_chat"/);
   assert.match(dutyMessagesSource, /insertChatNotificationEvents/);
   assert.match(dutyMessagesSource, /deactivateChatNotificationEvents/);
-  assert.match(notificationsSource, /buildChatNotificationItem/);
-  assert.match(notificationsSource, /shouldNotifyChatViewer/);
   assert.match(notificationsSource, /canSeeWorkModule/);
   assert.match(notificationsSource, /canSeeDutiesModule/);
   assert.match(notificationsSource, /chatNotificationEvents/);
   assert.match(notificationsSource, /mergeChatFeedItems/);
-  assert.match(notificationsSource, /work_chat/);
-  assert.match(notificationsSource, /duty_chat/);
+  assert.match(notificationsSource, /export const chatFeed = query/);
+  assert.doesNotMatch(notificationsSource, /query\("workMessages"\)/);
+  assert.doesNotMatch(notificationsSource, /query\("dutyMessages"\)/);
+  assert.doesNotMatch(notificationsSource, /query\("users"\)/);
+  assert.match(mainSource, /SHELL_QUERY_REFRESH_MS = 15 \* 60 \* 1000/);
+  assert.match(mainSource, /visibilityState/);
+  assert.match(mainSource, /notifications\.chatFeed/);
+  assert.doesNotMatch(mainSource, /useNotificationMinute/);
 });
 
 test('shared modal shows recalled placeholder and author-only X', () => {

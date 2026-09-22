@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ConvexAuthProvider, useAuthActions } from '@convex-dev/auth/react';
-import { Authenticated, AuthLoading, Unauthenticated, useAction, useMutation, useQuery, ConvexReactClient } from 'convex/react';
+import { Authenticated, AuthLoading, Unauthenticated, useAction, useConvex, useMutation, useQuery, ConvexReactClient } from 'convex/react';
 import { anyApi } from 'convex/server';
 import '@fontsource-variable/montserrat';
 import '@fontsource-variable/montserrat/wght-italic.css';
@@ -138,13 +138,10 @@ function AppShell({ session }) {
   const { signOut } = useAuthActions();
   const { user, isAdmin, isModerator, isOperationalManager, menuAccess } = session;
   const canManageOperations = Boolean(isOperationalManager || isAdmin || isModerator);
-  const workBadge = useQuery(anyApi.work.badge, canManageOperations || menuAccess?.work !== 'hidden' ? {} : 'skip');
+  const shellVisible = useDocumentVisible();
+  const [bellOpen, setBellOpen] = useState(false);
+  const canUseWorkBadge = canManageOperations || menuAccess?.work !== 'hidden';
   const canUseNotifications = canManageOperations || menuAccess?.notifications !== 'hidden';
-  const notificationNow = useNotificationMinute();
-  const notificationFeed = useQuery(
-    anyApi.notifications.feed,
-    canUseNotifications ? { now: notificationNow } : 'skip',
-  );
   const visiblePrimaryMenus = useMemo(() => {
     if (canManageOperations) return PRIMARY_MENUS;
     return PRIMARY_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
@@ -159,6 +156,23 @@ function AppShell({ session }) {
     : sidebarPrimaryMenus[0]?.[0] || 'profile';
   const initialRoute = routeForPathname(window.location.pathname);
   const [active, setActive] = useState(initialRoute?.menu || defaultActive);
+  const notificationsLive = shellVisible && (bellOpen || active === 'notifications');
+  const workBadge = useOccasionalQuery(anyApi.work.badge, {
+    enabled: canUseWorkBadge && shellVisible,
+    refreshMs: SHELL_QUERY_REFRESH_MS,
+    resetKey: user._id,
+  });
+  const milestoneFeed = useOccasionalQuery(anyApi.notifications.feed, {
+    enabled: canUseNotifications && shellVisible,
+    refreshMs: SHELL_QUERY_REFRESH_MS,
+    resetKey: user._id,
+    live: notificationsLive,
+    withNow: true,
+  });
+  const [chatFeed, setChatFeed] = useState(undefined);
+  const onChatFeed = useCallback((value) => setChatFeed(value), []);
+  const [readKeys, setReadKeys] = useState(() => new Set());
+  const notificationFeed = combineNotificationFeed(milestoneFeed, chatFeed, readKeys);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [reportSection, setReportSection] = useState(initialRoute?.reportSection || 'work');
@@ -312,6 +326,11 @@ function AppShell({ session }) {
     <OwnAvatarProvider user={user}>
     <ChatAutoOpenProvider target={activeFocusTarget}>
     <div className={`shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {canUseNotifications ? (
+        <ChatFeedBoundary>
+          <LiveChatFeed enabled={shellVisible} resetKey={user._id} onChange={onChatFeed} />
+        </ChatFeedBoundary>
+      ) : null}
       <aside
         className={`shell-sidebar ${mobileOpen ? 'is-open' : ''}`}
         aria-label="Menu điều hướng"
@@ -406,6 +425,12 @@ function AppShell({ session }) {
                 data={notificationFeed}
                 onViewAll={() => choose('notifications')}
                 onOpenItem={openFromNotification}
+                onOpenChange={setBellOpen}
+                onItemRead={(key) => setReadKeys((current) => {
+                  const next = new Set(current);
+                  next.add(key);
+                  return next;
+                })}
               />
             ) : null}
             <AccountMenu onChoose={choose} onSignOut={() => void signOut()} />
@@ -479,24 +504,126 @@ function AppShell({ session }) {
   );
 }
 
-function useNotificationMinute() {
-  const minuteValue = () => Math.floor(Date.now() / 60_000) * 60_000;
-  const [currentMinute, setCurrentMinute] = useState(minuteValue);
+const SHELL_QUERY_REFRESH_MS = 15 * 60 * 1000;
+const EMPTY_QUERY_ARGS = {};
+
+function useDocumentVisible() {
+  const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      const nextMinute = minuteValue();
-      setCurrentMinute((current) => current === nextMinute ? current : nextMinute);
-    }, 30_000);
-    return () => window.clearInterval(timer);
+    const sync = () => setVisible(document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
   }, []);
-  return currentMinute;
+  return visible;
 }
 
-function NotificationBell({ data, onViewAll, onOpenItem }) {
+function LiveChatFeed({ enabled, resetKey, onChange }) {
+  const chatFeed = useRetainedQuery(
+    anyApi.notifications.chatFeed,
+    enabled ? {} : 'skip',
+    resetKey,
+  );
+  useEffect(() => {
+    onChange(chatFeed);
+  }, [chatFeed, onChange]);
+  return null;
+}
+
+class ChatFeedBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) return null;
+    return this.props.children;
+  }
+}
+
+function useRetainedQuery(queryRef, args, resetKey) {
+  const result = useQuery(queryRef, args);
+  const retained = useRef({ key: resetKey, value: undefined });
+  if (retained.current.key !== resetKey) {
+    retained.current = { key: resetKey, value: undefined };
+  }
+  if (result !== undefined) retained.current.value = result;
+  return result !== undefined ? result : retained.current.value;
+}
+
+function useOccasionalQuery(queryRef, { enabled, refreshMs, resetKey, live = false, withNow = false }) {
+  const convex = useConvex();
+  const queryRefHolder = useRef(queryRef);
+  queryRefHolder.current = queryRef;
+  const wasLive = useRef(false);
+  const liveStamp = useRef(Date.now());
+  if (live && !wasLive.current) liveStamp.current = Date.now();
+  wasLive.current = live;
+  const liveArgs = withNow ? { now: liveStamp.current } : EMPTY_QUERY_ARGS;
+  const liveResult = useQuery(queryRef, enabled && live ? liveArgs : 'skip');
+  const [snapshot, setSnapshot] = useState({ key: resetKey, value: undefined });
+  if (snapshot.key !== resetKey) setSnapshot({ key: resetKey, value: undefined });
+
+  useEffect(() => {
+    if (liveResult !== undefined) setSnapshot({ key: resetKey, value: liveResult });
+  }, [liveResult, resetKey]);
+
+  useEffect(() => {
+    if (!enabled || live) return undefined;
+    let cancelled = false;
+    const pull = () => {
+      const args = withNow ? { now: Date.now() } : EMPTY_QUERY_ARGS;
+      convex.query(queryRefHolder.current, args).then((value) => {
+        if (!cancelled) setSnapshot({ key: resetKey, value });
+      }).catch(() => {});
+    };
+    pull();
+    const timer = window.setInterval(pull, refreshMs);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [convex, enabled, live, refreshMs, resetKey, withNow]);
+
+  if (snapshot.key !== resetKey) return undefined;
+  if (live && liveResult !== undefined) return liveResult;
+  return snapshot.value;
+}
+
+function isChatNotification(item) {
+  return item?.sourceType === 'work_chat' || item?.sourceType === 'duty_chat';
+}
+
+function combineNotificationFeed(feed, chat, readKeys) {
+  if (feed === undefined) return undefined;
+  const milestoneItems = (feed.items || []).filter((item) => !isChatNotification(item));
+  const chatItems = chat?.items || (feed.items || []).filter((item) => isChatNotification(item));
+  const items = [...milestoneItems, ...chatItems]
+    .map((item) => (readKeys?.has(item.key) ? { ...item, read: true } : item))
+    .sort((left, right) =>
+      (right.availableAt || 0) - (left.availableAt || 0)
+      || String(left.title || '').localeCompare(String(right.title || ''), 'vi'));
+  return {
+    items,
+    unreadCount: items.filter((item) => !item.read).length,
+    canDelete: Boolean(feed.canDelete || chat?.canDelete),
+    settings: feed.settings,
+  };
+}
+
+function NotificationBell({ data, onViewAll, onOpenItem, onOpenChange, onItemRead }) {
   const markRead = useMutation(anyApi.notifications.markRead);
   const [open, setOpen] = useState(false);
   const latestItems = (data?.items || []).slice(0, 10);
   const unreadCount = data?.unreadCount || 0;
+
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -508,7 +635,10 @@ function NotificationBell({ data, onViewAll, onOpenItem }) {
   }, [open]);
 
   const openItem = (item) => {
-    if (!item.read) void markRead({ notificationKey: item.key });
+    if (!item.read) {
+      onItemRead?.(item.key);
+      void markRead({ notificationKey: item.key });
+    }
     setOpen(false);
     onOpenItem?.(item);
   };
