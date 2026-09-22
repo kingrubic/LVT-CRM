@@ -6,9 +6,7 @@ import {
   getBooleanSystemSetting,
   getSourceNotificationMilestones,
   getWorkAssignerMode,
-  getWorkVisibilityMode,
   isOperationalManagerRole,
-  isSameDepartmentSubordinate,
   NOTIFICATION_DUTIES_ENABLED_SETTING_KEY,
   NOTIFICATION_DUTY_MILESTONES_SETTING_KEY,
   NOTIFICATION_SOURCE_DEFAULT,
@@ -19,14 +17,7 @@ import {
   WORK_ASSIGNER_MODE_ADMIN_MOD,
 } from "./lib";
 import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
-import {
-  buildChatNotificationItem,
-  selectVisibleChatNotifications,
-  shouldNotifyChatViewer,
-} from "./chatMessagePolicy";
 import { chatEventToFeedItem, mergeChatFeedItems } from "./chatNotifications";
-import { canAccessDutyChat } from "./dutyMessagePolicy";
-import { canAccessWorkChat } from "./workMessagePolicy";
 import { createMilestones, mergeMilestoneItems, unionMilestoneHours } from "./notificationSettings";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -112,23 +103,13 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     canSeeWorkModule ||
     enabledPersonal.some((row: any) => row.kind === "work");
 
-  const [duties, documents, workItems, personalTasks, positions, departments, users, workMessages, dutyMessages, storedChatEvents] = await Promise.all([
+  const [duties, documents, workItems, personalTasks, positions, departments] = await Promise.all([
     needDuties ? ctx.db.query("duties").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("officeDocuments").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("workItems").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("personalTasks").collect() : Promise.resolve([]),
     ctx.db.query("positions").collect(),
     ctx.db.query("departments").collect(),
-    canSeeWorkModule || canSeeDutiesModule || canUseWork || canUseDuties
-      ? ctx.db.query("users").collect()
-      : Promise.resolve([]),
-    canSeeWorkModule ? ctx.db.query("workMessages").collect() : Promise.resolve([]),
-    canSeeDutiesModule ? ctx.db.query("dutyMessages").collect() : Promise.resolve([]),
-    ctx.db
-      .query("chatNotificationEvents")
-      .withIndex("by_user_created", (q: any) => q.eq("userId", String(user._id)))
-      .order("desc")
-      .take(80),
   ]);
   const departmentMap = new Map(
     departments.map((department: any) => [String(department._id), department.name]),
@@ -444,139 +425,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
       milestoneLabel: "Cần duyệt",
       availableAt: now,
     }));
-  const usersById = new Map(users.map((row: any) => [String(row._id), row]));
-  const displayUserName = (id: string) => {
-    const row = usersById.get(String(id)) as { name?: string; email?: string } | undefined;
-    return String(row?.name || row?.email || "Người dùng").trim() || "Người dùng";
-  };
-  const visibilityMode = canSeeWorkModule ? await getWorkVisibilityMode(ctx) : null;
-  const workItemsByDocument = new Map<string, any[]>();
-  const personalTasksByDocument = new Map<string, any[]>();
-  if (canSeeWorkModule) {
-    for (const item of activeWorkItems) {
-      const list = workItemsByDocument.get(String(item.documentId)) || [];
-      list.push(item);
-      workItemsByDocument.set(String(item.documentId), list);
-    }
-    for (const task of activeTasks) {
-      const parent = activeWorkItems.find((item: any) => String(item._id) === String(task.workItemId));
-      if (!parent) continue;
-      const list = personalTasksByDocument.get(String(parent.documentId)) || [];
-      list.push(task);
-      personalTasksByDocument.set(String(parent.documentId), list);
-    }
-  }
-  const workChatAccess = new Map<string, boolean>();
-  const dutyChatAccess = new Map<string, boolean>();
-  const dutySubordinates = canSeeDutiesModule
-    ? users.filter(
-        (target: any) =>
-          target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
-      )
-    : [];
-  const computedChatItems = selectVisibleChatNotifications(
-    [
-      ...(canSeeWorkModule
-        ? workMessages
-            .filter((row: any) => {
-              const documentId = String(row.documentId || "");
-              if (!workChatAccess.has(documentId)) {
-                const document = documentsById.get(documentId);
-                const items = workItemsByDocument.get(documentId) || [];
-                const assigned = items.some((item: any) =>
-                  isWorkNotificationAssignee({
-                    user,
-                    item,
-                    document: document as { approverUserIds?: string[] } | undefined,
-                  }),
-                );
-                workChatAccess.set(
-                  documentId,
-                  assigned ||
-                  canAccessWorkChat({
-                    actorUserId: String(user._id),
-                    actorRole: user.role,
-                    actorLevel: level,
-                    actorDepartmentId: String(user.departmentId || ""),
-                    visibilityMode: visibilityMode || "school",
-                    document: document as { active?: boolean; createdBy?: string; status?: string } | undefined,
-                    workItems: items,
-                    personalTasks: personalTasksByDocument.get(documentId) || [],
-                    usersById: usersById as Map<string, { status?: string }>,
-                  }),
-                );
-              }
-              return shouldNotifyChatViewer({
-                viewerUserId: String(user._id),
-                authorUserId: String(row.authorUserId),
-                canSeeChat: Boolean(workChatAccess.get(documentId)),
-                recalledAt: row.recalledAt,
-                active: row.active,
-              });
-            })
-            .map((row: any) => {
-              const document = documentsById.get(String(row.documentId));
-              return buildChatNotificationItem({
-                kind: "work",
-                messageId: String(row._id),
-                entityId: String(row.documentId),
-                entityTitle: workListTitle(document || {}),
-                authorName: displayUserName(row.authorUserId),
-                bodyText: String(row.bodyText || ""),
-                createdAt: row.createdAt,
-              });
-            })
-        : []),
-      ...(canSeeDutiesModule
-        ? dutyMessages
-            .filter((row: any) => {
-              const dutyId = String(row.dutyId || "");
-              if (!dutyChatAccess.has(dutyId)) {
-                const duty = duties.find((item: any) => String(item._id) === dutyId);
-                dutyChatAccess.set(
-                  dutyId,
-                  canAccessDutyChat({
-                    actorUserId: String(user._id),
-                    actorRole: String(user.role || ""),
-                    actorAccess: String(menuAccess.duties || ""),
-                    actorDepartmentId: user.departmentId,
-                    duty,
-                    subordinateUsers: dutySubordinates,
-                  }),
-                );
-              }
-              return shouldNotifyChatViewer({
-                viewerUserId: String(user._id),
-                authorUserId: String(row.authorUserId),
-                canSeeChat: Boolean(dutyChatAccess.get(dutyId)),
-                recalledAt: row.recalledAt,
-                active: row.active,
-              });
-            })
-            .map((row: any) => {
-              const duty = duties.find((item: any) => String(item._id) === String(row.dutyId));
-              return buildChatNotificationItem({
-                kind: "duty",
-                messageId: String(row._id),
-                entityId: String(row.dutyId),
-                entityTitle: duty ? dutyListTitle(duty) : "Công tác",
-                authorName: displayUserName(row.authorUserId),
-                bodyText: String(row.bodyText || ""),
-                createdAt: row.createdAt,
-              });
-            })
-        : []),
-    ],
-    now,
-  );
-  const storedChatItems = storedChatEvents
-    .filter((row: any) => {
-      if (row.active === false) return false;
-      if (row.kind === "duty") return canSeeDutiesModule;
-      return canSeeWorkModule;
-    })
-    .map((row: any) => chatEventToFeedItem(row));
-  const chatItems = mergeChatFeedItems([storedChatItems, computedChatItems], now);
+  const chatItems = await loadChatNotificationItems(ctx, user, menuAccess, now);
   const milestones = [...newDutyAssignments, ...newWorkAssignments, ...pendingApprovalItems, ...chatItems, ...scheduledMilestones]
     .sort((a, b) => b.availableAt - a.availableAt || a.title.localeCompare(b.title, "vi"));
   const [reads, dismissals] = await Promise.all([
@@ -612,9 +461,61 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   };
 }
 
+async function loadChatNotificationItems(ctx: any, user: any, menuAccess: any, now: number) {
+  const canSeeDutiesModule =
+    isOperationalManagerRole(user.role) || menuAccess.duties !== "hidden";
+  const canSeeWorkModule =
+    isOperationalManagerRole(user.role) || menuAccess.work !== "hidden";
+  const storedChatEvents = await ctx.db
+    .query("chatNotificationEvents")
+    .withIndex("by_user_created", (q: any) => q.eq("userId", String(user._id)))
+    .order("desc")
+    .take(80);
+  const storedChatItems = storedChatEvents
+    .filter((row: any) => {
+      if (row.active === false) return false;
+      if (row.kind === "duty") return canSeeDutiesModule;
+      return canSeeWorkModule;
+    })
+    .map((row: any) => chatEventToFeedItem(row));
+  return mergeChatFeedItems([storedChatItems], now);
+}
+
 export const feed = query({
   args: { now: v.optional(v.number()) },
   handler: async (ctx, args) => notificationItems(ctx, args.now),
+});
+
+/** Live bell rows for chat. Reads only this user's event, read, and dismissal rows. */
+export const chatFeed = query({
+  args: {},
+  handler: async (ctx) => {
+    const { user, menuAccess } = await notificationContext(ctx);
+    const chatItems = await loadChatNotificationItems(ctx, user, menuAccess, Date.now());
+    const [reads, dismissals] = await Promise.all([
+      ctx.db
+        .query("notificationReads")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect(),
+      ctx.db
+        .query("notificationDismissals")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect(),
+    ]);
+    const readMap = new Map(reads.map((read) => [read.notificationKey, read.readAt]));
+    const dismissedKeys = new Set(dismissals.map((item) => item.notificationKey));
+    const items = chatItems
+      .filter((item) => !dismissedKeys.has(item.key))
+      .map((item) => ({
+        ...item,
+        read: readMap.has(item.key),
+        readAt: readMap.get(item.key) || null,
+      }));
+    return {
+      items,
+      canDelete: canOperateMenu(menuAccess.notifications),
+    };
+  },
 });
 
 export const markRead = mutation({
