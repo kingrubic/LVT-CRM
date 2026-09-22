@@ -154,20 +154,20 @@
   font-size: 14px;
   font-weight: 400;
   vertical-align: middle;
-  text-align: left;
+  text-align: center;
   word-break: break-word;
 }
 
 .lct-table thead th {
   background: #efefef;
   font-weight: 700;
-  text-align: left;
+  text-align: center;
 }
 
 .lct-table tbody th {
   font-weight: 700;
   width: 16%;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .lct-col-day { width: 16%; }
@@ -185,20 +185,31 @@
   background: #f7fafb;
 }
 
+.lct-row-edited > td,
+.lct-row-edited > th[rowspan="1"] {
+  background: #fff4c2;
+}
+
+.lct-row-selectable.lct-row-edited:hover > td,
+.lct-row-selectable.lct-row-edited:hover > th[rowspan="1"] {
+  background: #ffe8a3;
+}
+
 .lct-content-cell.is-editable {
   cursor: pointer;
 }
 
 .lct-content-with-actions {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
 .lct-content-text {
   min-width: 0;
   flex: 1 1 auto;
+  text-align: center;
 }
 
 .lct-row-actions {
@@ -222,7 +233,7 @@
 
 .lct-content-button {
   appearance: none;
-  display: inline;
+  display: block;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -231,7 +242,7 @@
   color: inherit;
   font: inherit;
   font-size: inherit;
-  text-align: inherit;
+  text-align: center;
   text-decoration: underline;
   text-decoration-color: transparent;
   text-underline-offset: 2px;

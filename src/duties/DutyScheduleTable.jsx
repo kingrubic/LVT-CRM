@@ -34,10 +34,17 @@ export default function DutyScheduleTable({
           {rows.map((row, index) => {
             const selectable = Boolean(row.eventId && onSelectEvent);
             const editable = Boolean(onEditContent) && canOpenDutyContentEditor(row);
+            const edited = Boolean(row.edited);
+            const rowClass = [
+              selectable ? 'lct-row-selectable' : '',
+              edited ? 'lct-row-edited' : '',
+            ].filter(Boolean).join(' ');
             return (
               <tr
                 key={`${row.dayIso}-${row.eventId || 'empty'}-${index}`}
-                className={selectable ? 'lct-row-selectable' : undefined}
+                className={rowClass || undefined}
+                data-edited={edited ? 'true' : undefined}
+                title={edited ? 'Đã chỉnh sửa' : undefined}
                 onClick={selectable ? () => onSelectEvent(row) : undefined}
               >
                 {row.showDay ? (

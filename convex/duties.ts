@@ -471,6 +471,8 @@ export const sharedSchedule = query({
           .map((id) => userNameMap.get(String(id)))
           .filter((name): name is string => Boolean(name)),
         otherParticipants: String(duty.otherParticipants || "").trim(),
+        createdAt: duty.createdAt,
+        updatedAt: duty.updatedAt,
         canManage: isAdmin || String(duty.createdBy || "") === String(user._id),
         canChat: canAccessDutyChat({
           actorUserId: String(user._id),
