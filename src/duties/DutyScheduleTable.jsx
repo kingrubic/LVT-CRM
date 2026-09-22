@@ -4,6 +4,15 @@ import { DutyChatButton } from './DutyChatButton';
 import { CardIconButton, PencilIcon } from '../lib/CardActionIcons';
 import '../work/work.css';
 
+function DutyContentLabel({ content, edited }) {
+  if (!edited || !content) return content;
+  return (
+    <span className="lct-content-edited" data-edited="true" title="Đã chỉnh sửa">
+      {content}
+    </span>
+  );
+}
+
 export default function DutyScheduleTable({
   title,
   rows,
@@ -34,6 +43,7 @@ export default function DutyScheduleTable({
           {rows.map((row, index) => {
             const selectable = Boolean(row.eventId && onSelectEvent);
             const editable = Boolean(onEditContent) && canOpenDutyContentEditor(row);
+            const edited = Boolean(row.edited);
             return (
               <tr
                 key={`${row.dayIso}-${row.eventId || 'empty'}-${index}`}
@@ -58,10 +68,10 @@ export default function DutyScheduleTable({
                             onEditContent(row);
                           }}
                         >
-                          {row.content}
+                          <DutyContentLabel content={row.content} edited={edited} />
                         </button>
                       ) : (
-                        row.content
+                        <DutyContentLabel content={row.content} edited={edited} />
                       )}
                     </div>
                     {row.eventId ? (

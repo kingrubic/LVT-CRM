@@ -135,6 +135,21 @@ function compareScheduleEvents(a, b) {
   return String(a.title || a.content || '').localeCompare(String(b.title || b.content || ''), 'vi');
 }
 
+/**
+ * Create and Excel import set `createdAt` and `updatedAt` to the same `Date.now()`
+ * (`insertCreatedDuty`). The content update mutation is what moves `updatedAt`
+ * later on an active duty. Attendance and chat write other tables, so they do
+ * not count. Treat a gap within this tolerance as unchanged.
+ */
+export const DUTY_EDITED_TOLERANCE_MS = 1000;
+
+export function isEditedDuty(event) {
+  const createdAt = Number(event?.createdAt);
+  const updatedAt = Number(event?.updatedAt);
+  if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt)) return false;
+  return updatedAt - createdAt > DUTY_EDITED_TOLERANCE_MS;
+}
+
 export function displayDateForEvent(event, days) {
   if (!event?.startDate || !event?.endDate || !days.length) return null;
   const rangeStart = days[0];
@@ -170,6 +185,7 @@ export function buildSharedScheduleRows(mode, anchorIso, events) {
         eventId: null,
         canManage: false,
         canChat: false,
+        edited: false,
       });
       continue;
     }
@@ -186,6 +202,7 @@ export function buildSharedScheduleRows(mode, anchorIso, events) {
         eventId: event._id || null,
         canManage: Boolean(event.canManage),
         canChat: event.canChat !== false,
+        edited: isEditedDuty(event),
       });
     });
   }

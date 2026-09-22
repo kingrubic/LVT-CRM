@@ -268,6 +268,8 @@ export const dutyCalendar = query({
             (participant) => participant.name || participant.email || "",
           ).filter(Boolean),
           otherParticipants: String(duty.otherParticipants || "").trim(),
+          createdAt: duty.createdAt,
+          updatedAt: duty.updatedAt,
           assignmentType: duty.participantUserIds.some(
             (id) => String(id) === selectedUserId,
           )

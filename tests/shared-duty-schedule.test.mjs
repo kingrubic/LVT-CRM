@@ -5,11 +5,13 @@ import { readFileSync } from 'node:fs';
 import {
   buildSharedScheduleRows,
   canOpenDutyContentEditor,
+  DUTY_EDITED_TOLERANCE_MS,
   formatDayCell,
   formatDutyClock,
   formatParticipantCell,
   formatTimeCell,
   formatVnDate,
+  isEditedDuty,
   scheduleRange,
   sharedScheduleFilename,
 } from '../src/duties/sharedDutySchedule.js';
@@ -163,6 +165,43 @@ test('PDF lịch chung nhúng font tiếng Việt và giữ tiêu đề/cột c�
   assert.match(visible, /Thứ Bảy/);
   assert.match(visible, /12\/9/);
   assert.match(visible, /Thứ Năm/);
+});
+
+test('ô công tác đã sửa khi updatedAt muộn hơn createdAt quá dung sai', () => {
+  const createdAt = 1_700_000_000_000;
+  assert.equal(DUTY_EDITED_TOLERANCE_MS, 1000);
+  assert.equal(isEditedDuty({ createdAt, updatedAt: createdAt }), false);
+  assert.equal(isEditedDuty({ createdAt, updatedAt: createdAt + DUTY_EDITED_TOLERANCE_MS }), false);
+  assert.equal(isEditedDuty({ createdAt, updatedAt: createdAt + DUTY_EDITED_TOLERANCE_MS + 1 }), true);
+  assert.equal(isEditedDuty({ createdAt }), false);
+  assert.equal(isEditedDuty({ updatedAt: createdAt }), false);
+  assert.equal(isEditedDuty(null), false);
+
+  const { rows } = buildSharedScheduleRows('week', '2026-09-09', [
+    { ...sampleEvents[0], createdAt, updatedAt: createdAt },
+    { ...sampleEvents[1], createdAt, updatedAt: createdAt + 5000 },
+  ]);
+  const monday = rows.filter((row) => row.dayIso === '2026-09-07');
+  assert.equal(monday[0].edited, false);
+  assert.equal(monday[1].edited, true);
+  assert.equal(rows.find((row) => row.dayIso === '2026-09-12').edited, false);
+
+  const table = readFileSync(new URL('../src/duties/DutyScheduleTable.jsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/duties/sharedDutySchedule.css', import.meta.url), 'utf8');
+  const duties = readFileSync(new URL('../convex/duties.ts', import.meta.url), 'utf8');
+  const reports = readFileSync(new URL('../convex/reports.ts', import.meta.url), 'utf8');
+  assert.match(table, /lct-content-edited/);
+  assert.doesNotMatch(table, /lct-row-edited/);
+  assert.match(table, /DutyChatButton/);
+  assert.match(table, /PencilIcon/);
+  assert.match(css, /text-align:\s*center/);
+  assert.match(css, /vertical-align:\s*middle/);
+  assert.match(css, /\.lct-content-edited \{[\s\S]*background:\s*#fff4c2/);
+  assert.doesNotMatch(css, /\.lct-row-edited/);
+  assert.match(css, /\.lct-content-with-actions[\s\S]*align-items:\s*center/);
+  assert.match(duties, /updatedAt: duty\.updatedAt/);
+  assert.match(reports, /createdAt: duty\.createdAt/);
+  assert.match(reports, /updatedAt: duty\.updatedAt/);
 });
 
 test('admin/mod bấm Nội dung trên bảng tuần/tháng để sửa tại chỗ, user thường thì không', () => {
