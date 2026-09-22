@@ -190,12 +190,14 @@ test('ô công tác đã sửa khi updatedAt muộn hơn createdAt quá dung sai
   const css = readFileSync(new URL('../src/duties/sharedDutySchedule.css', import.meta.url), 'utf8');
   const duties = readFileSync(new URL('../convex/duties.ts', import.meta.url), 'utf8');
   const reports = readFileSync(new URL('../convex/reports.ts', import.meta.url), 'utf8');
-  assert.match(table, /lct-row-edited/);
+  assert.match(table, /lct-content-edited/);
+  assert.doesNotMatch(table, /lct-row-edited/);
   assert.match(table, /DutyChatButton/);
   assert.match(table, /PencilIcon/);
   assert.match(css, /text-align:\s*center/);
   assert.match(css, /vertical-align:\s*middle/);
-  assert.match(css, /\.lct-row-edited > td[\s\S]*background:\s*#fff4c2/);
+  assert.match(css, /\.lct-content-edited \{[\s\S]*background:\s*#fff4c2/);
+  assert.doesNotMatch(css, /\.lct-row-edited/);
   assert.match(css, /\.lct-content-with-actions[\s\S]*align-items:\s*center/);
   assert.match(duties, /updatedAt: duty\.updatedAt/);
   assert.match(reports, /createdAt: duty\.createdAt/);

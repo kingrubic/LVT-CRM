@@ -185,13 +185,18 @@
   background: #f7fafb;
 }
 
-.lct-row-edited > td,
-.lct-row-edited > th[rowspan="1"] {
+.lct-content-edited {
+  display: inline;
+  padding: 0 0.2em;
+  border-radius: 2px;
   background: #fff4c2;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 
-.lct-row-selectable.lct-row-edited:hover > td,
-.lct-row-selectable.lct-row-edited:hover > th[rowspan="1"] {
+.lct-row-selectable:hover .lct-content-edited {
   background: #ffe8a3;
 }
 
