@@ -111,3 +111,55 @@ export async function loadActiveDutiesOverlapping(
 ) {
   return loadActiveDutiesFromEndDate(ctx, startDate, endDate);
 }
+
+export type DutyRevisionPart = {
+  id: string;
+  updatedAt?: number;
+  tag?: string;
+};
+
+/**
+ * Stable fingerprint for a duty window.
+ * `count` and `maxUpdatedAt` are readable; the hash changes when any row's
+ * id, timestamp, or tag changes, including an edit that does not set a new max.
+ */
+export function dutyWindowRevision(parts: DutyRevisionPart[]) {
+  const rows = parts
+    .map((part) => ({
+      id: String(part.id),
+      updatedAt: Number(part.updatedAt) || 0,
+      tag: String(part.tag || ""),
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id) || a.tag.localeCompare(b.tag) || a.updatedAt - b.updatedAt);
+  let hash = 2166136261;
+  let maxUpdatedAt = 0;
+  for (const row of rows) {
+    if (row.updatedAt > maxUpdatedAt) maxUpdatedAt = row.updatedAt;
+    const piece = `${row.id}\0${row.updatedAt}\0${row.tag}\0`;
+    for (let index = 0; index < piece.length; index += 1) {
+      hash ^= piece.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+  }
+  return `${rows.length}:${maxUpdatedAt}:${hash >>> 0}`;
+}
+
+/** Shared and personal schedule stamps. Attendance rows are personal-only. */
+export function dutyScheduleRevision(input: {
+  duties: Array<{ _id: string; updatedAt?: number }>;
+  attendances?: Array<{ dutyId: string; userId: string; status?: string; updatedAt?: number }>;
+  meta?: string;
+}) {
+  return dutyWindowRevision([
+    ...input.duties.map((duty) => ({
+      id: `duty:${String(duty._id)}`,
+      updatedAt: duty.updatedAt,
+    })),
+    ...(input.attendances || []).map((row) => ({
+      id: `att:${String(row.dutyId)}:${String(row.userId)}`,
+      updatedAt: row.updatedAt,
+      tag: String(row.status || ""),
+    })),
+    { id: "meta", updatedAt: 0, tag: String(input.meta || "") },
+  ]);
+}

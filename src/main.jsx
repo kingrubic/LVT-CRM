@@ -428,7 +428,7 @@ function AppShell({ session }) {
           <NotificationsView data={notificationFeed} onOpenItem={openFromNotification} />
         ) : active === 'duties' ? (
           dutyRoute.view === 'shared' ? (
-            <SharedDutyScheduleView onChooseView={chooseDutyView} />
+            <SharedDutyScheduleView currentUserId={user._id} onChooseView={chooseDutyView} />
           ) : canManageOperations ? (
             <DutiesAdminView
               currentUserId={user._id}
@@ -814,6 +814,7 @@ function DutiesAdminView({
 
       {!editorOpen ? (
         <DutyReportsView
+          currentUserId={currentUserId}
           onCreate={openCreateEditor}
           onImport={openImportPanel}
           onEdit={(event) => startEdit({ _id: event._id })}
@@ -1036,6 +1037,7 @@ function DutiesUserView({
 
       {!editorOpen ? (
         <DutyReportsView
+          currentUserId={currentUserId}
           onCreate={openCreateEditor}
           onImport={openImportPanel}
           onEdit={(event) => startEdit({ _id: event._id })}

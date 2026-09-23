@@ -25,6 +25,8 @@ import {
   toIsoDate as toSharedIsoDate,
 } from '../duties/sharedDutySchedule.js';
 import { dutyListDateWindow } from '../duties/dutyListRange.js';
+import { refreshCachedDutyCalendar } from '../duties/dutyScheduleCache.js';
+import { useCachedDutySchedule } from '../duties/useCachedDutySchedule.js';
 import '../duties/sharedDutySchedule.css';
 import '../work/work.css';
 import PersonalReminderPanel, {
@@ -359,6 +361,7 @@ export default function DutyReportsView(props) {
 }
 
 function DutyReportsViewBody({
+  currentUserId = '',
   onCreate = null,
   onImport = null,
   onEdit = null,
@@ -388,12 +391,24 @@ function DutyReportsViewBody({
     [mode, anchor],
   );
   const listWindow = useMemo(() => (mode === 'list' ? dutyListDateWindow() : null), [mode]);
+  const queryUserId = selectedUserId || currentUserId || '';
   const queryArgs = {
-    ...(selectedUserId ? { userId: selectedUserId } : {}),
+    ...(queryUserId ? { userId: queryUserId } : {}),
     startDate: listWindow ? listWindow.startDate : toIsoDate(calendarRange.start),
     endDate: listWindow ? listWindow.endDate : toIsoDate(calendarRange.end),
   };
-  const data = useQuery(anyApi.reports.dutyCalendar, queryArgs);
+  const data = useCachedDutySchedule({
+    userId: currentUserId,
+    view: 'personal',
+    mode,
+    startDate: queryArgs.startDate,
+    endDate: queryArgs.endDate,
+    selectedUserId: queryUserId,
+    revisionQuery: anyApi.reports.dutyCalendarRevision,
+    dataQuery: anyApi.reports.dutyCalendar,
+    queryArgs,
+    prepare: refreshCachedDutyCalendar,
+  });
   const myDutyReminders = useQuery(
     anyApi.personalReminders.listMine,
     !reminderFailed && data?.isSelectedSelf ? { kind: 'duty' } : 'skip',

@@ -17,8 +17,10 @@ import { canCreateAssignments, dutyListTitle, dutyLocationLabel } from "./assign
 import { dutyTiming, requireDutiesAccess } from "./duties";
 import {
   dutyListDateWindow,
+  dutyScheduleRevision,
   loadActiveDutiesOverlapping,
   loadDocsByIds,
+  parseDutyDateRange,
 } from "./dutyRange";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -143,6 +145,78 @@ async function loadAttendancesForDuties(ctx: { db: any }, dutyIds: string[]) {
     ),
   );
   return groups.flat();
+}
+
+function dutyCalendarRevisionMeta(input: {
+  attendanceConfirmationEnabled: boolean;
+  access: string;
+  isAdmin: boolean;
+  actor: {
+    _id: string;
+    role?: string;
+    departmentId?: string;
+    positionId?: string;
+    permissionGroupId?: string;
+    updatedAt?: number;
+  };
+  selected: { _id: string; departmentId?: string; positionId?: string; updatedAt?: number };
+}) {
+  return [
+    input.attendanceConfirmationEnabled ? "confirm" : "noconfirm",
+    input.access,
+    input.isAdmin ? "ops" : "member",
+    String(input.actor._id),
+    String(input.actor.role || ""),
+    String(input.actor.departmentId || ""),
+    String(input.actor.positionId || ""),
+    String(input.actor.permissionGroupId || ""),
+    String(Number(input.actor.updatedAt) || 0),
+    String(input.selected._id),
+    String(input.selected.departmentId || ""),
+    String(input.selected.positionId || ""),
+    String(Number(input.selected.updatedAt) || 0),
+  ].join("|");
+}
+
+function buildDutyCalendarRevision(input: {
+  duties: Array<{ _id: string; updatedAt?: number }>;
+  attendances: Array<{ dutyId: string; userId: string; status?: string; updatedAt?: number }>;
+  attendanceConfirmationEnabled: boolean;
+  access: string;
+  isAdmin: boolean;
+  actor: {
+    _id: string;
+    role?: string;
+    departmentId?: string;
+    positionId?: string;
+    permissionGroupId?: string;
+    updatedAt?: number;
+  };
+  selected: { _id: string; departmentId?: string; positionId?: string; updatedAt?: number };
+}) {
+  return dutyScheduleRevision({
+    duties: input.duties,
+    attendances: input.attendances,
+    meta: dutyCalendarRevisionMeta(input),
+  });
+}
+
+async function resolveVisibleDutyUser(
+  ctx: { db: any },
+  actor: { _id: string; departmentId?: string; positionId?: string },
+  access: string,
+  isAdmin: boolean,
+  userId?: string,
+): Promise<any> {
+  if (!userId || String(userId) === String(actor._id)) return actor;
+  const selected = await ctx.db.get(userId);
+  if (!selected || selected.status !== "active") throw new Error("REPORT_USER_FORBIDDEN");
+  if (isAdmin || access === "view_all") return selected;
+  const positions = await loadDocsByIds(ctx, [actor.positionId, selected.positionId]);
+  if (!isSameDepartmentSubordinate(actor, selected, positions)) {
+    throw new Error("REPORT_USER_FORBIDDEN");
+  }
+  return selected;
 }
 
 export const dutyCalendar = query({
@@ -349,6 +423,7 @@ export const dutyCalendar = query({
             : "department",
           attendanceStatus: selectedAttendance(String(duty._id), String(selectedUser._id)),
           canManage: isAdmin || String(duty.createdBy || "") === String(actor._id),
+          canMarkSelectedUser,
           canMarkAttendance: canMarkSelectedUser && timing.isOngoing,
           timing: {
             isOngoing: timing.isOngoing,
@@ -378,7 +453,64 @@ export const dutyCalendar = query({
       canEdit,
       canManageSubordinates,
       attendanceConfirmationEnabled,
+      startDate,
+      endDate,
+      revision: buildDutyCalendarRevision({
+        duties,
+        attendances,
+        attendanceConfirmationEnabled,
+        access,
+        isAdmin,
+        actor,
+        selected: selectedUser,
+      }),
       events,
+    };
+  },
+});
+
+/**
+ * Cheap stamp for one person's Lịch công tác window.
+ * Same duty slice and attendance rows as `dutyCalendar`, without the roster,
+ * department, or location joins.
+ */
+export const dutyCalendarRevision = query({
+  args: {
+    userId: v.optional(v.id("users")),
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { startDate, endDate } = parseDutyDateRange(args.startDate, args.endDate);
+    const { user: actor, access, isAdmin } = await requireDutiesAccess(ctx);
+    const selectedUser = await resolveVisibleDutyUser(ctx, actor, access, isAdmin, args.userId);
+    const [dutiesInWindow, attendanceConfirmationEnabled] = await Promise.all([
+      loadActiveDutiesOverlapping(ctx, startDate, endDate),
+      getBooleanSystemSetting(
+        ctx,
+        DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
+        DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
+      ),
+    ]);
+    const duties = dutiesInWindow.filter((duty: { departmentIds: string[]; participantUserIds: string[] }) =>
+      userIsParticipant(selectedUser, duty),
+    );
+    const attendances = await loadAttendancesForDuties(
+      ctx,
+      duties.map((duty: { _id: string }) => String(duty._id)),
+    );
+    return {
+      startDate,
+      endDate,
+      revision: buildDutyCalendarRevision({
+        duties,
+        attendances,
+        attendanceConfirmationEnabled,
+        access,
+        isAdmin,
+        actor,
+        selected: selectedUser,
+      }),
     };
   },
 });

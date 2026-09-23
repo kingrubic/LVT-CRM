@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import DutyWorkspaceTabs from './DutyWorkspaceTabs';
 import DutyEditModal from './DutyEditModal';
@@ -9,16 +8,26 @@ import {
   shiftScheduleAnchor,
   toIsoDate,
 } from './sharedDutySchedule.js';
+import { useCachedDutySchedule } from './useCachedDutySchedule.js';
 import './sharedDutySchedule.css';
 
-export default function SharedDutyScheduleView({ onChooseView }) {
+export default function SharedDutyScheduleView({ onChooseView, currentUserId = '' }) {
   const [mode, setMode] = useState('week');
   const [anchorIso, setAnchorIso] = useState(() => toIsoDate(new Date()));
   const [editingEvent, setEditingEvent] = useState(null);
   const rangePreview = useMemo(() => buildSharedScheduleRows(mode, anchorIso, []).range, [mode, anchorIso]);
-  const data = useQuery(anyApi.duties.sharedSchedule, {
+  const data = useCachedDutySchedule({
+    userId: currentUserId,
+    view: 'shared',
+    mode,
     startDate: rangePreview.startIso,
     endDate: rangePreview.endIso,
+    revisionQuery: anyApi.duties.sharedScheduleRevision,
+    dataQuery: anyApi.duties.sharedSchedule,
+    queryArgs: {
+      startDate: rangePreview.startIso,
+      endDate: rangePreview.endIso,
+    },
   });
   const events = data?.events || [];
   const built = useMemo(
