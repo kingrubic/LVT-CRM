@@ -22,7 +22,7 @@ import {
 } from "./assignmentPolicy";
 import { cleanDutyInput, evaluateDutyRefs, parseLocalMs } from "./dutyWritePolicy";
 import { canAccessDutyChat } from "./dutyMessagePolicy";
-import { loadActiveDutiesOverlapping, loadDocsByIds, parseDutyDateRange } from "./dutyRange";
+import { dutyScheduleRevision, loadActiveDutiesOverlapping, loadDocsByIds, parseDutyDateRange } from "./dutyRange";
 
 async function assertRefs(
   ctx: { db: any },
@@ -439,6 +439,26 @@ async function loadScheduleSubordinates(
   );
 }
 
+function sharedScheduleStamp(
+  duties: Array<{ _id: string; updatedAt?: number }>,
+  user: { _id: string; role?: string; departmentId?: string; permissionGroupId?: string; updatedAt?: number },
+  access: string,
+  isAdmin: boolean,
+) {
+  return dutyScheduleRevision({
+    duties,
+    meta: [
+      access,
+      isAdmin ? "ops" : "member",
+      String(user._id),
+      String(user.role || ""),
+      String(user.departmentId || ""),
+      String(user.permissionGroupId || ""),
+      String(Number(user.updatedAt) || 0),
+    ].join("|"),
+  });
+}
+
 /** School-wide Lịch công tác sheet for anyone who can open the duties menu. */
 export const sharedSchedule = query({
   args: {
@@ -495,7 +515,34 @@ export const sharedSchedule = query({
           a.startTime.localeCompare(b.startTime) ||
           a.title.localeCompare(b.title, "vi"),
       );
-    return { startDate, endDate, events };
+    return {
+      startDate,
+      endDate,
+      revision: sharedScheduleStamp(duties, user, access, isAdmin),
+      events,
+    };
+  },
+});
+
+/**
+ * Cheap stamp for the shared Lịch công tác window.
+ * Reads the same duty index as `sharedSchedule` and skips location, department,
+ * and participant joins so a browser cache can skip the heavy query when unchanged.
+ */
+export const sharedScheduleRevision = query({
+  args: {
+    startDate: v.string(),
+    endDate: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { startDate, endDate } = parseDutyDateRange(args.startDate, args.endDate);
+    const { user, access, isAdmin } = await requireDutiesAccess(ctx);
+    const duties = await loadActiveDutiesOverlapping(ctx, startDate, endDate);
+    return {
+      startDate,
+      endDate,
+      revision: sharedScheduleStamp(duties, user, access, isAdmin),
+    };
   },
 });
 
