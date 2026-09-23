@@ -15,6 +15,11 @@ import {
 } from "./lib";
 import { canCreateAssignments, dutyListTitle, dutyLocationLabel } from "./assignmentPolicy";
 import { dutyTiming, requireDutiesAccess } from "./duties";
+import {
+  dutyListDateWindow,
+  loadActiveDutiesOverlapping,
+  loadDocsByIds,
+} from "./dutyRange";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -111,6 +116,35 @@ function bumpKpi(
   else kpi.incomplete += 1;
 }
 
+async function loadActiveUsers(ctx: { db: any }) {
+  return ctx.db
+    .query("users")
+    .withIndex("by_status", (q: any) => q.eq("status", "active"))
+    .collect();
+}
+
+async function loadActiveDepartmentUsers(ctx: { db: any }, departmentId?: string) {
+  if (!departmentId) return [];
+  const rows = await ctx.db
+    .query("users")
+    .withIndex("by_department", (q: any) => q.eq("departmentId", String(departmentId)))
+    .collect();
+  return rows.filter((user: { status?: string }) => user.status === "active");
+}
+
+async function loadAttendancesForDuties(ctx: { db: any }, dutyIds: string[]) {
+  if (!dutyIds.length) return [];
+  const groups = await Promise.all(
+    dutyIds.map((dutyId) =>
+      ctx.db
+        .query("dutyAttendances")
+        .withIndex("by_duty", (q: any) => q.eq("dutyId", dutyId))
+        .collect(),
+    ),
+  );
+  return groups.flat();
+}
+
 export const dutyCalendar = query({
   args: {
     userId: v.optional(v.id("users")),
@@ -118,52 +152,96 @@ export const dutyCalendar = query({
     endDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const startDate = args.startDate?.trim() || "";
-    const endDate = args.endDate?.trim() || "";
-    const unbounded = !startDate && !endDate;
-    if (!unbounded && (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate)) {
+    const rawStart = args.startDate?.trim() || "";
+    const rawEnd = args.endDate?.trim() || "";
+    const window = !rawStart && !rawEnd ? dutyListDateWindow() : { startDate: rawStart, endDate: rawEnd };
+    if (!DATE_RE.test(window.startDate) || !DATE_RE.test(window.endDate) || window.endDate < window.startDate) {
       throw new Error("INVALID_DATE_RANGE");
     }
+    const { startDate, endDate } = window;
 
     const { user: actor, access, isAdmin } = await requireDutiesAccess(ctx);
+    const canViewAll = isAdmin || access === "view_all";
+    const canEdit = isAdmin || canOperateMenu(access);
 
-    const [users, positions, departments, locations, duties, attendanceConfirmationEnabled] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db.query("positions").collect(),
-      ctx.db.query("departments").collect(),
-      ctx.db.query("locations").collect(),
-      ctx.db.query("duties").collect(),
+    const [seedUsers, dutiesInWindow, attendanceConfirmationEnabled] = await Promise.all([
+      canViewAll ? loadActiveUsers(ctx) : loadActiveDepartmentUsers(ctx, actor.departmentId),
+      loadActiveDutiesOverlapping(ctx, startDate, endDate),
       getBooleanSystemSetting(
         ctx,
         DUTY_ATTENDANCE_CONFIRMATION_SETTING_KEY,
         DUTY_ATTENDANCE_CONFIRMATION_DEFAULT,
       ),
     ]);
+    const roster = new Map<string, any>(
+      seedUsers.map((user: any) => [String(user._id), user]),
+    );
+    if (!roster.has(String(actor._id))) roster.set(String(actor._id), actor);
 
-    const activeUsers = users.filter((user) => user.status === "active");
-    const canViewAll = isAdmin || access === "view_all";
-    const canEdit = isAdmin || canOperateMenu(access);
+    let positions = await loadDocsByIds(ctx, [
+      actor.positionId,
+      ...seedUsers.map((user: { positionId?: string }) => user.positionId),
+    ]);
     const actorLevel = activePositionLevel(actor, positions);
     const canCreate = canCreateAssignments(actor.role, actorLevel);
     const canManageSubordinates =
       attendanceConfirmationEnabled && !isAdmin && canEdit && actorLevel > 0;
-    const visibleUsers =
-      canViewAll
-        ? activeUsers
-        : activeUsers.filter(
-            (user) =>
-              String(user._id) === String(actor._id) ||
-              isSameDepartmentSubordinate(actor, user, positions),
-          );
+    const visibleUsers = canViewAll
+      ? [...roster.values()]
+      : [...roster.values()].filter(
+          (user) =>
+            String(user._id) === String(actor._id) ||
+            isSameDepartmentSubordinate(actor, user, positions),
+        );
     const selectedUserId = String(args.userId || actor._id);
     const selectedUser = visibleUsers.find(
       (user) => String(user._id) === selectedUserId,
     );
     if (!selectedUser) throw new Error("REPORT_USER_FORBIDDEN");
 
-    const attendances = await ctx.db.query("dutyAttendances").collect();
+    const duties = dutiesInWindow.filter((duty: { departmentIds: string[]; participantUserIds: string[] }) =>
+      userIsParticipant(selectedUser, duty),
+    );
+    if (!canViewAll && duties.length) {
+      const known = new Set(roster.keys());
+      const extraDepartmentIds = [
+        ...new Set(
+          duties.flatMap((duty: { departmentIds?: string[] }) => duty.departmentIds || []).map(String),
+        ),
+      ];
+      const extraUserIds = duties
+        .flatMap((duty: { participantUserIds?: string[] }) => duty.participantUserIds || [])
+        .map(String)
+        .filter((id: string) => !known.has(id));
+      const [departmentGroups, extraUsers] = await Promise.all([
+        Promise.all(extraDepartmentIds.map((departmentId) => loadActiveDepartmentUsers(ctx, departmentId))),
+        loadDocsByIds(ctx, extraUserIds),
+      ]);
+      for (const user of departmentGroups.flat()) roster.set(String(user._id), user);
+      for (const user of extraUsers) {
+        if (user.status === "active") roster.set(String(user._id), user);
+      }
+      const loadedPositionIds = new Set(positions.map((position) => String(position._id)));
+      const missingPositionIds = [...roster.values()]
+        .map((user) => user.positionId)
+        .filter((id) => id && !loadedPositionIds.has(String(id)));
+      if (missingPositionIds.length) {
+        positions = positions.concat(await loadDocsByIds(ctx, missingPositionIds));
+      }
+    }
+    const users = [...roster.values()];
+
+    const [departments, locations, attendances] = await Promise.all([
+      loadDocsByIds(ctx, [
+        ...users.map((user) => user.departmentId),
+        ...visibleUsers.map((user) => user.departmentId),
+        ...duties.flatMap((duty: { departmentIds?: string[] }) => duty.departmentIds || []),
+      ]),
+      loadDocsByIds(ctx, duties.flatMap((duty: { locationIds?: string[] }) => duty.locationIds || [])),
+      loadAttendancesForDuties(ctx, duties.map((duty: { _id: string }) => String(duty._id))),
+    ]);
     const attendanceMap = new Map(
-      attendances.map((attendance) => [
+      attendances.map((attendance: { dutyId: string; userId: string; status: string }) => [
         `${String(attendance.dutyId)}:${String(attendance.userId)}`,
         attendance.status,
       ]),
@@ -219,12 +297,6 @@ export const dutyCalendar = query({
 
     const now = Date.now();
     const events = duties
-      .filter(
-        (duty) =>
-          duty.active &&
-          (unbounded || (duty.startDate <= endDate && duty.endDate >= startDate)) &&
-          userIsParticipant(selectedUser, duty),
-      )
       .map((duty) => {
         const timing = dutyTiming(duty, now);
         const participants = users.filter(

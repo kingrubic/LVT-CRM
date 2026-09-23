@@ -21,6 +21,7 @@ import {
 import { dutyListTitle, isDutyParticipant, isWorkNotificationAssignee, workListTitle } from "./assignmentPolicy";
 import {
   buildChatNotificationItem,
+  CHAT_NOTIFICATION_TTL_MS,
   selectVisibleChatNotifications,
   shouldNotifyChatViewer,
 } from "./chatMessagePolicy";
@@ -28,6 +29,7 @@ import { chatEventToFeedItem, mergeChatFeedItems } from "./chatNotifications";
 import { canAccessDutyChat } from "./dutyMessagePolicy";
 import { canAccessWorkChat } from "./workMessagePolicy";
 import { createMilestones, mergeMilestoneItems, unionMilestoneHours } from "./notificationSettings";
+import { dutyNotificationEndFloor, loadActiveDutiesFromEndDate } from "./dutyRange";
 
 const HOUR_MS = 60 * 60 * 1000;
 const VN_OFFSET_MS = 7 * HOUR_MS;
@@ -75,6 +77,12 @@ async function notificationContext(ctx: any) {
 }
 
 async function notificationItems(ctx: any, requestedNow?: number) {
+  const now =
+    requestedNow && Math.abs(requestedNow - Date.now()) <= 5 * 60 * 1000
+      ? requestedNow
+      : Date.now();
+  const chatSince = now - CHAT_NOTIFICATION_TTL_MS;
+  const dutyEndFloor = dutyNotificationEndFloor(now);
   const { user, menuAccess } = await notificationContext(ctx);
   const [dutiesEnabled, workEnabled, dutyMilestonesHours, workMilestonesHours] = await Promise.all([
     getBooleanSystemSetting(
@@ -113,7 +121,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     enabledPersonal.some((row: any) => row.kind === "work");
 
   const [duties, documents, workItems, personalTasks, positions, departments, users, workMessages, dutyMessages, storedChatEvents] = await Promise.all([
-    needDuties ? ctx.db.query("duties").collect() : Promise.resolve([]),
+    needDuties ? loadActiveDutiesFromEndDate(ctx, dutyEndFloor) : Promise.resolve([]),
     needWork ? ctx.db.query("officeDocuments").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("workItems").collect() : Promise.resolve([]),
     needWork ? ctx.db.query("personalTasks").collect() : Promise.resolve([]),
@@ -122,8 +130,12 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     canSeeWorkModule || canSeeDutiesModule || canUseWork || canUseDuties
       ? ctx.db.query("users").collect()
       : Promise.resolve([]),
-    canSeeWorkModule ? ctx.db.query("workMessages").collect() : Promise.resolve([]),
-    canSeeDutiesModule ? ctx.db.query("dutyMessages").collect() : Promise.resolve([]),
+    canSeeWorkModule
+      ? ctx.db.query("workMessages").withIndex("by_created", (q: any) => q.gte("createdAt", chatSince)).collect()
+      : Promise.resolve([]),
+    canSeeDutiesModule
+      ? ctx.db.query("dutyMessages").withIndex("by_created", (q: any) => q.gte("createdAt", chatSince)).collect()
+      : Promise.resolve([]),
     ctx.db
       .query("chatNotificationEvents")
       .withIndex("by_user_created", (q: any) => q.eq("userId", String(user._id)))
@@ -335,10 +347,6 @@ async function notificationItems(ctx: any, requestedNow?: number) {
     }
   }
 
-  const now =
-    requestedNow && Math.abs(requestedNow - Date.now()) <= 5 * 60 * 1000
-      ? requestedNow
-      : Date.now();
   // A new duty is an assignment event, not a deadline reminder. Keep it visible
   // until the duty ends so an assignee who opens the app after creation still sees it.
   const newDutyAssignments = canUseDuties
@@ -474,6 +482,20 @@ async function notificationItems(ctx: any, requestedNow?: number) {
           target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
       )
     : [];
+  const dutyById = new Map<string, any>(duties.map((duty: any) => [String(duty._id), duty]));
+  if (canSeeDutiesModule && dutyMessages.length) {
+    const missingDutyIds = [
+      ...new Set(
+        dutyMessages
+          .map((row: any) => String(row.dutyId || ""))
+          .filter((dutyId: string) => dutyId && !dutyById.has(dutyId)),
+      ),
+    ];
+    const extraDuties = await Promise.all(missingDutyIds.map((dutyId) => ctx.db.get(dutyId)));
+    for (const duty of extraDuties) {
+      if (duty) dutyById.set(String(duty._id), duty);
+    }
+  }
   const computedChatItems = selectVisibleChatNotifications(
     [
       ...(canSeeWorkModule
@@ -532,7 +554,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
             .filter((row: any) => {
               const dutyId = String(row.dutyId || "");
               if (!dutyChatAccess.has(dutyId)) {
-                const duty = duties.find((item: any) => String(item._id) === dutyId);
+                const duty = dutyById.get(dutyId);
                 dutyChatAccess.set(
                   dutyId,
                   canAccessDutyChat({
@@ -554,7 +576,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
               });
             })
             .map((row: any) => {
-              const duty = duties.find((item: any) => String(item._id) === String(row.dutyId));
+              const duty = dutyById.get(String(row.dutyId));
               return buildChatNotificationItem({
                 kind: "duty",
                 messageId: String(row._id),
