@@ -22,6 +22,7 @@ import {
 } from "./assignmentPolicy";
 import { cleanDutyInput, evaluateDutyRefs, parseLocalMs } from "./dutyWritePolicy";
 import { canAccessDutyChat } from "./dutyMessagePolicy";
+import { loadActiveDutiesOverlapping, loadDocsByIds, parseDutyDateRange } from "./dutyRange";
 
 async function assertRefs(
   ctx: { db: any },
@@ -417,7 +418,26 @@ export const listMine = query({
   },
 });
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+async function loadScheduleSubordinates(
+  ctx: { db: any },
+  user: { _id: string; departmentId?: string; positionId?: string },
+  isAdmin: boolean,
+  access: string,
+) {
+  if (isAdmin || access === "view_all" || !user.departmentId) return [];
+  const departmentUsers = await ctx.db
+    .query("users")
+    .withIndex("by_department", (q: any) => q.eq("departmentId", String(user.departmentId)))
+    .collect();
+  const positions = await loadDocsByIds(ctx, [
+    user.positionId,
+    ...departmentUsers.map((row: { positionId?: string }) => row.positionId),
+  ]);
+  return departmentUsers.filter(
+    (target: { status?: string; _id: string; departmentId?: string; positionId?: string }) =>
+      target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
+  );
+}
 
 /** School-wide Lịch công tác sheet for anyone who can open the duties menu. */
 export const sharedSchedule = query({
@@ -426,33 +446,19 @@ export const sharedSchedule = query({
     endDate: v.string(),
   },
   handler: async (ctx, args) => {
-    const startDate = args.startDate.trim();
-    const endDate = args.endDate.trim();
-    if (!DATE_RE.test(startDate) || !DATE_RE.test(endDate) || endDate < startDate) {
-      throw new Error("INVALID_DATE_RANGE");
-    }
+    const { startDate, endDate } = parseDutyDateRange(args.startDate, args.endDate);
     const { user, access, isAdmin } = await requireDutiesAccess(ctx);
-    const [duties, locations, departments, users, positions] = await Promise.all([
-      ctx.db.query("duties").collect(),
-      ctx.db.query("locations").collect(),
-      ctx.db.query("departments").collect(),
-      ctx.db.query("users").collect(),
-      ctx.db.query("positions").collect(),
+    const duties = await loadActiveDutiesOverlapping(ctx, startDate, endDate);
+    const [locations, departments, participantUsers, subordinateUsers] = await Promise.all([
+      loadDocsByIds(ctx, duties.flatMap((duty) => duty.locationIds || [])),
+      loadDocsByIds(ctx, duties.flatMap((duty) => duty.departmentIds || [])),
+      loadDocsByIds(ctx, duties.flatMap((duty) => duty.participantUserIds || [])),
+      loadScheduleSubordinates(ctx, user, isAdmin, access),
     ]);
     const userNameMap = new Map(
-      users.map((user) => [String(user._id), String(user.name || user.email || "")]),
+      participantUsers.map((row) => [String(row._id), String(row.name || row.email || "")]),
     );
-    const subordinateUsers = isAdmin
-      ? []
-      : users.filter(
-          (target) =>
-            target.status === "active" && isSameDepartmentSubordinate(user, target, positions),
-        );
     const events = duties
-      .filter(
-        (duty) =>
-          duty.active && duty.startDate <= endDate && duty.endDate >= startDate,
-      )
       .map((duty) => ({
         _id: duty._id,
         title: dutyListTitle(duty),

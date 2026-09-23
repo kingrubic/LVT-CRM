@@ -24,6 +24,7 @@ import {
   buildSharedScheduleRows,
   toIsoDate as toSharedIsoDate,
 } from '../duties/sharedDutySchedule.js';
+import { dutyListDateWindow } from '../duties/dutyListRange.js';
 import '../duties/sharedDutySchedule.css';
 import '../work/work.css';
 import PersonalReminderPanel, {
@@ -386,14 +387,11 @@ function DutyReportsViewBody({
     () => viewRange(mode === 'list' ? 'week' : mode, anchor),
     [mode, anchor],
   );
+  const listWindow = useMemo(() => (mode === 'list' ? dutyListDateWindow() : null), [mode]);
   const queryArgs = {
     ...(selectedUserId ? { userId: selectedUserId } : {}),
-    ...(mode === 'list'
-      ? {}
-      : {
-          startDate: toIsoDate(calendarRange.start),
-          endDate: toIsoDate(calendarRange.end),
-        }),
+    startDate: listWindow ? listWindow.startDate : toIsoDate(calendarRange.start),
+    endDate: listWindow ? listWindow.endDate : toIsoDate(calendarRange.end),
   };
   const data = useQuery(anyApi.reports.dutyCalendar, queryArgs);
   const myDutyReminders = useQuery(

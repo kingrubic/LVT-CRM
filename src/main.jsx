@@ -140,10 +140,9 @@ function AppShell({ session }) {
   const canManageOperations = Boolean(isOperationalManager || isAdmin || isModerator);
   const workBadge = useQuery(anyApi.work.badge, canManageOperations || menuAccess?.work !== 'hidden' ? {} : 'skip');
   const canUseNotifications = canManageOperations || menuAccess?.notifications !== 'hidden';
-  const notificationNow = useNotificationMinute();
   const notificationFeed = useQuery(
     anyApi.notifications.feed,
-    canUseNotifications ? { now: notificationNow } : 'skip',
+    canUseNotifications ? {} : 'skip',
   );
   const visiblePrimaryMenus = useMemo(() => {
     if (canManageOperations) return PRIMARY_MENUS;
@@ -479,19 +478,6 @@ function AppShell({ session }) {
   );
 }
 
-function useNotificationMinute() {
-  const minuteValue = () => Math.floor(Date.now() / 60_000) * 60_000;
-  const [currentMinute, setCurrentMinute] = useState(minuteValue);
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const nextMinute = minuteValue();
-      setCurrentMinute((current) => current === nextMinute ? current : nextMinute);
-    }, 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return currentMinute;
-}
-
 function NotificationBell({ data, onViewAll, onOpenItem }) {
   const markRead = useMutation(anyApi.notifications.markRead);
   const [open, setOpen] = useState(false);
@@ -598,8 +584,9 @@ function DutiesAdminView({
   editDutyId = null,
   onDutyNavigate,
 }) {
-  const options = useQuery(anyApi.duties.formOptions, allowManage ? {} : 'skip');
-  const listData = useQuery(anyApi.duties.listAdmin);
+  const editorOpen = dutyPage === 'create' || dutyPage === 'edit';
+  const options = useQuery(anyApi.duties.formOptions, allowManage && editorOpen ? {} : 'skip');
+  const listData = useQuery(anyApi.duties.listAdmin, editorOpen ? {} : 'skip');
   const list = listData?.duties || [];
   const create = useMutation(anyApi.duties.create);
   const update = useMutation(anyApi.duties.update);
@@ -610,7 +597,6 @@ function DutiesAdminView({
   const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const { pending, feedback, setFeedback, run } = useFeedback();
-  const editorOpen = dutyPage === 'create' || dutyPage === 'edit';
   const missingEdit = dutyPage === 'edit' && listData !== undefined &&
     !list.some((item) => String(item._id) === String(editDutyId));
 
@@ -848,9 +834,9 @@ function DutiesUserView({
   editDutyId = null,
   onDutyNavigate,
 }) {
-  const data = useQuery(anyApi.duties.listMine);
-  const needFormOptions = Boolean(data?.canCreate) || dutyPage === 'create' || dutyPage === 'edit';
-  const options = useQuery(anyApi.duties.formOptions, needFormOptions ? {} : 'skip');
+  const editorOpen = dutyPage === 'create' || dutyPage === 'edit';
+  const data = useQuery(anyApi.duties.listMine, editorOpen ? {} : 'skip');
+  const options = useQuery(anyApi.duties.formOptions, editorOpen ? {} : 'skip');
   const create = useMutation(anyApi.duties.create);
   const update = useMutation(anyApi.duties.update);
   const { pending, feedback, setFeedback, run } = useFeedback();
@@ -862,7 +848,6 @@ function DutiesUserView({
   const [editConfirm, setEditConfirm] = useState(null);
   const editorRef = useRef(null);
   const duties = data?.duties;
-  const editorOpen = dutyPage === 'create' || dutyPage === 'edit';
   const missingEdit = dutyPage === 'edit' && data !== undefined &&
     !(duties || []).some((item) => String(item._id) === String(editDutyId));
 
@@ -952,7 +937,7 @@ function DutiesUserView({
     setPreviewOpen(true);
   };
 
-  if (editorOpen && (data === undefined || (needFormOptions && options === undefined))) {
+  if (editorOpen && (data === undefined || options === undefined)) {
     return <LoadingView label="Đang tải danh sách công tác…" />;
   }
   return (
@@ -967,7 +952,7 @@ function DutiesUserView({
         <DutyWorkspaceTabs view="personal" onChoose={onDutyNavigate} />
       )}
 
-      {canCreate && importOpen && !editorOpen ? (
+      {importOpen && !editorOpen ? (
         <DutyBulkImport onClose={() => setImportOpen(false)} />
       ) : null}
 
