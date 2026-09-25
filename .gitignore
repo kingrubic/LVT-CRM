@@ -43,3 +43,7 @@ acceptance-platform/logs/
 acceptance-platform/*.bak*
 acceptance-platform/keychain-helper
 .claude/
+
+# Cursor / agent code intelligence caches (rebuild in CI / Cloud Agent VM)
+.codegraph/
+graphify-out/

@@ -1,0 +1,22 @@
+---
+description: graphify knowledge graph context
+alwaysApply: true
+---
+
+This project can use a graphify knowledge graph at `graphify-out/`.
+
+**When `graphify-out/graph.json` exists**, prefer querying it before broad Read/Grep/Glob exploration:
+- `graphify query "<question>"` — scoped subgraph for architecture / codebase questions
+- `graphify path "<A>" "<B>"` — dependency path between two symbols
+- `graphify explain "<concept>"` — nodes related to a concept
+
+Pass the same guidance to subagents that explore code.
+
+**When `graphify-out/graph.json` does not exist yet** (typical on a fresh Cloud Agent VM):
+1. If the `graphify` CLI is available, build once with `graphify update .` (AST-only, no API cost), then query.
+2. If the CLI is missing, install with `uv tool install graphifyy` (or `pipx install graphifyy`) and re-run `graphify update .`, **or** fall back to normal Read/Grep/Glob — do not block the task.
+3. After meaningful code edits in a session where the graph is in use, run `graphify update .` to refresh.
+
+Optional extras when present:
+- `graphify-out/wiki/index.md` — navigate instead of raw files for orientation
+- `graphify-out/GRAPH_REPORT.md` — broad architecture review only
