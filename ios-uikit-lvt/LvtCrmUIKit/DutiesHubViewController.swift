@@ -4,11 +4,16 @@ import UIKit
 final class DutiesHubViewController: UIViewController {
     private let dutiesViewModel: DutiesViewModel
     private let dutiesRepository: DutiesRepository
-    private(set) lazy var dutiesListController = DutiesViewController(viewModel: dutiesViewModel)
+    private let chatRepository: ChatRepository
+    private(set) lazy var dutiesListController = DutiesViewController(
+        viewModel: dutiesViewModel,
+        chatRepository: chatRepository
+    )
 
-    init(dutiesViewModel: DutiesViewModel, dutiesRepository: DutiesRepository) {
+    init(dutiesViewModel: DutiesViewModel, dutiesRepository: DutiesRepository, chatRepository: ChatRepository) {
         self.dutiesViewModel = dutiesViewModel
         self.dutiesRepository = dutiesRepository
+        self.chatRepository = chatRepository
         super.init(nibName: nil, bundle: nil)
         title = "Lịch CT"
     }

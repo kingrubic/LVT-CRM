@@ -35,6 +35,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,7 +50,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import lvt.crm.data.chat.ChatKind
+import lvt.crm.data.chat.ChatRepository
+import lvt.crm.data.chat.ChatTarget
 import lvt.crm.data.duties.DutyItem
+import lvt.crm.ui.chat.ChatDialog
 import lvt.crm.ui.components.ListSearchBar
 import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatePanel
@@ -59,7 +64,10 @@ import lvt.crm.ui.components.StatusTone
 @Composable
 fun DutiesScreen(
     viewModel: DutiesViewModel,
+    chatRepository: ChatRepository,
     focusId: String?,
+    openChat: Boolean = false,
+    focusToken: String? = null,
     tabOpenToken: Int,
     openTab: DutyListTab? = null,
     openFilterToken: Int = 0,
@@ -68,7 +76,29 @@ fun DutiesScreen(
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     var selectedDutyId by remember { mutableStateOf<String?>(null) }
+    var chatTarget by remember { mutableStateOf<ChatTarget?>(null) }
+    var consumedChatToken by remember { mutableStateOf<String?>(null) }
     val selectedDuty = currentDuty(state.duties, selectedDutyId)
+
+    LaunchedEffect(focusToken, openChat, focusId, state.loading, state.duties) {
+        if (!openChat || focusId.isNullOrBlank() || focusToken.isNullOrBlank()) return@LaunchedEffect
+        if (state.loading && state.duties.isEmpty()) return@LaunchedEffect
+        if (consumedChatToken == focusToken) return@LaunchedEffect
+        consumedChatToken = focusToken
+        val duty = state.duties.firstOrNull { it.id == focusId }
+        chatTarget = ChatTarget(
+            ChatKind.Duty,
+            focusId,
+            duty?.let { dutyDisplayTitle(it) } ?: "Công tác",
+        )
+    }
+    chatTarget?.let { target ->
+        ChatDialog(
+            repository = chatRepository,
+            target = target,
+            onBack = { chatTarget = null },
+        )
+    }
 
     BackHandler(enabled = selectedDutyId != null || onBackToHub != null) {
         if (selectedDutyId != null) selectedDutyId = null else onBackToHub?.invoke()
@@ -87,6 +117,9 @@ fun DutiesScreen(
             onBack = { selectedDutyId = null },
             onAttend = { viewModel.setAttendance(duty.id, "attended") },
             onAbsent = { viewModel.setAttendance(duty.id, "absent") },
+            onChat = {
+                chatTarget = ChatTarget(ChatKind.Duty, duty.id, dutyDisplayTitle(duty))
+            },
         )
         return
     }
@@ -217,6 +250,9 @@ fun DutiesScreen(
                                 onOpen = { selectedDutyId = duty.id },
                                 onAttend = { viewModel.setAttendance(duty.id, "attended") },
                                 onAbsent = { viewModel.setAttendance(duty.id, "absent") },
+                                onChat = {
+                                    chatTarget = ChatTarget(ChatKind.Duty, duty.id, dutyDisplayTitle(duty))
+                                },
                             )
                         }
                     }
@@ -247,6 +283,9 @@ fun DutiesScreen(
                                     onOpen = { selectedDutyId = duty.id },
                                     onAttend = { viewModel.setAttendance(duty.id, "attended") },
                                     onAbsent = { viewModel.setAttendance(duty.id, "absent") },
+                                    onChat = {
+                                        chatTarget = ChatTarget(ChatKind.Duty, duty.id, dutyDisplayTitle(duty))
+                                    },
                                 )
                             }
                         }
@@ -308,6 +347,7 @@ private fun DutyCard(
     onOpen: () -> Unit,
     onAttend: () -> Unit,
     onAbsent: () -> Unit,
+    onChat: () -> Unit,
 ) {
     val cardModifier = if (focused) {
         Modifier
@@ -394,6 +434,9 @@ private fun DutyCard(
                     }
                 }
             }
+            TextButton(onClick = onChat, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Trao đổi")
+            }
         }
     }
 }
@@ -407,6 +450,7 @@ private fun DutyDetailScreen(
     onBack: () -> Unit,
     onAttend: () -> Unit,
     onAbsent: () -> Unit,
+    onChat: () -> Unit,
 ) {
     LvtScreen(
         title = "Chi tiết công tác",
@@ -487,6 +531,10 @@ private fun DutyDetailScreen(
                             }
                         }
                     }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(onClick = onChat, modifier = Modifier.fillMaxWidth()) {
+                    Text("Trao đổi")
                 }
             }
         }

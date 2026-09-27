@@ -8,6 +8,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
     private let notificationsRepository: NotificationsRepository
     private let dutiesRepository: DutiesRepository
     private let workRepository: WorkRepository
+    private let chatRepository: ChatRepository
     private let avatarRepository: AvatarRepository
     private let notificationsViewModel: NotificationsViewModel
     private var tabControllers: [AppTab: UINavigationController] = [:]
@@ -27,6 +28,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         notificationsRepository: NotificationsRepository,
         dutiesRepository: DutiesRepository,
         workRepository: WorkRepository,
+        chatRepository: ChatRepository,
         avatarRepository: AvatarRepository
     ) {
         self.session = session
@@ -35,6 +37,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         self.notificationsRepository = notificationsRepository
         self.dutiesRepository = dutiesRepository
         self.workRepository = workRepository
+        self.chatRepository = chatRepository
         self.avatarRepository = avatarRepository
         self.notificationsViewModel = NotificationsViewModel(repository: notificationsRepository)
         super.init(nibName: nil, bundle: nil)
@@ -88,7 +91,8 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         )
         let dutiesHubViewController = DutiesHubViewController(
             dutiesViewModel: DutiesViewModel(repository: dutiesRepository, currentUserId: session.userId),
-            dutiesRepository: dutiesRepository
+            dutiesRepository: dutiesRepository,
+            chatRepository: chatRepository
         )
         dutiesHubViewController.navigationItem.rightBarButtonItem = makeAccountHeaderItem()
         dutiesHubViewController.dutiesListController.trailingAccessoryBarButtonItems = [makeAccountHeaderItem()]
@@ -100,6 +104,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         let repository = workRepository
         let workViewController = WorkViewController(
             viewModel: WorkViewModel(repository: repository),
+            chatRepository: chatRepository,
             downloadDocument: { document in try await repository.downloadDocument(document) }
         )
         workViewController.trailingAccessoryBarButtonItems = [makeAccountHeaderItem()]
@@ -173,11 +178,14 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         detachAuxiliary(from: navigationController)
         if tab == .duties {
             dutiesHubViewController?.openPersonal(animated: false)
-            dutiesHubViewController?.dutiesListController.focus(dutyId: destination.sourceId)
+            dutiesHubViewController?.dutiesListController.focus(
+                dutyId: destination.sourceId,
+                openChat: destination.opensChat
+            )
         } else {
             navigationController.popToRootViewController(animated: false)
             if tab == .work {
-                workViewController?.focus(itemId: destination.sourceId)
+                workViewController?.focus(itemId: destination.sourceId, openChat: destination.opensChat)
             }
         }
         if markNotificationRead, let key = destination.notificationKey {

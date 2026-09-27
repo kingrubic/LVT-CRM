@@ -16,10 +16,12 @@ final class WorkViewController: UITableViewController {
     }
 
     private let viewModel: WorkViewModel
+    private let chatRepository: ChatRepository
     private let downloadDocument: (WorkApprovalItem) async throws -> URL
     var trailingAccessoryBarButtonItems: [UIBarButtonItem] = []
     private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
+    private var pendingOpenChat = false
     private var pendingUploadTask: WorkTaskItem?
     private var pendingUploadNote = ""
 
@@ -41,9 +43,11 @@ final class WorkViewController: UITableViewController {
 
     init(
         viewModel: WorkViewModel,
+        chatRepository: ChatRepository,
         downloadDocument: @escaping (WorkApprovalItem) async throws -> URL
     ) {
         self.viewModel = viewModel
+        self.chatRepository = chatRepository
         self.downloadDocument = downloadDocument
         super.init(style: .insetGrouped)
         title = "Công việc"
@@ -200,7 +204,8 @@ final class WorkViewController: UITableViewController {
                 item,
                 admin: viewModel.isAdmin,
                 busy: viewModel.busyApprovalId == item.id,
-                focused: isFocused(approval: item)
+                focused: isFocused(approval: item),
+                onChat: { [weak self] in self?.presentWorkChat(documentId: item.id, title: item.title) }
             ) { [weak self] action in
                 guard let self else { return }
                 if action == .detail { showDocument(item) }
@@ -224,7 +229,13 @@ final class WorkViewController: UITableViewController {
             cell.configureTask(
                 item,
                 busy: viewModel.busyTaskId == item.id,
-                focused: pendingFocusId == item.id
+                focused: pendingFocusId == item.id || pendingFocusId == item.documentId,
+                onChat: item.documentId.isEmpty ? nil : { [weak self] in
+                    self?.presentWorkChat(
+                        documentId: item.documentId,
+                        title: item.documentTitle.isEmpty ? item.title : item.documentTitle
+                    )
+                }
             ) { [weak self] in self?.confirmCompletion(item) }
             return cell
         case .reviews(let items):
@@ -258,11 +269,12 @@ final class WorkViewController: UITableViewController {
         }
     }
 
-    func focus(itemId: String) {
+    func focus(itemId: String, openChat: Bool = false) {
         loadViewIfNeeded()
         viewModel.showNeedsCompletionOnly = false
         pendingFocusId = itemId
-        if let task = viewModel.tasks.first(where: { $0.id == itemId }) {
+        pendingOpenChat = openChat
+        if let task = viewModel.tasks.first(where: { $0.id == itemId || $0.documentId == itemId }) {
             viewModel.mineTab = WorkListRules.tab(for: task)
         }
         render()
@@ -357,24 +369,56 @@ final class WorkViewController: UITableViewController {
     }
 
     private func processPendingFocusIfPossible() {
-        guard let focusId = pendingFocusId, !viewModel.loading, viewModel.error == nil else { return }
-        if let item = viewModel.approval(focusId: focusId) {
+        guard let focusId = pendingFocusId, !viewModel.loading else { return }
+        let openChat = pendingOpenChat
+        if viewModel.error != nil {
+            pendingFocusId = nil
+            pendingOpenChat = false
+            if openChat { presentWorkChat(documentId: focusId, title: "Công việc") }
+            return
+        }
+        pendingOpenChat = false
+        if let item = viewModel.approval(focusId: focusId), item.id == focusId || !openChat {
             viewModel.createdTab = WorkListRules.tab(for: item)
             scrollToApproval(item)
             pendingFocusId = nil
-            DispatchQueue.main.async { [weak self] in self?.showDocument(item) }
-        } else if let item = viewModel.task(id: focusId) {
+            DispatchQueue.main.async { [weak self] in
+                self?.showDocument(item)
+                if openChat {
+                    self?.presentWorkChat(documentId: item.id, title: item.title)
+                }
+            }
+        } else if let item = viewModel.tasks.first(where: { $0.id == focusId || $0.documentId == focusId }) {
             viewModel.mineTab = WorkListRules.tab(for: item)
             scrollToTask(item)
             pendingFocusId = nil
-            DispatchQueue.main.async { [weak self] in self?.showTask(item) }
-        } else if let item = viewModel.review(focusId: focusId) {
+            DispatchQueue.main.async { [weak self] in
+                self?.showTask(item)
+                if openChat {
+                    let documentId = item.documentId.isEmpty ? focusId : item.documentId
+                    let title = item.documentTitle.isEmpty ? item.title : item.documentTitle
+                    self?.presentWorkChat(documentId: documentId, title: title)
+                }
+            }
+        } else if !openChat, let item = viewModel.review(focusId: focusId) {
             pendingFocusId = nil
             DispatchQueue.main.async { [weak self] in self?.showReview(item) }
+        } else if openChat {
+            pendingFocusId = nil
+            presentWorkChat(documentId: focusId, title: "Công việc")
         } else {
             pendingFocusId = nil
             presentMissingItemAlert()
         }
+    }
+
+    private func presentWorkChat(documentId: String, title: String) {
+        guard !documentId.isEmpty else { return }
+        let controller = ChatViewController(
+            repository: chatRepository,
+            target: ChatTarget(kind: .work, entityId: documentId, title: title.isEmpty ? "Công việc" : title)
+        )
+        navigationController?.pushViewController(controller, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     private func scrollToApproval(_ item: WorkApprovalItem) {
@@ -621,7 +665,13 @@ final class WorkViewController: UITableViewController {
 
     private func showDocument(_ item: WorkApprovalItem) {
         navigationController?.pushViewController(
-            WorkDocumentViewController(document: item, downloadDocument: downloadDocument),
+            WorkDocumentViewController(
+                document: item,
+                downloadDocument: downloadDocument,
+                onOpenChat: { [weak self] in
+                    self?.presentWorkChat(documentId: item.id, title: item.title)
+                }
+            ),
             animated: !UIAccessibility.isReduceMotionEnabled
         )
     }
@@ -630,7 +680,13 @@ final class WorkViewController: UITableViewController {
         let detail = WorkTaskDetailViewController(
             task: item,
             busy: viewModel.busyTaskId == item.id,
-            downloadDocument: downloadDocument
+            downloadDocument: downloadDocument,
+            onOpenChat: item.documentId.isEmpty ? nil : { [weak self] in
+                self?.presentWorkChat(
+                    documentId: item.documentId,
+                    title: item.documentTitle.isEmpty ? item.title : item.documentTitle
+                )
+            }
         ) { [weak self] in
             self?.confirmCompletion(item)
         }
@@ -735,6 +791,8 @@ private final class WorkItemCell: UITableViewCell {
     private let metaLabel = UILabel()
     private let reasonLabel = UILabel()
     private let actionButton = UIButton(type: .system)
+    private let chatButton = UIButton(type: .system)
+    private var onChat: (() -> Void)?
     private let spinner = UIActivityIndicatorView(style: .medium)
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -758,7 +816,13 @@ private final class WorkItemCell: UITableViewCell {
         let actionRow = UIStackView(arrangedSubviews: [actionButton, spinner])
         actionRow.spacing = 8
         actionRow.alignment = .center
-        let stack = UIStackView(arrangedSubviews: [statusLabel, titleLabel, detailLabel, metaLabel, reasonLabel, actionRow])
+        chatButton.configuration = .plain()
+        chatButton.configuration?.title = "Trao đổi"
+        chatButton.configuration?.image = UIImage(systemName: "bubble.left")
+        chatButton.configuration?.imagePadding = 6
+        chatButton.accessibilityLabel = "Trao đổi công việc"
+        chatButton.addAction(UIAction { [weak self] _ in self?.onChat?() }, for: .touchUpInside)
+        let stack = UIStackView(arrangedSubviews: [statusLabel, titleLabel, detailLabel, metaLabel, reasonLabel, actionRow, chatButton])
         stack.axis = .vertical
         stack.alignment = .leading
         stack.spacing = 7
@@ -780,6 +844,8 @@ private final class WorkItemCell: UITableViewCell {
         actionButton.menu = nil
         actionButton.removeTarget(nil, action: nil, for: .allEvents)
         actionButton.isHidden = false
+        chatButton.isHidden = true
+        onChat = nil
         reasonLabel.isHidden = true
         spinner.stopAnimating()
         backgroundColor = .secondarySystemGroupedBackground
@@ -790,6 +856,7 @@ private final class WorkItemCell: UITableViewCell {
         admin: Bool,
         busy: Bool,
         focused: Bool,
+        onChat: @escaping () -> Void,
         action: @escaping (WorkCellAction) -> Void
     ) {
         statusLabel.text = item.status == "pending" ? "Chờ duyệt · \(item.approvalCount)/\(item.approvalTotal)" : "\(item.status) · \(item.approvalCount)/\(item.approvalTotal)"
@@ -817,10 +884,17 @@ private final class WorkItemCell: UITableViewCell {
             statusLabel.text = item.myDecision == "approved" ? "Bạn đã duyệt" : "Bạn đã từ chối"
             statusLabel.textColor = item.myDecision == "approved" ? .systemGreen : .systemRed
         }
+        setChat(onChat)
         accessibilityLabel = [statusLabel.text, titleLabel.text, detailLabel.text, metaLabel.text].compactMap { $0 }.joined(separator: ". ")
     }
 
-    func configureTask(_ item: WorkTaskItem, busy: Bool, focused: Bool, complete: @escaping () -> Void) {
+    func configureTask(
+        _ item: WorkTaskItem,
+        busy: Bool,
+        focused: Bool,
+        onChat: (() -> Void)?,
+        complete: @escaping () -> Void
+    ) {
         statusLabel.text = WorkPresentation.status(item.status) + (item.qualityPercent.map { " · \($0)%" } ?? "")
         statusLabel.textColor = WorkPresentation.statusColor(item.status)
         titleLabel.text = item.title
@@ -846,10 +920,12 @@ private final class WorkItemCell: UITableViewCell {
         } else {
             actionButton.isHidden = true
         }
+        setChat(onChat)
         accessibilityLabel = [statusLabel.text, titleLabel.text, detailLabel.text, metaLabel.text, reasonLabel.text].compactMap { $0 }.joined(separator: ". ")
     }
 
     func configureReview(_ item: WorkCompletionReviewItem, busy: Bool, review: @escaping () -> Void) {
+        setChat(nil)
         statusLabel.text = "Chờ xác nhận"
         statusLabel.textColor = .systemOrange
         titleLabel.text = item.userName
@@ -866,6 +942,11 @@ private final class WorkItemCell: UITableViewCell {
         actionButton.configuration = .borderedProminent()
         setButton("Đánh giá", busy: busy, action: review)
         accessibilityLabel = "Chờ xác nhận. \(item.userName). \(item.content). \(metaLabel.text ?? "")"
+    }
+
+    private func setChat(_ action: (() -> Void)?) {
+        onChat = action
+        chatButton.isHidden = action == nil
     }
 
     private func setButton(_ title: String, busy: Bool, action: @escaping () -> Void) {
@@ -908,15 +989,19 @@ private final class WorkTaskDetailViewController: UIViewController, QLPreviewCon
     private var openingFile = false
     private weak var openFileButton: UIButton?
 
+    private let onOpenChat: (() -> Void)?
+
     init(
         task: WorkTaskItem,
         busy: Bool,
         downloadDocument: @escaping (WorkApprovalItem) async throws -> URL,
+        onOpenChat: (() -> Void)?,
         onComplete: @escaping () -> Void
     ) {
         self.task = task
         self.busy = busy
         self.downloadDocument = downloadDocument
+        self.onOpenChat = onOpenChat
         self.onComplete = onComplete
         super.init(nibName: nil, bundle: nil)
         title = "Chi tiết nhiệm vụ"
@@ -950,6 +1035,14 @@ private final class WorkTaskDetailViewController: UIViewController, QLPreviewCon
             openButton.addAction(UIAction { [weak self] _ in self?.openAttachedFile() }, for: .touchUpInside)
             openFileButton = openButton
             stack.addArrangedSubview(openButton)
+        }
+        if let onOpenChat {
+            let chatButton = UIButton(type: .system)
+            chatButton.configuration = .tinted()
+            chatButton.configuration?.title = "Trao đổi"
+            chatButton.configuration?.image = UIImage(systemName: "bubble.left")
+            chatButton.addAction(UIAction { _ in onOpenChat() }, for: .touchUpInside)
+            stack.addArrangedSubview(chatButton)
         }
         if WorkHelpers.needsCompletion(task.status) {
             let button = UIButton(type: .system)
@@ -1034,12 +1127,16 @@ private final class WorkDocumentViewController: UITableViewController, QLPreview
     private var previewURL: URL?
     private var openingFile = false
 
+    private let onOpenChat: () -> Void
+
     init(
         document: WorkApprovalItem,
-        downloadDocument: @escaping (WorkApprovalItem) async throws -> URL
+        downloadDocument: @escaping (WorkApprovalItem) async throws -> URL,
+        onOpenChat: @escaping () -> Void
     ) {
         self.document = document
         self.downloadDocument = downloadDocument
+        self.onOpenChat = onOpenChat
         groupedAssignments = Dictionary(grouping: document.assignments, by: \.departmentName)
             .map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
         super.init(style: .insetGrouped)
@@ -1059,7 +1156,7 @@ private final class WorkDocumentViewController: UITableViewController, QLPreview
     override func numberOfSections(in tableView: UITableView) -> Int { 1 + groupedAssignments.count }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        section == 0 ? 1 : groupedAssignments[section - 1].1.count
+        section == 0 ? 2 : groupedAssignments[section - 1].1.count
     }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
@@ -1076,7 +1173,14 @@ private final class WorkDocumentViewController: UITableViewController, QLPreview
         var content = cell.defaultContentConfiguration()
         content.textProperties.numberOfLines = 0
         content.secondaryTextProperties.numberOfLines = 0
-        if indexPath.section == 0 {
+        if indexPath.section == 0 && indexPath.row == 1 {
+            content.text = "Trao đổi"
+            content.image = UIImage(systemName: "bubble.left")
+            cell.selectionStyle = .default
+            cell.accessoryType = .disclosureIndicator
+            cell.accessibilityTraits.insert(.button)
+            cell.accessibilityLabel = "Trao đổi công việc"
+        } else if indexPath.section == 0 {
             content.text = WorkHelpers.listTitle(document)
             let body = WorkHelpers.listSubtitle(document) ?? ""
             content.secondaryText = [body, "Hạn: \(document.deadline)", "Phê duyệt: \(document.approvalCount)/\(document.approvalTotal)"].filter { !$0.isEmpty }.joined(separator: "\n")
@@ -1102,7 +1206,11 @@ private final class WorkDocumentViewController: UITableViewController, QLPreview
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard indexPath.section == 0, !document.fileName.isEmpty, !openingFile else { return }
+        if indexPath.section == 0 && indexPath.row == 1 {
+            onOpenChat()
+            return
+        }
+        guard indexPath.section == 0, indexPath.row == 0, !document.fileName.isEmpty, !openingFile else { return }
         openingFile = true
         let spinner = UIActivityIndicatorView(style: .medium)
         spinner.startAnimating()

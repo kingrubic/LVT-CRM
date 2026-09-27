@@ -349,7 +349,7 @@ private fun NotificationCard(
                             modifier = Modifier.size(17.dp),
                         )
                         Text(
-                            "Hạn ${formatDueAt(item.dueAt)}",
+                            "${if (item.sourceType == "duty_chat" || item.sourceType == "work_chat") "Lúc" else "Hạn"} ${formatDueAt(item.dueAt)}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(start = 6.dp),
@@ -422,6 +422,7 @@ private fun FileTypeTile(fileName: String?) {
 }
 
 private fun kindLabel(item: NotificationItem): String = when {
+    item.sourceType == "duty_chat" || item.sourceType == "work_chat" -> "Trao đổi"
     item.kind == "duty" -> "Công tác"
     item.sourceType == "completion_rejected" -> "Từ chối hoàn thành"
     item.sourceType == "approval" -> "Công văn cần duyệt"

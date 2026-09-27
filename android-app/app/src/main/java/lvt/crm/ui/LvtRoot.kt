@@ -364,9 +364,14 @@ private fun MainShell(
                 DutiesTabHost(
                     viewModel = vm,
                     dutiesRepository = container.dutiesRepository,
+                    chatRepository = container.chatRepository,
                     focusId = focusTarget
                         ?.takeIf { it.route == Routes.Duties }
                         ?.sourceId,
+                    openChat = focusTarget?.opensChat == true && focusTarget?.route == Routes.Duties,
+                    focusToken = focusTarget
+                        ?.takeIf { it.route == Routes.Duties }
+                        ?.let { it.notificationKey ?: it.sourceId },
                     tabOpenToken = tabOpenToken,
                     openTab = dutyOpenTab,
                     openFilterToken = dutyFilterToken,
@@ -379,9 +384,14 @@ private fun MainShell(
                 )
                 WorkScreen(
                     viewModel = vm,
+                    chatRepository = container.chatRepository,
                     focusId = focusTarget
                         ?.takeIf { it.route == Routes.Work }
                         ?.sourceId,
+                    openChat = focusTarget?.opensChat == true && focusTarget?.route == Routes.Work,
+                    focusToken = focusTarget
+                        ?.takeIf { it.route == Routes.Work }
+                        ?.let { it.notificationKey ?: it.sourceId },
                     tabOpenToken = tabOpenToken,
                     openFilter = workOpenFilter,
                     openFilterToken = workFilterToken,

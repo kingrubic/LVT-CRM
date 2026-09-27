@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import lvt.crm.data.chat.ChatRepository
 import lvt.crm.data.duties.DutiesRepository
 import lvt.crm.ui.components.LvtScreen
 
@@ -39,7 +40,10 @@ private enum class DutiesTabPage { Hub, Personal, SharedPicker }
 fun DutiesTabHost(
     viewModel: DutiesViewModel,
     dutiesRepository: DutiesRepository,
+    chatRepository: ChatRepository,
     focusId: String?,
+    openChat: Boolean = false,
+    focusToken: String? = null,
     tabOpenToken: Int,
     openTab: DutyListTab? = null,
     openFilterToken: Int = 0,
@@ -61,7 +65,10 @@ fun DutiesTabHost(
         )
         DutiesTabPage.Personal -> DutiesScreen(
             viewModel = viewModel,
+            chatRepository = chatRepository,
             focusId = focusId,
+            openChat = openChat,
+            focusToken = focusToken,
             tabOpenToken = tabOpenToken,
             openTab = openTab,
             openFilterToken = openFilterToken,

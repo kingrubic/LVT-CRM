@@ -194,6 +194,16 @@ class ConvexHttpClient(
                 "PUBLIC_SIGNUP_DISABLED",
                 "INVALID_EMAIL",
                 "INVALID_AUTH_FLOW",
+                "DUTY_CHAT_EMPTY",
+                "WORK_CHAT_EMPTY",
+                "DUTY_CHAT_TOO_LONG",
+                "WORK_CHAT_TOO_LONG",
+                "DUTY_CHAT_RECALL_TOO_LATE",
+                "WORK_CHAT_RECALL_TOO_LATE",
+                "DUTY_CHAT_RECALL_FORBIDDEN",
+                "WORK_CHAT_RECALL_FORBIDDEN",
+                "DUTY_CHAT_FORBIDDEN",
+                "WORK_CHAT_FORBIDDEN",
                 "FORBIDDEN",
                 "UNAUTHENTICATED",
                 "CANNOT_REVOKE_CURRENT_SESSION",
@@ -250,6 +260,16 @@ class ConvexHttpClient(
                     "Mỗi phòng ban chỉ được nhận một đầu việc trong cùng công văn."
                 code == "NOT_A_SUBORDINATE" ->
                     "Chỉ được giao hoặc cập nhật cấp dưới trong cùng phòng ban."
+                code == "DUTY_CHAT_EMPTY" || code == "WORK_CHAT_EMPTY" ->
+                    "Vui lòng nhập nội dung tin nhắn."
+                code == "DUTY_CHAT_TOO_LONG" || code == "WORK_CHAT_TOO_LONG" ->
+                    "Tin nhắn quá dài (tối đa 4000 ký tự)."
+                code == "DUTY_CHAT_RECALL_TOO_LATE" || code == "WORK_CHAT_RECALL_TOO_LATE" ->
+                    "Đã quá 15 phút, không thể thu hồi tin nhắn này."
+                code == "DUTY_CHAT_RECALL_FORBIDDEN" || code == "WORK_CHAT_RECALL_FORBIDDEN" ->
+                    "Bạn chỉ có thể thu hồi tin nhắn của mình."
+                code == "DUTY_CHAT_FORBIDDEN" || code == "WORK_CHAT_FORBIDDEN" ->
+                    "Bạn không có quyền trao đổi mục này."
                 code.contains("FORBIDDEN", ignoreCase = true) -> "Bạn không có quyền thực hiện thao tác này."
                 else -> code.take(180)
             }
