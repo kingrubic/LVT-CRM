@@ -182,6 +182,7 @@ actor ConvexHttpClient {
             "DUTY_CHAT_RECALL_TOO_LATE", "WORK_CHAT_RECALL_TOO_LATE",
             "DUTY_CHAT_RECALL_FORBIDDEN", "WORK_CHAT_RECALL_FORBIDDEN",
             "DUTY_CHAT_FORBIDDEN", "WORK_CHAT_FORBIDDEN",
+            "WORK_DOCUMENT_IMMUTABLE", "WORK_UPDATE_FORBIDDEN", "WORK_DOCUMENT_NOT_FOUND",
             "FORBIDDEN", "UNAUTHENTICATED", "CANNOT_REVOKE_CURRENT_SESSION",
             "SESSION_NOT_FOUND", "DOCUMENT_TYPE_REQUIRED", "INVALID_DOCUMENT_TYPE", "SESSION_TIMEOUT",
             "INVALID_AVATAR_FILE", "AVATAR_FILE_TOO_LARGE", "AVATAR_UPLOAD_NOT_FOUND", "AVATAR_NOT_FOUND",
@@ -247,6 +248,12 @@ actor ConvexHttpClient {
             return "Bạn chỉ có thể thu hồi tin nhắn của mình."
         case code == "DUTY_CHAT_FORBIDDEN", code == "WORK_CHAT_FORBIDDEN":
             return "Bạn không có quyền trao đổi mục này."
+        case code == "WORK_DOCUMENT_IMMUTABLE":
+            return "Đã có người nộp · Không thể sửa hoặc xóa"
+        case code == "WORK_UPDATE_FORBIDDEN":
+            return "Bạn không có quyền sửa hoặc xóa công việc này."
+        case code == "WORK_DOCUMENT_NOT_FOUND":
+            return "Công việc không còn tồn tại."
         case code.localizedCaseInsensitiveContains("FORBIDDEN"):
             return "Bạn không có quyền thực hiện thao tác này."
         default: return String(code.prefix(180))

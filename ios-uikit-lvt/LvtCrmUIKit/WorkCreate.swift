@@ -81,6 +81,24 @@ enum WorkCreatePolicy {
         return nil
     }
 
+    static let lockedMessage = "Đã có người nộp · Không thể sửa hoặc xóa"
+
+    static func showsEdit(canEdit: Bool, isOps: Bool) -> Bool { canEdit || isOps }
+
+    static func showsDelete(canDelete: Bool, isOps: Bool) -> Bool { canDelete || isOps }
+
+    static func showsLocked(canEdit: Bool, canDelete: Bool, isOps: Bool) -> Bool {
+        !showsEdit(canEdit: canEdit, isOps: isOps) && !showsDelete(canDelete: canDelete, isOps: isOps)
+    }
+
+    /// Admin/mod keep the server right to edit after someone has submitted.
+    static func actionError(raw: String, deleting: Bool, fallback: String) -> String {
+        if raw.contains("WORK_DOCUMENT_IMMUTABLE") { return lockedMessage }
+        if raw.contains("WORK_UPDATE_FORBIDDEN") { return "Bạn không có quyền sửa hoặc xóa công việc này." }
+        if deleting { return "Không thể xóa công văn lúc này." }
+        return fallback
+    }
+
     static func formatDeadline(_ date: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 7 * 3600) ?? .current

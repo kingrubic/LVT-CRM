@@ -59,6 +59,9 @@ data class WorkDocumentAssignment(
     val deadline: String,
     val status: String,
     val members: List<WorkMemberItem>,
+    val type: String = "",
+    val departmentId: String = "",
+    val userIds: List<String> = emptyList(),
 )
 
 data class WorkCompletionReviewItem(
@@ -84,7 +87,39 @@ data class WorkApprovalItem(
     val fileUrl: String = "",
     val privateFile: Boolean = false,
     val title: String = "",
+    val canEdit: Boolean = false,
+    val canDelete: Boolean = false,
+    val documentTypeId: String = "",
 )
+
+/** Prefill the create form. Individual assignees are one row each, matching web. */
+fun WorkApprovalItem.editAssignments(): List<WorkCreateAssignment> = assignments.flatMap { row ->
+    val individual = row.type == "individual" ||
+        (row.type.isBlank() && row.departmentId.isBlank() &&
+            (row.userIds.isNotEmpty() || row.departmentName == "Cá nhân"))
+    if (!individual) {
+        return@flatMap listOf(
+            WorkCreateAssignment(
+                type = "department",
+                departmentId = row.departmentId,
+                content = row.content,
+                deadline = row.deadline,
+            ),
+        )
+    }
+    val ids = row.userIds.filter { it.isNotBlank() }.ifEmpty {
+        row.members.map { it.id }.filter { it.isNotBlank() }
+    }
+    val people = ids.ifEmpty { listOf("") }
+    people.map { id ->
+        WorkCreateAssignment(
+            type = "individual",
+            userIds = if (id.isBlank()) emptyList() else listOf(id),
+            content = row.content,
+            deadline = row.deadline,
+        )
+    }
+}
 
 data class WorkSnapshot(
     val assignerMode: String,
@@ -152,6 +187,16 @@ interface WorkOperations {
         evidence: WorkUploadedEvidence? = null,
         documentTypeId: String? = null,
     ): String = throw UnsupportedOperationException()
+
+    suspend fun updateDocument(
+        documentId: String,
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        evidence: WorkUploadedEvidence? = null,
+        documentTypeId: String? = null,
+    ): Unit = throw UnsupportedOperationException()
+
+    suspend fun deleteDocument(documentId: String): Unit = throw UnsupportedOperationException()
 }
 
 class WorkRepository(
@@ -196,21 +241,7 @@ class WorkRepository(
                         rejected = approver.optBoolean("rejected", false),
                     )
                 }
-                val myDecision = decisionForUser(currentUserId, decisions)
-                approvals += WorkApprovalItem(
-                    id = document.optString("_id"),
-                    fileName = document.optString("fileName"),
-                    content = document.optString("content"),
-                    deadline = document.optString("deadline"),
-                    status = document.optString("status"),
-                    approvalCount = document.optInt("approvalCount"),
-                    approvalTotal = document.optInt("approvalTotal"),
-                    myDecision = myDecision,
-                    assignments = parseAssignments(document.optJSONArray("assignments")),
-                    fileUrl = document.optPublicFileUrl("fileUrl"),
-                    privateFile = document.optBoolean("privateFile", false),
-                    title = document.optString("title"),
-                )
+                approvals += parseApproval(document, decisionForUser(currentUserId, decisions))
             }
         }
 
@@ -222,20 +253,7 @@ class WorkRepository(
             val documents = adminResult.optJSONArray("documents") ?: org.json.JSONArray()
             for (i in 0 until documents.length()) {
                 val document = documents.getJSONObject(i)
-                approvals += WorkApprovalItem(
-                    id = document.optString("_id"),
-                    fileName = document.optString("fileName"),
-                    content = document.optString("content"),
-                    deadline = document.optString("deadline"),
-                    status = document.optString("status"),
-                    approvalCount = document.optInt("approvalCount"),
-                    approvalTotal = document.optInt("approvalTotal"),
-                    myDecision = "",
-                    assignments = parseAssignments(document.optJSONArray("assignments")),
-                    fileUrl = document.optPublicFileUrl("fileUrl"),
-                    privateFile = document.optBoolean("privateFile", false),
-                    title = document.optString("title"),
-                )
+                approvals += parseApproval(document, "")
             }
             completionReviews = parseCompletionReviews(adminResult.optJSONArray("pendingCompletionReviews"))
         } else {
@@ -346,35 +364,7 @@ class WorkRepository(
         evidence: WorkUploadedEvidence?,
         documentTypeId: String?,
     ): String {
-        val args = org.json.JSONObject()
-            .put("title", title.trim())
-            .put("assignments", org.json.JSONArray().apply {
-                assignments.forEach { row ->
-                    put(
-                        org.json.JSONObject().apply {
-                            put("type", row.type)
-                            put("content", row.content.trim())
-                            put("deadline", row.deadline.trim())
-                            if (row.isIndividual) {
-                                put("userIds", org.json.JSONArray(row.userIds.filter { it.isNotBlank() }))
-                            } else {
-                                put("departmentId", row.departmentId)
-                            }
-                        },
-                    )
-                }
-            })
-        if (!documentTypeId.isNullOrBlank()) {
-            args.put("documentTypeId", documentTypeId.trim())
-        }
-        if (evidence != null) {
-            args.put("driveFileId", evidence.driveFileId)
-            args.put("driveChecksum", evidence.driveChecksum)
-            args.put("cleanupToken", evidence.cleanupToken)
-            args.put("fileName", evidence.fileName)
-            args.put("fileType", evidence.fileType)
-            args.put("fileSize", evidence.fileSize)
-        }
+        val args = documentMutationArgs(title, assignments, evidence, documentTypeId)
         return try {
             val result = convex.mutation("work:createDocument", args)
             if (evidence != null && evidence.cleanupToken.isNotBlank()) {
@@ -386,6 +376,77 @@ class WorkRepository(
                 settleUploadedFile(evidence.cleanupToken, finalize = false)
             }
             throw error
+        }
+    }
+
+    override suspend fun updateDocument(
+        documentId: String,
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        evidence: WorkUploadedEvidence?,
+        documentTypeId: String?,
+    ) {
+        val args = documentMutationArgs(title, assignments, evidence, documentTypeId)
+            .put("documentId", documentId)
+        try {
+            val result = convex.mutation("work:updateDocument", args)
+            if (evidence != null && evidence.cleanupToken.isNotBlank()) {
+                settleUploadedFile(evidence.cleanupToken, finalize = true)
+            }
+            settleCleanupJob(result.optString("cleanupJobId"))
+        } catch (error: Exception) {
+            if (evidence != null && evidence.cleanupToken.isNotBlank()) {
+                settleUploadedFile(evidence.cleanupToken, finalize = false)
+            }
+            throw error
+        }
+    }
+
+    override suspend fun deleteDocument(documentId: String) {
+        val result = convex.mutation(
+            "work:deleteDocument",
+            JSONObject().put("documentId", documentId),
+        )
+        settleCleanupJob(result.optString("cleanupJobId"))
+    }
+
+    private fun documentMutationArgs(
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        evidence: WorkUploadedEvidence?,
+        documentTypeId: String?,
+    ): JSONObject {
+        val args = JSONObject()
+            .put("title", title.trim())
+            .put("assignments", assignmentPayload(assignments))
+        if (!documentTypeId.isNullOrBlank()) {
+            args.put("documentTypeId", documentTypeId.trim())
+        }
+        if (evidence != null) {
+            args.put("driveFileId", evidence.driveFileId)
+            args.put("driveChecksum", evidence.driveChecksum)
+            args.put("cleanupToken", evidence.cleanupToken)
+            args.put("fileName", evidence.fileName)
+            args.put("fileType", evidence.fileType)
+            args.put("fileSize", evidence.fileSize)
+        }
+        return args
+    }
+
+    private fun assignmentPayload(assignments: List<WorkCreateAssignment>) = org.json.JSONArray().apply {
+        assignments.forEach { row ->
+            put(
+                JSONObject().apply {
+                    put("type", row.type)
+                    put("content", row.content.trim())
+                    put("deadline", row.deadline.trim())
+                    if (row.isIndividual) {
+                        put("userIds", org.json.JSONArray(row.userIds.filter { it.isNotBlank() }))
+                    } else {
+                        put("departmentId", row.departmentId)
+                    }
+                },
+            )
         }
     }
 
@@ -476,6 +537,19 @@ class WorkRepository(
                 fileSize = fileBytes.size.toLong(),
             )
         }
+    }
+
+    private suspend fun settleCleanupJob(cleanupJobId: String) = withContext(Dispatchers.IO) {
+        val jobId = cleanupJobId.trim()
+        if (jobId.isEmpty() || jobId == "null") return@withContext
+        val token = tokenProvider()?.takeIf { it.isNotBlank() } ?: return@withContext
+        val encoded = URLEncoder.encode(jobId, Charsets.UTF_8.name()).replace("+", "%20")
+        val request = Request.Builder()
+            .url("${webUrl.trimEnd('/')}/api/files/cleanup-jobs/work/$encoded")
+            .header("Authorization", "Bearer $token")
+            .delete("".toRequestBody("text/plain".toMediaType()))
+            .build()
+        runCatching { downloadHttp.newCall(request).execute().close() }
     }
 
     private suspend fun settleUploadedFile(cleanupToken: String, finalize: Boolean) = withContext(Dispatchers.IO) {
@@ -595,25 +669,50 @@ private fun org.json.JSONArray?.toMemberNames(): List<String> {
     }.filter { it.isNotBlank() }
 }
 
+private fun parseApproval(document: JSONObject, myDecision: String) = WorkApprovalItem(
+    id = document.optString("_id"),
+    fileName = document.optString("fileName"),
+    content = document.optString("content"),
+    deadline = document.optString("deadline"),
+    status = document.optString("status"),
+    approvalCount = document.optInt("approvalCount"),
+    approvalTotal = document.optInt("approvalTotal"),
+    myDecision = myDecision,
+    assignments = parseAssignments(document.optJSONArray("assignments")),
+    fileUrl = document.optPublicFileUrl("fileUrl"),
+    privateFile = document.optBoolean("privateFile", false),
+    title = document.optString("title"),
+    canEdit = document.optBoolean("canEdit", false),
+    canDelete = document.optBoolean("canDelete", false),
+    documentTypeId = document.optString("documentTypeId"),
+)
+
 private fun parseAssignments(items: org.json.JSONArray?): List<WorkDocumentAssignment> {
     if (items == null) return emptyList()
     return List(items.length()) { index ->
         val item = items.getJSONObject(index)
         val members = item.optJSONArray("members") ?: org.json.JSONArray()
+        val parsedMembers = List(members.length()) { memberIndex ->
+            val member = members.getJSONObject(memberIndex)
+            WorkMemberItem(
+                id = member.optString("_id"),
+                name = member.optString("name").ifBlank { member.optString("email") },
+                status = member.optString("status"),
+            )
+        }
+        val userIds = item.optJSONArray("userIds")?.let { ids ->
+            List(ids.length()) { ids.optString(it) }.filter { it.isNotBlank() }
+        }.orEmpty()
         WorkDocumentAssignment(
             id = item.optString("_id"),
             departmentName = item.optString("departmentName"),
             content = item.optString("content"),
             deadline = item.optString("deadline"),
             status = item.optString("status"),
-            members = List(members.length()) { memberIndex ->
-                val member = members.getJSONObject(memberIndex)
-                WorkMemberItem(
-                    id = member.optString("_id"),
-                    name = member.optString("name").ifBlank { member.optString("email") },
-                    status = member.optString("status"),
-                )
-            },
+            members = parsedMembers,
+            type = item.optString("type"),
+            departmentId = item.optString("departmentId"),
+            userIds = userIds,
         )
     }
 }

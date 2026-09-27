@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDocumentPickerDelegate, PHPickerViewControllerDelegate {
     private let viewModel: WorkViewModel
+    private let editing: WorkApprovalItem?
     private let onCreated: () -> Void
 
     private let scrollView = UIScrollView()
@@ -24,16 +25,18 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
     private var fileName = ""
     private var fileMime = ""
     private var documentTypeId = ""
+    private var keptFileName = ""
     private var isBusy = false
 
     private static let maxUploadFileSize = 20 * 1024 * 1024
     private static let allowedUploadExtensions: Set<String> = ["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg"]
 
-    init(viewModel: WorkViewModel, onCreated: @escaping () -> Void) {
+    init(viewModel: WorkViewModel, editing: WorkApprovalItem? = nil, onCreated: @escaping () -> Void) {
         self.viewModel = viewModel
+        self.editing = editing
         self.onCreated = onCreated
         super.init(nibName: nil, bundle: nil)
-        title = "Tạo công việc"
+        title = editing == nil ? "Tạo công việc" : "Sửa công việc"
     }
 
     @available(*, unavailable)
@@ -43,9 +46,24 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
         navigationItem.largeTitleDisplayMode = .never
+        if let editing {
+            titleField.text = WorkHelpers.listTitle(editing)
+            assignments = editing.editAssignments()
+            documentTypeId = editing.documentTypeId
+            if editing.privateFile {
+                keptFileName = editing.fileName
+            }
+            navigationItem.leftBarButtonItem = UIBarButtonItem(
+                title: "Hủy sửa",
+                style: .plain,
+                target: self,
+                action: #selector(confirmCancel)
+            )
+        }
         configureViews()
         configureLayout()
         rebuildAssignments()
+        refreshFileLabel()
         Task { await loadOptions() }
     }
 
@@ -91,7 +109,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         errorLabel.numberOfLines = 0
         errorLabel.isHidden = true
 
-        submitButton.setTitle("Tạo công việc", for: .normal)
+        submitButton.setTitle(editing == nil ? "Tạo công việc" : "Lưu thay đổi", for: .normal)
         submitButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         submitButton.addTarget(self, action: #selector(submit), for: .touchUpInside)
 
@@ -145,6 +163,11 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         do {
             let loaded = try await viewModel.loadFormOptions()
             options = loaded
+            if editing?.privateFile == true && documentTypeId.isEmpty,
+               let fallback = loaded.documentTypes.first(where: { $0.code == "BIEN_BAN" }) {
+                documentTypeId = fallback.id
+            }
+            refreshTypeButton()
             if loaded.isOps, addRow.arrangedSubviews.count == 1 {
                 let addDepartment = UIButton(type: .system)
                 addDepartment.setTitle("＋ Phòng ban", for: .normal)
@@ -336,9 +359,28 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         fileData = nil
         fileName = ""
         fileMime = ""
-        documentTypeId = ""
-        fileLabel.text = "Tệp đính kèm (không bắt buộc)"
+        documentTypeId = editing?.documentTypeId ?? ""
+        refreshFileLabel()
         refreshTypeButton()
+    }
+
+    private func refreshFileLabel() {
+        if !fileName.isEmpty {
+            fileLabel.text = fileName
+        } else if !keptFileName.isEmpty {
+            fileLabel.text = "Đang giữ tệp hiện tại: \(keptFileName). Chọn tệp mới nếu muốn thay."
+        } else {
+            fileLabel.text = "Tệp đính kèm (không bắt buộc)"
+        }
+    }
+
+    @objc private func confirmCancel() {
+        let alert = UIAlertController(title: "Bạn có chắc chắn Hủy sửa không?", message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Hủy", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Hủy sửa", style: .destructive) { [weak self] _ in
+            self?.navigationController?.popViewController(animated: !UIAccessibility.isReduceMotionEnabled)
+        })
+        present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     @objc private func pickDocumentType() {
@@ -351,7 +393,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
     }
 
     private func refreshTypeButton() {
-        let hasFile = fileData != nil
+        let hasFile = fileData != nil || editing?.privateFile == true
         typeButton.isHidden = !hasFile
         let name = options?.documentTypes.first { $0.id == documentTypeId }?.name
         typeButton.setTitle(name ?? "Chọn loại văn bản", for: .normal)
@@ -380,6 +422,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
             fileName = url.lastPathComponent
             fileMime = mimeType(for: url)
             fileLabel.text = fileName
+            refreshFileLabel()
             refreshTypeButton()
         } catch {
             showError("Không thể đọc tệp đã chọn. Vui lòng thử lại.")
@@ -410,12 +453,27 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
                 self.fileName = "dinh_kem_\(formatter.string(from: Date())).jpg"
                 self.fileMime = "image/jpeg"
                 self.fileLabel.text = self.fileName
+                self.refreshFileLabel()
                 self.refreshTypeButton()
             }
         }
     }
 
     @objc private func submit() {
+        guard !isBusy else { return }
+        if editing != nil {
+            let alert = UIAlertController(title: "Bạn có chắc chắn Lưu không?", message: nil, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Hủy", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Lưu", style: .default) { [weak self] _ in
+                self?.persist()
+            })
+            present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
+            return
+        }
+        persist()
+    }
+
+    private func persist() {
         guard !isBusy else { return }
         hideError()
         if let message = WorkCreatePolicy.validate(
@@ -429,23 +487,44 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         }
         isBusy = true
         submitButton.isEnabled = false
+        submitButton.setTitle(editing == nil ? "Đang tạo…" : "Đang lưu…", for: .normal)
         spinner.startAnimating()
+        let editingDocument = editing
         Task {
             do {
-                try await viewModel.submitCreate(
-                    title: titleField.text ?? "",
-                    assignments: assignments,
-                    fileData: fileData,
-                    fileName: fileName.isEmpty ? nil : fileName,
-                    mimeType: fileMime.isEmpty ? nil : fileMime,
-                    documentTypeId: documentTypeId
-                )
+                if let editingDocument {
+                    try await viewModel.submitUpdate(
+                        documentId: editingDocument.id,
+                        title: titleField.text ?? "",
+                        assignments: assignments,
+                        fileData: fileData,
+                        fileName: fileName.isEmpty ? nil : fileName,
+                        mimeType: fileMime.isEmpty ? nil : fileMime,
+                        documentTypeId: documentTypeId
+                    )
+                } else {
+                    try await viewModel.submitCreate(
+                        title: titleField.text ?? "",
+                        assignments: assignments,
+                        fileData: fileData,
+                        fileName: fileName.isEmpty ? nil : fileName,
+                        mimeType: fileMime.isEmpty ? nil : fileMime,
+                        documentTypeId: documentTypeId
+                    )
+                }
                 onCreated()
                 navigationController?.popViewController(animated: !UIAccessibility.isReduceMotionEnabled)
             } catch {
-                showError((error as? ConvexException)?.message ?? ConvexHttpClient.humanize(error.localizedDescription))
+                let fallback = (error as? ConvexException)?.message ?? ConvexHttpClient.humanize(error.localizedDescription)
+                if editingDocument != nil {
+                    let raw = ((error as? ConvexException)?.code ?? "") + " " + fallback
+                    showError(WorkCreatePolicy.actionError(raw: raw, deleting: false, fallback: fallback))
+                } else {
+                    showError(fallback)
+                }
                 isBusy = false
                 submitButton.isEnabled = true
+                submitButton.setTitle(editingDocument == nil ? "Tạo công việc" : "Lưu thay đổi", for: .normal)
                 spinner.stopAnimating()
             }
         }

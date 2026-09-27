@@ -204,6 +204,9 @@ class ConvexHttpClient(
                 "WORK_CHAT_RECALL_FORBIDDEN",
                 "DUTY_CHAT_FORBIDDEN",
                 "WORK_CHAT_FORBIDDEN",
+                "WORK_DOCUMENT_IMMUTABLE",
+                "WORK_UPDATE_FORBIDDEN",
+                "WORK_DOCUMENT_NOT_FOUND",
                 "FORBIDDEN",
                 "UNAUTHENTICATED",
                 "CANNOT_REVOKE_CURRENT_SESSION",
@@ -270,6 +273,9 @@ class ConvexHttpClient(
                     "Bạn chỉ có thể thu hồi tin nhắn của mình."
                 code == "DUTY_CHAT_FORBIDDEN" || code == "WORK_CHAT_FORBIDDEN" ->
                     "Bạn không có quyền trao đổi mục này."
+                code == "WORK_DOCUMENT_IMMUTABLE" -> "Đã có người nộp · Không thể sửa hoặc xóa"
+                code == "WORK_UPDATE_FORBIDDEN" -> "Bạn không có quyền sửa hoặc xóa công việc này."
+                code == "WORK_DOCUMENT_NOT_FOUND" -> "Công việc không còn tồn tại."
                 code.contains("FORBIDDEN", ignoreCase = true) -> "Bạn không có quyền thực hiện thao tác này."
                 else -> code.take(180)
             }

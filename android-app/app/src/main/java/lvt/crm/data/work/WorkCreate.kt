@@ -87,3 +87,26 @@ object WorkCreatePolicy {
 
     private val DATE_RE = Regex("""^\d{4}-\d{2}-\d{2}$""")
 }
+
+const val WORK_LOCKED_MESSAGE = "Đã có người nộp · Không thể sửa hoặc xóa"
+
+/**
+ * Visibility follows `canEdit` / `canDelete` from the list payload.
+ * Admin/mod (`isOps`) keep the longer server right: `updateDocument` / `deleteDocument`
+ * still succeed after a submission, so the buttons stay available.
+ */
+object WorkDocumentActions {
+    fun showsEdit(canEdit: Boolean, isOps: Boolean) = canEdit || isOps
+
+    fun showsDelete(canDelete: Boolean, isOps: Boolean) = canDelete || isOps
+
+    fun showsLocked(canEdit: Boolean, canDelete: Boolean, isOps: Boolean) =
+        !showsEdit(canEdit, isOps) && !showsDelete(canDelete, isOps)
+
+    fun errorMessage(raw: String, deleting: Boolean, fallback: String): String {
+        if (raw.contains("WORK_DOCUMENT_IMMUTABLE")) return WORK_LOCKED_MESSAGE
+        if (raw.contains("WORK_UPDATE_FORBIDDEN")) return "Bạn không có quyền sửa hoặc xóa công việc này."
+        if (deleting) return "Không thể xóa công văn lúc này."
+        return fallback
+    }
+}

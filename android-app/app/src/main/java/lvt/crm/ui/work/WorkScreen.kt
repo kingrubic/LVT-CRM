@@ -92,6 +92,8 @@ import lvt.crm.data.chat.ChatRepository
 import lvt.crm.data.chat.ChatTarget
 import lvt.crm.data.chat.workChatTarget
 import lvt.crm.data.work.WorkApprovalItem
+import lvt.crm.data.work.WORK_LOCKED_MESSAGE
+import lvt.crm.data.work.WorkDocumentActions
 import lvt.crm.ui.chat.ChatDialog
 import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkDocumentAssignment
@@ -117,6 +119,7 @@ fun WorkScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var chatTarget by remember { mutableStateOf<ChatTarget?>(null) }
+    var editingDocument by remember { mutableStateOf<WorkApprovalItem?>(null) }
     var consumedChatToken by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(focusToken, openChat, focusId, state.loading, state.tasks, state.approvals) {
         if (!openChat || focusId.isNullOrBlank() || focusToken.isNullOrBlank()) return@LaunchedEffect
@@ -184,11 +187,18 @@ fun WorkScreen(
         }
     }
 
-    if (state.canCreate && showingCreate) {
+    if (state.canCreate && (showingCreate || editingDocument != null)) {
         WorkCreateScreen(
             viewModel = viewModel,
-            onBack = { showingCreate = false },
-            onCreated = { showingCreate = false },
+            editing = editingDocument,
+            onBack = {
+                showingCreate = false
+                editingDocument = null
+            },
+            onCreated = {
+                showingCreate = false
+                editingDocument = null
+            },
         )
         return
     }
@@ -205,6 +215,8 @@ fun WorkScreen(
             onSearchChange = viewModel::updateSearch,
             onCompleteTask = { task -> viewModel.requestComplete(task) },
             onCreate = { showingCreate = true },
+            onEdit = { editingDocument = it },
+            onDelete = { viewModel.deleteDocument(it.id) },
             openChat = openChat,
             onOpenChat = openThread,
         )
@@ -647,10 +659,13 @@ private fun AdminWorkScreen(
     onSearchChange: (ListSearchState) -> Unit,
     onCompleteTask: (WorkTaskItem) -> Unit,
     onCreate: () -> Unit,
+    onEdit: (WorkApprovalItem) -> Unit,
+    onDelete: (WorkApprovalItem) -> Unit,
     openChat: Boolean = false,
     onOpenChat: (ChatTarget) -> Unit = {},
 ) {
     var selectedDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<WorkApprovalItem?>(null) }
     val selectedDocument = currentAdminDocument(state.approvals, selectedDocumentId)
     var selectedTaskId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedTask = state.tasks.firstOrNull { it.id == selectedTaskId }
@@ -830,8 +845,12 @@ private fun AdminWorkScreen(
                         items(documents, key = { "created-${it.id}" }) { document ->
                             AdminDocumentCard(
                                 document = document,
+                                isOps = state.isOps,
+                                busy = state.creating,
                                 onOpen = { selectedDocumentId = document.id },
                                 onChat = { onOpenChat(workChatTarget(document.id, state.tasks, listOf(document))) },
+                                onEdit = { onEdit(document) },
+                                onDelete = { pendingDelete = document },
                             )
                         }
                     }
@@ -847,8 +866,12 @@ private fun AdminWorkScreen(
                     item {
                         DocumentSummaryCard(
                             document,
+                            isOps = state.isOps,
+                            busy = state.creating,
                             onOpenDocument = { onOpenDocument(document) },
                             onChat = { onOpenChat(workChatTarget(document.id, state.tasks, listOf(document))) },
+                            onEdit = { onEdit(document) },
+                            onDelete = { pendingDelete = document },
                         )
                     }
                     if (document.assignments.isEmpty()) {
@@ -887,6 +910,14 @@ private fun AdminWorkScreen(
             }
         }
 
+        state.notice?.let { message ->
+            Text(
+                message,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
         state.actionError?.let { message ->
             Text(
                 message,
@@ -944,6 +975,27 @@ private fun AdminWorkScreen(
             },
         )
     }
+
+    pendingDelete?.let { document ->
+        AlertDialog(
+            onDismissRequest = { if (!state.creating) pendingDelete = null },
+            title = { Text("Xóa công việc ${workListTitle(document)}?") },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.creating,
+                    onClick = {
+                        val target = document
+                        pendingDelete = null
+                        if (selectedDocumentId == target.id) selectedDocumentId = null
+                        onDelete(target)
+                    },
+                ) { Text("Xóa") }
+            },
+            dismissButton = {
+                TextButton(enabled = !state.creating, onClick = { pendingDelete = null }) { Text("Hủy") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -971,8 +1023,12 @@ private fun WorkLoadError(message: String, onRefresh: () -> Unit) {
 @Composable
 private fun AdminDocumentCard(
     document: WorkApprovalItem,
+    isOps: Boolean,
+    busy: Boolean,
     onOpen: () -> Unit,
     onChat: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val displayTitle = workListTitle(document)
     val extension = document.fileName.substringAfterLast('.', "").uppercase().filter { it.isLetterOrDigit() }.take(4)
@@ -1037,6 +1093,7 @@ private fun AdminDocumentCard(
         ) {
             Text("Trao đổi")
         }
+        WorkDocumentActionsRow(document, isOps, busy, onEdit, onDelete)
     }
 }
 
@@ -1176,8 +1233,12 @@ internal fun focusedAdminDocument(
 @Composable
 private fun DocumentSummaryCard(
     document: WorkApprovalItem,
+    isOps: Boolean,
+    busy: Boolean,
     onOpenDocument: () -> Unit,
     onChat: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val members = document.assignments.flatMap { it.members }
     val completedCount = members.count { it.status in completedWorkStatuses }
@@ -1277,6 +1338,41 @@ private fun DocumentSummaryCard(
             TextButton(onClick = onChat, modifier = Modifier.padding(top = 4.dp)) {
                 Text("Trao đổi")
             }
+            WorkDocumentActionsRow(document, isOps, busy, onEdit, onDelete)
+        }
+    }
+}
+
+@Composable
+private fun WorkDocumentActionsRow(
+    document: WorkApprovalItem,
+    isOps: Boolean,
+    busy: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val canEdit = WorkDocumentActions.showsEdit(document.canEdit, isOps)
+    val canDelete = WorkDocumentActions.showsDelete(document.canDelete, isOps)
+    if (!canEdit && !canDelete) {
+        if (WorkDocumentActions.showsLocked(document.canEdit, document.canDelete, isOps)) {
+            Text(
+                WORK_LOCKED_MESSAGE,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            )
+        }
+        return
+    }
+    Row(
+        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (canEdit) {
+            OutlinedButton(onClick = onEdit, enabled = !busy) { Text("Sửa") }
+        }
+        if (canDelete) {
+            OutlinedButton(onClick = onDelete, enabled = !busy) { Text("Xóa") }
         }
     }
 }
