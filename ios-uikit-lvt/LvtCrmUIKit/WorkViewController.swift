@@ -354,7 +354,7 @@ final class WorkViewController: UITableViewController {
     }
 
     private func openEdit(_ item: WorkApprovalItem) {
-        let controller = WorkCreateViewController(viewModel: viewModel, editing: item) { }
+        let controller = WorkCreateViewController(viewModel: viewModel, editingWork: item) { }
         navigationController?.pushViewController(controller, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 

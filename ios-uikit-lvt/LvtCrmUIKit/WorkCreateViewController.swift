@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDocumentPickerDelegate, PHPickerViewControllerDelegate {
     private let viewModel: WorkViewModel
-    private let editing: WorkApprovalItem?
+    private let editingWork: WorkApprovalItem?
     private let onCreated: () -> Void
 
     private let scrollView = UIScrollView()
@@ -31,12 +31,12 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
     private static let maxUploadFileSize = 20 * 1024 * 1024
     private static let allowedUploadExtensions: Set<String> = ["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg"]
 
-    init(viewModel: WorkViewModel, editing: WorkApprovalItem? = nil, onCreated: @escaping () -> Void) {
+    init(viewModel: WorkViewModel, editingWork: WorkApprovalItem? = nil, onCreated: @escaping () -> Void) {
         self.viewModel = viewModel
-        self.editing = editing
+        self.editingWork = editingWork
         self.onCreated = onCreated
         super.init(nibName: nil, bundle: nil)
-        title = editing == nil ? "Tạo công việc" : "Sửa công việc"
+        title = editingWork == nil ? "Tạo công việc" : "Sửa công việc"
     }
 
     @available(*, unavailable)
@@ -46,12 +46,12 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
         navigationItem.largeTitleDisplayMode = .never
-        if let editing {
-            titleField.text = WorkHelpers.listTitle(editing)
-            assignments = editing.editAssignments()
-            documentTypeId = editing.documentTypeId
-            if editing.privateFile {
-                keptFileName = editing.fileName
+        if let editingWork {
+            titleField.text = WorkHelpers.listTitle(editingWork)
+            assignments = editingWork.editAssignments()
+            documentTypeId = editingWork.documentTypeId
+            if editingWork.privateFile {
+                keptFileName = editingWork.fileName
             }
             navigationItem.leftBarButtonItem = UIBarButtonItem(
                 title: "Hủy sửa",
@@ -109,7 +109,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         errorLabel.numberOfLines = 0
         errorLabel.isHidden = true
 
-        submitButton.setTitle(editing == nil ? "Tạo công việc" : "Lưu thay đổi", for: .normal)
+        submitButton.setTitle(editingWork == nil ? "Tạo công việc" : "Lưu thay đổi", for: .normal)
         submitButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         submitButton.addTarget(self, action: #selector(submit), for: .touchUpInside)
 
@@ -163,7 +163,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         do {
             let loaded = try await viewModel.loadFormOptions()
             options = loaded
-            if editing?.privateFile == true && documentTypeId.isEmpty,
+            if editingWork?.privateFile == true && documentTypeId.isEmpty,
                let fallback = loaded.documentTypes.first(where: { $0.code == "BIEN_BAN" }) {
                 documentTypeId = fallback.id
             }
@@ -359,7 +359,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         fileData = nil
         fileName = ""
         fileMime = ""
-        documentTypeId = editing?.documentTypeId ?? ""
+        documentTypeId = editingWork?.documentTypeId ?? ""
         refreshFileLabel()
         refreshTypeButton()
     }
@@ -393,7 +393,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
     }
 
     private func refreshTypeButton() {
-        let hasFile = fileData != nil || editing?.privateFile == true
+        let hasFile = fileData != nil || editingWork?.privateFile == true
         typeButton.isHidden = !hasFile
         let name = options?.documentTypes.first { $0.id == documentTypeId }?.name
         typeButton.setTitle(name ?? "Chọn loại văn bản", for: .normal)
@@ -461,7 +461,7 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
 
     @objc private func submit() {
         guard !isBusy else { return }
-        if editing != nil {
+        if editingWork != nil {
             let alert = UIAlertController(title: "Bạn có chắc chắn Lưu không?", message: nil, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Hủy", style: .cancel))
             alert.addAction(UIAlertAction(title: "Lưu", style: .default) { [weak self] _ in
@@ -487,9 +487,9 @@ final class WorkCreateViewController: UIViewController, UITextViewDelegate, UIDo
         }
         isBusy = true
         submitButton.isEnabled = false
-        submitButton.setTitle(editing == nil ? "Đang tạo…" : "Đang lưu…", for: .normal)
+        submitButton.setTitle(editingWork == nil ? "Đang tạo…" : "Đang lưu…", for: .normal)
         spinner.startAnimating()
-        let editingDocument = editing
+        let editingDocument = editingWork
         Task {
             do {
                 if let editingDocument {
