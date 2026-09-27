@@ -11,13 +11,16 @@ final class DutiesViewController: UITableViewController {
     }
 
     private let viewModel: DutiesViewModel
+    private let chatRepository: ChatRepository
     var trailingAccessoryBarButtonItems: [UIBarButtonItem] = []
     private let searchHeader = ListSearchHeaderView()
     private var pendingFocusId: String?
+    private var pendingOpenChat = false
     private weak var detailViewController: DutyDetailViewController?
 
-    init(viewModel: DutiesViewModel) {
+    init(viewModel: DutiesViewModel, chatRepository: ChatRepository) {
         self.viewModel = viewModel
+        self.chatRepository = chatRepository
         super.init(style: .insetGrouped)
         title = "Lịch công tác cá nhân"
     }
@@ -127,9 +130,17 @@ final class DutiesViewController: UITableViewController {
                 showAttendanceStatus: viewModel.attendanceConfirmationEnabled,
                 canMark: viewModel.canMark(duty),
                 busy: viewModel.busyDutyId == duty.id,
-                focused: duty.id == pendingFocusId
+                focused: duty.id == pendingFocusId,
+                onChat: { [weak self] in
+                    self?.presentChat(dutyId: duty.id, title: DutyListRules.displayTitle(duty))
+                }
             )
-            cell.accessibilityCustomActions = attendanceAccessibilityActions(for: duty)
+            var actions = attendanceAccessibilityActions(for: duty) ?? []
+            actions.append(UIAccessibilityCustomAction(name: "Trao đổi") { [weak self] _ in
+                self?.presentChat(dutyId: duty.id, title: DutyListRules.displayTitle(duty))
+                return true
+            })
+            cell.accessibilityCustomActions = actions
             return cell
         case .feedback(let message):
             return stateCell(
@@ -215,9 +226,10 @@ final class DutiesViewController: UITableViewController {
         return configuration
     }
 
-    func focus(dutyId: String) {
+    func focus(dutyId: String, openChat: Bool = false) {
         loadViewIfNeeded()
         pendingFocusId = dutyId
+        pendingOpenChat = openChat
         if let duty = viewModel.duty(id: dutyId) {
             let tab = DutyListRules.tab(for: duty)
             if viewModel.lists.mine.contains(where: { $0.id == duty.id }) { viewModel.mineTab = tab }
@@ -291,10 +303,22 @@ final class DutiesViewController: UITableViewController {
     }
 
     private func processPendingFocusIfPossible() {
-        guard let dutyId = pendingFocusId, !viewModel.loading, viewModel.error == nil else { return }
+        guard let dutyId = pendingFocusId, !viewModel.loading else { return }
+        let openChat = pendingOpenChat
+        if viewModel.error != nil {
+            pendingFocusId = nil
+            pendingOpenChat = false
+            if openChat { presentChat(dutyId: dutyId, title: "Công tác") }
+            return
+        }
         pendingFocusId = nil
+        pendingOpenChat = false
         guard let duty = viewModel.duty(id: dutyId) else {
-            presentMissingDutyAlert()
+            if openChat {
+                presentChat(dutyId: dutyId, title: "Công tác")
+            } else {
+                presentMissingDutyAlert()
+            }
             return
         }
         let tab = DutyListRules.tab(for: duty)
@@ -308,7 +332,11 @@ final class DutiesViewController: UITableViewController {
                 return false
             }
         }) else {
-            presentMissingDutyAlert()
+            if openChat {
+                presentChat(dutyId: duty.id, title: DutyListRules.displayTitle(duty))
+            } else {
+                presentMissingDutyAlert()
+            }
             return
         }
         let row: Int
@@ -330,7 +358,18 @@ final class DutiesViewController: UITableViewController {
             self.tableView.selectRow(at: indexPath, animated: true, scrollPosition: .none)
             UIAccessibility.post(notification: .screenChanged, argument: self.tableView.cellForRow(at: indexPath))
             self.showDetail(for: duty)
+            if openChat {
+                self.presentChat(dutyId: duty.id, title: DutyListRules.displayTitle(duty))
+            }
         }
+    }
+
+    private func presentChat(dutyId: String, title: String) {
+        let controller = ChatViewController(
+            repository: chatRepository,
+            target: ChatTarget(kind: .duty, entityId: dutyId, title: title)
+        )
+        navigationController?.pushViewController(controller, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     private func showDetail(for duty: DutyItem) {
@@ -341,6 +380,9 @@ final class DutiesViewController: UITableViewController {
             actionError: viewModel.actionError,
             onSetAttendance: { [weak self] status in
                 self?.viewModel.setAttendance(dutyId: duty.id, status: status)
+            },
+            onOpenChat: { [weak self] in
+                self?.presentChat(dutyId: duty.id, title: DutyListRules.displayTitle(duty))
             }
         )
         detailViewController = detail
@@ -470,7 +512,9 @@ private final class DutyTableViewCell: UITableViewCell {
     private let statusLabel = UILabel()
     private let titleLabel = UILabel()
     private let scheduleLabel = UILabel()
+    private let chatButton = UIButton(type: .system)
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private var onChat: (() -> Void)?
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -496,7 +540,14 @@ private final class DutyTableViewCell: UITableViewCell {
         statusStack.distribution = .equalSpacing
         statusStack.spacing = 12
 
-        let stack = UIStackView(arrangedSubviews: [statusStack, titleLabel, scheduleLabel])
+        chatButton.configuration = .plain()
+        chatButton.configuration?.title = "Trao đổi"
+        chatButton.configuration?.image = UIImage(systemName: "bubble.left")
+        chatButton.configuration?.imagePadding = 6
+        chatButton.contentHorizontalAlignment = .leading
+        chatButton.accessibilityLabel = "Trao đổi công tác"
+        chatButton.addAction(UIAction { [weak self] _ in self?.onChat?() }, for: .touchUpInside)
+        let stack = UIStackView(arrangedSubviews: [statusStack, titleLabel, scheduleLabel, chatButton])
         stack.axis = .vertical
         stack.spacing = 7
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -517,7 +568,8 @@ private final class DutyTableViewCell: UITableViewCell {
         showAttendanceStatus: Bool,
         canMark: Bool,
         busy: Bool,
-        focused: Bool
+        focused: Bool,
+        onChat: @escaping () -> Void
     ) {
         titleLabel.text = DutyListRules.displayTitle(duty)
         scheduleLabel.text = DutyPresentation.schedule(duty)
@@ -532,6 +584,7 @@ private final class DutyTableViewCell: UITableViewCell {
         } else {
             statusLabel.text = nil
         }
+        self.onChat = onChat
         backgroundColor = focused ? UIColor.systemIndigo.withAlphaComponent(0.12) : .secondarySystemGroupedBackground
         accessoryView = busy ? activityIndicator : nil
         accessoryType = busy ? .none : .disclosureIndicator
@@ -561,6 +614,7 @@ private final class DutyDetailViewController: UITableViewController {
         case content
         case information([(String, String)])
         case attendance
+        case chat
     }
 
     private(set) var dutyId: String
@@ -569,13 +623,15 @@ private final class DutyDetailViewController: UITableViewController {
     private var busy: Bool
     private var actionError: String?
     private let onSetAttendance: (String) -> Void
+    private let onOpenChat: () -> Void
 
     init(
         duty: DutyItem,
         attendanceEnabled: Bool,
         busy: Bool,
         actionError: String?,
-        onSetAttendance: @escaping (String) -> Void
+        onSetAttendance: @escaping (String) -> Void,
+        onOpenChat: @escaping () -> Void
     ) {
         dutyId = duty.id
         self.duty = duty
@@ -583,6 +639,7 @@ private final class DutyDetailViewController: UITableViewController {
         self.busy = busy
         self.actionError = actionError
         self.onSetAttendance = onSetAttendance
+        self.onOpenChat = onOpenChat
         super.init(style: .insetGrouped)
         title = "Chi tiết công tác"
     }
@@ -608,6 +665,7 @@ private final class DutyDetailViewController: UITableViewController {
         switch sections[section] {
         case .information(let rows): return rows.count
         case .attendance: return 2
+        case .chat: return 1
         default: return 1
         }
     }
@@ -616,6 +674,7 @@ private final class DutyDetailViewController: UITableViewController {
         switch sections[section] {
         case .information: return "Thông tin"
         case .attendance: return "Xác nhận tham dự"
+        case .chat: return nil
         default: return nil
         }
     }
@@ -666,6 +725,14 @@ private final class DutyDetailViewController: UITableViewController {
                 indicator.startAnimating()
                 cell.accessoryView = indicator
             }
+        case .chat:
+            content.text = "Trao đổi"
+            content.image = UIImage(systemName: "bubble.left")
+            content.imageProperties.tintColor = .systemIndigo
+            cell.selectionStyle = .default
+            cell.accessoryType = .disclosureIndicator
+            cell.accessibilityTraits = .button
+            cell.accessibilityLabel = "Trao đổi công tác"
         }
         cell.contentConfiguration = content
         return cell
@@ -673,8 +740,14 @@ private final class DutyDetailViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard case .attendance = sections[indexPath.section], !busy else { return }
-        onSetAttendance(indexPath.row == 0 ? "attended" : "absent")
+        switch sections[indexPath.section] {
+        case .attendance where !busy:
+            onSetAttendance(indexPath.row == 0 ? "attended" : "absent")
+        case .chat:
+            onOpenChat()
+        default:
+            break
+        }
     }
 
     func update(
@@ -705,6 +778,7 @@ private final class DutyDetailViewController: UITableViewController {
         if attendanceEnabled && duty.isMine && duty.canMarkAttendance {
             result.append(.attendance)
         }
+        result.append(.chat)
         return result
     }
 

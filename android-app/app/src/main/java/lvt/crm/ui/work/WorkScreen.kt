@@ -88,7 +88,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import lvt.crm.data.work.WorkTaskItem
+import lvt.crm.data.chat.ChatRepository
+import lvt.crm.data.chat.ChatTarget
+import lvt.crm.data.chat.workChatTarget
 import lvt.crm.data.work.WorkApprovalItem
+import lvt.crm.ui.chat.ChatDialog
 import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkDocumentAssignment
 import lvt.crm.data.work.needsCompletion
@@ -102,13 +106,33 @@ import lvt.crm.ui.components.StatusTone
 @Composable
 fun WorkScreen(
     viewModel: WorkViewModel,
+    chatRepository: ChatRepository,
     focusId: String?,
+    openChat: Boolean = false,
+    focusToken: String? = null,
     tabOpenToken: Int,
     openFilter: WorkDashboardFilter? = null,
     openFilterToken: Int = 0,
     onOpenDocument: (WorkApprovalItem) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+    var chatTarget by remember { mutableStateOf<ChatTarget?>(null) }
+    var consumedChatToken by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(focusToken, openChat, focusId, state.loading, state.tasks, state.approvals) {
+        if (!openChat || focusId.isNullOrBlank() || focusToken.isNullOrBlank()) return@LaunchedEffect
+        if (state.loading && state.tasks.isEmpty() && state.approvals.isEmpty()) return@LaunchedEffect
+        if (consumedChatToken == focusToken) return@LaunchedEffect
+        consumedChatToken = focusToken
+        chatTarget = workChatTarget(focusId, state.tasks, state.approvals)
+    }
+    chatTarget?.let { target ->
+        ChatDialog(
+            repository = chatRepository,
+            target = target,
+            onBack = { chatTarget = null },
+        )
+    }
+    val openThread: (ChatTarget) -> Unit = { chatTarget = it }
     val context = LocalContext.current
     var showingCreate by rememberSaveable { mutableStateOf(false) }
     var evidenceFile by remember { mutableStateOf<WorkPickedFile?>(null) }
@@ -181,6 +205,8 @@ fun WorkScreen(
             onSearchChange = viewModel::updateSearch,
             onCompleteTask = { task -> viewModel.requestComplete(task) },
             onCreate = { showingCreate = true },
+            openChat = openChat,
+            onOpenChat = openThread,
         )
     } else {
         val listState = rememberLazyListState()
@@ -215,10 +241,11 @@ fun WorkScreen(
             if (focusId.isNullOrBlank() || state.loading || consumedFocusId == focusId) return@LaunchedEffect
             consumedFocusId = focusId
             val approval = state.approvals.firstOrNull { it.id == focusId }
-            val task = state.tasks.firstOrNull { it.id == focusId }
+            val task = state.tasks.firstOrNull { it.id == focusId || it.documentId == focusId }
             when {
                 approval != null -> selectedApprovalId = approval.id
                 task != null -> selectedTaskId = task.id
+                openChat -> Unit
                 else -> missingFocus = true
             }
         }
@@ -229,7 +256,7 @@ fun WorkScreen(
                 listState.animateScrollToItem(approvalIndex + 1)
                 return@LaunchedEffect
             }
-            val taskIndex = visibleTasks.indexOfFirst { it.id == focusId }
+            val taskIndex = visibleTasks.indexOfFirst { it.id == focusId || it.documentId == focusId }
             if (taskIndex >= 0) {
                 val approvalOffset = if (visibleApprovals.isEmpty()) 0 else visibleApprovals.size + 1
                 listState.animateScrollToItem(approvalOffset + taskIndex)
@@ -255,6 +282,7 @@ fun WorkScreen(
                 document = document,
                 onBack = { selectedApprovalId = null },
                 onOpenFile = { onOpenDocument(document) },
+                onChat = { openThread(workChatTarget(document.id, state.tasks, listOf(document))) },
             )
         } ?: selectedTask?.let { task ->
             WorkTaskDetailScreen(
@@ -266,6 +294,9 @@ fun WorkScreen(
                     { onOpenDocument(task.toAttachedDocument()) }
                 } else {
                     null
+                },
+                onChat = task.documentId.takeIf { it.isNotBlank() }?.let { documentId ->
+                    { openThread(workChatTarget(documentId, listOf(task), emptyList())) }
                 },
             )
         } ?: LvtScreen(
@@ -360,10 +391,13 @@ fun WorkScreen(
                             items(state.visibleMine, key = { "${it.kind}-${it.id}" }) { task ->
                                 WorkCard(
                                     task = task,
-                                    focused = task.id == focusId,
+                                    focused = task.id == focusId || task.documentId == focusId,
                                     busy = state.busyTaskId != null || state.busyApprovalId != null,
                                     onOpen = { selectedTaskId = task.id },
                                     onComplete = { viewModel.requestComplete(task) },
+                                    onChat = task.documentId.takeIf { it.isNotBlank() }?.let { documentId ->
+                                        { openThread(workChatTarget(documentId, listOf(task), emptyList())) }
+                                    },
                                 )
                             }
                         }
@@ -613,6 +647,8 @@ private fun AdminWorkScreen(
     onSearchChange: (ListSearchState) -> Unit,
     onCompleteTask: (WorkTaskItem) -> Unit,
     onCreate: () -> Unit,
+    openChat: Boolean = false,
+    onOpenChat: (ChatTarget) -> Unit = {},
 ) {
     var selectedDocumentId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedDocument = currentAdminDocument(state.approvals, selectedDocumentId)
@@ -628,12 +664,15 @@ private fun AdminWorkScreen(
         selectedDocumentId = null
         selectedTaskId = null
     }
-    LaunchedEffect(focusId, state.approvals, state.completionReviews, state.loading) {
+    LaunchedEffect(focusId, state.approvals, state.tasks, state.completionReviews, state.loading, openChat) {
         if (focusId.isNullOrBlank() || state.loading) return@LaunchedEffect
         val review = state.completionReviews.firstOrNull { it.workItemId == focusId }
         val focusedDocument = focusedAdminDocument(state.approvals, focusId)
+        val task = state.tasks.firstOrNull { it.id == focusId || it.documentId == focusId }
         when {
-            review != null -> selectedReview = review
+            focusedDocument != null && focusedDocument.id == focusId -> selectedDocumentId = focusedDocument.id
+            task != null -> selectedTaskId = task.id
+            review != null && !openChat -> selectedReview = review
             focusedDocument != null -> selectedDocumentId = focusedDocument.id
         }
     }
@@ -689,6 +728,9 @@ private fun AdminWorkScreen(
                         { onOpenDocument(selectedTask.toAttachedDocument()) }
                     } else {
                         null
+                    },
+                    onChat = selectedTask.documentId.takeIf { it.isNotBlank() }?.let { documentId ->
+                        { onOpenChat(workChatTarget(documentId, listOf(selectedTask), emptyList())) }
                     },
                 )
             }
@@ -757,10 +799,13 @@ private fun AdminWorkScreen(
                         items(state.visibleMine, key = { "mine-${it.kind}-${it.id}" }) { task ->
                             WorkCard(
                                 task = task,
-                                focused = task.id == focusId,
+                                focused = task.id == focusId || task.documentId == focusId,
                                 busy = state.busyTaskId != null,
                                 onOpen = { selectedTaskId = task.id },
                                 onComplete = { onCompleteTask(task) },
+                                onChat = task.documentId.takeIf { it.isNotBlank() }?.let { documentId ->
+                                    { onOpenChat(workChatTarget(documentId, listOf(task), emptyList())) }
+                                },
                             )
                         }
                     }
@@ -783,7 +828,11 @@ private fun AdminWorkScreen(
                         }
                     } else {
                         items(documents, key = { "created-${it.id}" }) { document ->
-                            AdminDocumentCard(document = document, onOpen = { selectedDocumentId = document.id })
+                            AdminDocumentCard(
+                                document = document,
+                                onOpen = { selectedDocumentId = document.id },
+                                onChat = { onOpenChat(workChatTarget(document.id, state.tasks, listOf(document))) },
+                            )
                         }
                     }
                 }
@@ -795,7 +844,13 @@ private fun AdminWorkScreen(
                     contentPadding = PaddingValues(bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    item { DocumentSummaryCard(document, onOpenDocument = { onOpenDocument(document) }) }
+                    item {
+                        DocumentSummaryCard(
+                            document,
+                            onOpenDocument = { onOpenDocument(document) },
+                            onChat = { onOpenChat(workChatTarget(document.id, state.tasks, listOf(document))) },
+                        )
+                    }
                     if (document.assignments.isEmpty()) {
                         item {
                             StatePanel(
@@ -914,7 +969,11 @@ private fun WorkLoadError(message: String, onRefresh: () -> Unit) {
 }
 
 @Composable
-private fun AdminDocumentCard(document: WorkApprovalItem, onOpen: () -> Unit) {
+private fun AdminDocumentCard(
+    document: WorkApprovalItem,
+    onOpen: () -> Unit,
+    onChat: () -> Unit,
+) {
     val displayTitle = workListTitle(document)
     val extension = document.fileName.substringAfterLast('.', "").uppercase().filter { it.isLetterOrDigit() }.take(4)
         .ifBlank { displayTitle.take(2).uppercase().ifBlank { "CV" } }
@@ -971,6 +1030,12 @@ private fun AdminDocumentCard(document: WorkApprovalItem, onOpen: () -> Unit) {
                 )
             }
             Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.outline)
+        }
+        TextButton(
+            onClick = onChat,
+            modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+        ) {
+            Text("Trao đổi")
         }
     }
 }
@@ -1112,6 +1177,7 @@ internal fun focusedAdminDocument(
 private fun DocumentSummaryCard(
     document: WorkApprovalItem,
     onOpenDocument: () -> Unit,
+    onChat: () -> Unit,
 ) {
     val members = document.assignments.flatMap { it.members }
     val completedCount = members.count { it.status in completedWorkStatuses }
@@ -1207,6 +1273,9 @@ private fun DocumentSummaryCard(
                     .padding(top = 12.dp),
             ) {
                 Text("Mở tệp")
+            }
+            TextButton(onClick = onChat, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Trao đổi")
             }
         }
     }
@@ -1581,6 +1650,7 @@ private fun WorkCard(
     busy: Boolean,
     onOpen: () -> Unit,
     onComplete: () -> Unit,
+    onChat: (() -> Unit)? = null,
 ) {
     val canComplete = needsCompletion(task.status)
     val isRejected = task.status in setOf("rejected", "rejected_completion")
@@ -1732,6 +1802,11 @@ private fun WorkCard(
                                 if (task.isAdmin) "Hoàn thành và chấm %" else "Nộp bằng chứng hoàn thành",
                                 modifier = Modifier.padding(start = 7.dp),
                             )
+                        }
+                    }
+                    if (onChat != null) {
+                        TextButton(onClick = onChat, modifier = Modifier.padding(top = 4.dp)) {
+                            Text("Trao đổi")
                         }
                     }
                 }

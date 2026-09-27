@@ -177,7 +177,12 @@ actor ConvexHttpClient {
             "ACCOUNT_LOCKED", "PASSWORD_TOO_SHORT", "PASSWORD_CHANGE_FAILED", "PASSWORD_CHANGED_SYNC_PENDING",
             "PASSWORD_CHANGE_REQUIRED", "PASSWORD_RESET_FAILED", "PASSWORD_RESET_EMAIL_FAILED",
             "MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PUBLIC_SIGNUP_DISABLED", "INVALID_EMAIL",
-            "INVALID_AUTH_FLOW", "FORBIDDEN", "UNAUTHENTICATED", "CANNOT_REVOKE_CURRENT_SESSION",
+            "INVALID_AUTH_FLOW",
+            "DUTY_CHAT_EMPTY", "WORK_CHAT_EMPTY", "DUTY_CHAT_TOO_LONG", "WORK_CHAT_TOO_LONG",
+            "DUTY_CHAT_RECALL_TOO_LATE", "WORK_CHAT_RECALL_TOO_LATE",
+            "DUTY_CHAT_RECALL_FORBIDDEN", "WORK_CHAT_RECALL_FORBIDDEN",
+            "DUTY_CHAT_FORBIDDEN", "WORK_CHAT_FORBIDDEN",
+            "FORBIDDEN", "UNAUTHENTICATED", "CANNOT_REVOKE_CURRENT_SESSION",
             "SESSION_NOT_FOUND", "DOCUMENT_TYPE_REQUIRED", "INVALID_DOCUMENT_TYPE", "SESSION_TIMEOUT",
             "INVALID_AVATAR_FILE", "AVATAR_FILE_TOO_LARGE", "AVATAR_UPLOAD_NOT_FOUND", "AVATAR_NOT_FOUND",
             "AVATAR_UPLOAD_FAILED",
@@ -232,6 +237,16 @@ actor ConvexHttpClient {
             return "Mỗi phòng ban chỉ được nhận một đầu việc trong cùng công văn."
         case code == "NOT_A_SUBORDINATE":
             return "Chỉ được giao hoặc cập nhật cấp dưới trong cùng phòng ban."
+        case code == "DUTY_CHAT_EMPTY", code == "WORK_CHAT_EMPTY":
+            return "Vui lòng nhập nội dung tin nhắn."
+        case code == "DUTY_CHAT_TOO_LONG", code == "WORK_CHAT_TOO_LONG":
+            return "Tin nhắn quá dài (tối đa 4000 ký tự)."
+        case code == "DUTY_CHAT_RECALL_TOO_LATE", code == "WORK_CHAT_RECALL_TOO_LATE":
+            return "Đã quá 15 phút, không thể thu hồi tin nhắn này."
+        case code == "DUTY_CHAT_RECALL_FORBIDDEN", code == "WORK_CHAT_RECALL_FORBIDDEN":
+            return "Bạn chỉ có thể thu hồi tin nhắn của mình."
+        case code == "DUTY_CHAT_FORBIDDEN", code == "WORK_CHAT_FORBIDDEN":
+            return "Bạn không có quyền trao đổi mục này."
         case code.localizedCaseInsensitiveContains("FORBIDDEN"):
             return "Bạn không có quyền thực hiện thao tác này."
         default: return String(code.prefix(180))

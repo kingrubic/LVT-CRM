@@ -8,6 +8,13 @@ data class AppChangelogEntry(
 object AppChangelog {
     val entries: List<AppChangelogEntry> = listOf(
         AppChangelogEntry(
+            "0.19.0",
+            listOf(
+                "Trao đổi trên công tác và công việc: gửi in đậm, in nghiêng, gạch chân và thu hồi trong 15 phút.",
+                "Chuông thông báo trao đổi mở đúng cuộc hội thoại.",
+            ),
+        ),
+        AppChangelogEntry(
             "0.18.0",
             listOf(
                 "Sau khi chọn ảnh đại diện, cắt khung 1:1 rồi lưu WebP (nhẹ hơn JPEG).",

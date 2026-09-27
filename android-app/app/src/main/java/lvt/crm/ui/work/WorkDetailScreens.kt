@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +38,7 @@ fun WorkDocumentDetailScreen(
     document: WorkApprovalItem,
     onBack: () -> Unit,
     onOpenFile: () -> Unit,
+    onChat: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     val grouped = document.assignments.groupBy { it.departmentName.ifBlank { "Khác" } }
@@ -82,6 +84,12 @@ fun WorkDocumentDetailScreen(
                     Text("Mở tệp")
                 }
             }
+            TextButton(
+                onClick = onChat,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                Text("Trao đổi")
+            }
             grouped.forEach { (department, assignments) ->
                 HorizontalDivider()
                 Text(
@@ -122,6 +130,7 @@ fun WorkTaskDetailScreen(
     onBack: () -> Unit,
     onComplete: () -> Unit,
     onOpenFile: (() -> Unit)? = null,
+    onChat: (() -> Unit)? = null,
 ) {
     BackHandler(onBack = onBack)
     LvtScreen(
@@ -183,6 +192,11 @@ fun WorkTaskDetailScreen(
                     "Lý do từ chối: ${task.rejectionReason}",
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+            if (onChat != null) {
+                TextButton(onClick = onChat, modifier = Modifier.fillMaxWidth()) {
+                    Text("Trao đổi")
+                }
             }
             if (needsCompletion(task.status)) {
                 Spacer(modifier = Modifier.height(8.dp))

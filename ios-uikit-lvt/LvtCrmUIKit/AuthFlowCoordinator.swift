@@ -65,6 +65,7 @@ final class AuthFlowCoordinator {
                 notificationsRepository: container.notificationsRepository,
                 dutiesRepository: container.dutiesRepository,
                 workRepository: container.workRepository,
+                chatRepository: container.chatRepository,
                 avatarRepository: container.avatarRepository
             )
             root = tabBarController

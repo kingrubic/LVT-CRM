@@ -43,6 +43,11 @@ struct NotificationDestination: Equatable, Sendable, Hashable {
         kind == "duty" ? .duties : .work
     }
 
+    /// Bell items for Trao đổi use sourceType; kind still selects the tab.
+    var opensChat: Bool {
+        sourceType == "duty_chat" || sourceType == "work_chat"
+    }
+
     static func from(url: URL) -> NotificationDestination? {
         guard url.scheme == "lvtcrm", url.host == "notification" else { return nil }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
