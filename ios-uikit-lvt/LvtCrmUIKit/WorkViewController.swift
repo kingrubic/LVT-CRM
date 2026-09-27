@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 final class WorkViewController: UITableViewController {
     private enum SectionKind {
         case feedback(String)
+        case notice(String)
         case loading
         case error(String)
         case reviewBanner(Int)
@@ -165,6 +166,8 @@ final class WorkViewController: UITableViewController {
         switch sectionKinds[indexPath.section] {
         case .feedback(let message):
             return stateCell(indexPath, "Không thể cập nhật công việc", message, "exclamationmark.circle.fill", .systemRed)
+        case .notice(let message):
+            return stateCell(indexPath, message, nil, "checkmark.circle.fill", .systemGreen)
         case .loading:
             let cell = stateCell(indexPath, "Đang tải công việc…", nil, nil, .secondaryLabel)
             let spinner = UIActivityIndicatorView(style: .medium)
@@ -203,9 +206,12 @@ final class WorkViewController: UITableViewController {
             cell.configureApproval(
                 item,
                 admin: viewModel.isAdmin,
+                isOps: viewModel.isOps,
                 busy: viewModel.busyApprovalId == item.id,
                 focused: isFocused(approval: item),
-                onChat: { [weak self] in self?.presentWorkChat(documentId: item.id, title: item.title) }
+                onChat: { [weak self] in self?.presentWorkChat(documentId: item.id, title: item.title) },
+                onEdit: { [weak self] in self?.openEdit(item) },
+                onDelete: { [weak self] in self?.confirmDelete(item) }
             ) { [weak self] action in
                 guard let self else { return }
                 if action == .detail { showDocument(item) }
@@ -305,6 +311,7 @@ final class WorkViewController: UITableViewController {
     private var sectionKinds: [SectionKind] {
         var sections: [SectionKind] = []
         if let actionError = viewModel.actionError { sections.append(.feedback(actionError)) }
+        if let notice = viewModel.notice { sections.append(.notice(notice)) }
         if let error = viewModel.error { return sections + [.error(error)] }
         if viewModel.loading { return sections + [.loading] }
         if viewModel.canCreate, !viewModel.completionReviews.isEmpty {
@@ -344,6 +351,24 @@ final class WorkViewController: UITableViewController {
             self?.viewModel.refresh()
         }
         navigationController?.pushViewController(controller, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
+    private func openEdit(_ item: WorkApprovalItem) {
+        let controller = WorkCreateViewController(viewModel: viewModel, editingWork: item) { }
+        navigationController?.pushViewController(controller, animated: !UIAccessibility.isReduceMotionEnabled)
+    }
+
+    private func confirmDelete(_ item: WorkApprovalItem) {
+        let alert = UIAlertController(
+            title: "Xóa công việc \(WorkHelpers.listTitle(item))?",
+            message: nil,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Hủy", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Xóa", style: .destructive) { [weak self] _ in
+            self?.viewModel.deleteDocument(id: item.id)
+        })
+        present(alert, animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     override func viewDidLayoutSubviews() {
@@ -667,9 +692,18 @@ final class WorkViewController: UITableViewController {
         navigationController?.pushViewController(
             WorkDocumentViewController(
                 document: item,
+                isOps: viewModel.isOps,
                 downloadDocument: downloadDocument,
                 onOpenChat: { [weak self] in
                     self?.presentWorkChat(documentId: item.id, title: item.title)
+                },
+                onEdit: { [weak self] in
+                    self?.navigationController?.popViewController(animated: false)
+                    self?.openEdit(item)
+                },
+                onDelete: { [weak self] in
+                    self?.navigationController?.popViewController(animated: false)
+                    self?.confirmDelete(item)
                 }
             ),
             animated: !UIAccessibility.isReduceMotionEnabled
@@ -792,7 +826,13 @@ private final class WorkItemCell: UITableViewCell {
     private let reasonLabel = UILabel()
     private let actionButton = UIButton(type: .system)
     private let chatButton = UIButton(type: .system)
+    private let editButton = UIButton(type: .system)
+    private let deleteButton = UIButton(type: .system)
+    private let lockedLabel = UILabel()
+    private let manageRow = UIStackView()
     private var onChat: (() -> Void)?
+    private var onEdit: (() -> Void)?
+    private var onDelete: (() -> Void)?
     private let spinner = UIActivityIndicatorView(style: .medium)
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -822,7 +862,24 @@ private final class WorkItemCell: UITableViewCell {
         chatButton.configuration?.imagePadding = 6
         chatButton.accessibilityLabel = "Trao đổi công việc"
         chatButton.addAction(UIAction { [weak self] _ in self?.onChat?() }, for: .touchUpInside)
-        let stack = UIStackView(arrangedSubviews: [statusLabel, titleLabel, detailLabel, metaLabel, reasonLabel, actionRow, chatButton])
+        editButton.configuration = .bordered()
+        editButton.configuration?.title = "Sửa"
+        editButton.accessibilityLabel = "Sửa công việc"
+        editButton.addAction(UIAction { [weak self] _ in self?.onEdit?() }, for: .touchUpInside)
+        deleteButton.configuration = .bordered()
+        deleteButton.configuration?.title = "Xóa"
+        deleteButton.accessibilityLabel = "Xóa công việc"
+        deleteButton.addAction(UIAction { [weak self] _ in self?.onDelete?() }, for: .touchUpInside)
+        manageRow.axis = .horizontal
+        manageRow.spacing = 8
+        manageRow.addArrangedSubview(editButton)
+        manageRow.addArrangedSubview(deleteButton)
+        lockedLabel.font = .preferredFont(forTextStyle: .footnote)
+        lockedLabel.adjustsFontForContentSizeCategory = true
+        lockedLabel.textColor = .secondaryLabel
+        lockedLabel.numberOfLines = 0
+        lockedLabel.text = WorkCreatePolicy.lockedMessage
+        let stack = UIStackView(arrangedSubviews: [statusLabel, titleLabel, detailLabel, metaLabel, reasonLabel, actionRow, chatButton, manageRow, lockedLabel])
         stack.axis = .vertical
         stack.alignment = .leading
         stack.spacing = 7
@@ -846,6 +903,12 @@ private final class WorkItemCell: UITableViewCell {
         actionButton.isHidden = false
         chatButton.isHidden = true
         onChat = nil
+        onEdit = nil
+        onDelete = nil
+        manageRow.isHidden = true
+        editButton.isHidden = true
+        deleteButton.isHidden = true
+        lockedLabel.isHidden = true
         reasonLabel.isHidden = true
         spinner.stopAnimating()
         backgroundColor = .secondarySystemGroupedBackground
@@ -854,9 +917,12 @@ private final class WorkItemCell: UITableViewCell {
     func configureApproval(
         _ item: WorkApprovalItem,
         admin: Bool,
+        isOps: Bool,
         busy: Bool,
         focused: Bool,
         onChat: @escaping () -> Void,
+        onEdit: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
         action: @escaping (WorkCellAction) -> Void
     ) {
         statusLabel.text = item.status == "pending" ? "Chờ duyệt · \(item.approvalCount)/\(item.approvalTotal)" : "\(item.status) · \(item.approvalCount)/\(item.approvalTotal)"
@@ -885,7 +951,17 @@ private final class WorkItemCell: UITableViewCell {
             statusLabel.textColor = item.myDecision == "approved" ? .systemGreen : .systemRed
         }
         setChat(onChat)
-        accessibilityLabel = [statusLabel.text, titleLabel.text, detailLabel.text, metaLabel.text].compactMap { $0 }.joined(separator: ". ")
+        let canEdit = WorkCreatePolicy.showsEdit(canEdit: item.canEdit, isOps: isOps)
+        let canDelete = WorkCreatePolicy.showsDelete(canDelete: item.canDelete, isOps: isOps)
+        self.onEdit = onEdit
+        self.onDelete = onDelete
+        editButton.isHidden = !canEdit
+        deleteButton.isHidden = !canDelete
+        editButton.isEnabled = !busy
+        deleteButton.isEnabled = !busy
+        manageRow.isHidden = !canEdit && !canDelete
+        lockedLabel.isHidden = !WorkCreatePolicy.showsLocked(canEdit: item.canEdit, canDelete: item.canDelete, isOps: isOps)
+        accessibilityLabel = [statusLabel.text, titleLabel.text, detailLabel.text, metaLabel.text, lockedLabel.isHidden ? nil : lockedLabel.text].compactMap { $0 }.joined(separator: ". ")
     }
 
     func configureTask(
@@ -895,6 +971,10 @@ private final class WorkItemCell: UITableViewCell {
         onChat: (() -> Void)?,
         complete: @escaping () -> Void
     ) {
+        manageRow.isHidden = true
+        editButton.isHidden = true
+        deleteButton.isHidden = true
+        lockedLabel.isHidden = true
         statusLabel.text = WorkPresentation.status(item.status) + (item.qualityPercent.map { " · \($0)%" } ?? "")
         statusLabel.textColor = WorkPresentation.statusColor(item.status)
         titleLabel.text = item.title
@@ -925,6 +1005,10 @@ private final class WorkItemCell: UITableViewCell {
     }
 
     func configureReview(_ item: WorkCompletionReviewItem, busy: Bool, review: @escaping () -> Void) {
+        manageRow.isHidden = true
+        editButton.isHidden = true
+        deleteButton.isHidden = true
+        lockedLabel.isHidden = true
         setChat(nil)
         statusLabel.text = "Chờ xác nhận"
         statusLabel.textColor = .systemOrange
@@ -1122,21 +1206,30 @@ private final class WorkTaskDetailViewController: UIViewController, QLPreviewCon
 
 private final class WorkDocumentViewController: UITableViewController, QLPreviewControllerDataSource {
     private let document: WorkApprovalItem
+    private let isOps: Bool
     private let downloadDocument: (WorkApprovalItem) async throws -> URL
     private let groupedAssignments: [(String, [WorkDocumentAssignment])]
     private var previewURL: URL?
     private var openingFile = false
 
     private let onOpenChat: () -> Void
+    private let onEdit: () -> Void
+    private let onDelete: () -> Void
 
     init(
         document: WorkApprovalItem,
+        isOps: Bool,
         downloadDocument: @escaping (WorkApprovalItem) async throws -> URL,
-        onOpenChat: @escaping () -> Void
+        onOpenChat: @escaping () -> Void,
+        onEdit: @escaping () -> Void,
+        onDelete: @escaping () -> Void
     ) {
         self.document = document
+        self.isOps = isOps
         self.downloadDocument = downloadDocument
         self.onOpenChat = onOpenChat
+        self.onEdit = onEdit
+        self.onDelete = onDelete
         groupedAssignments = Dictionary(grouping: document.assignments, by: \.departmentName)
             .map { ($0.key, $0.value) }.sorted { $0.0 < $1.0 }
         super.init(style: .insetGrouped)
@@ -1151,7 +1244,29 @@ private final class WorkDocumentViewController: UITableViewController, QLPreview
         tableView.cellLayoutMarginsFollowReadableWidth = true
         tableView.rowHeight = UITableView.automaticDimension
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "DocumentCell")
+        var items: [UIBarButtonItem] = []
+        if WorkCreatePolicy.showsDelete(canDelete: document.canDelete, isOps: isOps) {
+            items.append(UIBarButtonItem(title: "Xóa", style: .plain, target: self, action: #selector(deleteDocument)))
+        }
+        if WorkCreatePolicy.showsEdit(canEdit: document.canEdit, isOps: isOps) {
+            items.append(UIBarButtonItem(title: "Sửa", style: .done, target: self, action: #selector(editDocument)))
+        }
+        navigationItem.rightBarButtonItems = items.isEmpty ? nil : items
+        if WorkCreatePolicy.showsLocked(canEdit: document.canEdit, canDelete: document.canDelete, isOps: isOps) {
+            let footer = UILabel()
+            footer.text = WorkCreatePolicy.lockedMessage
+            footer.font = .preferredFont(forTextStyle: .footnote)
+            footer.textColor = .secondaryLabel
+            footer.numberOfLines = 0
+            footer.textAlignment = .center
+            footer.frame.size.height = 44
+            tableView.tableFooterView = footer
+        }
     }
+
+    @objc private func editDocument() { onEdit() }
+
+    @objc private func deleteDocument() { onDelete() }
 
     override func numberOfSections(in tableView: UITableView) -> Int { 1 + groupedAssignments.count }
 

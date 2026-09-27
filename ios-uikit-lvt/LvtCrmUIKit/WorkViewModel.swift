@@ -168,6 +168,7 @@ final class WorkViewModel {
     private(set) var refreshing = false
     private(set) var error: String?
     private(set) var actionError: String?
+    private(set) var notice: String?
     private(set) var isAdmin = false
     private(set) var canCreate = false
     private(set) var isOps = false
@@ -237,6 +238,7 @@ final class WorkViewModel {
         refreshing = !initial
         error = nil
         actionError = nil
+        notice = nil
         notifyChange()
         task = Task { [weak self] in
             guard let self else { return }
@@ -333,6 +335,61 @@ final class WorkViewModel {
             }()
         )
         try await loadSnapshot()
+    }
+
+    func submitUpdate(
+        documentId: String,
+        title: String,
+        assignments: [WorkCreateAssignment],
+        fileData: Data?,
+        fileName: String?,
+        mimeType: String?,
+        documentTypeId: String = ""
+    ) async throws {
+        let hasFile = fileData != nil && fileName != nil && mimeType != nil
+        if let message = WorkCreatePolicy.validate(
+            title: title,
+            assignments: assignments,
+            hasFile: hasFile,
+            documentTypeId: documentTypeId
+        ) {
+            throw ConvexException(code: "VALIDATION", message: message)
+        }
+        var evidence: WorkUploadedEvidence?
+        if let fileData, let fileName, let mimeType {
+            evidence = try await repository.uploadEvidence(fileData: fileData, fileName: fileName, mimeType: mimeType)
+        }
+        let trimmedType = documentTypeId.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await repository.updateDocument(
+            documentId: documentId,
+            title: title,
+            assignments: assignments,
+            evidence: evidence,
+            documentTypeId: trimmedType.isEmpty ? nil : trimmedType
+        )
+        try await loadSnapshot()
+        notice = "Đã cập nhật công việc."
+        notifyChange()
+    }
+
+    func deleteDocument(id: String) {
+        guard busyApprovalId == nil else { return }
+        busyApprovalId = id
+        runMutation {
+            do {
+                try await self.repository.deleteDocument(id: id)
+                self.notice = "Đã xóa công văn chưa duyệt."
+            } catch {
+                let fallback = (error as? ConvexException)?.message ?? error.localizedDescription
+                let raw = ((error as? ConvexException)?.code ?? "") + " " + fallback
+                throw ConvexException(
+                    code: (error as? ConvexException)?.code ?? "DELETE_FAILED",
+                    message: WorkCreatePolicy.actionError(raw: raw, deleting: true, fallback: fallback)
+                )
+            }
+        } finish: {
+            if self.busyApprovalId == id { self.busyApprovalId = nil }
+        }
     }
 
     func complete(

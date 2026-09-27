@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,10 +48,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkCreateAssignment
 import lvt.crm.data.work.WorkDocumentType
 import lvt.crm.data.work.WorkFormDepartment
 import lvt.crm.data.work.WorkFormUser
+import lvt.crm.data.work.editAssignments
 import lvt.crm.data.work.formatWorkDeadline
 import lvt.crm.ui.components.LvtScreen
 
@@ -60,24 +63,73 @@ fun WorkCreateScreen(
     viewModel: WorkViewModel,
     onBack: () -> Unit,
     onCreated: () -> Unit,
+    editing: WorkApprovalItem? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var title by remember { mutableStateOf("") }
-    val assignments = remember { mutableStateListOf<WorkCreateAssignment>() }
-    var fileName by remember { mutableStateOf("") }
-    var fileBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var fileMime by remember { mutableStateOf<String?>(null) }
-    var documentTypeId by remember { mutableStateOf("") }
-    var localError by remember { mutableStateOf<String?>(null) }
+    val editingId = editing?.id
+    var title by remember(editingId) { mutableStateOf(editing?.let(::workListTitle).orEmpty()) }
+    val assignments = remember(editingId) {
+        mutableStateListOf<WorkCreateAssignment>().apply {
+            editing?.editAssignments()?.let { addAll(it) }
+        }
+    }
+    var fileName by remember(editingId) { mutableStateOf("") }
+    var fileBytes by remember(editingId) { mutableStateOf<ByteArray?>(null) }
+    var fileMime by remember(editingId) { mutableStateOf<String?>(null) }
+    var documentTypeId by remember(editingId) { mutableStateOf(editing?.documentTypeId.orEmpty()) }
+    var localError by remember(editingId) { mutableStateOf<String?>(null) }
     var pickerIndex by remember { mutableStateOf<Int?>(null) }
     var dateIndex by remember { mutableStateOf<Int?>(null) }
+    var confirm by remember { mutableStateOf<String?>(null) }
     val options = state.formOptions
     val showDepartments = state.isOps
     val error = localError ?: state.actionError
+    val keptFileName = editing?.fileName?.takeIf { editing.privateFile && it.isNotBlank() }.orEmpty()
 
     LaunchedEffect(Unit) {
         viewModel.loadFormOptions()
+    }
+
+    LaunchedEffect(options?.documentTypes, editingId) {
+        if (editing?.privateFile == true && documentTypeId.isBlank()) {
+            val fallback = options?.documentTypes?.firstOrNull { it.code == "BIEN_BAN" }
+            if (fallback != null) documentTypeId = fallback.id
+        }
+    }
+
+    fun clearReplacement() {
+        fileBytes = null
+        fileName = ""
+        fileMime = null
+        documentTypeId = editing?.documentTypeId.orEmpty()
+    }
+
+    fun persist() {
+        localError = null
+        val onDone = onCreated
+        if (editing != null) {
+            viewModel.updateDocument(
+                documentId = editing.id,
+                title = title,
+                assignments = assignments.toList(),
+                fileBytes = fileBytes,
+                fileName = fileName.takeIf { it.isNotBlank() },
+                mimeType = fileMime,
+                documentTypeId = documentTypeId,
+                onSuccess = onDone,
+            )
+        } else {
+            viewModel.createDocument(
+                title = title,
+                assignments = assignments.toList(),
+                fileBytes = fileBytes,
+                fileName = fileName.takeIf { it.isNotBlank() },
+                mimeType = fileMime,
+                documentTypeId = documentTypeId,
+                onSuccess = onDone,
+            )
+        }
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -110,9 +162,9 @@ fun WorkCreateScreen(
     }
 
     LvtScreen(
-        title = "Tạo công việc",
+        title = if (editing != null) "Sửa công việc" else "Tạo công việc",
         navigationIcon = {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = { if (editing != null) confirm = "cancel" else onBack() }) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại")
             }
         },
@@ -179,14 +231,16 @@ fun WorkCreateScreen(
                 )
             }
             Text("Tệp đính kèm (không bắt buộc)", style = MaterialTheme.typography.titleSmall)
+            if (fileBytes == null && keptFileName.isNotBlank()) {
+                Text(
+                    "Đang giữ tệp hiện tại: $keptFileName. Chọn tệp mới nếu muốn thay.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (fileName.isNotBlank()) {
                 Text(fileName, style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = {
-                    fileBytes = null
-                    fileName = ""
-                    fileMime = null
-                    documentTypeId = ""
-                }) { Text("Gỡ tệp") }
+                TextButton(onClick = { clearReplacement() }) { Text("Gỡ tệp") }
             }
             OutlinedButton(
                 onClick = {
@@ -218,7 +272,7 @@ fun WorkCreateScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("Chọn từ Tệp (PDF, Word, Excel)")
             }
-            if (fileBytes != null) {
+            if (fileBytes != null || editing?.privateFile == true) {
                 WorkDocumentTypeField(
                     types = options?.documentTypes.orEmpty(),
                     selectedId = documentTypeId,
@@ -230,16 +284,7 @@ fun WorkCreateScreen(
             }
             Button(
                 onClick = {
-                    localError = null
-                    viewModel.createDocument(
-                        title = title,
-                        assignments = assignments.toList(),
-                        fileBytes = fileBytes,
-                        fileName = fileName.takeIf { it.isNotBlank() },
-                        mimeType = fileMime,
-                        documentTypeId = documentTypeId,
-                        onSuccess = onCreated,
-                    )
+                    if (editing != null) confirm = "save" else persist()
                 },
                 enabled = !state.creating && !state.formOptionsLoading,
                 modifier = Modifier.fillMaxWidth(),
@@ -253,10 +298,40 @@ fun WorkCreateScreen(
                     )
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (state.creating) "Đang tạo…" else "Tạo công việc")
+                Text(
+                    when {
+                        state.creating && editing != null -> "Đang lưu…"
+                        state.creating -> "Đang tạo…"
+                        editing != null -> "Lưu thay đổi"
+                        else -> "Tạo công việc"
+                    },
+                )
             }
             Spacer(modifier = Modifier.height(28.dp))
         }
+    }
+
+    if (confirm != null) {
+        val canceling = confirm == "cancel"
+        AlertDialog(
+            onDismissRequest = { if (!state.creating) confirm = null },
+            title = {
+                Text(if (canceling) "Bạn có chắc chắn Hủy sửa không?" else "Bạn có chắc chắn Lưu không?")
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !state.creating,
+                    onClick = {
+                        val action = confirm
+                        confirm = null
+                        if (action == "cancel") onBack() else persist()
+                    },
+                ) { Text(if (canceling) "Hủy sửa" else "Lưu") }
+            },
+            dismissButton = {
+                TextButton(enabled = !state.creating, onClick = { confirm = null }) { Text("Hủy") }
+            },
+        )
     }
 
     val pickIndex = pickerIndex

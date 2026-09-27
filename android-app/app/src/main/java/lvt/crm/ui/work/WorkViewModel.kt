@@ -20,6 +20,7 @@ import lvt.crm.data.work.WorkCompletionReviewItem
 import lvt.crm.data.work.WorkTaskItem
 import lvt.crm.data.work.WorkCreateAssignment
 import lvt.crm.data.work.WorkCreatePolicy
+import lvt.crm.data.work.WorkDocumentActions
 import lvt.crm.data.work.WorkDocumentType
 import lvt.crm.data.work.WorkFormOptions
 import lvt.crm.ui.components.ListSearchState
@@ -46,6 +47,7 @@ data class WorkUiState(
     val formOptions: WorkFormOptions? = null,
     val formOptionsLoading: Boolean = false,
     val creating: Boolean = false,
+    val notice: String? = null,
     val documentTypes: List<WorkDocumentType> = emptyList(),
     val mineTab: WorkListTab = WorkListTab.Todo,
     val createdTab: WorkListTab = WorkListTab.Todo,
@@ -148,6 +150,110 @@ class WorkViewModel(
             }
             runPendingRefresh()
         }
+    }
+
+    fun updateDocument(
+        documentId: String,
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        fileBytes: ByteArray? = null,
+        fileName: String? = null,
+        mimeType: String? = null,
+        documentTypeId: String = "",
+        onSuccess: () -> Unit,
+    ) {
+        saveDocument(
+            deleting = false,
+            title = title,
+            assignments = assignments,
+            fileBytes = fileBytes,
+            fileName = fileName,
+            mimeType = mimeType,
+            documentTypeId = documentTypeId,
+            onSuccess = onSuccess,
+        ) { evidence ->
+            repository.updateDocument(
+                documentId,
+                title,
+                assignments,
+                evidence,
+                documentTypeId.takeIf { it.isNotBlank() },
+            )
+            "Đã cập nhật công việc."
+        }
+    }
+
+    fun deleteDocument(documentId: String, onSuccess: () -> Unit = {}) {
+        _uiState.update { it.copy(creating = true, actionError = null) }
+        viewModelScope.launch {
+            operationMutex.withLock {
+                try {
+                    repository.deleteDocument(documentId)
+                    reloadAfterCommittedMutation()
+                    _uiState.update { it.copy(notice = "Đã xóa công văn chưa duyệt.") }
+                    onSuccess()
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(actionError = documentActionError(e, deleting = true))
+                    }
+                } finally {
+                    _uiState.update { it.copy(creating = false) }
+                }
+            }
+            runPendingRefresh()
+        }
+    }
+
+    private fun saveDocument(
+        deleting: Boolean,
+        title: String,
+        assignments: List<WorkCreateAssignment>,
+        fileBytes: ByteArray?,
+        fileName: String?,
+        mimeType: String?,
+        documentTypeId: String,
+        onSuccess: () -> Unit,
+        persist: suspend (lvt.crm.data.work.WorkUploadedEvidence?) -> String,
+    ) {
+        val hasFile = fileBytes != null && fileName != null && mimeType != null
+        val validationError = WorkCreatePolicy.validate(title, assignments, hasFile, documentTypeId)
+        if (validationError != null) {
+            _uiState.update { it.copy(actionError = validationError) }
+            return
+        }
+        _uiState.update { it.copy(creating = true, actionError = null) }
+        viewModelScope.launch {
+            operationMutex.withLock {
+                try {
+                    val evidence = if (hasFile) {
+                        repository.uploadEvidence(fileBytes!!, fileName!!, mimeType!!)
+                    } else {
+                        null
+                    }
+                    val savedNotice = persist(evidence)
+                    reloadAfterCommittedMutation()
+                    _uiState.update { it.copy(notice = savedNotice) }
+                    onSuccess()
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(actionError = documentActionError(e, deleting = deleting))
+                    }
+                } finally {
+                    _uiState.update { it.copy(creating = false) }
+                }
+            }
+            runPendingRefresh()
+        }
+    }
+
+    private fun documentActionError(error: Exception, deleting: Boolean): String {
+        val raw = when (error) {
+            is ConvexException -> "${error.code} ${error.message.orEmpty()}"
+            else -> error.message.orEmpty()
+        }
+        val fallback = (error as? ConvexException)?.message
+            ?: ConvexHttpClient.humanize(error.message ?: if (deleting) "DELETE_FAILED" else "UPDATE_FAILED")
+        return WorkDocumentActions.errorMessage(raw, deleting, fallback)
     }
 
     fun refresh(initial: Boolean = false) {
