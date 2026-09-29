@@ -15,6 +15,13 @@ import type * as attendanceImportSheet from "../attendanceImportSheet.js";
 import type * as attendanceImportValidate from "../attendanceImportValidate.js";
 import type * as auth from "../auth.js";
 import type * as boarding from "../boarding.js";
+import type * as chatAudience from "../chatAudience.js";
+import type * as chatGroupAccess from "../chatGroupAccess.js";
+import type * as chatHub from "../chatHub.js";
+import type * as chatHubPolicy from "../chatHubPolicy.js";
+import type * as chatInbox from "../chatInbox.js";
+import type * as chatMessagePolicy from "../chatMessagePolicy.js";
+import type * as chatNotifications from "../chatNotifications.js";
 import type * as departments from "../departments.js";
 import type * as documentTypePolicy from "../documentTypePolicy.js";
 import type * as documentTypes from "../documentTypes.js";
@@ -24,8 +31,12 @@ import type * as dutyImport from "../dutyImport.js";
 import type * as dutyImportParse from "../dutyImportParse.js";
 import type * as dutyImportSheet from "../dutyImportSheet.js";
 import type * as dutyImportValidate from "../dutyImportValidate.js";
+import type * as dutyMessagePolicy from "../dutyMessagePolicy.js";
+import type * as dutyMessages from "../dutyMessages.js";
+import type * as dutyRange from "../dutyRange.js";
 import type * as dutyWritePolicy from "../dutyWritePolicy.js";
 import type * as entityCodes from "../entityCodes.js";
+import type * as groupMessages from "../groupMessages.js";
 import type * as homeroomAlerts from "../homeroomAlerts.js";
 import type * as homeroomCatalog from "../homeroomCatalog.js";
 import type * as homeroomClasses from "../homeroomClasses.js";
@@ -63,6 +74,8 @@ import type * as studentRosterImportParse from "../studentRosterImportParse.js";
 import type * as studentRosterImportSheet from "../studentRosterImportSheet.js";
 import type * as studentRosterImportValidate from "../studentRosterImportValidate.js";
 import type * as students from "../students.js";
+import type * as userAvatar from "../userAvatar.js";
+import type * as userAvatarPolicy from "../userAvatarPolicy.js";
 import type * as userImport from "../userImport.js";
 import type * as userImportParse from "../userImportParse.js";
 import type * as userImportPolicy from "../userImportPolicy.js";
@@ -71,6 +84,8 @@ import type * as userImportValidate from "../userImportValidate.js";
 import type * as users from "../users.js";
 import type * as work from "../work.js";
 import type * as workDocumentPolicy from "../workDocumentPolicy.js";
+import type * as workMessagePolicy from "../workMessagePolicy.js";
+import type * as workMessages from "../workMessages.js";
 
 import type {
   ApiFromModules,
@@ -86,6 +101,13 @@ declare const fullApi: ApiFromModules<{
   attendanceImportValidate: typeof attendanceImportValidate;
   auth: typeof auth;
   boarding: typeof boarding;
+  chatAudience: typeof chatAudience;
+  chatGroupAccess: typeof chatGroupAccess;
+  chatHub: typeof chatHub;
+  chatHubPolicy: typeof chatHubPolicy;
+  chatInbox: typeof chatInbox;
+  chatMessagePolicy: typeof chatMessagePolicy;
+  chatNotifications: typeof chatNotifications;
   departments: typeof departments;
   documentTypePolicy: typeof documentTypePolicy;
   documentTypes: typeof documentTypes;
@@ -95,8 +117,12 @@ declare const fullApi: ApiFromModules<{
   dutyImportParse: typeof dutyImportParse;
   dutyImportSheet: typeof dutyImportSheet;
   dutyImportValidate: typeof dutyImportValidate;
+  dutyMessagePolicy: typeof dutyMessagePolicy;
+  dutyMessages: typeof dutyMessages;
+  dutyRange: typeof dutyRange;
   dutyWritePolicy: typeof dutyWritePolicy;
   entityCodes: typeof entityCodes;
+  groupMessages: typeof groupMessages;
   homeroomAlerts: typeof homeroomAlerts;
   homeroomCatalog: typeof homeroomCatalog;
   homeroomClasses: typeof homeroomClasses;
@@ -134,6 +160,8 @@ declare const fullApi: ApiFromModules<{
   studentRosterImportSheet: typeof studentRosterImportSheet;
   studentRosterImportValidate: typeof studentRosterImportValidate;
   students: typeof students;
+  userAvatar: typeof userAvatar;
+  userAvatarPolicy: typeof userAvatarPolicy;
   userImport: typeof userImport;
   userImportParse: typeof userImportParse;
   userImportPolicy: typeof userImportPolicy;
@@ -142,6 +170,8 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   work: typeof work;
   workDocumentPolicy: typeof workDocumentPolicy;
+  workMessagePolicy: typeof workMessagePolicy;
+  workMessages: typeof workMessages;
 }>;
 
 /**

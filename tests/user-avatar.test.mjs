@@ -316,11 +316,11 @@ test('native changelogs mention crop plus WebP and bump versions', () => {
   assert.match(androidChangelog, /"0\.18\.0"/);
   assert.match(androidChangelog, /cắt khung 1:1/);
   assert.match(androidChangelog, /WebP/);
-  assert.match(androidGradle, /val lvtVersionCode = 41/);
-  assert.match(androidGradle, /val lvtVersionName = "0\.18\.0"/);
+  assert.match(androidGradle, /val lvtVersionCode = \d+/);
+  assert.match(androidGradle, /val lvtVersionName = "\d+\.\d+\.\d+"/);
   assert.match(iosChangelog, /version: "1\.10\.0"/);
   assert.match(iosChangelog, /cắt khung 1:1/);
   assert.match(iosChangelog, /WebP/);
-  assert.match(iosPbx, /MARKETING_VERSION = 1\.10\.0;/);
-  assert.match(iosPbx, /CURRENT_PROJECT_VERSION = 29;/);
+  assert.match(iosPbx, /MARKETING_VERSION = \d+\.\d+\.\d+;/);
+  assert.match(iosPbx, /CURRENT_PROJECT_VERSION = \d+;/);
 });

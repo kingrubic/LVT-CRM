@@ -23,8 +23,9 @@ import {
   sanitizeWorkMessageHtml,
   workChatAuthorInitials,
 } from "./workMessagePolicy";
-
-const MESSAGE_LIST_LIMIT = 200;
+import { listWorkChatRecipientIds } from "./chatAudience";
+import { applyChatRecall, publishChatMessage } from "./chatInbox";
+import { clampChatPageLimit } from "./chatHubPolicy";
 
 async function requireWorkChatActor(ctx: any) {
   const user = await currentUserOrThrow(ctx);
@@ -103,16 +104,26 @@ function displayName(user: { name?: string; email?: string } | null | undefined)
 }
 
 export const list = query({
-  args: { documentId: v.string() },
+  args: {
+    documentId: v.string(),
+    before: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const { actor, document, usersById } = await authorizeWorkChat(ctx, args.documentId);
+    const limit = clampChatPageLimit(args.limit);
     const rows = await ctx.db
       .query("workMessages")
-      .withIndex("by_document_created", (q: any) => q.eq("documentId", String(args.documentId)))
+      .withIndex("by_document_created", (q: any) => {
+        const range = q.eq("documentId", String(args.documentId));
+        return args.before ? range.lt("createdAt", args.before) : range;
+      })
       .order("desc")
-      .take(MESSAGE_LIST_LIMIT);
+      .take(limit + 1);
+    const hasMore = rows.length > limit;
     const now = Date.now();
     const messages = [...rows]
+      .slice(0, limit)
       .filter((row: any) => row.active)
       .reverse()
       .map((row: any) => {
@@ -142,6 +153,7 @@ export const list = query({
       documentId: String(document._id),
       documentTitle: String(document.title || document.fileName || document.content || "Công việc"),
       currentUserId: String(actor.user._id),
+      hasMore,
       messages,
     };
   },
@@ -170,31 +182,25 @@ export const create = mutation({
       String(args.documentId),
     );
     const visibilityMode = await getWorkVisibilityMode(ctx);
-    const recipientIds: string[] = [];
-    for (const row of usersById.values()) {
-      const user = row as any;
-      if (user.status !== "active" || String(user._id) === String(actor.user._id)) continue;
-      const menuAccess = await resolveUserMenuAccess(ctx, user);
-      if (!isOperationalManagerRole(user.role) && menuAccess.work === "hidden") continue;
-      if (
-        !canAccessWorkChat({
-          actorUserId: String(user._id),
-          actorRole: String(user.role || "user"),
-          actorLevel: isOperationalManagerRole(user.role)
-            ? 5
-            : activePositionLevel(user, actor.positions),
-          actorDepartmentId: String(user.departmentId || ""),
-          visibilityMode,
-          document,
-          workItems,
-          personalTasks,
-          usersById,
-        })
-      ) {
-        continue;
-      }
-      recipientIds.push(String(user._id));
-    }
+    const recipientIds = await listWorkChatRecipientIds(ctx, {
+      authorUserId: String(actor.user._id),
+      document,
+      workItems,
+      personalTasks,
+      users: [...usersById.values()] as any[],
+      usersById,
+      positions: actor.positions,
+      visibilityMode,
+    });
+    await publishChatMessage(ctx, {
+      kind: "work",
+      entityId: String(args.documentId),
+      title: String(document?.title || document?.fileName || "Công việc"),
+      bodyText: prepared.bodyText,
+      createdAt: now,
+      authorUserId: String(actor.user._id),
+      recipientIds,
+    });
     if (recipientIds.length) {
       const feedItem = buildChatNotificationItem({
         kind: "work",
@@ -248,6 +254,12 @@ export const recall = mutation({
     const now = Date.now();
     await ctx.db.patch(row._id, { recalledAt: now, updatedAt: now });
     await deactivateChatNotificationEvents(ctx, String(row._id));
+    await applyChatRecall(ctx, {
+      kind: "work",
+      entityId: String(row.documentId),
+      messageCreatedAt: row.createdAt,
+      authorUserId: String(row.authorUserId),
+    });
     return { recalled: true };
   },
 });

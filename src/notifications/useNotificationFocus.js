@@ -63,5 +63,8 @@ export function useNotificationFocus(focusTarget, options = {}) {
 }
 
 export function menuForNotification(item) {
+  if (item?.sourceType === 'work_chat' || item?.sourceType === 'duty_chat' || item?.sourceType === 'group_chat') {
+    return 'chat';
+  }
   return item?.kind === 'duty' ? 'duties' : 'work';
 }

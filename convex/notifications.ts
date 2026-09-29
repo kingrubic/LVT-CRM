@@ -594,6 +594,7 @@ async function notificationItems(ctx: any, requestedNow?: number) {
   const storedChatItems = storedChatEvents
     .filter((row: any) => {
       if (row.active === false) return false;
+      if (row.kind === "group" || row.sourceType === "group_chat") return true;
       if (row.kind === "duty") return canSeeDutiesModule;
       return canSeeWorkModule;
     })

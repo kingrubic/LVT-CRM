@@ -24,7 +24,7 @@ function NotificationItem({ item, onOpen, onDismiss, canDelete, pending }) {
       <button
         type="button"
         className="notification-card-main"
-        title={item.kind === 'duty' ? 'Mở công tác này' : 'Mở công việc này'}
+        title={item.sourceType === 'group_chat' || item.kind === 'group' ? 'Mở nhóm trao đổi' : item.kind === 'duty' ? 'Mở công tác này' : 'Mở công việc này'}
         onClick={() => onOpen(item)}
         disabled={pending === item.key}
       >
@@ -35,7 +35,7 @@ function NotificationItem({ item, onOpen, onDismiss, canDelete, pending }) {
           <span className="notification-meta">
             <strong>{item.milestoneLabel}</strong>
             <small>
-              {item.sourceType === 'work_chat' || item.sourceType === 'duty_chat'
+              {item.sourceType === 'work_chat' || item.sourceType === 'duty_chat' || item.sourceType === 'group_chat'
                 ? `Lúc ${formatDueAt(item.dueAt)}`
                 : `Hạn ${formatDueAt(item.dueAt)}`}
             </small>
@@ -66,7 +66,7 @@ function NotificationSection({ kind, title, subtitle, items, onOpen, onDismiss, 
     <section className={`notification-category category-${kind}`}>
       <header>
         <div>
-          <span>{kind === 'duty' ? 'CÔNG TÁC' : 'CÔNG VIỆC'}</span>
+          <span>{kind === 'duty' ? 'CÔNG TÁC' : kind === 'group' ? 'NHÓM' : 'CÔNG VIỆC'}</span>
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
@@ -107,6 +107,7 @@ export default function NotificationsView({ data, onOpenItem }) {
 
   const dutyItems = data.items.filter((item) => item.kind === 'duty');
   const workItems = data.items.filter((item) => item.kind === 'work');
+  const groupItems = data.items.filter((item) => item.kind === 'group');
   const unreadKeys = data.items.filter((item) => !item.read).map((item) => item.key);
 
   const openOne = async (item) => {
@@ -166,6 +167,18 @@ export default function NotificationsView({ data, onOpenItem }) {
           canDelete={data.canDelete}
           pending={pending}
         />
+        {groupItems.length ? (
+          <NotificationSection
+            kind="group"
+            title="Trao đổi nhóm"
+            subtitle="Tin nhắn mới trong nhóm bạn tham gia."
+            items={groupItems}
+            onOpen={openOne}
+            onDismiss={dismissOne}
+            canDelete={data.canDelete}
+            pending={pending}
+          />
+        ) : null}
         <NotificationSection
           kind="work"
           title="Công việc gần đến hạn"

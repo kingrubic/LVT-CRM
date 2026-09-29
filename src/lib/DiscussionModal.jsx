@@ -1,6 +1,8 @@
 import React, { Component, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from 'convex/react';
+import { anyApi } from 'convex/server';
+import { threadKeyFor } from '../chat/threadKey';
 import { ChatBubbleIcon, CardIconButton } from './CardActionIcons';
 import '../work/work.css';
 
@@ -58,7 +60,7 @@ function editorIsEmpty(node) {
   return !text;
 }
 
-function DiscussionComposer({ disabled, sending, onSend }) {
+export function DiscussionComposer({ disabled, sending, onSend }) {
   const editorRef = useRef(null);
   const [empty, setEmpty] = useState(true);
 
@@ -161,7 +163,7 @@ function useRecallStillOpen(createdAt, recalled) {
   return open;
 }
 
-function DiscussionMessage({ item, onRecall, recallingId }) {
+export function DiscussionMessage({ item, onRecall, recallingId }) {
   const recallOpen = useRecallStillOpen(item.createdAt, item.recalled);
   const showRecall = Boolean(item.canRecall && item.isSelf && recallOpen && onRecall);
   return (
@@ -287,6 +289,7 @@ export default function DiscussionModal({
   const listRef = useRef(null);
   const sendMessage = useMutation(createMutation);
   const recallMessage = useMutation(recallMutation);
+  const markRead = useMutation(anyApi.chatHub.markRead);
   const data = useQuery(listQuery, entityId ? { [idField]: entityId } : 'skip');
   const [sending, setSending] = useState(false);
   const [recallingId, setRecallingId] = useState('');
@@ -300,6 +303,20 @@ export default function DiscussionModal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, sending]);
+
+  const newestId = data?.messages?.[data.messages.length - 1]?._id || '';
+  const threadKey = idField === 'documentId'
+    ? threadKeyFor('work', entityId)
+    : idField === 'dutyId'
+      ? threadKeyFor('duty', entityId)
+      : '';
+
+  const messagesReady = data !== undefined;
+  useEffect(() => {
+    if (!threadKey || !messagesReady) return undefined;
+    void markRead({ threadKey }).catch(() => {});
+    return undefined;
+  }, [threadKey, newestId, messagesReady, markRead]);
 
   useEffect(() => {
     const node = listRef.current;
