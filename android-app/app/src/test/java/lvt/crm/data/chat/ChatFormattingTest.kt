@@ -1,5 +1,7 @@
 package lvt.crm.data.chat
 
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import lvt.crm.data.work.WorkApprovalItem
 import lvt.crm.data.work.WorkDocumentAssignment
 import lvt.crm.data.work.WorkTaskItem
@@ -121,5 +123,25 @@ class ChatFormattingTest {
         assertEquals("Kế hoạch", workChatTarget("task-1", listOf(task), emptyList()).title)
         assertEquals("doc-2", workChatTarget("doc-2", emptyList(), listOf(approval)).entityId)
         assertEquals("Công việc", workChatTarget("missing", emptyList(), emptyList()).title)
+    }
+
+    @Test
+    fun hubPreviewSearchAndListTimeMatchWeb() {
+        assertEquals("Bạn: Xin chào", chatListPreview("Xin chào", "u1", "u1"))
+        assertEquals(CHAT_RECALLED_PLACEHOLDER, chatListPreview(CHAT_RECALLED_PLACEHOLDER, "u2", "u1"))
+        assertEquals("Nhóm vừa được tạo", chatListPreview(CHAT_GROUP_CREATED_PREVIEW, "", "u1"))
+        assertEquals("Chưa có tin nhắn", chatListPreview("  ", "", "u1"))
+        assertEquals("group:abc", chatThreadKey(ChatKind.Group, "abc"))
+        assertTrue(chatSearchMatch("Nguyễn Văn A phòng", "nguyen phong"))
+        assertFalse(chatSearchMatch("Công việc", "nhom"))
+        assertEquals("Vui lòng nhập tên nhóm.", chatHubFailureMessage("GROUP_NAME_REQUIRED"))
+        assertEquals("Hãy chọn ít nhất một thành viên.", chatHubFailureMessage("GROUP_MEMBERS_REQUIRED"))
+        val zone = ZoneId.of("Asia/Ho_Chi_Minh")
+        val now = ZonedDateTime.of(2026, 9, 29, 15, 0, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals("Vừa xong", formatChatListTime(now - 10_000, now))
+        assertEquals("5 phút", formatChatListTime(now - 5 * 60_000, now))
+        assertEquals("2 giờ", formatChatListTime(now - 2 * 3_600_000, now))
+        assertEquals("Hôm qua", formatChatListTime(now - 24 * 60 * 60 * 1000, now))
+        assertEquals("Hôm nay", chatDayLabel(now, now))
     }
 }

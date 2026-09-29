@@ -11,11 +11,13 @@ const androidHeader = readFileSync(new URL('../android-app/app/src/main/java/lvt
 const androidScreen = readFileSync(new URL('../android-app/app/src/main/java/lvt/crm/ui/components/LvtComponents.kt', import.meta.url), 'utf8');
 const androidChangelog = readFileSync(new URL('../android-app/app/src/main/java/lvt/crm/ui/profile/AppChangelog.kt', import.meta.url), 'utf8');
 
-test('iOS bottom bar keeps only Tổng quan, Lịch CT and Công việc', () => {
-  assert.match(iosRoot, /viewControllers = \[overview, duties, work\]/);
+test('iOS bottom bar is Tổng quan, Trao đổi, Lịch CT and Công việc', () => {
+  assert.match(iosRoot, /viewControllers = \[overview, chat, duties, work\]/);
+  assert.match(iosRoot, /title: "Trao đổi"/);
   assert.doesNotMatch(iosRoot, /title: "Thông báo"/);
   assert.doesNotMatch(iosRoot, /title: "Cá nhân"/);
   assert.match(iosModels, /case overview/);
+  assert.match(iosModels, /case chat/);
   assert.doesNotMatch(iosModels, /case notifications/);
   assert.doesNotMatch(iosModels, /case profile/);
 });
@@ -44,13 +46,14 @@ test('iOS changelog still records the 1.9.0 header cluster', () => {
   assert.match(iosChangelog, /Đổi ảnh đại diện/);
 });
 
-test('Android bottom bar keeps only Tổng quan, Lịch CT and Công việc', () => {
+test('Android bottom bar is Tổng quan, Trao đổi, Lịch CT and Công việc', () => {
   assert.match(androidRoot, /Routes\.Overview, R\.string\.nav_overview/);
+  assert.match(androidRoot, /Routes\.Chat, R\.string\.nav_chat/);
   assert.match(androidRoot, /Routes\.Duties, R\.string\.nav_duties/);
   assert.match(androidRoot, /Routes\.Work, R\.string\.nav_work/);
   assert.doesNotMatch(androidRoot, /Routes\.Notifications, R\.string\.nav_notifications/);
   assert.doesNotMatch(androidRoot, /Routes\.Profile, R\.string\.nav_profile/);
-  assert.match(androidRoot, /mainTabRoutes = setOf\(Routes\.Overview, Routes\.Duties, Routes\.Work\)/);
+  assert.match(androidRoot, /mainTabRoutes = setOf\(Routes\.Overview, Routes\.Chat, Routes\.Duties, Routes\.Work\)/);
 });
 
 test('Android header cluster sits in the top app bar and reuses unread count', () => {

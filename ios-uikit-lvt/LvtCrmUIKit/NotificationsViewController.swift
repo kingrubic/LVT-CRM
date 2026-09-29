@@ -274,7 +274,7 @@ final class NotificationsViewController: UITableViewController {
         cell.accessibilityLabel = [state, kindLabel(item), item.title, item.description, dueText(item)]
             .filter { !$0.isEmpty }
             .joined(separator: ". ")
-        cell.accessibilityHint = item.sourceType == "duty_chat" || item.sourceType == "work_chat"
+        cell.accessibilityHint = item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat"
             ? "Mở trao đổi"
             : "Mở \(item.kind == "duty" ? "tab Lịch CT" : "tab Công việc")"
         cell.accessibilityTraits = .button
@@ -287,7 +287,7 @@ final class NotificationsViewController: UITableViewController {
     }
 
     private func kindLabel(_ item: NotificationItem) -> String {
-        if item.sourceType == "duty_chat" || item.sourceType == "work_chat" { return "Trao đổi" }
+        if item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat" { return "Trao đổi" }
         if item.sourceType == "completion_rejected" { return "Từ chối hoàn thành" }
         if item.kind == "duty" { return "Công tác" }
         if item.sourceType == "document" || item.sourceType == "approval" {
@@ -299,7 +299,7 @@ final class NotificationsViewController: UITableViewController {
     private func dueText(_ item: NotificationItem) -> String {
         guard item.dueAt > 0 else { return "" }
         let when = Self.dueFormatter.string(from: Date(timeIntervalSince1970: TimeInterval(item.dueAt) / 1000))
-        if item.sourceType == "duty_chat" || item.sourceType == "work_chat" { return "Lúc \(when)" }
+        if item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat" { return "Lúc \(when)" }
         return when
     }
 

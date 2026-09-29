@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.WorkOutline
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +32,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,11 +56,13 @@ import lvt.crm.data.auth.AuthState
 import lvt.crm.data.notifications.NotificationItem
 import lvt.crm.push.NotificationDestination
 import lvt.crm.push.NotificationMarkReadWorker
+import kotlinx.coroutines.delay
 import lvt.crm.ui.auth.ChangePasswordScreen
 import lvt.crm.ui.auth.LoginScreen
 import lvt.crm.ui.auth.LoginViewModel
 import lvt.crm.ui.components.AccountHeaderState
 import lvt.crm.ui.components.LocalAccountHeader
+import lvt.crm.ui.chat.ChatHubScreen
 import lvt.crm.ui.components.accountInitials
 import lvt.crm.ui.duties.DutiesTabHost
 import lvt.crm.ui.duties.DutiesViewModel
@@ -80,6 +86,7 @@ import kotlinx.coroutines.launch
 private object Routes {
     const val Overview = "overview"
     const val Notifications = "notifications"
+    const val Chat = "chat"
     const val Duties = "duties"
     const val Work = "work"
     const val Profile = "profile"
@@ -171,7 +178,16 @@ private fun MainShell(
     var filePreview by remember { mutableStateOf<WorkFilePreviewState?>(null) }
     var openingFile by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(Routes.Overview) }
+    var chatUnread by remember { mutableIntStateOf(0) }
     val avatarBitmap by container.avatarRepository.bitmap.collectAsState()
+
+    LaunchedEffect(sessionUserId) {
+        while (true) {
+            runCatching { container.chatRepository.unreadTotal() }
+                .onSuccess { chatUnread = it }
+            delay(12_000)
+        }
+    }
 
     LaunchedEffect(sessionUserId, hasAvatar, avatarVersion) {
         container.avatarRepository.sync(sessionUserId, hasAvatar, avatarVersion)
@@ -179,10 +195,11 @@ private fun MainShell(
 
     val tabs = listOf(
         Triple(Routes.Overview, R.string.nav_overview, Icons.Outlined.Dashboard),
+        Triple(Routes.Chat, R.string.nav_chat, Icons.Outlined.Forum),
         Triple(Routes.Duties, R.string.nav_duties, Icons.Outlined.WorkOutline),
         Triple(Routes.Work, R.string.nav_work, Icons.Outlined.TaskAlt),
     )
-    val mainTabRoutes = setOf(Routes.Overview, Routes.Duties, Routes.Work)
+    val mainTabRoutes = setOf(Routes.Overview, Routes.Chat, Routes.Duties, Routes.Work)
     val highlightedTab = if (current in mainTabRoutes) current else selectedTab
 
     LaunchedEffect(current) {
@@ -250,6 +267,12 @@ private fun MainShell(
             sourceId = item.sourceId,
             notificationKey = item.key,
         )
+        if (destination.opensChat) {
+            focusTarget = destination
+            selectedTab = Routes.Chat
+            navController.navigate(Routes.Chat) { launchSingleTop = true }
+            return
+        }
         if (destination.route == Routes.Duties) dutiesSkipHub = true
         focusTarget = destination
         selectedTab = destination.route
@@ -260,11 +283,17 @@ private fun MainShell(
 
     LaunchedEffect(notificationDestination) {
         val destination = notificationDestination ?: return@LaunchedEffect
-        if (destination.route == Routes.Duties) dutiesSkipHub = true
-        focusTarget = destination
-        selectedTab = destination.route
-        navController.navigate(destination.route) {
-            launchSingleTop = true
+        if (destination.opensChat) {
+            focusTarget = destination
+            selectedTab = Routes.Chat
+            navController.navigate(Routes.Chat) { launchSingleTop = true }
+        } else {
+            if (destination.route == Routes.Duties) dutiesSkipHub = true
+            focusTarget = destination
+            selectedTab = destination.route
+            navController.navigate(destination.route) {
+                launchSingleTop = true
+            }
         }
         destination.notificationKey?.let { key ->
             runCatching { container.notificationsRepository.markRead(key) }
@@ -299,7 +328,19 @@ private fun MainShell(
                             }
                         },
                         icon = {
-                            Icon(icon, contentDescription = stringResource(labelRes))
+                            if (route == Routes.Chat && chatUnread > 0) {
+                                BadgedBox(
+                                    badge = {
+                                        Badge {
+                                            Text(if (chatUnread > 99) "99+" else chatUnread.toString())
+                                        }
+                                    },
+                                ) {
+                                    Icon(icon, contentDescription = stringResource(labelRes))
+                                }
+                            } else {
+                                Icon(icon, contentDescription = stringResource(labelRes))
+                            }
                         },
                         label = { Text(stringResource(labelRes)) },
                     )
@@ -355,6 +396,35 @@ private fun MainShell(
                     onOpenItem = ::openNotification,
                     tabOpenToken = tabOpenToken,
                     onBack = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.Chat) {
+                val chatFocus = focusTarget?.takeIf { it.opensChat }
+                ChatHubScreen(
+                    repository = container.chatRepository,
+                    openKind = chatFocus?.chatKind,
+                    openEntityId = chatFocus?.sourceId,
+                    openToken = chatFocus?.let { it.notificationKey ?: it.sourceId },
+                    onOpenWork = { documentId ->
+                        focusTarget = NotificationDestination(
+                            kind = "work",
+                            sourceType = "document",
+                            sourceId = documentId,
+                            notificationKey = "chat-work-$documentId-${System.currentTimeMillis()}",
+                        )
+                        navigateToTab(Routes.Work)
+                    },
+                    onOpenDuty = { dutyId ->
+                        dutiesSkipHub = true
+                        focusTarget = NotificationDestination(
+                            kind = "duty",
+                            sourceType = "duty",
+                            sourceId = dutyId,
+                            notificationKey = "chat-duty-$dutyId-${System.currentTimeMillis()}",
+                        )
+                        navigateToTab(Routes.Duties)
+                    },
+                    onUnread = { chatUnread = it },
                 )
             }
             composable(Routes.Duties) {

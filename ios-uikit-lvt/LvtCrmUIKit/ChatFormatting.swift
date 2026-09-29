@@ -11,7 +11,10 @@ let chatUnderline = 4
 enum ChatKind: Equatable, Sendable {
     case duty
     case work
+    case group
 }
+
+let chatGroupCreatedPreview = "Nhóm vừa được tạo"
 
 enum ChatAction {
     case load
@@ -52,7 +55,169 @@ func chatContextText(_ kind: ChatKind) -> String {
     switch kind {
     case .duty: return "Tin nhắn hiển thị cho người đã thấy công tác này."
     case .work: return "Tin nhắn hiển thị cho người đã thấy công việc này."
+    case .group: return "Tin nhắn hiển thị cho thành viên nhóm."
     }
+}
+
+func chatKindLabel(_ kind: ChatKind) -> String {
+    switch kind {
+    case .duty: return "Công tác"
+    case .work: return "Công việc"
+    case .group: return "Nhóm"
+    }
+}
+
+func chatKindWire(_ kind: ChatKind) -> String {
+    switch kind {
+    case .duty: return "duty"
+    case .work: return "work"
+    case .group: return "group"
+    }
+}
+
+func chatKindFromWire(_ value: String) -> ChatKind? {
+    switch value {
+    case "duty": return .duty
+    case "work": return .work
+    case "group": return .group
+    default: return nil
+    }
+}
+
+func chatThreadKey(_ kind: ChatKind, _ entityId: String) -> String {
+    "\(chatKindWire(kind)):\(entityId)"
+}
+
+func chatListPreview(lastBodyText: String, lastAuthorUserId: String, currentUserId: String) -> String {
+    let text = lastBodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+    if text.isEmpty { return "Chưa có tin nhắn" }
+    if text == chatRecalledPlaceholder || text == chatGroupCreatedPreview { return text }
+    if !lastAuthorUserId.isEmpty && lastAuthorUserId == currentUserId { return "Bạn: \(text)" }
+    return text
+}
+
+func chatSearchMatch(_ haystack: String, _ query: String) -> Bool {
+    let needle = normalizeChatSearch(query)
+    if needle.isEmpty { return true }
+    let hay = normalizeChatSearch(haystack)
+    return needle.split(separator: " ").allSatisfy { hay.contains($0) }
+}
+
+func chatHubFailureMessage(_ raw: String) -> String {
+    let code = raw.uppercased()
+    if code.contains("GROUP_NAME_REQUIRED") { return "Vui lòng nhập tên nhóm." }
+    if code.contains("GROUP_NAME_TOO_LONG") { return "Tên nhóm tối đa 80 ký tự." }
+    if code.contains("GROUP_MEMBERS_REQUIRED") { return "Hãy chọn ít nhất một thành viên." }
+    if code.contains("GROUP_TOO_MANY_MEMBERS") { return "Nhóm tối đa 100 thành viên." }
+    if code.contains("GROUP_MEMBER_INVALID") { return "Có thành viên không còn hoạt động." }
+    if code.contains("GROUP_NOT_FOUND") { return "Nhóm không còn tồn tại." }
+    if code.contains("GROUP_FORBIDDEN") || code.contains("GROUP_CHAT_FORBIDDEN")
+        || code.contains("WORK_CHAT_FORBIDDEN") || code.contains("DUTY_CHAT_FORBIDDEN") {
+        return "Bạn không có quyền với cuộc trò chuyện này."
+    }
+    if code.contains("CHAT_EMPTY") { return "Vui lòng nhập nội dung tin nhắn." }
+    if code.contains("TOO_LONG") { return "Tin nhắn quá dài (tối đa 4000 ký tự)." }
+    if code.contains("RECALL_TOO_LATE") { return "Đã quá 15 phút, không thể thu hồi tin nhắn này." }
+    if code.contains("RECALL_FORBIDDEN") { return "Bạn chỉ có thể thu hồi tin nhắn của mình." }
+    return "Không thực hiện được. Vui lòng thử lại."
+}
+
+func formatChatListTime(_ epochMs: Int64, now: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) -> String {
+    guard epochMs > 0 else { return "" }
+    let delta = now - epochMs
+    let minute = Int64(60_000)
+    let hour = Int64(3_600_000)
+    if delta < minute { return "Vừa xong" }
+    let today = chatDateParts(now)
+    let then = chatDateParts(epochMs)
+    if today == then {
+        if delta < hour { return "\(max(Int64(1), delta / minute)) phút" }
+        return "\(max(Int64(1), delta / hour)) giờ"
+    }
+    if chatDayLabel(epochMs, now: now) == "Hôm qua" { return "Hôm qua" }
+    if today.year != then.year { return String(format: "%02d/%02d/%d", then.day, then.month, then.year) }
+    return String(format: "%02d/%02d", then.day, then.month)
+}
+
+func chatDayLabel(_ epochMs: Int64, now: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) -> String {
+    let key = chatDateParts(epochMs)
+    let today = chatDateParts(now)
+    let day = Int64(24 * 60 * 60 * 1000)
+    if key == today { return "Hôm nay" }
+    if key == chatDateParts(now - day) { return "Hôm qua" }
+    if today.year != key.year { return String(format: "%02d/%02d/%d", key.day, key.month, key.year) }
+    return String(format: "%02d/%02d", key.day, key.month)
+}
+
+private struct ChatDateParts: Equatable {
+    let year: Int
+    let month: Int
+    let day: Int
+}
+
+private func chatDateParts(_ epochMs: Int64) -> ChatDateParts {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh") ?? .current
+    let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000)
+    let parts = calendar.dateComponents([.year, .month, .day], from: date)
+    return ChatDateParts(year: parts.year ?? 0, month: parts.month ?? 0, day: parts.day ?? 0)
+}
+
+private func normalizeChatSearch(_ value: String) -> String {
+    value.replacingOccurrences(of: "đ", with: "d")
+        .replacingOccurrences(of: "Đ", with: "D")
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "vi_VN"))
+        .lowercased()
+        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+struct ChatConversation: Equatable, Sendable, Identifiable {
+    var id: String { threadKey }
+    let threadKey: String
+    let kind: ChatKind
+    let entityId: String
+    let title: String
+    let lastBodyText: String
+    let lastMessageAt: Int64
+    let lastAuthorUserId: String
+    let unreadCount: Int
+    var memberCount: Int = 0
+    var viewerIsMember: Bool = true
+}
+
+struct ChatInboxSnapshot: Equatable, Sendable {
+    let currentUserId: String
+    let isAdmin: Bool
+    let backfillPending: Bool
+    let conversations: [ChatConversation]
+}
+
+struct ChatPerson: Equatable, Sendable, Identifiable {
+    var id: String { userId }
+    let userId: String
+    let name: String
+    let email: String
+    let departmentName: String
+}
+
+struct ChatGroupMember: Equatable, Sendable, Identifiable {
+    var id: String { userId }
+    let userId: String
+    let name: String
+    let role: String
+    let isSelf: Bool
+}
+
+struct ChatGroupState: Equatable, Sendable {
+    let groupId: String
+    let name: String
+    let memberCount: Int
+    let canManage: Bool
+    let canDissolve: Bool
+    let canLeave: Bool
+    let canSend: Bool
+    let members: [ChatGroupMember]
 }
 
 func chatRecallStillOpen(createdAt: Int64, recalled: Bool, now: Int64) -> Bool {
