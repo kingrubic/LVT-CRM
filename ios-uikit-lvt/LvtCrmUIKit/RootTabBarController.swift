@@ -17,6 +17,8 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
     private var profileViewController: ProfileViewController?
     private weak var dutiesHubViewController: DutiesHubViewController?
     private weak var workViewController: WorkViewController?
+    private weak var chatHubViewController: ChatHubViewController?
+    private var unreadTask: Task<Void, Never>?
     private var pushObserver: NSObjectProtocol?
     private var avatarObserver: NSObjectProtocol?
     private var avatarImage: UIImage?
@@ -53,6 +55,7 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         if let avatarObserver {
             NotificationCenter.default.removeObserver(avatarObserver)
         }
+        unreadTask?.cancel()
     }
 
     override func viewDidLoad() {
@@ -113,14 +116,29 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
             systemImage: "checkmark.seal",
             viewController: workViewController
         )
+        let chatHubViewController = ChatHubViewController(
+            repository: chatRepository,
+            onOpenDuty: { [weak self] dutyId in self?.openDutyFromChat(dutyId) },
+            onOpenWork: { [weak self] documentId in self?.openWorkFromChat(documentId) },
+            onUnread: { [weak self] count in self?.applyChatBadge(count) }
+        )
+        let chat = navigationController(
+            title: "Trao đổi",
+            systemImage: "bubble.left.and.bubble.right",
+            viewController: chatHubViewController
+        )
+        chatHubViewController.installAccountHeader(makeAccountHeaderItem())
         tabControllers = [
             .overview: overview,
+            .chat: chat,
             .duties: duties,
             .work: work,
         ]
         self.dutiesHubViewController = dutiesHubViewController
         self.workViewController = workViewController
-        viewControllers = [overview, duties, work]
+        self.chatHubViewController = chatHubViewController
+        viewControllers = [overview, chat, duties, work]
+        startUnreadPolling()
         pushObserver = NotificationCenter.default.addObserver(
             forName: .pushReceived,
             object: nil,
@@ -160,6 +178,38 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         workViewController?.applyDashboardFilter(filter)
     }
 
+    private func openDutyFromChat(_ dutyId: String) {
+        selectTab(.duties)
+        if let navigationController = tabControllers[.duties] {
+            detachAuxiliary(from: navigationController)
+        }
+        dutiesHubViewController?.openPersonal(animated: false)
+        dutiesHubViewController?.dutiesListController.focus(dutyId: dutyId, openChat: false)
+    }
+
+    private func openWorkFromChat(_ documentId: String) {
+        selectTab(.work)
+        tabControllers[.work]?.popToRootViewController(animated: false)
+        workViewController?.focus(itemId: documentId, openChat: false)
+    }
+
+    private func applyChatBadge(_ count: Int) {
+        let item = tabControllers[.chat]?.tabBarItem
+        item?.badgeValue = count > 0 ? (count > 99 ? "99+" : "\(count)") : nil
+    }
+
+    private func startUnreadPolling() {
+        unreadTask?.cancel()
+        unreadTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                if let count = try? await self?.chatRepository.unreadTotal() {
+                    self?.applyChatBadge(count)
+                }
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
+            }
+        }
+    }
+
     func openNotifications() {
         guard let controller = notificationsViewController else { return }
         presentAuxiliary(controller)
@@ -176,7 +226,10 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         guard let navigationController = tabControllers[tab] else { return }
         selectedViewController = navigationController
         detachAuxiliary(from: navigationController)
-        if tab == .duties {
+        if destination.opensChat {
+            navigationController.popToRootViewController(animated: false)
+            chatHubViewController?.openThread(kind: destination.chatKind, entityId: destination.sourceId)
+        } else if tab == .duties {
             dutiesHubViewController?.openPersonal(animated: false)
             dutiesHubViewController?.dutiesListController.focus(
                 dutyId: destination.sourceId,

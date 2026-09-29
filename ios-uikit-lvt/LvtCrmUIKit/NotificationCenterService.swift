@@ -42,6 +42,9 @@ enum NotificationCenterService {
         if item.sourceType == "completion_rejected" {
             return "Hoàn thành bị từ chối"
         }
+        if item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat" {
+            return "Trao đổi"
+        }
         if !item.milestoneLabel.isEmpty {
             return item.milestoneLabel
         }

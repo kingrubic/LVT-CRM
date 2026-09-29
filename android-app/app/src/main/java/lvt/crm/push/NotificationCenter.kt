@@ -66,6 +66,8 @@ object NotificationCenter {
         )
         val title = when {
             item.sourceType == "completion_rejected" -> "Hoàn thành bị từ chối"
+            item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat" ->
+                "Trao đổi · ${item.milestoneLabel.ifBlank { "Tin nhắn mới" }}"
             item.kind == "duty" -> "Công tác · ${item.milestoneLabel}"
             else -> "Công việc · ${item.milestoneLabel}"
         }

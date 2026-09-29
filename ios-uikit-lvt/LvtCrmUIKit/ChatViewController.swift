@@ -12,6 +12,14 @@ final class ChatViewController: UIViewController, UITableViewDataSource, UITable
     private var errorMessage: String?
     private var pollTask: Task<Void, Never>?
     private var recallTask: Task<Void, Never>?
+    var hubActions = false
+    var onOpenEntity: (() -> Void)?
+    var onManageGroup: (() -> Void)?
+    var onArchive: (() -> Void)?
+    private var canSend = true
+    private var composerStack: UIStackView?
+    private let viewerNote = UILabel()
+    private let archiveButton = UIButton(type: .system)
 
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let composer = UITextView()
@@ -89,21 +97,40 @@ final class ChatViewController: UIViewController, UITableViewDataSource, UITable
         let composerStack = UIStackView(arrangedSubviews: [toolbar, composer, errorLabel, sendButton])
         composerStack.axis = .vertical
         composerStack.spacing = 8
-        composerStack.translatesAutoresizingMaskIntoConstraints = false
         composerStack.isLayoutMarginsRelativeArrangement = true
         composerStack.layoutMargins = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        self.composerStack = composerStack
+
+        viewerNote.text = "Bạn đang xem nhóm này. Chỉ thành viên mới gửi tin."
+        viewerNote.font = .preferredFont(forTextStyle: .footnote)
+        viewerNote.textColor = .secondaryLabel
+        viewerNote.numberOfLines = 0
+        viewerNote.isHidden = true
+
+        archiveButton.configuration = .plain()
+        archiveButton.configuration?.title = "Ẩn cuộc trò chuyện"
+        archiveButton.addAction(UIAction { [weak self] _ in self?.onArchive?() }, for: .touchUpInside)
+        archiveButton.isHidden = true
+
+        let footer = UIStackView(arrangedSubviews: [composerStack, viewerNote, archiveButton])
+        footer.axis = .vertical
+        footer.spacing = 8
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        footer.isLayoutMarginsRelativeArrangement = true
+        footer.layoutMargins = UIEdgeInsets(top: 0, left: 16, bottom: 8, right: 16)
+        composerStack.layoutMargins = UIEdgeInsets(top: 8, left: 0, bottom: 0, right: 0)
 
         view.addSubview(tableView)
-        view.addSubview(composerStack)
-        let bottom = composerStack.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor)
+        view.addSubview(footer)
+        let bottom = footer.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor)
         composerBottom = bottom
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: composerStack.topAnchor),
-            composerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            composerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: footer.topAnchor),
+            footer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             bottom,
         ])
         updateSendEnabled()
@@ -195,13 +222,55 @@ final class ChatViewController: UIViewController, UITableViewDataSource, UITable
             tableView.reloadData()
             if wasNearBottom { scrollToBottom() }
             scheduleRecallRefresh()
+            await refreshHubChrome()
+            updateArchiveButton()
         } catch {
             loading = false
             if messages.isEmpty {
                 errorMessage = chatError(error, action: .load)
                 tableView.reloadData()
             }
+            updateArchiveButton()
         }
+    }
+
+    private func refreshHubChrome() async {
+        guard hubActions else { return }
+        try? await repository.markRead(threadKey: chatThreadKey(target.kind, target.entityId))
+        if target.kind == .group {
+            let state = try? await repository.groupState(groupId: target.entityId)
+            canSend = state?.canSend ?? true
+            let count = state?.memberCount ?? 0
+            let label = count > 0 ? "\(count) thành viên" : "Thành viên"
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: label,
+                style: .plain,
+                target: self,
+                action: #selector(hubActionTapped)
+            )
+        } else {
+            let label = target.kind == .duty ? "Mở công tác" : "Mở công việc"
+            navigationItem.rightBarButtonItem = UIBarButtonItem(
+                title: label,
+                style: .plain,
+                target: self,
+                action: #selector(hubActionTapped)
+            )
+        }
+        composerStack?.isHidden = !canSend
+        viewerNote.isHidden = canSend
+    }
+
+    @objc private func hubActionTapped() {
+        if target.kind == .group {
+            onManageGroup?()
+        } else {
+            onOpenEntity?()
+        }
+    }
+
+    private func updateArchiveButton() {
+        archiveButton.isHidden = !(hubActions && errorMessage != nil && messages.isEmpty && !loading)
     }
 
     private func send() {

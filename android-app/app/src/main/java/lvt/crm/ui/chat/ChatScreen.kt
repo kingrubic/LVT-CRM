@@ -103,6 +103,11 @@ fun ChatScreen(
     repository: ChatRepository,
     target: ChatTarget,
     onBack: () -> Unit,
+    canSend: Boolean = true,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    markReadKey: String? = null,
+    onArchive: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var title by remember(target.entityId) { mutableStateOf(target.title.ifBlank { "Trao đổi" }) }
@@ -124,6 +129,9 @@ fun ChatScreen(
                 messages = thread.messages
                 error = null
                 loading = false
+                if (!markReadKey.isNullOrBlank()) {
+                    runCatching { repository.markRead(markReadKey) }
+                }
             }
             .onFailure { failure ->
                 loading = false
@@ -152,6 +160,7 @@ fun ChatScreen(
 
     LvtScreen(
         title = "Trao đổi",
+        showAccountHeader = true,
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Đóng")
@@ -168,8 +177,13 @@ fun ChatScreen(
                 chatContextText(target.kind),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
             )
+            if (!actionLabel.isNullOrBlank() && onAction != null) {
+                TextButton(onClick = onAction, modifier = Modifier.padding(bottom = 4.dp)) {
+                    Text(actionLabel)
+                }
+            }
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     loading && messages.isEmpty() -> Text("Đang tải tin nhắn…")
@@ -212,6 +226,10 @@ fun ChatScreen(
                     modifier = Modifier.padding(vertical = 6.dp),
                 )
             }
+            if (onArchive != null && error != null && messages.isEmpty() && !loading) {
+                TextButton(onClick = onArchive) { Text("Ẩn cuộc trò chuyện") }
+            }
+            if (canSend) {
             ChatComposer(
                 value = draft,
                 flags = flags,
@@ -262,6 +280,14 @@ fun ChatScreen(
                     }
                 },
             )
+            } else {
+                Text(
+                    "Bạn đang xem nhóm này. Chỉ thành viên mới gửi tin.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+            }
         }
     }
 }

@@ -6,6 +6,7 @@
     <string name="password">Mật khẩu</string>
     <string name="sign_in">Đăng nhập</string>
     <string name="nav_overview">Tổng quan</string>
+    <string name="nav_chat">Trao đổi</string>
     <string name="nav_notifications">Thông báo</string>
     <string name="nav_duties">Lịch CT</string>
     <string name="nav_work">Công việc</string>

@@ -10,11 +10,18 @@ data class NotificationDestination(
     val notificationKey: String?,
 ) {
     val route: String
-        get() = routeForKind(kind)
+        get() = if (opensChat) "chat" else routeForKind(kind)
 
-    /** Bell items for Trao đổi use sourceType, while kind still selects the tab. */
+    /** Bell items for Trao đổi open the chat hub. Other kinds still select their tab. */
     val opensChat: Boolean
         get() = opensChat(sourceType)
+
+    val chatKind: String
+        get() = when (sourceType) {
+            "duty_chat" -> "duty"
+            "group_chat" -> "group"
+            else -> "work"
+        }
 
     companion object {
         const val EXTRA_KIND = "lvt.notification.kind"
@@ -59,7 +66,7 @@ data class NotificationDestination(
             if (kind == "duty") "duties" else "work"
 
         fun opensChat(sourceType: String): Boolean =
-            sourceType == "duty_chat" || sourceType == "work_chat"
+            sourceType == "duty_chat" || sourceType == "work_chat" || sourceType == "group_chat"
 
         private const val DEEP_LINK_SCHEME = "lvtcrm"
         private const val DEEP_LINK_HOST = "notification"

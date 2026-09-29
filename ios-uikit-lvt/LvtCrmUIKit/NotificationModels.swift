@@ -29,6 +29,7 @@ struct NotificationsSnapshot: Equatable, Sendable {
 
 enum AppTab: Hashable {
     case overview
+    case chat
     case duties
     case work
 }
@@ -40,12 +41,21 @@ struct NotificationDestination: Equatable, Sendable, Hashable {
     let notificationKey: String?
 
     var route: AppTab {
-        kind == "duty" ? .duties : .work
+        if opensChat { return .chat }
+        return kind == "duty" ? .duties : .work
     }
 
-    /// Bell items for Trao đổi use sourceType; kind still selects the tab.
+    var chatKind: ChatKind {
+        switch sourceType {
+        case "duty_chat": return .duty
+        case "group_chat": return .group
+        default: return .work
+        }
+    }
+
+    /// Bell items for Trao đổi open the chat hub.
     var opensChat: Bool {
-        sourceType == "duty_chat" || sourceType == "work_chat"
+        sourceType == "duty_chat" || sourceType == "work_chat" || sourceType == "group_chat"
     }
 
     static func from(url: URL) -> NotificationDestination? {
