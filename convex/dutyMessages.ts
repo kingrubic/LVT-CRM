@@ -15,8 +15,9 @@ import { requireDutiesAccess } from "./duties";
 import { isOperationalManagerRole, isSameDepartmentSubordinate, resolveUserMenuAccess } from "./lib";
 import { canAccessDutyChat, prepareDutyMessageBody } from "./dutyMessagePolicy";
 import { sanitizeWorkMessageHtml, workChatAuthorInitials } from "./workMessagePolicy";
-
-const MESSAGE_LIST_LIMIT = 200;
+import { listDutyChatRecipientIds } from "./chatAudience";
+import { applyChatRecall, publishChatMessage } from "./chatInbox";
+import { clampChatPageLimit } from "./chatHubPolicy";
 
 async function loadDuty(ctx: any, dutyId: string) {
   try {
@@ -61,16 +62,26 @@ function displayName(user: { name?: string; email?: string } | null | undefined)
 }
 
 export const list = query({
-  args: { dutyId: v.string() },
+  args: {
+    dutyId: v.string(),
+    before: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const { user, duty, usersById } = await authorizeDutyChat(ctx, args.dutyId);
+    const limit = clampChatPageLimit(args.limit);
     const rows = await ctx.db
       .query("dutyMessages")
-      .withIndex("by_duty_created", (q: any) => q.eq("dutyId", String(args.dutyId)))
+      .withIndex("by_duty_created", (q: any) => {
+        const range = q.eq("dutyId", String(args.dutyId));
+        return args.before ? range.lt("createdAt", args.before) : range;
+      })
       .order("desc")
-      .take(MESSAGE_LIST_LIMIT);
+      .take(limit + 1);
+    const hasMore = rows.length > limit;
     const now = Date.now();
     const messages = [...rows]
+      .slice(0, limit)
       .filter((row: any) => row.active)
       .reverse()
       .map((row: any) => {
@@ -101,6 +112,7 @@ export const list = query({
       dutyTitle: dutyListTitle(duty),
       currentUserId: String(user._id),
       isParticipant: isDutyParticipant(user, duty),
+      hasMore,
       messages,
     };
   },
@@ -126,33 +138,21 @@ export const create = mutation({
     });
     const users = [...usersById.values()] as any[];
     const positions = await ctx.db.query("positions").collect();
-    const recipientIds: string[] = [];
-    for (const candidate of users) {
-      if (candidate.status !== "active" || String(candidate._id) === String(user._id)) continue;
-      const menuAccess = await resolveUserMenuAccess(ctx, candidate);
-      if (!isOperationalManagerRole(candidate.role) && menuAccess.duties === "hidden") continue;
-      const access = isOperationalManagerRole(candidate.role) ? "view_all" : String(menuAccess.duties || "hidden");
-      const subordinateUsers = isOperationalManagerRole(candidate.role)
-        ? []
-        : users.filter(
-            (target) =>
-              target.status === "active" &&
-              isSameDepartmentSubordinate(candidate, target, positions),
-          );
-      if (
-        !canAccessDutyChat({
-          actorUserId: String(candidate._id),
-          actorRole: String(candidate.role || ""),
-          actorAccess: access,
-          actorDepartmentId: candidate.departmentId,
-          duty,
-          subordinateUsers,
-        })
-      ) {
-        continue;
-      }
-      recipientIds.push(String(candidate._id));
-    }
+    const recipientIds = await listDutyChatRecipientIds(ctx, {
+      authorUserId: String(user._id),
+      duty,
+      users,
+      positions,
+    });
+    await publishChatMessage(ctx, {
+      kind: "duty",
+      entityId: String(args.dutyId),
+      title: dutyListTitle(duty),
+      bodyText: prepared.bodyText,
+      createdAt: now,
+      authorUserId: String(user._id),
+      recipientIds,
+    });
     if (recipientIds.length) {
       const feedItem = buildChatNotificationItem({
         kind: "duty",
@@ -206,6 +206,12 @@ export const recall = mutation({
     const now = Date.now();
     await ctx.db.patch(row._id, { recalledAt: now, updatedAt: now });
     await deactivateChatNotificationEvents(ctx, String(row._id));
+    await applyChatRecall(ctx, {
+      kind: "duty",
+      entityId: String(row.dutyId),
+      messageCreatedAt: row.createdAt,
+      authorUserId: String(row.authorUserId),
+    });
     return { recalled: true };
   },
 });

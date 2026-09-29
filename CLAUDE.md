@@ -134,6 +134,13 @@ Additional rules:
 - For live/deployment tasks, verify health, live hashed assets/routes, authorization failure behavior, and the actual changed workflow before reporting success.
 - Before finishing, show `git status --short`, confirm `ios-app` was untouched unless explicitly scoped, and report remaining risks honestly.
 
+## Trao đổi hub (web)
+
+- Sidebar **Trao đổi** (`/trao-doi`) sits above Lịch công tác and Công việc and is visible to every active signed-in user. Work/duty threads still use the existing access rules; groups are membership-based. Admin (`role === admin`) may view and dissolve any group.
+- Do not scan `workMessages` / `dutyMessages` to build the conversation list. Maintain `chatThreads` + per-user `chatInbox` (index `by_user_active_activity`) and `chatCounters` on send, recall, and group membership changes. Message history stays paginated on the existing per-entity indexes.
+- Popup Trao đổi on Công tác/Công việc and the hub read the same message tables. Bell items `work_chat` / `duty_chat` / `group_chat` open the hub thread. `chatHubSync` is a one-time backfill cursor for threads that existed before the hub; new messages update the inbox directly.
+- Group owner adds/removes/renames/dissolves. Members may leave (owner leave transfers to the earliest remaining member, or dissolves if nobody remains). Recall window stays 15 minutes.
+
 ## Bulk user import invariants (SYS-011)
 
 Canonical product detail lives in `README.md` → **Import user hàng loạt**. Do not weaken these rules without owner confirmation:

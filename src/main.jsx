@@ -17,7 +17,7 @@ import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
 import NotificationsView from './notifications/NotificationsView';
 import { DUTY_NOTIFICATION_FOCUS_TYPES, menuForNotification, useNotificationFocus } from './notifications/useNotificationFocus';
-import { ACCOUNT_MENU_IDS, isAccountMenu, isSidebarPrimaryMenu, pathnameForMenu, pathnameForReportSection, routeForPathname, dutiesPathname, titleForAccountMenu } from './navigationRoutes';
+import { ACCOUNT_MENU_IDS, isAccountMenu, isSidebarPrimaryMenu, pathnameForMenu, pathnameForReportSection, routeForPathname, dutiesPathname, chatPathname, titleForAccountMenu } from './navigationRoutes';
 import { parseDutyPath } from './duties/dutyRoutes';
 import AccountDeletionPage from './privacy/AccountDeletionPage';
 import PrivacyPolicyPage from './privacy/PrivacyPolicyPage';
@@ -54,6 +54,7 @@ import './profile/devices.css';
 import './settings/displaySettings.css';
 import './notifications/notifications.css';
 import { navIconFor } from './navIcons';
+import ChatHub from './chat/ChatHub';
 
 const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL;
 const publicConvexUrl =
@@ -64,6 +65,7 @@ const convex = publicConvexUrl ? new ConvexReactClient(publicConvexUrl) : null;
 const PRIMARY_MENUS = [
   ['reports', 'Báo cáo'],
   ['notifications', 'Thông báo'],
+  ['chat', 'Trao đổi'],
   ['duties', 'Lịch công tác'],
   ['work', 'Công việc'],
   ['homeroom', 'Lớp chủ nhiệm'],
@@ -139,6 +141,7 @@ function AppShell({ session }) {
   const { user, isAdmin, isModerator, isOperationalManager, menuAccess } = session;
   const canManageOperations = Boolean(isOperationalManager || isAdmin || isModerator);
   const workBadge = useQuery(anyApi.work.badge, canManageOperations || menuAccess?.work !== 'hidden' ? {} : 'skip');
+  const chatUnread = useQuery(anyApi.chatHub.unreadTotal, {});
   const canUseNotifications = canManageOperations || menuAccess?.notifications !== 'hidden';
   const notificationFeed = useQuery(
     anyApi.notifications.feed,
@@ -146,7 +149,7 @@ function AppShell({ session }) {
   );
   const visiblePrimaryMenus = useMemo(() => {
     if (canManageOperations) return PRIMARY_MENUS;
-    return PRIMARY_MENUS.filter(([id]) => menuAccess?.[id] && menuAccess[id] !== 'hidden');
+    return PRIMARY_MENUS.filter(([id]) => id === 'chat' || (menuAccess?.[id] && menuAccess[id] !== 'hidden'));
   }, [canManageOperations, menuAccess]);
   const sidebarPrimaryMenus = useMemo(
     () => visiblePrimaryMenus.filter(([id]) => isSidebarPrimaryMenu(id)),
@@ -165,6 +168,9 @@ function AppShell({ session }) {
     initialRoute && 'dutyPath' in initialRoute && initialRoute.dutyPath
       ? initialRoute.dutyPath
       : dutiesPathname(),
+  );
+  const [chatPath, setChatPath] = useState(
+    initialRoute?.menu === 'chat' && initialRoute.chatPath ? initialRoute.chatPath : chatPathname(),
   );
   const [focusTarget, setFocusTarget] = useState(null);
   const dutyRoute = parseDutyPath(dutyPath) || { view: 'personal', dutyId: undefined };
@@ -200,6 +206,7 @@ function AppShell({ session }) {
         setActive(route.menu);
         if (route.reportSection) setReportSection(route.reportSection);
         if ('dutyPath' in route && route.dutyPath) setDutyPath(route.dutyPath);
+        if (route.menu === 'chat' && route.chatPath) setChatPath(route.chatPath);
       } else {
         setActive(defaultActive);
         setReportSection('work');
@@ -266,6 +273,7 @@ function AppShell({ session }) {
     setActive(id);
     if (id === 'reports') setReportSection('work');
     if (id === 'duties') setDutyPath(dutiesPathname());
+    if (id === 'chat') setChatPath(chatPathname());
     const pathname = pathnameForMenu(id);
     if (window.location.pathname !== pathname) {
       window.history[replace ? 'replaceState' : 'pushState']({}, '', pathname);
@@ -293,13 +301,58 @@ function AppShell({ session }) {
     setMobileOpen(false);
   };
 
+  const openChatThread = (kind, entityId) => {
+    const pathname = chatPathname(kind && entityId ? { kind, entityId } : {});
+    setActive('chat');
+    setChatPath(pathname);
+    if (window.location.pathname !== pathname) window.history.pushState({}, '', pathname);
+    setMobileOpen(false);
+  };
+
+  const openChatEntity = (kind, entityId) => {
+    if (kind === 'work') {
+      setFocusTarget({
+        menu: 'work',
+        sourceType: 'work_chat',
+        sourceId: String(entityId),
+        openChat: false,
+        token: Date.now(),
+      });
+      choose('work');
+      return;
+    }
+    if (kind === 'duty') {
+      setFocusTarget({
+        menu: 'duties',
+        sourceType: 'duty_chat',
+        sourceId: String(entityId),
+        openChat: false,
+        token: Date.now(),
+      });
+      choose('duties');
+    }
+  };
+
   const openFromNotification = (item) => {
     const menu = menuForNotification(item);
+    const isChat = item.sourceType === 'work_chat' || item.sourceType === 'duty_chat' || item.sourceType === 'group_chat';
+    if (isChat) {
+      const kind = item.sourceType === 'duty_chat' ? 'duty' : item.sourceType === 'group_chat' ? 'group' : 'work';
+      setFocusTarget({
+        menu: 'chat',
+        sourceType: item.sourceType,
+        sourceId: String(item.sourceId),
+        openChat: true,
+        token: Date.now(),
+      });
+      openChatThread(kind, String(item.sourceId));
+      return;
+    }
     setFocusTarget({
       menu,
       sourceType: item.sourceType,
       sourceId: String(item.sourceId),
-      openChat: item.sourceType === 'work_chat' || item.sourceType === 'duty_chat',
+      openChat: false,
       token: Date.now(),
     });
     choose(menu);
@@ -334,7 +387,13 @@ function AppShell({ session }) {
           ) : (
             sidebarPrimaryMenus.map(([id, label]) => (
               <React.Fragment key={id}>
-                <NavButton id={id} label={label} badge={id === 'work' ? workBadge?.count : 0} active={active} onClick={choose} />
+                <NavButton
+                  id={id}
+                  label={label}
+                  badge={id === 'work' ? workBadge?.count : id === 'chat' ? chatUnread?.count : 0}
+                  active={active}
+                  onClick={choose}
+                />
                 {id === 'reports' && active === 'reports' ? (
                   <ReportSubmenu
                     active={reportSection}
@@ -450,6 +509,8 @@ function AppShell({ session }) {
           )
         ) : active === 'work' ? (
           <WorkUserView focusTarget={activeFocusTarget} />
+        ) : active === 'chat' ? (
+          <ChatHub path={chatPath} onNavigate={openChatThread} onOpenEntity={openChatEntity} />
         ) : active === 'people-review' ? (
           <PeopleReviewView />
         ) : active === 'staff-faults' ? (
@@ -528,10 +589,10 @@ function NotificationBell({ data, onViewAll, onOpenItem }) {
                   type="button"
                   className={`notification-popover-item ${item.read ? '' : 'unread'}${item.sourceType === 'completion_rejected' ? ' is-rejection' : ''}`}
                   key={item.key}
-                  title={item.kind === 'duty' ? 'Mở công tác này' : 'Mở công việc này'}
+                  title={item.sourceType === 'group_chat' || item.kind === 'group' ? 'Mở nhóm trao đổi' : item.kind === 'duty' ? 'Mở công tác này' : 'Mở công việc này'}
                   onClick={() => openItem(item)}
                 >
-                  <span>{item.kind === 'duty' ? 'Công tác' : item.sourceType === 'completion_rejected' ? 'Từ chối hoàn thành' : 'Công việc'} · {item.milestoneLabel}</span>
+                  <span>{item.sourceType === 'group_chat' || item.kind === 'group' ? 'Nhóm' : item.kind === 'duty' ? 'Công tác' : item.sourceType === 'completion_rejected' ? 'Từ chối hoàn thành' : 'Công việc'} · {item.milestoneLabel}</span>
                   <strong>{item.title}</strong>
                   <small>{item.description}</small>
                 </button>

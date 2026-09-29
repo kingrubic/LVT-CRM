@@ -60,7 +60,7 @@ function truncatePreview(text: string, max = 120) {
 }
 
 export function buildChatNotificationItem(args: {
-  kind: "work" | "duty";
+  kind: "work" | "duty" | "group";
   messageId: string;
   entityId: string;
   entityTitle: string;
@@ -68,8 +68,9 @@ export function buildChatNotificationItem(args: {
   bodyText: string;
   createdAt: number;
 }) {
-  const sourceType = args.kind === "duty" ? "duty_chat" : "work_chat";
-  const title = `${args.authorName} đã trao đổi: ${args.entityTitle || (args.kind === "duty" ? "Công tác" : "Công việc")}`;
+  const sourceType = args.kind === "duty" ? "duty_chat" : args.kind === "group" ? "group_chat" : "work_chat";
+  const fallback = args.kind === "duty" ? "Công tác" : args.kind === "group" ? "Nhóm" : "Công việc";
+  const title = `${args.authorName} đã trao đổi: ${args.entityTitle || fallback}`;
   return {
     key: `${args.kind}:${sourceType}:${args.messageId}`,
     kind: args.kind,
@@ -101,8 +102,8 @@ export function selectVisibleChatNotifications<T extends { createdAt?: number; a
     .slice(0, CHAT_NOTIFICATION_LIST_LIMIT);
 }
 
-export function recallErrorCode(kind: "work" | "duty", code: string) {
-  const prefix = kind === "duty" ? "DUTY_CHAT" : "WORK_CHAT";
+export function recallErrorCode(kind: "work" | "duty" | "group", code: string) {
+  const prefix = kind === "duty" ? "DUTY_CHAT" : kind === "group" ? "GROUP_CHAT" : "WORK_CHAT";
   if (code === "CHAT_RECALL_NOT_AUTHOR" || code === "CHAT_RECALL_ALREADY") {
     return `${prefix}_RECALL_FORBIDDEN`;
   }

@@ -21,6 +21,11 @@ const NAV_ICONS = {
       <path d="M10 21h4" />
     </NavGlyph>
   ),
+  chat: () => (
+    <NavGlyph>
+      <path d="M5 16.5 3.5 20.5 8 18.2A8.2 8.2 0 1 0 5 16.5z" />
+    </NavGlyph>
+  ),
   duties: () => (
     <NavGlyph>
       <rect x="3.5" y="5" width="17" height="15.5" rx="2" />

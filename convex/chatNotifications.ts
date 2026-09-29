@@ -5,7 +5,7 @@ export async function insertChatNotificationEvents(
   ctx: { db: any },
   args: {
     recipientUserIds: string[];
-    kind: "work" | "duty";
+    kind: "work" | "duty" | "group";
     sourceId: string;
     messageId: string;
     title: string;
@@ -13,7 +13,7 @@ export async function insertChatNotificationEvents(
     createdAt: number;
   },
 ) {
-  const sourceType = args.kind === "duty" ? "duty_chat" : "work_chat";
+  const sourceType = args.kind === "duty" ? "duty_chat" : args.kind === "group" ? "group_chat" : "work_chat";
   for (const userId of args.recipientUserIds) {
     if (!userId) continue;
     await ctx.db.insert("chatNotificationEvents", {
@@ -43,8 +43,8 @@ export async function deactivateChatNotificationEvents(ctx: { db: any }, message
 }
 
 export function chatEventToFeedItem(row: {
-  kind: "work" | "duty";
-  sourceType: "work_chat" | "duty_chat";
+  kind: "work" | "duty" | "group";
+  sourceType: "work_chat" | "duty_chat" | "group_chat";
   sourceId: string;
   messageId: string;
   title: string;

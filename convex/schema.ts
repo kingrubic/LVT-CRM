@@ -470,8 +470,8 @@ export default defineSchema({
    */
   chatNotificationEvents: defineTable({
     userId: v.string(),
-    kind: v.union(v.literal("work"), v.literal("duty")),
-    sourceType: v.union(v.literal("work_chat"), v.literal("duty_chat")),
+    kind: v.union(v.literal("work"), v.literal("duty"), v.literal("group")),
+    sourceType: v.union(v.literal("work_chat"), v.literal("duty_chat"), v.literal("group_chat")),
     sourceId: v.string(),
     messageId: v.string(),
     title: v.string(),
@@ -481,6 +481,96 @@ export default defineSchema({
   })
     .index("by_user_created", ["userId", "createdAt"])
     .index("by_message", ["messageId"]),
+  /**
+   * One summary per Trao đổi thread (work document, duty, or user group).
+   * The hub list does not scan message tables; it reads per-user inbox rows.
+   */
+  chatThreads: defineTable({
+    threadKey: v.string(),
+    kind: v.union(v.literal("work"), v.literal("duty"), v.literal("group")),
+    entityId: v.string(),
+    title: v.string(),
+    lastBodyText: v.string(),
+    lastMessageAt: v.number(),
+    lastAuthorUserId: v.string(),
+    active: v.boolean(),
+    ...timestamps,
+  })
+    .index("by_thread_key", ["threadKey"])
+    .index("by_kind_entity", ["kind", "entityId"]),
+  /**
+   * Per-user membership, preview, and unread count. List query is
+   * by_user_active_activity (bounded take), not a full-table scan.
+   */
+  chatInbox: defineTable({
+    userId: v.string(),
+    threadKey: v.string(),
+    kind: v.union(v.literal("work"), v.literal("duty"), v.literal("group")),
+    entityId: v.string(),
+    title: v.string(),
+    lastBodyText: v.string(),
+    lastMessageAt: v.number(),
+    lastAuthorUserId: v.string(),
+    lastReadAt: v.number(),
+    unreadCount: v.number(),
+    active: v.boolean(),
+    ...timestamps,
+  })
+    .index("by_user_active_activity", ["userId", "active", "lastMessageAt"])
+    .index("by_user_thread", ["userId", "threadKey"])
+    .index("by_thread", ["threadKey"]),
+  /** One counter document per user so the sidebar badge is a single read. */
+  chatCounters: defineTable({
+    userId: v.string(),
+    unreadTotal: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+  /** User-created group chats. Admin may view/dissolve any active group. */
+  chatGroups: defineTable({
+    name: v.string(),
+    ownerUserId: v.string(),
+    memberCount: v.number(),
+    lastBodyText: v.string(),
+    lastMessageAt: v.number(),
+    lastAuthorUserId: v.string(),
+    active: v.boolean(),
+    createdBy: v.string(),
+    ...timestamps,
+  }).index("by_active_activity", ["active", "lastMessageAt"]),
+  chatGroupMembers: defineTable({
+    groupId: v.string(),
+    userId: v.string(),
+    role: v.union(v.literal("owner"), v.literal("member")),
+    active: v.boolean(),
+    joinedAt: v.number(),
+    leftAt: v.optional(v.number()),
+    ...timestamps,
+  })
+    .index("by_group_active", ["groupId", "active"])
+    .index("by_user_active", ["userId", "active"])
+    .index("by_group_user", ["groupId", "userId"]),
+  groupMessages: defineTable({
+    groupId: v.string(),
+    authorUserId: v.string(),
+    bodyHtml: v.string(),
+    bodyText: v.string(),
+    active: v.boolean(),
+    recalledAt: v.optional(v.number()),
+    ...timestamps,
+  })
+    .index("by_group", ["groupId"])
+    .index("by_group_created", ["groupId", "createdAt"]),
+  /**
+   * Cursor for the one-time inbox backfill of historical work/duty messages.
+   * New messages maintain inbox rows directly; this only catches threads
+   * that existed before the hub.
+   */
+  chatHubSync: defineTable({
+    scope: v.string(),
+    cursor: v.number(),
+    done: v.boolean(),
+    updatedAt: v.number(),
+  }).index("by_scope", ["scope"]),
   /**
    * Personnel fault records (Ghi nhận lỗi) with evidence on Google Drive.
    */

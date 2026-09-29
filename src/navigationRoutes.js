@@ -4,6 +4,7 @@ const MENU_PATHS = Object.freeze({
   reports: '/bao-cao/cong-viec',
   notifications: '/thong-bao',
   duties: '/cong-tac',
+  chat: '/trao-doi',
   work: '/cong-viec',
   homeroom: '/lop-chu-nhiem',
   'people-review': '/danh-gia-nhan-su',
@@ -93,8 +94,48 @@ export function homeroomPathname(args = {}) {
   return MENU_PATHS.homeroom;
 }
 
+const CHAT_KIND_PATHS = Object.freeze({
+  'cong-viec': 'work',
+  'cong-tac': 'duty',
+  nhom: 'group',
+});
+
+export function chatPathname(args) {
+  const kind = args?.kind;
+  const entityId = args?.entityId;
+  if (kind === 'work' && entityId) return `/trao-doi/cong-viec/${encodeURIComponent(entityId)}`;
+  if (kind === 'duty' && entityId) return `/trao-doi/cong-tac/${encodeURIComponent(entityId)}`;
+  if (kind === 'group' && entityId) return `/trao-doi/nhom/${encodeURIComponent(entityId)}`;
+  return MENU_PATHS.chat;
+}
+
+export function parseChatPath(pathname) {
+  const normalized = normalizePathname(pathname);
+  if (normalized === MENU_PATHS.chat) {
+    return { kind: '', entityId: '', chatPath: normalized };
+  }
+  const match = normalized.match(/^\/trao-doi\/(cong-viec|cong-tac|nhom)\/([^/]+)$/);
+  if (!match) return null;
+  return {
+    kind: CHAT_KIND_PATHS[match[1]],
+    entityId: decodeURIComponent(match[2]),
+    chatPath: normalized,
+  };
+}
+
 export function routeForPathname(pathname) {
   const normalized = normalizePathname(pathname);
+  if (normalized === MENU_PATHS.chat || normalized.startsWith(`${MENU_PATHS.chat}/`)) {
+    const parsed = parseChatPath(normalized);
+    if (!parsed) return null;
+    return {
+      menu: 'chat',
+      reportSection: undefined,
+      chatPath: parsed.chatPath,
+      chatKind: parsed.kind,
+      chatEntityId: parsed.entityId,
+    };
+  }
   if (normalized === MENU_PATHS.homeroom || normalized.startsWith(`${MENU_PATHS.homeroom}/`)) {
     return { menu: 'homeroom', reportSection: undefined, homeroomPath: normalized };
   }
