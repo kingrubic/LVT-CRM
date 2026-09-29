@@ -108,7 +108,12 @@ export function CreateGroupDialog({ onClose, onCreated }) {
         {error ? <p className="chat-form-error" role="alert">{error}</p> : null}
         <footer>
           <button type="button" className="work-ghost-button" onClick={onClose} disabled={saving}>Hủy</button>
-          <button type="button" className="work-primary-button" onClick={() => void submit()} disabled={saving}>
+          <button
+            type="button"
+            className="work-primary-button"
+            onClick={() => void submit()}
+            disabled={saving || !name.trim() || !memberIds.length}
+          >
             {saving ? 'Đang tạo…' : 'Tạo nhóm'}
           </button>
         </footer>

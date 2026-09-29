@@ -10,6 +10,26 @@
   flex: none;
 }
 
+/*
+ * The hub reuses shared `work-*` components (buttons, chat bubbles, composer)
+ * whose colors come from `--work-*` variables that are only declared inside
+ * `.work-management` / `.work-user-view` / `.work-chat-backdrop`. Declare them
+ * on the hub and its dialogs too, otherwise `.work-primary-button` resolves
+ * `background: var(--work-navy)` to transparent and renders as a blank white
+ * box (same root cause as the white "Lưu" button fixed in PR #62).
+ */
+.chat-hub,
+.chat-dialog-backdrop {
+  --work-ink: var(--lvt-ink, #16243e);
+  --work-navy: var(--lvt-navy, #14355f);
+  --work-blue: var(--lvt-blue, #28639a);
+  --work-teal: var(--lvt-teal, #138f7b);
+  --work-coral: var(--lvt-coral, #e36d55);
+  --work-gold: var(--lvt-gold, #e9ad43);
+  --work-paper: var(--lvt-paper, #fffdf7);
+  --work-line: var(--lvt-line, #dce5eb);
+}
+
 .chat-hub {
   --chat-list-width: 25%;
   display: flex;
@@ -392,6 +412,54 @@
 
 .chat-form-error { color: #9d341f; font-size: 13px; }
 .chat-group-name { font-weight: 800; }
+
+/* Dialog action buttons: solid brand primary, readable labels, visible disabled state. */
+.chat-dialog .work-primary-button,
+.chat-dialog .work-ghost-button,
+.chat-dialog .chat-danger-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.chat-dialog .work-primary-button {
+  border: 0;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  background: var(--lvt-navy, #14355f);
+}
+
+.chat-dialog .work-ghost-button {
+  border: 1px solid #d4dfe6;
+  color: #4f6376;
+  -webkit-text-fill-color: #4f6376;
+  background: #fff;
+}
+
+.chat-dialog .chat-danger-button {
+  -webkit-text-fill-color: #9d341f;
+}
+
+.chat-dialog .work-primary-button:disabled {
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  background: #7f93a8;
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.chat-dialog .work-ghost-button:disabled,
+.chat-dialog .chat-danger-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
 
 @media (max-width: 800px) {
   .chat-hub-list {

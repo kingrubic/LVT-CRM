@@ -106,3 +106,10 @@ test('hub list is indexed per user and existing chats publish inbox rows', () =>
   assert.match(dutySource, /publishChatMessage/);
   assert.match(dutySource, /listDutyChatRecipientIds/);
 });
+
+test('chat hub dialogs define work color tokens so primary buttons are not blank white', () => {
+  const css = readFileSync(new URL('../src/chat/chatHub.css', import.meta.url), 'utf8');
+  assert.match(css, /\.chat-hub,\s*\.chat-dialog-backdrop\s*\{[^}]*--work-navy:\s*var\(--lvt-navy/);
+  assert.match(css, /\.chat-dialog \.work-primary-button\s*\{[^}]*color:\s*#fff;[^}]*background:\s*var\(--lvt-navy/);
+  assert.match(css, /\.chat-dialog \.work-primary-button:disabled\s*\{[^}]*color:\s*#fff;[^}]*background:\s*#[0-9a-f]{6}/);
+});
