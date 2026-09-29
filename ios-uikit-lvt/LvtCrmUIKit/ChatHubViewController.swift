@@ -73,7 +73,7 @@ final class ChatHubViewController: UIViewController, UITableViewDataSource, UITa
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 76
         let refresh = UIRefreshControl()
-        refresh.addAction(UIAction { [weak self] _ in self?.reload(manual: true) }, for: .valueChanged)
+        refresh.addAction(UIAction { [weak self] _ in Task { await self?.reload(manual: true) } }, for: .valueChanged)
         tableView.refreshControl = refresh
         let search = UISearchController(searchResultsController: nil)
         search.searchResultsUpdater = self
