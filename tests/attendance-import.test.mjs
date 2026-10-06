@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 import {
   ATTENDANCE_TEMPLATE_HEADERS,
@@ -9,10 +11,9 @@ import {
   rowsFromAttendanceMatrix,
 } from '../convex/attendanceImportSheet.ts';
 import {
-  applyUnconfirmedNameMatchGate,
+  classMatchKey,
   decidePublishedDateAction,
   parseSchoolCameraStatus,
-  reconcileAttendanceRows,
   reconcileSchoolAttendanceRows,
   REPLACE_MODE_CANCEL,
   REPLACE_MODE_REPLACE,
@@ -23,11 +24,8 @@ import {
   attendanceReplaceModeChoices,
   buildAttendancePublishArgs,
   buildAttendanceValidateArgs,
-  buildConfirmedAttendanceValidateArgs,
-  canExplicitlyConfirmNameMatches,
   classPreviewState,
   isAttendanceReplaceModeRequired,
-  proposedUniqueNameMatches,
   publishPlan,
   REPLACE_MODE_CANCEL as UI_REPLACE_MODE_CANCEL,
   REPLACE_MODE_REPLACE as UI_REPLACE_MODE_REPLACE,
@@ -45,45 +43,42 @@ import { messageFor } from '../src/lib/appErrorMessage.js';
 const importUiSource = readFileSync(new URL('../src/homeroom/HomeroomAttendanceImport.jsx', import.meta.url), 'utf8');
 
 const students = [
-  { studentId: 's1', studentCode: 'HS001', fullName: 'Nguyễn Văn A', classId: 'c1', classCode: '6A1', enrollmentId: 'e1' },
-  { studentId: 's2', studentCode: 'HS002', fullName: 'Nguyễn Văn A', classId: 'c1', classCode: '6A1', enrollmentId: 'e2' },
-  { studentId: 's3', studentCode: 'HS003', fullName: 'Trần Thị B', classId: 'c1', classCode: '6A1', enrollmentId: 'e3' },
+  { studentId: 's1', studentCode: 'HS001', fullName: 'Nguyễn Văn A', dateOfBirth: '2014-03-11', classId: 'c1', classCode: '7/1', enrollmentId: 'e1' },
+  { studentId: 's2', studentCode: 'HS002', fullName: 'Nguyễn Văn A', dateOfBirth: '2014-05-20', classId: 'c1', classCode: '7/1', enrollmentId: 'e2' },
+  { studentId: 's3', studentCode: 'HS003', fullName: 'Hà Thị Thùy Linh', dateOfBirth: '2014-08-01', classId: 'c1', classCode: '7/1', enrollmentId: 'e3' },
+];
+const classes = [
+  { classId: 'c1', code: '7/1', name: 'Lớp 7/1' },
+  { classId: 'c2', code: '7/2', name: 'Lớp 7/2' },
 ];
 
-const TEMPLATE_HEADER = ['Mã HS', 'Họ tên HS', 'Mã lớp', 'Tên lớp', 'Thời gian có mặt', 'Trạng thái'];
+const TEMPLATE_HEADER = ['Lớp học', 'Tên học sinh', 'Ngày sinh', 'Trạng thái điểm danh', 'Thời gian điểm danh'];
+const FILE_HEADER = [...TEMPLATE_HEADER, 'Loại điểm danh'];
 
-test('fixed template header is detected below a title row and maps every column', () => {
+test('camera file header is detected below a title row; Loại điểm danh is ignored', () => {
   assert.deepEqual(Object.values(ATTENDANCE_TEMPLATE_HEADERS), TEMPLATE_HEADER);
   const matrix = [
-    ['DANH SÁCH ĐIỂM DANH NGÀY 01/09/2026'],
+    ['BẢNG THỐNG KÊ ĐIỂM DANH HỌC SINH TOÀN TRƯỜNG'],
     [],
-    TEMPLATE_HEADER,
-    ['HS001', 'Nguyễn Văn A', '6A1', 'Lớp 6A1', '07:05', 'Có mặt'],
+    FILE_HEADER,
+    ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đã điểm danh', '06:52', ''],
     ['', '', '', '', '', ''],
-    ['HS003', 'Trần Thị B', '6A1', 'Lớp 6A1', '', 'Vắng'],
+    ['7/1', 'Hà Thị Thuỳ Linh', '01/08/2014', 'Chưa điểm danh', '--:--', ''],
   ];
   const header = detectAttendanceHeader(matrix);
   assert.equal(header?.rowIndex, 2);
   assert.deepEqual(header?.missing, []);
-  assert.deepEqual(header?.columns, {
-    studentCode: 0,
-    studentName: 1,
-    classCode: 2,
-    className: 3,
-    observedAt: 4,
-    sourceStatus: 5,
-  });
+  assert.deepEqual(header?.columns, { classCode: 0, studentName: 1, dateOfBirth: 2, sourceStatus: 3, observedAt: 4 });
   const parsed = rowsFromAttendanceMatrix(matrix);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.rows.length, 2);
   assert.deepEqual(parsed.rows[0], {
     rowNumber: 4,
-    rawStudentCode: 'HS001',
+    rawClassCode: '7/1',
     rawStudentName: 'Nguyễn Văn A',
-    rawClassCode: '6A1',
-    rawClassName: 'Lớp 6A1',
-    rawObservedAt: '07:05',
-    rawStatus: 'Có mặt',
+    rawDateOfBirth: '11/03/2014',
+    rawObservedAt: '06:52',
+    rawStatus: 'Đã điểm danh',
   });
   assert.equal(parsed.rows[1].rowNumber, 6);
 });
@@ -93,69 +88,114 @@ test('template errors are explicit: missing header, missing required columns, em
     ok: false,
     message: 'ATTENDANCE_TEMPLATE_HEADER_NOT_FOUND',
   });
-  const missing = rowsFromAttendanceMatrix([['Mã HS', 'Họ tên HS', 'Thời gian có mặt'], ['HS001', 'A', '07:00']]);
+  const missing = rowsFromAttendanceMatrix([['Lớp học', 'Tên học sinh', 'Thời gian điểm danh'], ['7/1', 'A', '07:00']]);
   assert.equal(missing.ok, false);
   assert.equal(missing.message, 'ATTENDANCE_TEMPLATE_COLUMNS_MISSING');
-  assert.deepEqual(missing.missing, ['classCode', 'sourceStatus']);
+  assert.deepEqual(missing.missing, ['dateOfBirth', 'sourceStatus']);
   assert.equal(
     messageFor(new Error(`${missing.message}:${missing.missing.join(',')}`)),
-    'File điểm danh thiếu cột: Mã lớp, Trạng thái.',
+    'File điểm danh thiếu cột: Ngày sinh, Trạng thái điểm danh.',
   );
   assert.deepEqual(rowsFromAttendanceMatrix([TEMPLATE_HEADER]), { ok: false, message: 'IMPORT_FILE_EMPTY' });
 });
 
-test('school camera status accepts Có mặt / Trễ / Vắng with or without accents', () => {
-  assert.equal(parseSchoolCameraStatus('Có mặt'), 'present');
-  assert.equal(parseSchoolCameraStatus('co mat'), 'present');
-  assert.equal(parseSchoolCameraStatus(' Trễ '), 'late');
-  assert.equal(parseSchoolCameraStatus('Đi muộn'), 'late');
-  assert.equal(parseSchoolCameraStatus('VẮNG'), 'absent');
-  assert.equal(parseSchoolCameraStatus('Nghỉ'), null);
+test('camera status accepts only Chưa điểm danh / Đã điểm danh / Đi trễ (accents optional)', () => {
+  assert.equal(parseSchoolCameraStatus('Đã điểm danh'), 'present');
+  assert.equal(parseSchoolCameraStatus('da diem danh'), 'present');
+  assert.equal(parseSchoolCameraStatus(' Đi trễ '), 'late');
+  assert.equal(parseSchoolCameraStatus('CHƯA ĐIỂM DANH'), 'absent');
+  assert.equal(parseSchoolCameraStatus('Có mặt'), null);
   assert.equal(parseSchoolCameraStatus(''), null);
 });
 
-test('whole-school file splits by class code; broken classes are skipped, good classes stay publishable', () => {
-  const classes = [
-    { classId: 'c1', code: '6A1', name: 'Lớp 6A1' },
-    { classId: 'c2', code: '6A2', name: 'Lớp 6A2' },
+test('class key tolerates "Lớp" prefix, spacing, and "/" vs "-" (app codes cannot contain "/")', () => {
+  assert.equal(classMatchKey('7/1'), classMatchKey('Lớp 7/1'));
+  assert.equal(classMatchKey(' 7 / 1 '), '7-1');
+  assert.equal(classMatchKey('7/1'), classMatchKey('7-1'));
+  assert.equal(classMatchKey('7/1'), classMatchKey('Lớp 7-1'));
+  assert.notEqual(classMatchKey('7/1'), classMatchKey('7/11'));
+});
+
+test('students match by class + name + birth date; same name different DOB is disambiguated', () => {
+  const rows = [
+    { rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawObservedAt: '06:52', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 3, rawClassCode: 'Lớp 7/1', rawStudentName: 'nguyễn  văn a', rawDateOfBirth: '20/05/2014', rawObservedAt: '07:12', rawStatus: 'Đi trễ' },
+    { rowNumber: 4, rawClassCode: '7/1', rawStudentName: 'Hà Thị Thuỳ Linh', rawDateOfBirth: '01/08/2014', rawObservedAt: '--:--', rawStatus: 'Chưa điểm danh' },
   ];
+  const result = reconcileSchoolAttendanceRows(rows, { attendanceDate: '2026-09-01', classes, students });
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+  assert.deepEqual(result.rows.map((row) => row.matchedStudentId), ['s1', 's2', 's3']);
+  assert.deepEqual(result.rows.map((row) => row.rawObservation), ['present', 'late', 'absent']);
+  assert.equal(typeof result.rows[0].normalizedObservedAt, 'number');
+  assert.equal(result.rows[2].normalizedObservedAt, undefined);
+  const c1 = result.classes.find((row) => row.classId === 'c1');
+  assert.deepEqual([c1.present, c1.late, c1.absent, c1.missingCount, c1.publishable], [1, 1, 1, 0, true]);
+});
+
+test('broken classes are skipped, good classes stay publishable; DOB mismatch / wrong class are explicit', () => {
   const roster = [
     ...students,
-    { studentId: 's4', studentCode: 'HS004', fullName: 'Lê Văn C', classId: 'c2', classCode: '6A2', enrollmentId: 'e4' },
-    { studentId: 's5', studentCode: 'HS005', fullName: 'Phạm D', classId: 'c2', classCode: '6A2', enrollmentId: 'e5' },
+    { studentId: 's4', studentCode: 'HS004', fullName: 'Lê Văn C', dateOfBirth: '2014-01-02', classId: 'c2', classCode: '7/2', enrollmentId: 'e4' },
+    { studentId: 's5', studentCode: 'HS005', fullName: 'Phạm D', classId: 'c2', classCode: '7/2', enrollmentId: 'e5' },
   ];
   const rows = [
-    { rowNumber: 2, rawStudentCode: 'HS001', rawClassCode: '6A1', rawObservedAt: '07:05', rawStatus: 'Có mặt' },
-    { rowNumber: 3, rawStudentCode: 'HS002', rawClassCode: '6a1', rawObservedAt: '07:25', rawStatus: 'Trễ' },
-    { rowNumber: 4, rawStudentCode: 'HS004', rawClassCode: '6A2', rawStatus: 'Nghỉ' },
-    { rowNumber: 5, rawStudentCode: 'HS005', rawClassCode: '6A2', rawStatus: 'Vắng' },
-    { rowNumber: 6, rawStudentCode: 'HS999', rawClassCode: '9Z9', rawStatus: 'Có mặt' },
+    { rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 3, rawClassCode: '7/2', rawStudentName: 'Lê Văn C', rawDateOfBirth: '03/01/2014', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 4, rawClassCode: '7/2', rawStudentName: 'Phạm D', rawDateOfBirth: '04/04/2014', rawStatus: 'Đi trễ' },
+    { rowNumber: 5, rawClassCode: '7/2', rawStudentName: 'Hà Thị Thùy Linh', rawDateOfBirth: '01/08/2014', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 6, rawClassCode: '9/9', rawStudentName: 'X', rawDateOfBirth: '01/01/2012', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 7, rawClassCode: '7/2', rawStudentName: 'Lê Văn C', rawDateOfBirth: '02/01/2014', rawStatus: 'Nghỉ' },
   ];
   const result = reconcileSchoolAttendanceRows(rows, { attendanceDate: '2026-09-01', classes, students: roster });
   const c1 = result.classes.find((row) => row.classId === 'c1');
   const c2 = result.classes.find((row) => row.classId === 'c2');
   assert.equal(c1.publishable, true);
-  assert.equal(c1.present, 1);
-  assert.equal(c1.late, 1);
-  assert.equal(c1.missingCount, 1, 'HS003 is not in the file and becomes absent pending on publish');
+  assert.equal(c1.missingCount, 2, 'students absent from the file become absent pending on publish');
   assert.equal(c2.publishable, false);
-  assert.ok(c2.errorCount >= 1);
   assert.deepEqual(result.publishableClassIds, ['c1']);
-  assert.ok(result.issues.some((item) => item.code === 'CAMERA_STATUS_INVALID' && item.rowNumber === 4));
-  assert.ok(result.issues.some((item) => item.code === 'CAMERA_CLASS_UNKNOWN' && item.rowNumber === 6));
-  assert.equal(result.rows.find((row) => row.rowNumber === 6)?.resolution, 'invalid');
-  assert.equal(result.rows.find((row) => row.rowNumber === 5)?.rawObservation, 'absent');
+  const codeAt = (rowNumber) => result.issues.filter((item) => item.rowNumber === rowNumber).map((item) => item.code);
+  assert.deepEqual(codeAt(3), ['CAMERA_DOB_MISMATCH']);
+  assert.match(result.issues.find((item) => item.rowNumber === 3).message, /02\/01\/2014/);
+  assert.deepEqual(codeAt(4), ['CAMERA_DOB_MISMATCH'], 'student without DOB on file cannot be matched');
+  assert.deepEqual(codeAt(5), ['CAMERA_WRONG_CLASS']);
+  assert.deepEqual(codeAt(6), ['CAMERA_CLASS_UNKNOWN']);
+  assert.deepEqual(codeAt(7), ['CAMERA_STATUS_INVALID']);
+  assert.ok(result.rows.every((row) => row.rowNumber === 2 || row.resolution === 'invalid'));
   assert.equal(result.rows.length, rows.length);
 });
 
-test('ambiguous name does not auto-match without a student code', () => {
-  const result = reconcileAttendanceRows(
-    [{ rowNumber: 2, rawStudentName: 'Nguyễn Văn A', rawClassCode: '6A1' }],
-    { attendanceDate: '2026-09-01', classId: 'c1', classCode: '6A1', students },
+test('duplicate rows and same name + DOB twice in a class never auto-match', () => {
+  const twins = [
+    ...students,
+    { studentId: 's9', studentCode: 'HS009', fullName: 'Nguyễn Văn A', dateOfBirth: '2014-03-11', classId: 'c1', classCode: '7/1', enrollmentId: 'e9' },
+  ];
+  const ambiguous = reconcileSchoolAttendanceRows(
+    [{ rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đã điểm danh' }],
+    { attendanceDate: '2026-09-01', classes, students: twins },
   );
-  assert.equal(result.ok, false);
-  assert.equal(result.rows[0].resolution, 'ambiguous');
-  assert.ok(result.blockers.some((item) => item.code === 'CAMERA_NAME_AMBIGUOUS'));
+  assert.equal(ambiguous.ok, false);
+  assert.equal(ambiguous.issues[0].code, 'CAMERA_STUDENT_AMBIGUOUS');
+  const row = { rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đã điểm danh' };
+  const duplicate = reconcileSchoolAttendanceRows(
+    [{ rowNumber: 2, ...row }, { rowNumber: 3, ...row }],
+    { attendanceDate: '2026-09-01', classes, students },
+  );
+  assert.equal(duplicate.issues.some((item) => item.rowNumber === 3 && item.code === 'CAMERA_DUPLICATE_ROW'), true);
+  assert.equal(duplicate.classes[0].publishable, false);
+});
+
+const REAL_EXPORT = fileURLToPath(new URL('../Bảng-thống-kê-điểm-danh-học-sinh-toan-truong.xlsx', import.meta.url));
+
+test('the real school export parses and every row has a valid status and DOB', { skip: !existsSync(REAL_EXPORT) }, () => {
+  const XLSX = createRequire(import.meta.url)('xlsx');
+  const workbook = XLSX.readFile(REAL_EXPORT);
+  const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '', raw: false });
+  const parsed = rowsFromAttendanceMatrix(matrix);
+  assert.equal(parsed.ok, true);
+  assert.ok(parsed.rows.length > 100);
+  const result = reconcileSchoolAttendanceRows(parsed.rows, { attendanceDate: '2026-09-01', classes: [], students: [] });
+  const codes = new Set(result.issues.map((item) => item.code));
+  assert.deepEqual([...codes], ['CAMERA_CLASS_UNKNOWN'], 'only class lookup fails without a roster');
 });
 
 test('same checksum and date is idempotent; a different file requires an explicit mode', () => {
@@ -188,14 +228,9 @@ test('same checksum and date is idempotent; a different file requires an explici
 });
 
 test('positive_presence publication creates one day per enrollment and missing students become absent pending', () => {
-  const parsed = rowsFromAttendanceMatrix([TEMPLATE_HEADER, ['HS001', 'Nguyễn Văn A', '6A1', 'Lớp 6A1', '07:05', 'Có mặt']]);
+  const parsed = rowsFromAttendanceMatrix([TEMPLATE_HEADER, ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đã điểm danh', '07:05']]);
   assert.equal(parsed.ok, true);
-  const reconciled = reconcileAttendanceRows(parsed.rows, {
-    attendanceDate: '2026-09-01',
-    classId: 'c1',
-    classCode: '6A1',
-    students,
-  });
+  const reconciled = reconcileSchoolAttendanceRows(parsed.rows, { attendanceDate: '2026-09-01', classes, students });
   assert.equal(reconciled.ok, true);
   const published = applyPublicationPolicy({
     enrollments: students.map((row) => ({
@@ -234,72 +269,10 @@ test('publication roster is date-effective after a transfer', () => {
   assert.deepEqual(afterTransfer.map((row) => row.studentId), ['s2']);
 });
 
-test('unique name match stays blocked until an explicit confirmation; ambiguous can never be confirmed', () => {
-  const unique = reconcileAttendanceRows(
-    [{ rowNumber: 4, rawStudentName: 'Trần Thị B', rawClassCode: '6A1' }],
-    { attendanceDate: '2026-09-01', classId: 'c1', classCode: '6A1', students },
-  );
-  assert.equal(unique.issues.some((item) => item.code === 'CAMERA_NAME_MATCH_UNCONFIRMED'), true);
-  assert.deepEqual(unique.nameMatches, [
-    {
-      rowNumber: 4,
-      sourceName: 'Trần Thị B',
-      studentCode: 'HS003',
-      fullName: 'Trần Thị B',
-      classCode: '6A1',
-    },
-  ]);
-  const unconfirmed = applyUnconfirmedNameMatchGate(unique, { confirmNameMatches: false });
-  assert.equal(unconfirmed.ok, false);
-  assert.equal(unconfirmed.issues.some((item) => item.code === 'CAMERA_NAME_MATCH_UNCONFIRMED'), true);
-  const confirmed = applyUnconfirmedNameMatchGate(unique, { confirmNameMatches: true });
-  assert.equal(confirmed.ok, true);
-  assert.equal(confirmed.rows[0].resolution, 'matched');
-
-  const ambiguous = reconcileAttendanceRows(
-    [{ rowNumber: 2, rawStudentName: 'Nguyễn Văn A', rawClassCode: '6A1' }],
-    { attendanceDate: '2026-09-01', classId: 'c1', classCode: '6A1', students },
-  );
-  const stillBlocked = applyUnconfirmedNameMatchGate(ambiguous, { confirmNameMatches: true });
-  assert.equal(stillBlocked.ok, false);
-  assert.equal(stillBlocked.rows[0].resolution, 'ambiguous');
-  assert.ok(stillBlocked.blockers.some((item) => item.code === 'CAMERA_NAME_AMBIGUOUS'));
-  assert.deepEqual(stillBlocked.nameMatches, []);
-});
-
-test('frontend only retries unique name matches after an explicit confirmation action', () => {
+test('frontend validates once; there is no name-confirmation step anymore', () => {
   assert.deepEqual(buildAttendanceValidateArgs({ uploadId: 'up-1' }), { uploadId: 'up-1' });
-  assert.deepEqual(buildConfirmedAttendanceValidateArgs({ uploadId: 'up-1' }), {
-    uploadId: 'up-1',
-    confirmNameMatches: true,
-  });
-
-  const pending = {
-    ok: false,
-    unconfirmedNameCount: 1,
-    issues: [{ rowNumber: 4, code: 'CAMERA_NAME_MATCH_UNCONFIRMED', rejectedValue: 'Trần Thị B' }],
-    nameMatches: [{ rowNumber: 4, sourceName: 'Trần Thị B', studentCode: 'HS003', fullName: 'Trần Thị B', classCode: '6A1' }],
-  };
-  assert.deepEqual(proposedUniqueNameMatches(pending), pending.nameMatches);
-  assert.equal(canExplicitlyConfirmNameMatches(pending), true);
-  assert.equal(canExplicitlyConfirmNameMatches({ ...pending, unconfirmedNameCount: 0 }), false);
-  assert.equal(
-    canExplicitlyConfirmNameMatches({
-      ok: false,
-      unconfirmedNameCount: 1,
-      issues: [{ rowNumber: 2, code: 'CAMERA_NAME_AMBIGUOUS' }],
-      nameMatches: [],
-    }),
-    false,
-  );
-
-  const firstValidate = importUiSource.slice(importUiSource.indexOf('const onFile = async'), importUiSource.indexOf('const confirmNames = async'));
-  assert.match(firstValidate, /buildAttendanceValidateArgs\(\{ uploadId \}\)/);
-  assert.doesNotMatch(firstValidate, /buildConfirmedAttendanceValidateArgs|confirmNameMatches:\s*true/);
-  const confirmAction = importUiSource.slice(importUiSource.indexOf('const confirmNames = async'), importUiSource.indexOf('const publish = async'));
-  assert.match(confirmAction, /buildConfirmedAttendanceValidateArgs\(\{/);
-  assert.match(importUiSource, /canExplicitlyConfirmNameMatches\(preview\)/);
-  assert.match(importUiSource, /Xác nhận khớp/);
+  assert.match(importUiSource, /buildAttendanceValidateArgs\(\{ uploadId \}\)/);
+  assert.doesNotMatch(importUiSource, /confirmNameMatches|Xác nhận khớp/);
 });
 
 test('publish never invents a replace mode; ATTENDANCE_REPLACE_MODE_REQUIRED exposes the backend choices', () => {
@@ -330,9 +303,9 @@ test('publish never invents a replace mode; ATTENDANCE_REPLACE_MODE_REQUIRED exp
 test('publish plan: conflicts need a mode, cancel only publishes fresh classes, broken classes are skipped', () => {
   const preview = {
     classes: [
-      { classId: 'c1', code: '6A1', publishable: true, alreadyPublished: false, missingCount: 2, errorCount: 0, unconfirmedNameCount: 0 },
-      { classId: 'c2', code: '6A2', publishable: true, alreadyPublished: true, missingCount: 1, errorCount: 0, unconfirmedNameCount: 0 },
-      { classId: 'c3', code: '6A3', publishable: false, alreadyPublished: false, missingCount: 0, errorCount: 3, unconfirmedNameCount: 0 },
+      { classId: 'c1', code: '6A1', publishable: true, alreadyPublished: false, missingCount: 2, errorCount: 0 },
+      { classId: 'c2', code: '6A2', publishable: true, alreadyPublished: true, missingCount: 1, errorCount: 0 },
+      { classId: 'c3', code: '6A3', publishable: false, alreadyPublished: false, missingCount: 0, errorCount: 3 },
     ],
   };
   const noMode = publishPlan(preview, '');
@@ -349,8 +322,7 @@ test('publish plan: conflicts need a mode, cancel only publishes fresh classes, 
   assert.equal(classPreviewState(preview.classes[0]).key, 'ready');
   assert.equal(classPreviewState(preview.classes[1]).key, 'existing');
   assert.equal(classPreviewState(preview.classes[2]).key, 'error');
-  assert.equal(classPreviewState({ errorCount: 0, unconfirmedNameCount: 2, publishable: false }).key, 'confirm');
-  assert.equal(classPreviewState({ errorCount: 0, unconfirmedNameCount: 0, publishable: false }).key, 'error');
+  assert.equal(classPreviewState({ errorCount: 0, publishable: false }).key, 'error');
 });
 
 test('attendance import UI shows replace-mode choices only when a class already has data', () => {
@@ -493,7 +465,7 @@ test('school attendance template round-trips through the server header detector 
   const { ROSTER_IMPORT_HEADERS } = await import('../src/lib/rosterImportExcel.js');
   assert.equal(ATTENDANCE_IMPORT_TEMPLATE_FILENAME, 'mau_diem_danh_toan_truong.xlsx');
   assert.notDeepEqual(ATTENDANCE_IMPORT_TEMPLATE_HEADERS, ROSTER_IMPORT_HEADERS);
-  assert.deepEqual(ATTENDANCE_IMPORT_TEMPLATE_HEADERS, TEMPLATE_HEADER);
+  assert.deepEqual(ATTENDANCE_IMPORT_TEMPLATE_HEADERS, FILE_HEADER);
   const parsed = rowsFromAttendanceMatrix(attendanceImportTemplateMatrix());
   assert.equal(parsed.ok, true);
   assert.equal(parsed.headerRowIndex, 0);

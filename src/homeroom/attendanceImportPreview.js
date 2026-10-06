@@ -1,7 +1,5 @@
 import { convexErrorText } from '../lib/appErrorMessage.js';
 
-export const CAMERA_NAME_MATCH_UNCONFIRMED = 'CAMERA_NAME_MATCH_UNCONFIRMED';
-export const CAMERA_NAME_AMBIGUOUS = 'CAMERA_NAME_AMBIGUOUS';
 export const ATTENDANCE_REPLACE_MODE_REQUIRED = 'ATTENDANCE_REPLACE_MODE_REQUIRED';
 export const REPLACE_MODE_SUPPLEMENT = 'supplement';
 export const REPLACE_MODE_REPLACE = 'replace_camera_observations';
@@ -14,25 +12,8 @@ const EXPLICIT_REPLACE_MODES = new Set([
   REPLACE_MODE_CANCEL,
 ]);
 
-export function buildAttendanceValidateArgs({ uploadId, confirmNameMatches = false }) {
-  const args = { uploadId };
-  if (confirmNameMatches) args.confirmNameMatches = true;
-  return args;
-}
-
-export function buildConfirmedAttendanceValidateArgs(args) {
-  return buildAttendanceValidateArgs({ ...args, confirmNameMatches: true });
-}
-
-export function proposedUniqueNameMatches(result) {
-  return Array.isArray(result?.nameMatches) ? result.nameMatches : [];
-}
-
-export function canExplicitlyConfirmNameMatches(result) {
-  if (!result?.unconfirmedNameCount) return false;
-  const issues = result?.issues || [];
-  if (issues.some((item) => item.code === CAMERA_NAME_AMBIGUOUS)) return false;
-  return proposedUniqueNameMatches(result).length > 0;
+export function buildAttendanceValidateArgs({ uploadId }) {
+  return { uploadId };
 }
 
 export function isAttendanceReplaceModeRequired(error) {
@@ -69,7 +50,6 @@ export function buildAttendancePublishArgs({ uploadId, replaceMode }) {
 /** Trạng thái hiển thị của một lớp trong bản xem trước. */
 export function classPreviewState(row) {
   if (row.errorCount > 0) return { key: 'error', label: 'Có lỗi — sẽ bỏ qua' };
-  if (row.unconfirmedNameCount > 0) return { key: 'confirm', label: 'Chờ xác nhận tên' };
   if (!row.publishable) return { key: 'error', label: 'Không có dòng hợp lệ' };
   if (row.alreadyPublished) return { key: 'existing', label: 'Đã có dữ liệu' };
   return { key: 'ready', label: 'Sẵn sàng' };

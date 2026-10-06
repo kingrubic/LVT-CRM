@@ -82,8 +82,6 @@ export default function HomeroomRoster({ classId, detail, nav }) {
                             <span>{relationshipLabel(primary.relationship)}: {primary.fullName}</span>
                             {primary.phone ? <a href={`tel:${primary.phone}`} className="hr-sub"><Icon name="phone" size={12} /> {primary.phone}</a> : null}
                           </span>
-                        ) : row.student.studentPhone ? (
-                          <a href={`tel:${row.student.studentPhone}`} className="hr-sub"><Icon name="phone" size={12} /> {row.student.studentPhone}</a>
                         ) : (
                           <span className="hr-muted">Chưa có</span>
                         )}
@@ -134,7 +132,6 @@ function CreateStudentModal({ classId, detail, onClose }) {
     fullName: '',
     dateOfBirth: '',
     gender: '',
-    studentPhone: '',
     rosterNumber: '',
     startDate: today,
   });
@@ -168,7 +165,6 @@ function CreateStudentModal({ classId, detail, onClose }) {
               fullName: form.fullName,
               dateOfBirth: form.dateOfBirth || undefined,
               gender: form.gender || undefined,
-              studentPhone: form.studentPhone || undefined,
               rosterNumber: form.rosterNumber ? Number(form.rosterNumber) : undefined,
               startDate: form.startDate,
             }),
@@ -194,10 +190,6 @@ function CreateStudentModal({ classId, detail, onClose }) {
             <option value="">Chưa chọn</option>
             {GENDER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-        </label>
-        <label className="hr-field">
-          <span>SĐT học sinh</span>
-          <input type="tel" value={form.studentPhone} onChange={set('studentPhone')} maxLength={20} />
         </label>
         <label className="hr-field">
           <span>Số thứ tự</span>

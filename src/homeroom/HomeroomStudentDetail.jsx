@@ -84,17 +84,10 @@ export default function HomeroomStudentDetail({ studentId, nav }) {
         <section className="hr-panel">
           <header className="hr-panel-head">
             <h3>Liên hệ</h3>
-            {permissions.canEditContacts ? (
-              <div className="hr-row">
-                <button type="button" className="hr-button hr-button--sm" onClick={() => setModal({ kind: 'phone' })}>
-                  <Icon name="edit" size={14} /> SĐT học sinh
-                </button>
-                {guardians.length < 6 ? (
-                  <button type="button" className="primary-button hr-button--sm" onClick={() => setModal({ kind: 'guardian', guardian: null })}>
-                    <Icon name="plus" size={14} /> Thêm phụ huynh
-                  </button>
-                ) : null}
-              </div>
+            {permissions.canEditContacts && guardians.length < 6 ? (
+              <button type="button" className="primary-button hr-button--sm" onClick={() => setModal({ kind: 'guardian', guardian: null })}>
+                <Icon name="plus" size={14} /> Thêm phụ huynh
+              </button>
             ) : null}
           </header>
           {!showContacts ? (
@@ -103,10 +96,10 @@ export default function HomeroomStudentDetail({ studentId, nav }) {
             <ul className="hr-contact-list">
               <li>
                 <span className="hr-contact-role">Học sinh</span>
-                {student.studentPhone ? (
-                  <a href={`tel:${student.studentPhone}`}><Icon name="phone" size={13} /> {student.studentPhone}</a>
+                {student.dateOfBirth ? (
+                  <span><Icon name="calendar" size={13} /> Ngày sinh {formatDate(student.dateOfBirth)}</span>
                 ) : (
-                  <span className="hr-muted">Chưa có số điện thoại</span>
+                  <span className="hr-muted">Chưa có ngày sinh</span>
                 )}
               </li>
               {guardians.map((row) => (
@@ -206,46 +199,8 @@ export default function HomeroomStudentDetail({ studentId, nav }) {
         </section>
       ) : null}
 
-      {modal?.kind === 'phone' ? <PhoneModal student={student} onClose={() => setModal(null)} /> : null}
       {modal?.kind === 'guardian' ? <GuardianModal studentId={student._id} guardian={modal.guardian} onClose={() => setModal(null)} /> : null}
     </div>
-  );
-}
-
-function PhoneModal({ student, onClose }) {
-  const update = useMutation(anyApi.students.updateContacts);
-  const [phone, setPhone] = useState(student.studentPhone || '');
-  const task = useAsyncTask();
-  return (
-    <Modal
-      title="Số điện thoại học sinh"
-      subtitle={student.fullName}
-      onClose={onClose}
-      busy={task.pending}
-      size="sm"
-      footer={
-        <>
-          <button type="button" className="hr-button hr-button--ghost" onClick={onClose} disabled={task.pending}>Hủy</button>
-          <button type="submit" form="hr-phone" className="primary-button" disabled={task.pending}>{task.pending ? 'Đang lưu…' : 'Lưu'}</button>
-        </>
-      }
-    >
-      <form
-        id="hr-phone"
-        className="hr-form"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          const outcome = await task.run(() => update({ studentId: student._id, studentPhone: phone.trim() || undefined }));
-          if (outcome.ok) onClose();
-        }}
-      >
-        <label className="hr-field">
-          <span>Số điện thoại (để trống để xóa)</span>
-          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20} />
-        </label>
-        <Feedback error={task.error} />
-      </form>
-    </Modal>
   );
 }
 

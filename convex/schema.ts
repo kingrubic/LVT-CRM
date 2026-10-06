@@ -828,6 +828,7 @@ export default defineSchema({
     rowNumber: v.number(),
     rawStudentCode: v.optional(v.string()),
     rawStudentName: v.optional(v.string()),
+    rawDateOfBirth: v.optional(v.string()),
     rawClassCode: v.optional(v.string()),
     rawObservedAt: v.optional(v.string()),
     rawStatus: v.optional(v.string()),

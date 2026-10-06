@@ -1,27 +1,27 @@
 import * as XLSX from 'xlsx';
 
-/** Mẫu cố định: một file cho cả trường mỗi ngày. Tiêu đề phải khớp với convex/attendanceImportSheet.ts. */
+/** Mẫu = file "Bảng thống kê điểm danh học sinh toàn trường" của hệ thống camera. Tiêu đề phải khớp với convex/attendanceImportSheet.ts. */
 export const ATTENDANCE_IMPORT_TEMPLATE_HEADERS = [
-  'Mã HS',
-  'Họ tên HS',
-  'Mã lớp',
-  'Tên lớp',
-  'Thời gian có mặt',
-  'Trạng thái',
+  'Lớp học',
+  'Tên học sinh',
+  'Ngày sinh',
+  'Trạng thái điểm danh',
+  'Thời gian điểm danh',
+  'Loại điểm danh',
 ];
 
 export const ATTENDANCE_IMPORT_TEMPLATE_EXAMPLE_ROWS = [
-  ['HS001', 'Nguyễn Văn A', '6A1', 'Lớp 6A1', '07:05', 'Có mặt'],
-  ['HS002', 'Trần Thị B', '6A1', 'Lớp 6A1', '07:22', 'Trễ'],
-  ['HS003', 'Lê Văn C', '6A2', 'Lớp 6A2', '', 'Vắng'],
+  ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đã điểm danh', '06:52', ''],
+  ['7/1', 'Trần Thị B', '15/11/2014', 'Đi trễ', '07:12', ''],
+  ['7/2', 'Lê Văn C', '02/01/2014', 'Chưa điểm danh', '--:--', ''],
 ];
 
 export const ATTENDANCE_IMPORT_TEMPLATE_INSTRUCTIONS = [
-  ['File điểm danh toàn trường — mỗi ngày một file, chọn ngày điểm danh trên phần mềm khi nhập.'],
-  ['Giữ nguyên dòng tiêu đề: Mã HS, Họ tên HS, Mã lớp, Tên lớp, Thời gian có mặt, Trạng thái.'],
-  ['Bắt buộc: Mã HS, Mã lớp, Trạng thái. Mã lớp phải trùng mã lớp trên phần mềm (ví dụ 6A1).'],
-  ['Trạng thái chỉ nhận: Có mặt, Trễ, Vắng. Thời gian có mặt ghi giờ:phút (ví dụ 07:05), để trống nếu Vắng.'],
-  ['Học sinh có trong danh sách lớp nhưng không có trong file sẽ được ghi “Vắng chờ xử lý”.'],
+  ['File điểm danh toàn trường — xuất từ hệ thống camera, mỗi ngày một file. Chọn ngày điểm danh trên phần mềm khi nhập.'],
+  ['Giữ nguyên dòng tiêu đề: Lớp học, Tên học sinh, Ngày sinh, Trạng thái điểm danh, Thời gian điểm danh. Cột Loại điểm danh được bỏ qua.'],
+  ['Học sinh được nhận diện bằng Lớp + Họ tên + Ngày sinh (dd/mm/yyyy) — phải trùng hồ sơ trên phần mềm. Lớp học phải trùng tên hoặc mã lớp trên phần mềm (7/1 được hiểu là 7-1).'],
+  ['Trạng thái chỉ nhận: Chưa điểm danh, Đã điểm danh, Đi trễ. Thời gian ghi giờ:phút (ví dụ 07:05), --:-- nếu chưa điểm danh.'],
+  ['“Chưa điểm danh” và học sinh có trong danh sách lớp nhưng không có trong file đều được ghi “Vắng chờ xử lý”.'],
   ['Các dòng ví dụ là dữ liệu minh họa — xóa trước khi dùng.'],
 ];
 
@@ -36,7 +36,7 @@ export function attendanceImportTemplateMatrix() {
 export function buildAttendanceImportTemplateWorkbook() {
   const workbook = XLSX.utils.book_new();
   const dataSheet = XLSX.utils.aoa_to_sheet(attendanceImportTemplateMatrix());
-  dataSheet['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 10 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
+  dataSheet['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 12 }, { wch: 22 }, { wch: 20 }, { wch: 16 }];
   const instructionSheet = XLSX.utils.aoa_to_sheet(ATTENDANCE_IMPORT_TEMPLATE_INSTRUCTIONS);
   instructionSheet['!cols'] = [{ wch: 110 }];
   XLSX.utils.book_append_sheet(workbook, dataSheet, ATTENDANCE_IMPORT_TEMPLATE_SHEET);

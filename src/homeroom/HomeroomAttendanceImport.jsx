@@ -10,11 +10,8 @@ import {
   attendanceReplaceModeChoices,
   buildAttendancePublishArgs,
   buildAttendanceValidateArgs,
-  buildConfirmedAttendanceValidateArgs,
-  canExplicitlyConfirmNameMatches,
   classPreviewState,
   isAttendanceReplaceModeRequired,
-  proposedUniqueNameMatches,
   publishPlan,
   REPLACE_MODE_CANCEL,
 } from './attendanceImportPreview';
@@ -85,18 +82,6 @@ export default function HomeroomAttendanceImport({ yearId, initialDate = '', nav
     }
   };
 
-  const confirmNames = async () => {
-    setError('');
-    setPhase('Đang xác nhận khớp theo họ tên…');
-    try {
-      setPreview(await validateUpload(buildConfirmedAttendanceValidateArgs({ uploadId: preview.uploadId })));
-    } catch (err) {
-      setError(messageFor(err));
-    } finally {
-      setPhase('');
-    }
-  };
-
   const plan = publishPlan(preview, replaceMode);
 
   const publish = async () => {
@@ -126,7 +111,7 @@ export default function HomeroomAttendanceImport({ yearId, initialDate = '', nav
         <header className="hr-panel-head">
           <div>
             <h2>Nhập điểm danh</h2>
-            <p className="hr-muted">Một file Excel cho cả trường mỗi ngày. Hệ thống tự tách theo Mã lớp; lớp có lỗi được bỏ qua, các lớp đúng vẫn công bố.</p>
+            <p className="hr-muted">Một file Excel cho cả trường mỗi ngày. Hệ thống tự tách theo Lớp học và nhận diện học sinh bằng Họ tên + Ngày sinh; lớp có lỗi được bỏ qua, các lớp đúng vẫn công bố.</p>
           </div>
           <button type="button" className="hr-button" onClick={() => downloadAttendanceImportTemplate()}>
             <Icon name="download" size={15} /> Tải file mẫu
@@ -155,7 +140,6 @@ export default function HomeroomAttendanceImport({ yearId, initialDate = '', nav
           setReplaceMode={setReplaceMode}
           issueFilter={issueFilter}
           setIssueFilter={setIssueFilter}
-          onConfirmNames={confirmNames}
           onPublish={publish}
           onRestart={reset}
         />
@@ -209,9 +193,10 @@ function UploadStep({ yearId, date, setDate, today, busy, phase, error, onFile }
             )
           ) : null}
           <ul className="hr-checklist">
-            <li>Đúng 6 cột: Mã HS, Họ tên HS, Mã lớp, Tên lớp, Thời gian có mặt, Trạng thái.</li>
-            <li>Trạng thái: Có mặt / Trễ / Vắng. Giờ ghi dạng 07:05.</li>
-            <li>Học sinh thiếu trong file → “Vắng chờ xử lý”.</li>
+            <li>Cột: Lớp học, Tên học sinh, Ngày sinh, Trạng thái điểm danh, Thời gian điểm danh.</li>
+            <li>Học sinh khớp theo Lớp + Họ tên + Ngày sinh (dd/mm/yyyy).</li>
+            <li>Trạng thái: Chưa điểm danh / Đã điểm danh / Đi trễ.</li>
+            <li>“Chưa điểm danh” hoặc thiếu trong file → “Vắng chờ xử lý”.</li>
           </ul>
         </div>
         <div
@@ -272,12 +257,9 @@ function PreviewStep({
   setReplaceMode,
   issueFilter,
   setIssueFilter,
-  onConfirmNames,
   onPublish,
   onRestart,
 }) {
-  const nameMatches = proposedUniqueNameMatches(preview);
-  const canConfirmNames = canExplicitlyConfirmNameMatches(preview);
   const issues = (preview.issues || []).filter((item) => !issueFilter || item.severity === issueFilter);
 
   return (
@@ -309,39 +291,6 @@ function PreviewStep({
         </div>
       </section>
 
-      {preview.unconfirmedNameCount ? (
-        <section className="hr-panel">
-          <header className="hr-panel-head">
-            <div>
-              <h3>Khớp theo họ tên — cần xác nhận ({preview.unconfirmedNameCount} dòng)</h3>
-              <p className="hr-muted">Các dòng sau sai/thiếu Mã HS nhưng trùng họ tên duy nhất trong lớp. Kiểm tra rồi xác nhận để công bố các lớp này.</p>
-            </div>
-            {canConfirmNames ? (
-              <button type="button" className="primary-button" onClick={onConfirmNames} disabled={busy}>
-                <Icon name="check" size={15} /> Xác nhận khớp
-              </button>
-            ) : null}
-          </header>
-          <div className="hr-table-wrap">
-            <table className="hr-table">
-              <thead>
-                <tr><th>Dòng</th><th>Tên trong file</th><th>Học sinh trên phần mềm</th><th>Lớp</th></tr>
-              </thead>
-              <tbody>
-                {nameMatches.map((row) => (
-                  <tr key={row.rowNumber}>
-                    <td className="is-num">{row.rowNumber}</td>
-                    <td>{row.sourceName}</td>
-                    <td><strong>{row.fullName}</strong> <span className="hr-sub">{row.studentCode}</span></td>
-                    <td>{row.classCode}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
       <section className="hr-panel">
         <header className="hr-panel-head">
           <h3>Từng lớp trong file</h3>
@@ -351,7 +300,7 @@ function PreviewStep({
         </header>
         {!preview.classes.length ? (
           <EmptyState icon="file" title="Không tìm thấy lớp hợp lệ nào trong file.">
-            Kiểm tra cột “Mã lớp” có trùng mã lớp trên phần mềm không.
+            Kiểm tra cột “Lớp học” có trùng tên hoặc mã lớp trên phần mềm không (7/1 được hiểu là 7-1).
           </EmptyState>
         ) : (
           <div className="hr-table-wrap">

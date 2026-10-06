@@ -7,44 +7,44 @@ export const ATTENDANCE_IMPORT_MAX_HEADER_SCAN = 20;
 export const ATTENDANCE_IMPORT_TTL_MS = 2 * 60 * 60 * 1000;
 
 export const ATTENDANCE_COLUMN_KEYS = [
-  "studentCode",
-  "studentName",
   "classCode",
-  "className",
-  "observedAt",
+  "studentName",
+  "dateOfBirth",
   "sourceStatus",
+  "observedAt",
 ] as const;
 
 export type AttendanceColumnKey = (typeof ATTENDANCE_COLUMN_KEYS)[number];
 
-/** Template cố định (thống nhất với nhà trường): một file cho cả trường, mỗi ngày. */
+/**
+ * Template = file "Bảng thống kê điểm danh học sinh toàn trường" do hệ thống camera xuất ra.
+ * Học sinh được nhận diện bằng Lớp + Họ tên + Ngày sinh (file không có mã học sinh).
+ * Cột "Loại điểm danh" (nếu có) được bỏ qua.
+ */
 export const ATTENDANCE_TEMPLATE_HEADERS: Record<AttendanceColumnKey, string> = {
-  studentCode: "Mã HS",
-  studentName: "Họ tên HS",
-  classCode: "Mã lớp",
-  className: "Tên lớp",
-  observedAt: "Thời gian có mặt",
-  sourceStatus: "Trạng thái",
+  classCode: "Lớp học",
+  studentName: "Tên học sinh",
+  dateOfBirth: "Ngày sinh",
+  sourceStatus: "Trạng thái điểm danh",
+  observedAt: "Thời gian điểm danh",
 };
 
-export const ATTENDANCE_REQUIRED_COLUMNS: AttendanceColumnKey[] = ["studentCode", "classCode", "sourceStatus"];
+export const ATTENDANCE_REQUIRED_COLUMNS: AttendanceColumnKey[] = ["classCode", "studentName", "dateOfBirth", "sourceStatus"];
 
-/** Normalized header keys accepted for each column (template names first, legacy aliases after). */
+/** Normalized header keys accepted for each column (template names first, aliases after). */
 export const ATTENDANCE_HEADER_ALIASES: Record<AttendanceColumnKey, string[]> = {
-  studentCode: ["ma_hs", "ma_hoc_sinh", "student_code", "studentid", "ma"],
-  studentName: ["ho_ten_hs", "ho_ten_hoc_sinh", "ho_ten", "hoten", "student_name", "ten"],
-  classCode: ["ma_lop", "lop", "class_code", "class"],
-  className: ["ten_lop", "class_name"],
-  observedAt: ["thoi_gian_co_mat", "thoi_gian", "gio_co_mat", "gio", "time", "observed_at"],
-  sourceStatus: ["trang_thai", "status", "ket_qua"],
+  classCode: ["lop_hoc", "lop", "ten_lop", "ma_lop", "class"],
+  studentName: ["ten_hoc_sinh", "ho_va_ten", "ho_ten", "ho_ten_hoc_sinh", "ho_ten_hs", "hoten", "student_name"],
+  dateOfBirth: ["ngay_sinh", "ngay_thang_nam_sinh", "date_of_birth", "dob"],
+  sourceStatus: ["trang_thai_diem_danh", "trang_thai", "status"],
+  observedAt: ["thoi_gian_diem_danh", "thoi_gian", "gio_diem_danh", "time"],
 };
 
 export type AttendanceRawRow = {
   rowNumber: number;
-  rawStudentCode: string;
-  rawStudentName: string;
   rawClassCode: string;
-  rawClassName: string;
+  rawStudentName: string;
+  rawDateOfBirth: string;
   rawObservedAt: string;
   rawStatus: string;
 };
@@ -107,10 +107,9 @@ export function rowsFromAttendanceMatrix(matrix: unknown[][]):
     }
     rows.push({
       rowNumber: r + 1,
-      rawStudentCode: cell(line, "studentCode"),
-      rawStudentName: cell(line, "studentName"),
       rawClassCode: cell(line, "classCode"),
-      rawClassName: cell(line, "className"),
+      rawStudentName: cell(line, "studentName"),
+      rawDateOfBirth: cell(line, "dateOfBirth"),
       rawObservedAt: cell(line, "observedAt"),
       rawStatus: cell(line, "sourceStatus"),
     });

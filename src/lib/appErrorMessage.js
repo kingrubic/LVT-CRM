@@ -42,12 +42,11 @@ export function messageFor(error) {
   const missingColumns = raw.match(/ATTENDANCE_TEMPLATE_COLUMNS_MISSING(?::([A-Za-z,]+))?/);
   if (missingColumns) {
     const labels = {
-      studentCode: 'Mã HS',
-      studentName: 'Họ tên HS',
-      classCode: 'Mã lớp',
-      className: 'Tên lớp',
-      observedAt: 'Thời gian có mặt',
-      sourceStatus: 'Trạng thái',
+      classCode: 'Lớp học',
+      studentName: 'Tên học sinh',
+      dateOfBirth: 'Ngày sinh',
+      sourceStatus: 'Trạng thái điểm danh',
+      observedAt: 'Thời gian điểm danh',
     };
     const names = (missingColumns[1] || '').split(',').filter(Boolean).map((key) => labels[key] || key);
     return names.length
@@ -202,7 +201,7 @@ export function messageFor(error) {
     CALENDAR_DATE_OUTSIDE_YEAR: 'Ngày nằm ngoài thời gian của năm học.',
     INVALID_CALENDAR_NOTE: 'Ghi chú lịch tối đa 120 ký tự.',
     ATTENDANCE_TEMPLATE_HEADER_NOT_FOUND:
-      'Không tìm thấy dòng tiêu đề. File cần có các cột: Mã HS, Họ tên HS, Mã lớp, Tên lớp, Thời gian có mặt, Trạng thái.',
+      'Không tìm thấy dòng tiêu đề. File cần có các cột: Lớp học, Tên học sinh, Ngày sinh, Trạng thái điểm danh, Thời gian điểm danh.',
     IMPORT_TOO_MANY_ROWS: 'File có quá nhiều dòng. Vui lòng kiểm tra lại file điểm danh.',
     ATTENDANCE_DATE_OUTSIDE_YEAR: 'Ngày điểm danh nằm ngoài thời gian của năm học.',
     ATTENDANCE_DATE_IN_FUTURE: 'Không thể nhập điểm danh cho ngày trong tương lai.',

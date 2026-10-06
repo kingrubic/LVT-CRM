@@ -45,6 +45,7 @@ type SchoolRoster = {
     studentId: string;
     studentCode: string;
     fullName: string;
+    dateOfBirth?: string;
     classId: string;
     classCode: string;
     enrollmentId: string;
@@ -111,9 +112,9 @@ export const registerUpload = mutation({
   },
 });
 
-/** Đọc file, đối soát toàn trường theo Mã lớp và lưu bản xem trước. Không ghi điểm danh. */
+/** Đọc file, đối soát toàn trường theo Lớp + Họ tên + Ngày sinh và lưu bản xem trước. Không ghi điểm danh. */
 export const validate = action({
-  args: { uploadId: v.string(), confirmNameMatches: v.optional(v.boolean()) },
+  args: { uploadId: v.string() },
   handler: async (ctx, args) => {
     const upload = await ctx.runQuery(internal.attendanceImport.getUploadInternal, { uploadId: args.uploadId });
     if (!upload) throw new Error("IMPORT_UPLOAD_NOT_FOUND");
@@ -132,7 +133,6 @@ export const validate = action({
       attendanceDate: upload.attendanceDate,
       classes: roster.classes,
       students: roster.students,
-      confirmNameMatches: args.confirmNameMatches,
     });
     await ctx.runMutation(internal.attendanceImport.storePreviewInternal, {
       uploadId: args.uploadId,
@@ -144,8 +144,8 @@ export const validate = action({
       status: result.publishableClassIds.length ? "validated" : "rejected",
       rows: result.rows.map((row) => ({
         rowNumber: row.rowNumber,
-        rawStudentCode: row.rawStudentCode || undefined,
         rawStudentName: row.rawStudentName || undefined,
+        rawDateOfBirth: row.rawDateOfBirth || undefined,
         rawClassCode: row.rawClassCode || undefined,
         rawObservedAt: row.rawObservedAt || undefined,
         rawStatus: row.rawStatus || undefined,
@@ -167,8 +167,6 @@ export const validate = action({
       matchedCount: result.matchedCount,
       errorCount: result.errorCount,
       warningCount: result.warningCount,
-      unconfirmedNameCount: result.unconfirmedNameCount,
-      nameMatches: result.nameMatches.slice(0, ISSUE_RETURN_LIMIT),
       issues: result.issues.slice(0, ISSUE_RETURN_LIMIT),
       issuesTruncated: result.issues.length > ISSUE_RETURN_LIMIT,
       classes: result.classes.map((row) => ({ ...row, alreadyPublished: published.has(row.classId) })),
@@ -278,6 +276,7 @@ export const loadSchoolRosterInternal = internalQuery({
           studentId: String(student._id),
           studentCode: student.studentCode,
           fullName: student.fullName,
+          dateOfBirth: student.dateOfBirth,
           classId: enrollment.classId,
           classCode: klass.code,
           enrollmentId: String(enrollment._id),
@@ -301,8 +300,8 @@ export const storePreviewInternal = internalMutation({
     rows: v.array(
       v.object({
         rowNumber: v.number(),
-        rawStudentCode: v.optional(v.string()),
         rawStudentName: v.optional(v.string()),
+        rawDateOfBirth: v.optional(v.string()),
         rawClassCode: v.optional(v.string()),
         rawObservedAt: v.optional(v.string()),
         rawStatus: v.optional(v.string()),

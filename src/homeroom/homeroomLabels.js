@@ -23,9 +23,9 @@ export const STATUS_SHORT = {
 export const STATUS_ORDER = ['present', 'late', 'absent_pending', 'absent_excused', 'absent_unexcused', 'no_data'];
 
 export const RAW_LABELS = {
-  present: 'Có mặt',
-  late: 'Trễ',
-  absent: 'Vắng',
+  present: 'Đã điểm danh',
+  late: 'Đi trễ',
+  absent: 'Chưa điểm danh',
   unknown: 'Không rõ',
 };
 
@@ -57,12 +57,11 @@ export function relationshipLabel(value) {
 }
 
 export const IMPORT_COLUMN_LABELS = {
-  studentCode: 'Mã HS',
-  studentName: 'Họ tên HS',
-  classCode: 'Mã lớp',
-  className: 'Tên lớp',
-  observedAt: 'Thời gian có mặt',
-  sourceStatus: 'Trạng thái',
+  classCode: 'Lớp học',
+  studentName: 'Tên học sinh',
+  dateOfBirth: 'Ngày sinh',
+  sourceStatus: 'Trạng thái điểm danh',
+  observedAt: 'Thời gian điểm danh',
 };
 
 export function importColumnLabel(field) {
