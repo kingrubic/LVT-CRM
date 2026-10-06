@@ -22,6 +22,7 @@ import type * as chatHubPolicy from "../chatHubPolicy.js";
 import type * as chatInbox from "../chatInbox.js";
 import type * as chatMessagePolicy from "../chatMessagePolicy.js";
 import type * as chatNotifications from "../chatNotifications.js";
+import type * as classOrder from "../classOrder.js";
 import type * as departments from "../departments.js";
 import type * as documentTypePolicy from "../documentTypePolicy.js";
 import type * as documentTypes from "../documentTypes.js";
@@ -109,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   chatInbox: typeof chatInbox;
   chatMessagePolicy: typeof chatMessagePolicy;
   chatNotifications: typeof chatNotifications;
+  classOrder: typeof classOrder;
   departments: typeof departments;
   documentTypePolicy: typeof documentTypePolicy;
   documentTypes: typeof documentTypes;
