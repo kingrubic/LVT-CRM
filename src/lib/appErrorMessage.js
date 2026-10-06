@@ -26,6 +26,16 @@ export function convexErrorText(error) {
   return parts.filter(Boolean).join('\n') || 'UNKNOWN_ERROR';
 }
 
+/** Tên hiển thị của các loại dữ liệu chặn việc xoá năm học (khớp SCHOOL_YEAR_USAGE_TABLES ở convex/homeroomCatalog.ts). */
+export const SCHOOL_YEAR_USAGE_LABELS = {
+  homeroomClasses: 'lớp chủ nhiệm',
+  classEnrollments: 'học sinh được xếp lớp',
+  homeroomAssignments: 'phân công giáo viên chủ nhiệm',
+  studentAttendanceDays: 'dữ liệu điểm danh',
+  attendanceImportUploads: 'file điểm danh đã tải lên',
+  studentRosterImportUploads: 'file danh sách học sinh đã tải lên',
+};
+
 export function messageFor(error) {
   const raw = convexErrorText(error);
   if (/ArgumentValidationError|extraneous field|extra field/i.test(raw)) {
@@ -52,6 +62,16 @@ export function messageFor(error) {
     return names.length
       ? `File điểm danh thiếu cột: ${names.join(', ')}.`
       : 'File điểm danh thiếu cột bắt buộc. Vui lòng dùng file mẫu của hệ thống.';
+  }
+  const yearInUse = raw.match(/SCHOOL_YEAR_DELETE_IN_USE(?::([A-Za-z,]+))?/);
+  if (yearInUse) {
+    const names = (yearInUse[1] || '')
+      .split(',')
+      .filter(Boolean)
+      .map((key) => SCHOOL_YEAR_USAGE_LABELS[key] || key);
+    return names.length
+      ? `Không thể xoá năm học vì đã có ${names.join(', ')}. Chỉ xoá được năm học chưa có dữ liệu.`
+      : 'Không thể xoá năm học vì đã có dữ liệu lớp, học sinh hoặc điểm danh. Chỉ xoá được năm học chưa có dữ liệu.';
   }
   const messages = {
     USER_NOT_ACTIVE: 'Tài khoản không còn hoạt động. Vui lòng liên hệ quản trị viên.',
@@ -212,6 +232,9 @@ export function messageFor(error) {
     SCHOOL_YEAR_NAME_TAKEN: 'Tên năm học đã tồn tại.',
     SCHOOL_YEAR_OVERLAP: 'Không thể có hai năm học đang hoạt động chồng ngày.',
     SCHOOL_YEAR_LOCKED: 'Năm học đã khóa, không thể sửa thông tin thường.',
+    SCHOOL_YEAR_DELETE_DEFAULT:
+      'Không thể xoá năm học đang là mặc định của Lớp chủ nhiệm. Hãy đặt năm học khác làm mặc định trước.',
+    SCHOOL_YEAR_DELETE_LOCKED: 'Năm học đã khóa, không thể xoá.',
     CLASS_NOT_FOUND: 'Không tìm thấy lớp.',
     CLASS_ARCHIVED: 'Lớp đã lưu trữ. Không thể phân công, nhập danh sách hoặc nhập điểm danh.',
     CLASS_CODE_TAKEN: 'Mã lớp đã tồn tại trong năm học này.',

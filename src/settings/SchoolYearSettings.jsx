@@ -4,6 +4,7 @@ import { anyApi } from 'convex/server';
 import { vietnamTodayYmd } from '../homeroom/homeroomTime';
 import { addDays, endOfMonth, formatDate, formatDateLong, isYmd, weekdayIndex, weekdayLabel } from '../homeroom/homeroomLabels';
 import { Feedback, Icon, Modal, useAsyncTask } from '../homeroom/homeroomUi';
+import { messageFor } from '../lib/appErrorMessage';
 import { groupHolidayRuns, isWeekend, schoolYearStats, suggestVietnamHolidays, weekdaysBetween } from './schoolYearCalendar';
 import './schoolYearSettings.css';
 
@@ -54,6 +55,7 @@ export default function SchoolYearSettings() {
   const years = useQuery(anyApi.schoolYears.list, {});
   const [selectedId, setSelectedId] = useState('');
   const [modal, setModal] = useState(null);
+  const [notice, setNotice] = useState('');
   const today = vietnamTodayYmd();
 
   if (years === undefined) {
@@ -88,6 +90,8 @@ export default function SchoolYearSettings() {
           </small>
         </div>
       </header>
+
+      {notice ? <Feedback success={notice} /> : null}
 
       {!selected ? (
         <div className="sy-first-run">
@@ -143,10 +147,22 @@ export default function SchoolYearSettings() {
           latest={years[0]}
           isFirst={!years.length}
           onClose={() => setModal(null)}
-          onSaved={(id) => setSelectedId(String(id))}
+          onSaved={(id) => {
+            setNotice('');
+            setSelectedId(String(id));
+          }}
         />
       ) : null}
-      {modal?.kind === 'edit' ? <YearFormModal year={modal.year} onClose={() => setModal(null)} /> : null}
+      {modal?.kind === 'edit' ? (
+        <YearFormModal
+          year={modal.year}
+          onClose={() => setModal(null)}
+          onDeleted={(name) => {
+            setSelectedId('');
+            setNotice(`Đã xoá năm học ${name}.`);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -624,10 +640,14 @@ function DayModal({ yearId, date, row = undefined, onClose }) {
   );
 }
 
-function YearFormModal({ year = undefined, latest = undefined, isFirst = false, onClose, onSaved = undefined }) {
+function YearFormModal({ year = undefined, latest = undefined, isFirst = false, onClose, onSaved = undefined, onDeleted = undefined }) {
   const create = useMutation(anyApi.schoolYears.create);
   const update = useMutation(anyApi.schoolYears.update);
+  const removeYear = useMutation(anyApi.schoolYears.remove);
+  const removal = useQuery(anyApi.schoolYears.removalCheck, year ? { id: year._id } : 'skip');
   const task = useAsyncTask();
+  const deleteTask = useAsyncTask();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [nameTouched, setNameTouched] = useState(Boolean(year));
   const [form, setForm] = useState(() => {
     if (year) {
@@ -653,17 +673,80 @@ function YearFormModal({ year = undefined, latest = undefined, isFirst = false, 
   };
   const valid = isYmd(form.startDate) && isYmd(form.endDate) && form.startDate <= form.endDate;
   const preview = valid ? schoolYearStats(form, []) : null;
+  const deleteBlocker = year ? (year.active ? 'SCHOOL_YEAR_DELETE_DEFAULT' : removal?.blocker || '') : '';
+  const deleteReason = deleteBlocker ? messageFor(deleteBlocker) : '';
+  const busy = task.pending || deleteTask.pending;
+
+  if (year && confirmDelete) {
+    const calendarDays = removal?.calendarDays || 0;
+    return (
+      <Modal
+        key="confirm-delete"
+        title={`Xoá năm học ${year.name}?`}
+        subtitle={`${formatDate(year.startDate)} – ${formatDate(year.endDate)}`}
+        size="sm"
+        onClose={() => setConfirmDelete(false)}
+        busy={deleteTask.pending}
+        footer={
+          <>
+            <button type="button" className="hr-button hr-button--ghost" onClick={() => setConfirmDelete(false)} disabled={deleteTask.pending}>
+              Hủy
+            </button>
+            <button
+              type="button"
+              className="hr-button sy-confirm-delete-button"
+              disabled={deleteTask.pending || Boolean(deleteBlocker)}
+              onClick={async () => {
+                const outcome = await deleteTask.run(() => removeYear({ id: year._id }));
+                if (!outcome.ok) return;
+                onDeleted?.(year.name);
+                onClose();
+              }}
+            >
+              <Icon name="trash" size={15} /> {deleteTask.pending ? 'Đang xoá…' : 'Xoá vĩnh viễn'}
+            </button>
+          </>
+        }
+      >
+        <div className="hr-form">
+          <div className="sy-delete-warning">
+            <Icon name="alert" size={18} />
+            <p>
+              Năm học <strong>{year.name}</strong> sẽ bị xoá vĩnh viễn
+              {calendarDays ? <>, cùng <strong>{calendarDays} ngày nghỉ lễ / học bù</strong> đã đánh dấu</> : null}. Thao tác này không thể hoàn tác.
+            </p>
+          </div>
+          <Feedback error={deleteTask.error || (deleteTask.pending ? '' : deleteReason)} />
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
+      key="year-form"
       title={year ? `Sửa năm học ${year.name}` : 'Thêm năm học mới'}
       subtitle={year ? 'Các ngày nghỉ đã đánh dấu vẫn được giữ nguyên.' : 'Mặc định Thứ 2 – Thứ 6 là ngày học. Ngày nghỉ lễ thêm sau khi tạo.'}
       onClose={onClose}
-      busy={task.pending}
+      busy={busy}
       footer={
         <>
-          <button type="button" className="hr-button hr-button--ghost" onClick={onClose} disabled={task.pending}>Hủy</button>
-          <button type="submit" form="sy-year-form" className="primary-button" disabled={task.pending || !valid}>
+          {year ? (
+            <button
+              type="button"
+              className="hr-button sy-delete-button hr-push-left"
+              disabled={busy || removal === undefined || Boolean(deleteBlocker)}
+              title={deleteReason || 'Xoá năm học này'}
+              onClick={() => {
+                deleteTask.reset();
+                setConfirmDelete(true);
+              }}
+            >
+              <Icon name="trash" size={15} /> Xoá năm học
+            </button>
+          ) : null}
+          <button type="button" className="hr-button hr-button--ghost" onClick={onClose} disabled={busy}>Hủy</button>
+          <button type="submit" form="sy-year-form" className="primary-button" disabled={busy || !valid}>
             {task.pending ? 'Đang lưu…' : year ? 'Lưu thay đổi' : 'Tạo năm học'}
           </button>
         </>
@@ -721,6 +804,12 @@ function YearFormModal({ year = undefined, latest = undefined, isFirst = false, 
             <input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />
             <span>Đặt làm năm học mặc định cho Lớp chủ nhiệm</span>
           </label>
+        ) : null}
+        {deleteReason ? (
+          <p className="sy-delete-note">
+            <Icon name="alert" size={15} />
+            <span>{deleteReason}</span>
+          </p>
         ) : null}
         <Feedback error={task.error} />
       </form>
