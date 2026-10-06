@@ -4,6 +4,7 @@ import { anyApi } from 'convex/server';
 import { downloadRosterImportTemplate } from '../lib/rosterImportExcel';
 import { messageFor } from '../lib/appErrorMessage';
 import { vietnamTodayYmd } from './homeroomTime';
+import { sortClassesNatural } from './classOrder';
 import { foldSearch, formatDate, GENDER_OPTIONS, genderLabel, relationshipLabel, studentInitials } from './homeroomLabels';
 import { EmptyState, Feedback, Icon, Loading, Modal, Notice, useAsyncTask } from './homeroomUi';
 
@@ -214,7 +215,7 @@ function TransferModal({ row, detail, onClose }) {
   const [date, setDate] = useState(vietnamTodayYmd());
   const [reason, setReason] = useState('');
   const task = useAsyncTask();
-  const targets = (classes || []).filter((item) => item.status === 'active' && item._id !== detail.class._id);
+  const targets = sortClassesNatural(classes).filter((item) => item.status === 'active' && item._id !== detail.class._id);
 
   return (
     <Modal

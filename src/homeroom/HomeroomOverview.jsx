@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { vietnamTodayYmd } from './homeroomTime';
+import { sortClassesNatural } from './classOrder';
 import { foldSearch, formatDate, formatDateTime, percent, schoolDayLabel } from './homeroomLabels';
 import { AttendanceBar, DateStepper, EmptyState, Icon, Kpi, Loading, Notice } from './homeroomUi';
 
@@ -37,7 +38,7 @@ function ClassesOverview({ yearId, date, setDate, today, roles, nav }) {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  const classes = overview?.classes || [];
+  const classes = useMemo(() => sortClassesNatural(overview?.classes), [overview?.classes]);
   const visible = useMemo(() => {
     const needle = foldSearch(search);
     return classes.filter((row) => {

@@ -34,6 +34,7 @@ import {
   studentsByIds,
   usersByIds,
 } from "./homeroomData";
+import { compareClasses } from "./classOrder";
 
 const internal = anyApi;
 const ISSUE_RETURN_LIMIT = 400;
@@ -266,7 +267,7 @@ export const loadSchoolRosterInternal = internalQuery({
     const calendarDay = await calendarDayFor(ctx, args.schoolYearId, date);
     return {
       classes: classes
-        .sort((a, b) => a.gradeLevel - b.gradeLevel || a.code.localeCompare(b.code, "vi"))
+        .sort(compareClasses)
         .map((row) => ({ classId: String(row._id), code: row.code, name: row.name })),
       students: covering.flatMap((enrollment) => {
         const student = students.get(enrollment.studentId);
@@ -364,9 +365,11 @@ async function publishStoredImport(
       .filter((row) => row.status === "active")
       .map((row) => [String(row._id), row]),
   );
-  const publishable = [...byClass.entries()].filter(
-    ([classId, rows]) => activeClasses.has(classId) && rows.length > 0 && rows.every((row) => row.resolution === "matched"),
-  );
+  const publishable = [...byClass.entries()]
+    .filter(
+      ([classId, rows]) => activeClasses.has(classId) && rows.length > 0 && rows.every((row) => row.resolution === "matched"),
+    )
+    .sort(([a], [b]) => compareClasses(activeClasses.get(a)!, activeClasses.get(b)!));
   if (!publishable.length) throw new Error("IMPORT_ROWS_UNRESOLVED");
 
   type Plan = { classId: string; rows: typeof storedRows; existing: Awaited<ReturnType<typeof daysForClassOnDate>> };
