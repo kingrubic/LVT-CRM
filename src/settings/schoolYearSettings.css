@@ -9,6 +9,10 @@
   --sy-extra-bg: #e3f4ef;
   --sy-extra-line: #bfe3d8;
   --sy-card-shadow: 0 1px 0 rgba(20, 53, 95, .04), 0 14px 32px -22px rgba(20, 53, 95, .35);
+  /* Biến màu dùng chung của hr-alert / hr-button--danger-ghost (khai báo ở .homeroom-view, trang này không nằm trong đó). */
+  --hr-unexcused: #cf4b33;
+  --hr-unexcused-bg: #fbe5df;
+  --hr-present-bg: #e3f4ef;
   display: grid;
   gap: 20px;
   max-width: 1480px;
@@ -443,3 +447,36 @@
   .sy-suggest-list li { grid-template-columns: 1fr; }
   .hr-modal .sy-suggest-dates input { width: auto; flex: 1; }
 }
+
+/* ---------- Xoá năm học (màu cố định, không phụ thuộc biến ngoài) ---------- */
+.sy-view .sy-delete-button { color: #b23d27; border-color: #f0c2b7; background: #fff; }
+.sy-view .sy-delete-button:hover:not(:disabled) { color: #fff; border-color: #cf4b33; background: #cf4b33; }
+.sy-view .sy-confirm-delete-button { color: #fff; border-color: #cf4b33; background: #cf4b33; }
+.sy-view .sy-confirm-delete-button:hover:not(:disabled) { color: #fff; border-color: #b23d27; background: #b23d27; }
+.sy-delete-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #6b4a12;
+  background: #fdf1d8;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.sy-delete-note svg { flex: none; margin-top: 2px; }
+.sy-delete-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #f0c2b7;
+  border-radius: 12px;
+  color: #7a2716;
+  background: #fbe5df;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.sy-delete-warning svg { flex: none; margin-top: 2px; color: #cf4b33; }
+.sy-delete-warning strong { color: #9b2c1a; }

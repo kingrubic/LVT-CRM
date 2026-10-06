@@ -5,6 +5,8 @@ import {
   assertSchoolYearEditable,
   findOverlappingActiveYear,
   SCHOOL_YEAR_NAME_TAKEN,
+  SCHOOL_YEAR_USAGE_TABLES,
+  schoolYearRemovalBlocker,
   SCHOOL_YEAR_OVERLAP,
   validateSchoolYearInput,
 } from "./homeroomCatalog";
@@ -150,6 +152,81 @@ export const lock = mutation({
   },
 });
 
+/** Bảng nào còn dữ liệu của năm học (mỗi bảng chỉ đọc tối đa 1 dòng). */
+async function schoolYearUsage(ctx: any, schoolYearId: string): Promise<string[]> {
+  const probes: Record<(typeof SCHOOL_YEAR_USAGE_TABLES)[number], () => Promise<unknown>> = {
+    homeroomClasses: () =>
+      ctx.db.query("homeroomClasses").withIndex("by_year", (q: any) => q.eq("schoolYearId", schoolYearId)).first(),
+    classEnrollments: () =>
+      ctx.db.query("classEnrollments").withIndex("by_year_status", (q: any) => q.eq("schoolYearId", schoolYearId)).first(),
+    homeroomAssignments: () =>
+      ctx.db.query("homeroomAssignments").withIndex("by_year_user", (q: any) => q.eq("schoolYearId", schoolYearId)).first(),
+    studentAttendanceDays: () =>
+      ctx.db.query("studentAttendanceDays").withIndex("by_year_date", (q: any) => q.eq("schoolYearId", schoolYearId)).first(),
+    // Hai bảng upload không có index theo năm; thao tác xoá năm hiếm và chỉ Admin dùng nên quét có điều kiện là chấp nhận được.
+    attendanceImportUploads: () =>
+      ctx.db.query("attendanceImportUploads").filter((q: any) => q.eq(q.field("schoolYearId"), schoolYearId)).first(),
+    studentRosterImportUploads: () =>
+      ctx.db.query("studentRosterImportUploads").filter((q: any) => q.eq(q.field("schoolYearId"), schoolYearId)).first(),
+  };
+  const used: string[] = [];
+  for (const table of SCHOOL_YEAR_USAGE_TABLES) {
+    if (await probes[table]()) used.push(table);
+  }
+  return used;
+}
+
+/** Cho giao diện biết trước năm học có xoá được không (null = xoá được). */
+export const removalCheck = query({
+  args: { id: v.string() },
+  handler: async (ctx, args) => {
+    await adminOrThrow(ctx);
+    const yearId = ctx.db.normalizeId("schoolYears", args.id);
+    const year = yearId ? await ctx.db.get(yearId) : null;
+    if (!year) return { blocker: "SCHOOL_YEAR_NOT_FOUND", calendarDays: 0 };
+    const quick = schoolYearRemovalBlocker(year);
+    if (quick) return { blocker: quick, calendarDays: 0 };
+    const days = await ctx.db
+      .query("schoolCalendarDays")
+      .withIndex("by_year_date", (q) => q.eq("schoolYearId", String(year._id)))
+      .collect();
+    return {
+      blocker: schoolYearRemovalBlocker(year, await schoolYearUsage(ctx, String(year._id))),
+      calendarDays: days.length,
+    };
+  },
+});
+
+/**
+ * Xoá hẳn một năm học tạo nhầm / không dùng: chỉ Administrator, không phải năm mặc định, chưa khóa,
+ * và chưa có lớp, học sinh, phân công, điểm danh hay file nhập nào. Lịch nghỉ / học bù của năm bị xoá theo.
+ */
+export const remove = mutation({
+  args: { id: v.string() },
+  handler: async (ctx, args) => {
+    const user = await adminOrThrow(ctx);
+    const yearId = ctx.db.normalizeId("schoolYears", args.id);
+    const year = yearId ? await ctx.db.get(yearId) : null;
+    if (!year) throw new Error("SCHOOL_YEAR_NOT_FOUND");
+    const quick = schoolYearRemovalBlocker(year);
+    if (quick) throw new Error(quick);
+    const blocker = schoolYearRemovalBlocker(year, await schoolYearUsage(ctx, String(year._id)));
+    if (blocker) throw new Error(blocker);
+    const days = await ctx.db
+      .query("schoolCalendarDays")
+      .withIndex("by_year_date", (q) => q.eq("schoolYearId", String(year._id)))
+      .collect();
+    for (const row of days) await ctx.db.delete(row._id);
+    await ctx.db.delete(year._id);
+    await writeAudit(ctx, {
+      actorUserId: String(user._id),
+      action: "schoolYear.remove",
+      details: JSON.stringify({ id: args.id, name: year.name, calendarDays: days.length }),
+    });
+    return { calendarDays: days.length };
+  },
+});
+
 /** Ngoại lệ lịch học của năm: ngày nghỉ (holiday) và ngày học bù (extra_teaching). Mặc định T2–T6 là ngày học. */
 export const listCalendarDays = query({
   args: { schoolYearId: v.string(), from: v.optional(v.string()), to: v.optional(v.string()) },
@@ -157,7 +234,8 @@ export const listCalendarDays = query({
     await homeroomActorOrThrow(ctx);
     const yearId = ctx.db.normalizeId("schoolYears", args.schoolYearId);
     const year = yearId ? await ctx.db.get(yearId) : null;
-    if (!year) throw new Error("SCHOOL_YEAR_NOT_FOUND");
+    // Năm vừa bị xoá: trả null thay vì ném lỗi để trang đang mở không vỡ trong lúc danh sách cập nhật.
+    if (!year) return null;
     const from = args.from ? assertYmd(args.from) : undefined;
     const to = args.to ? assertYmd(args.to) : undefined;
     const days = await ctx.db
