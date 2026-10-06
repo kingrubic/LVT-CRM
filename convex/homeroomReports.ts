@@ -44,6 +44,7 @@ import {
   studentsByIds,
   usersByIds,
 } from "./homeroomData";
+import { compareClasses, sortClassesNatural } from "./classOrder";
 
 export const REPORT_RANGE_MAX_DAYS = 400;
 const PENDING_LIST_LIMIT = 500;
@@ -64,9 +65,7 @@ async function resolveYear(ctx: DbCtx, schoolYearId?: string) {
   return years.find((row) => row.active) || null;
 }
 
-function sortClasses<T extends { gradeLevel: number; code: string }>(rows: T[]) {
-  return rows.slice().sort((a, b) => a.gradeLevel - b.gradeLevel || a.code.localeCompare(b.code, "vi"));
-}
+const sortClasses = sortClassesNatural;
 
 function assertRangeWithinLimit(from: string, to: string) {
   if (addDaysYmd(from, REPORT_RANGE_MAX_DAYS) < to) throw new Error("REPORT_RANGE_TOO_LONG");
@@ -291,7 +290,15 @@ export const pendingAbsences = query({
       .filter((row) => (!from || row.attendanceDate >= from) && (!to || row.attendanceDate <= to))
       .filter((row) => classById.get(row.classId)?.status === "active")
       .filter((row) => canReadClass(actor, assignments, row.classId, row.attendanceDate))
-      .sort((a, b) => b.attendanceDate.localeCompare(a.attendanceDate) || a.classId.localeCompare(b.classId));
+      .sort((a, b) => {
+        const classA = classById.get(a.classId);
+        const classB = classById.get(b.classId);
+        return (
+          b.attendanceDate.localeCompare(a.attendanceDate)
+          || (classA && classB ? compareClasses(classA, classB) : a.classId.localeCompare(b.classId))
+          || a.classId.localeCompare(b.classId)
+        );
+      });
 
     const limited = filtered.slice(0, PENDING_LIST_LIMIT);
     const students = await studentsByIds(ctx, limited.map((row) => row.studentId));
@@ -308,6 +315,7 @@ export const pendingAbsences = query({
           classId: row.classId,
           classCode: klass?.code || "",
           className: klass?.name || "",
+          gradeLevel: klass?.gradeLevel ?? null,
           studentId: row.studentId,
           studentCode: student?.studentCode || "—",
           fullName: student?.fullName || "Học sinh không còn hiệu lực",

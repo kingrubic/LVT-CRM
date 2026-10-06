@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { vietnamTodayYmd } from './homeroomTime';
+import { sortClassesNatural } from './classOrder';
 import { foldSearch, formatDate } from './homeroomLabels';
 import {
   ASSIGNMENT_REPLACE_WARNING,
@@ -215,7 +216,7 @@ export function ClassCatalogPanel({ session, yearId, schoolYears = [], onOpenCla
   const [modal, setModal] = useState(null);
   const restoreTask = useAsyncTask();
 
-  const rows = classes || [];
+  const rows = useMemo(() => sortClassesNatural(classes), [classes]);
   const visible = useMemo(() => {
     const needle = foldSearch(search);
     return rows.filter((row) => {

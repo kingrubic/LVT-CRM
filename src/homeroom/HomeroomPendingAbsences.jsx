@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
 import { foldSearch, formatDate, isYmd, weekdayLabel } from './homeroomLabels';
+import { compareClasses } from './classOrder';
 import { ClassifyAbsenceModal, DISPOSITION_BATCH_LIMIT } from './HomeroomDisposition';
 import { EmptyState, Feedback, Icon, Loading, Notice } from './homeroomUi';
 
@@ -23,8 +24,14 @@ export default function HomeroomPendingAbsences({ yearId, nav }) {
   const rows = data?.rows || [];
   const classOptions = useMemo(() => {
     const map = new Map();
-    for (const row of rows) map.set(row.classId, row.classCode || row.className);
-    return [...map.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'vi'));
+    for (const row of rows) {
+      if (!map.has(row.classId)) {
+        map.set(row.classId, { classId: row.classId, code: row.classCode, name: row.className, gradeLevel: row.gradeLevel });
+      }
+    }
+    return [...map.values()]
+      .sort(compareClasses)
+      .map((item) => [item.classId, item.code || item.name]);
   }, [rows]);
 
   const visible = useMemo(() => {

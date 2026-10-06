@@ -49,10 +49,9 @@ import {
   getYearById,
   usersByIds,
 } from "./homeroomData";
+import { sortClassesNatural } from "./classOrder";
 
-function sortByGradeAndCode<T extends { gradeLevel: number; code: string }>(rows: T[]) {
-  return rows.slice().sort((a, b) => a.gradeLevel - b.gradeLevel || a.code.localeCompare(b.code, "vi"));
-}
+const sortByGradeAndCode = sortClassesNatural;
 
 export const listScoped = query({
   args: {
