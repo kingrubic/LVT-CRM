@@ -23,7 +23,7 @@ export const STATUS_SHORT = {
 export const STATUS_ORDER = ['present', 'late', 'absent_pending', 'absent_excused', 'absent_unexcused', 'no_data'];
 
 export const RAW_LABELS = {
-  present: 'Đã điểm danh',
+  present: 'Đúng giờ',
   late: 'Đi trễ',
   absent: 'Chưa điểm danh',
   unknown: 'Không rõ',

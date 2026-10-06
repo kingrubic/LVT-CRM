@@ -11,8 +11,8 @@ export const ATTENDANCE_IMPORT_TEMPLATE_HEADERS = [
 ];
 
 export const ATTENDANCE_IMPORT_TEMPLATE_EXAMPLE_ROWS = [
-  ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đã điểm danh', '06:52', ''],
-  ['7/1', 'Trần Thị B', '15/11/2014', 'Đi trễ', '07:12', ''],
+  ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đúng giờ', '06:52', 'Camera'],
+  ['7/1', 'Trần Thị B', '15/11/2014', 'Đi trễ', '07:12', 'Camera'],
   ['7/2', 'Lê Văn C', '02/01/2014', 'Chưa điểm danh', '--:--', ''],
 ];
 
@@ -20,7 +20,7 @@ export const ATTENDANCE_IMPORT_TEMPLATE_INSTRUCTIONS = [
   ['File điểm danh toàn trường — xuất từ hệ thống camera, mỗi ngày một file. Chọn ngày điểm danh trên phần mềm khi nhập.'],
   ['Giữ nguyên dòng tiêu đề: Lớp học, Tên học sinh, Ngày sinh, Trạng thái điểm danh, Thời gian điểm danh. Cột Loại điểm danh được bỏ qua.'],
   ['Học sinh được nhận diện bằng Lớp + Họ tên + Ngày sinh (dd/mm/yyyy) — phải trùng hồ sơ trên phần mềm. Lớp học phải trùng tên hoặc mã lớp trên phần mềm (7/1 được hiểu là 7-1).'],
-  ['Trạng thái chỉ nhận: Chưa điểm danh, Đã điểm danh, Đi trễ. Thời gian ghi giờ:phút (ví dụ 07:05), --:-- nếu chưa điểm danh.'],
+  ['Trạng thái chỉ nhận: Đúng giờ, Đi trễ, Chưa điểm danh. Thời gian ghi giờ:phút (ví dụ 07:05), --:-- nếu chưa điểm danh.'],
   ['“Chưa điểm danh” và học sinh có trong danh sách lớp nhưng không có trong file đều được ghi “Vắng chờ xử lý”.'],
   ['Các dòng ví dụ là dữ liệu minh họa — xóa trước khi dùng.'],
 ];

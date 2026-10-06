@@ -61,7 +61,7 @@ test('camera file header is detected below a title row; Loại điểm danh is i
     ['BẢNG THỐNG KÊ ĐIỂM DANH HỌC SINH TOÀN TRƯỜNG'],
     [],
     FILE_HEADER,
-    ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đã điểm danh', '06:52', ''],
+    ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đúng giờ', '06:52', ''],
     ['', '', '', '', '', ''],
     ['7/1', 'Hà Thị Thuỳ Linh', '01/08/2014', 'Chưa điểm danh', '--:--', ''],
   ];
@@ -78,7 +78,7 @@ test('camera file header is detected below a title row; Loại điểm danh is i
     rawStudentName: 'Nguyễn Văn A',
     rawDateOfBirth: '11/03/2014',
     rawObservedAt: '06:52',
-    rawStatus: 'Đã điểm danh',
+    rawStatus: 'Đúng giờ',
   });
   assert.equal(parsed.rows[1].rowNumber, 6);
 });
@@ -99,7 +99,10 @@ test('template errors are explicit: missing header, missing required columns, em
   assert.deepEqual(rowsFromAttendanceMatrix([TEMPLATE_HEADER]), { ok: false, message: 'IMPORT_FILE_EMPTY' });
 });
 
-test('camera status accepts only Chưa điểm danh / Đã điểm danh / Đi trễ (accents optional)', () => {
+test('camera status accepts only Đúng giờ / Đi trễ / Chưa điểm danh (accents optional)', () => {
+  assert.equal(parseSchoolCameraStatus('Đúng giờ'), 'present');
+  assert.equal(parseSchoolCameraStatus('dung gio'), 'present');
+  // File camera đời cũ
   assert.equal(parseSchoolCameraStatus('Đã điểm danh'), 'present');
   assert.equal(parseSchoolCameraStatus('da diem danh'), 'present');
   assert.equal(parseSchoolCameraStatus(' Đi trễ '), 'late');
@@ -118,7 +121,7 @@ test('class key tolerates "Lớp" prefix, spacing, and "/" vs "-" (app codes can
 
 test('students match by class + name + birth date; same name different DOB is disambiguated', () => {
   const rows = [
-    { rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawObservedAt: '06:52', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawObservedAt: '06:52', rawStatus: 'Đúng giờ' },
     { rowNumber: 3, rawClassCode: 'Lớp 7/1', rawStudentName: 'nguyễn  văn a', rawDateOfBirth: '20/05/2014', rawObservedAt: '07:12', rawStatus: 'Đi trễ' },
     { rowNumber: 4, rawClassCode: '7/1', rawStudentName: 'Hà Thị Thuỳ Linh', rawDateOfBirth: '01/08/2014', rawObservedAt: '--:--', rawStatus: 'Chưa điểm danh' },
   ];
@@ -139,11 +142,11 @@ test('broken classes are skipped, good classes stay publishable; DOB mismatch / 
     { studentId: 's5', studentCode: 'HS005', fullName: 'Phạm D', classId: 'c2', classCode: '7/2', enrollmentId: 'e5' },
   ];
   const rows = [
-    { rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đã điểm danh' },
-    { rowNumber: 3, rawClassCode: '7/2', rawStudentName: 'Lê Văn C', rawDateOfBirth: '03/01/2014', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đúng giờ' },
+    { rowNumber: 3, rawClassCode: '7/2', rawStudentName: 'Lê Văn C', rawDateOfBirth: '03/01/2014', rawStatus: 'Đúng giờ' },
     { rowNumber: 4, rawClassCode: '7/2', rawStudentName: 'Phạm D', rawDateOfBirth: '04/04/2014', rawStatus: 'Đi trễ' },
-    { rowNumber: 5, rawClassCode: '7/2', rawStudentName: 'Hà Thị Thùy Linh', rawDateOfBirth: '01/08/2014', rawStatus: 'Đã điểm danh' },
-    { rowNumber: 6, rawClassCode: '9/9', rawStudentName: 'X', rawDateOfBirth: '01/01/2012', rawStatus: 'Đã điểm danh' },
+    { rowNumber: 5, rawClassCode: '7/2', rawStudentName: 'Hà Thị Thùy Linh', rawDateOfBirth: '01/08/2014', rawStatus: 'Đúng giờ' },
+    { rowNumber: 6, rawClassCode: '9/9', rawStudentName: 'X', rawDateOfBirth: '01/01/2012', rawStatus: 'Đúng giờ' },
     { rowNumber: 7, rawClassCode: '7/2', rawStudentName: 'Lê Văn C', rawDateOfBirth: '02/01/2014', rawStatus: 'Nghỉ' },
   ];
   const result = reconcileSchoolAttendanceRows(rows, { attendanceDate: '2026-09-01', classes, students: roster });
@@ -170,12 +173,12 @@ test('duplicate rows and same name + DOB twice in a class never auto-match', () 
     { studentId: 's9', studentCode: 'HS009', fullName: 'Nguyễn Văn A', dateOfBirth: '2014-03-11', classId: 'c1', classCode: '7/1', enrollmentId: 'e9' },
   ];
   const ambiguous = reconcileSchoolAttendanceRows(
-    [{ rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đã điểm danh' }],
+    [{ rowNumber: 2, rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đúng giờ' }],
     { attendanceDate: '2026-09-01', classes, students: twins },
   );
   assert.equal(ambiguous.ok, false);
   assert.equal(ambiguous.issues[0].code, 'CAMERA_STUDENT_AMBIGUOUS');
-  const row = { rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đã điểm danh' };
+  const row = { rawClassCode: '7/1', rawStudentName: 'Nguyễn Văn A', rawDateOfBirth: '11/03/2014', rawStatus: 'Đúng giờ' };
   const duplicate = reconcileSchoolAttendanceRows(
     [{ rowNumber: 2, ...row }, { rowNumber: 3, ...row }],
     { attendanceDate: '2026-09-01', classes, students },
@@ -228,7 +231,7 @@ test('same checksum and date is idempotent; a different file requires an explici
 });
 
 test('positive_presence publication creates one day per enrollment and missing students become absent pending', () => {
-  const parsed = rowsFromAttendanceMatrix([TEMPLATE_HEADER, ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đã điểm danh', '07:05']]);
+  const parsed = rowsFromAttendanceMatrix([TEMPLATE_HEADER, ['7/1', 'Nguyễn Văn A', '11/03/2014', 'Đúng giờ', '07:05']]);
   assert.equal(parsed.ok, true);
   const reconciled = reconcileSchoolAttendanceRows(parsed.rows, { attendanceDate: '2026-09-01', classes, students });
   assert.equal(reconciled.ok, true);

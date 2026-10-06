@@ -102,12 +102,14 @@ export function studentMatchKey(fullName: string, dateOfBirth: string) {
 }
 
 const SCHOOL_STATUS_ALIASES: Record<string, "present" | "late" | "absent"> = {
+  "dung gio": "present",
+  // File camera đời cũ ghi "Đã điểm danh" — vẫn nhận để nhập lại dữ liệu cũ.
   "da diem danh": "present",
   "di tre": "late",
   "chua diem danh": "absent",
 };
 
-/** Trạng thái file camera: Đã điểm danh / Đi trễ / Chưa điểm danh (không dấu cũng được). Null khi trống hoặc lạ. */
+/** Trạng thái file camera: Đúng giờ / Đi trễ / Chưa điểm danh (không dấu cũng được). Null khi trống hoặc lạ. */
 export function parseSchoolCameraStatus(value: string | undefined): "present" | "late" | "absent" | null {
   return SCHOOL_STATUS_ALIASES[foldText(value || "")] || null;
 }
@@ -176,9 +178,9 @@ export function reconcileSchoolAttendanceRows(
 
     const status = parseSchoolCameraStatus(row.rawStatus);
     if (!(row.rawStatus || "").trim()) {
-      fail("sourceStatus", null, "CAMERA_STATUS_MISSING", "Thiếu trạng thái (Chưa điểm danh / Đã điểm danh / Đi trễ).");
+      fail("sourceStatus", null, "CAMERA_STATUS_MISSING", "Thiếu trạng thái (Đúng giờ / Đi trễ / Chưa điểm danh).");
     } else if (!status) {
-      fail("sourceStatus", row.rawStatus, "CAMERA_STATUS_INVALID", "Trạng thái chỉ nhận: Chưa điểm danh, Đã điểm danh, Đi trễ.");
+      fail("sourceStatus", row.rawStatus, "CAMERA_STATUS_INVALID", "Trạng thái chỉ nhận: Đúng giờ, Đi trễ, Chưa điểm danh.");
     }
 
     const name = (row.rawStudentName || "").trim();

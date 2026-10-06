@@ -195,7 +195,7 @@ function UploadStep({ yearId, date, setDate, today, busy, phase, error, onFile }
           <ul className="hr-checklist">
             <li>Cột: Lớp học, Tên học sinh, Ngày sinh, Trạng thái điểm danh, Thời gian điểm danh.</li>
             <li>Học sinh khớp theo Lớp + Họ tên + Ngày sinh (dd/mm/yyyy).</li>
-            <li>Trạng thái: Chưa điểm danh / Đã điểm danh / Đi trễ.</li>
+            <li>Trạng thái: Đúng giờ / Đi trễ / Chưa điểm danh.</li>
             <li>“Chưa điểm danh” hoặc thiếu trong file → “Vắng chờ xử lý”.</li>
           </ul>
         </div>

@@ -63,7 +63,7 @@ export function buildAttendanceReportVisibleMatrix(days) {
 }
 
 const RAW_OBSERVATION_LABELS = {
-  present: 'Đã điểm danh',
+  present: 'Đúng giờ',
   late: 'Đi trễ',
   absent: 'Chưa điểm danh',
   unknown: 'Không rõ',
