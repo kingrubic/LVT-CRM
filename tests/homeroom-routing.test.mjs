@@ -32,7 +32,6 @@ test('homeroom keeps /lop-chu-nhiem and supports deep subroutes for back/forward
   assert.equal(homeroomPathname({ manageClasses: true }), '/lop-chu-nhiem/quan-ly-lop');
   assert.equal(homeroomPathname({ importAttendance: true }), '/lop-chu-nhiem/nhap-diem-danh');
   assert.equal(homeroomPathname({ pendingAbsences: true }), '/lop-chu-nhiem/vang-cho-xu-ly');
-  assert.equal(homeroomPathname({ calendar: true }), '/lop-chu-nhiem/lich-hoc');
   const nested = routeForPathname('/lop-chu-nhiem/lop/c1/bao-cao');
   assert.equal(nested?.menu, 'homeroom');
   assert.equal(nested?.homeroomPath, '/lop-chu-nhiem/lop/c1/bao-cao');
@@ -45,7 +44,8 @@ test('homeroom keeps /lop-chu-nhiem and supports deep subroutes for back/forward
   assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/nhap-diem-danh'), { view: 'import' });
   assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/import-diem-danh/c1'), { view: 'import' });
   assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/quan-ly-lop'), { view: 'manage' });
-  assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/lich-hoc'), { view: 'calendar' });
+  // Lịch học đã chuyển sang Thiết lập tối cao › Thiết lập năm học; link cũ rơi về tổng quan.
+  assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/lich-hoc'), { view: 'overview' });
   assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/lop/c1'), { view: 'class', classId: 'c1', tab: 'hoc-sinh' });
   assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/lop/c1/bao-cao'), { view: 'class', classId: 'c1', tab: 'bao-cao' });
   assert.deepEqual(parseHomeroomPath('/lop-chu-nhiem/lop/c1/khong-ton-tai'), { view: 'class', classId: 'c1', tab: 'hoc-sinh' });
@@ -90,11 +90,13 @@ test('homeroom frontend date defaults use Vietnam calendar, including UTC 18:00'
 test('empty school-year state is actionable and never renders an infinite overview loader', () => {
   const source = readFileSync(new URL('../src/homeroom/HomeroomRouter.jsx', import.meta.url), 'utf8');
   assert.match(source, /Chưa cấu hình năm học/);
-  assert.match(source, /Thiết lập năm học đầu tiên/);
-  assert.match(source, /createSchoolYear/);
+  // Tạo năm học nay nằm ở Thiết lập tối cao › Thiết lập năm học (chỉ Admin).
+  assert.match(source, /Mở Thiết lập năm học/);
+  assert.match(source, /pathnameForMenu\('school-years'\)/);
+  assert.doesNotMatch(source, /createSchoolYear/);
   assert.match(source, /disabled=\{!years\?\.length\}/);
   assert.match(source, /!selectedYearId \? \(/);
-  assert.match(source, /<EmptySchoolYearState canCreate=\{roles\.isManager\} \/>/);
+  assert.match(source, /<EmptySchoolYearState isAdmin=\{Boolean\(session\?\.isAdmin\)\} \/>/);
   assert.match(source, /if \(years === undefined\)/);
   assert.match(source, /manageClasses: true/);
 });

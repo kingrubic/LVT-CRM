@@ -1,19 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { anyApi } from 'convex/server';
-import { homeroomPathname } from '../navigationRoutes';
+import { homeroomPathname, pathnameForMenu } from '../navigationRoutes';
 import { homeroomRoles, parseHomeroomPath } from './homeroomRoutes';
-import { messageFor } from '../lib/appErrorMessage';
 import { vietnamTodayYmd } from './homeroomTime';
 import { formatDateLong, isYmd } from './homeroomLabels';
 import { HomeroomStudentQueryErrorBoundary } from './studentQueryErrorBoundary';
-import { Feedback, HomeroomViewErrorBoundary, Icon, Loading, SilentBoundary } from './homeroomUi';
+import { HomeroomViewErrorBoundary, Icon, Loading, SilentBoundary } from './homeroomUi';
 import HomeroomOverview from './HomeroomOverview';
 import HomeroomPendingAbsences from './HomeroomPendingAbsences';
 import HomeroomAttendanceImport from './HomeroomAttendanceImport';
 import HomeroomClassDetail from './HomeroomClassDetail';
 import HomeroomStudentDetail from './HomeroomStudentDetail';
-import HomeroomCalendar from './HomeroomCalendar';
 import { ClassCatalogPanel } from './HomeroomClassCatalog';
 import './homeroom.css';
 
@@ -66,7 +64,6 @@ export default function HomeroomRouter({ session }) {
     pending: () => go(homeroomPathname({ pendingAbsences: true })),
     import: (date = '') => go(homeroomPathname({ importAttendance: true }), { date }),
     manage: () => go(homeroomPathname({ manageClasses: true })),
-    calendar: () => go(homeroomPathname({ calendar: true })),
     openClass: (id, tab = '', date = '') => go(homeroomPathname({ classId: id, tab: tab || undefined }), { date }),
     openStudent: (id) => go(homeroomPathname({ studentId: id })),
     back: goBack,
@@ -85,7 +82,6 @@ export default function HomeroomRouter({ session }) {
     { key: 'pending', label: 'Vắng chờ xử lý', icon: 'inbox', show: roles.seesClasses, onClick: nav.pending, badge: true },
     { key: 'import', label: 'Nhập điểm danh', icon: 'upload', show: roles.canImport, onClick: () => nav.import() },
     { key: 'manage', label: 'Quản lý lớp', icon: 'classes', show: roles.isManager, onClick: nav.manage },
-    { key: 'calendar', label: 'Lịch học', icon: 'calendar', show: roles.isManager, onClick: nav.calendar },
   ].filter((item) => item.show);
   const activeKey = route.view === 'class' || route.view === 'student' ? '' : route.view;
   const resetKey = `${location.path}|${selectedYearId}`;
@@ -112,7 +108,7 @@ export default function HomeroomRouter({ session }) {
               {!years?.length ? <option value="">Chưa có năm học</option> : null}
               {(years || []).map((year) => (
                 <option key={year._id} value={year._id}>
-                  {year.name}{year.active ? ' · đang áp dụng' : ''}
+                  {year.name}{year.active ? ' · mặc định' : ''}
                 </option>
               ))}
             </select>
@@ -142,7 +138,7 @@ export default function HomeroomRouter({ session }) {
       </header>
 
       {!selectedYearId ? (
-        <EmptySchoolYearState canCreate={roles.isManager} />
+        <EmptySchoolYearState isAdmin={Boolean(session?.isAdmin)} />
       ) : (
         <HomeroomViewErrorBoundary resetKey={resetKey} onBack={nav.overview}>
           {route.view === 'overview' ? (
@@ -160,12 +156,6 @@ export default function HomeroomRouter({ session }) {
               <ClassCatalogPanel session={session} yearId={selectedYearId} schoolYears={years} onOpenClass={(id) => nav.openClass(id)} />
             ) : (
               <Forbidden text="Chỉ quản trị viên mới được quản lý lớp." onBack={nav.overview} />
-            )
-          ) : route.view === 'calendar' ? (
-            roles.isManager ? (
-              <HomeroomCalendar yearId={selectedYearId} years={years} />
-            ) : (
-              <Forbidden text="Chỉ quản trị viên mới được cấu hình lịch học." onBack={nav.overview} />
             )
           ) : route.view === 'class' ? (
             <HomeroomClassDetail
@@ -205,66 +195,26 @@ function Forbidden({ text, onBack }) {
   );
 }
 
-function EmptySchoolYearState({ canCreate }) {
-  const createSchoolYear = useMutation(anyApi.schoolYears.create);
-  const year = Number(vietnamTodayYmd().slice(0, 4));
-  const [name, setName] = useState(`${year}-${year + 1}`);
-  const [startDate, setStartDate] = useState(`${year}-09-05`);
-  const [endDate, setEndDate] = useState(`${year + 1}-05-31`);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-
-  if (!canCreate) {
-    return (
-      <div className="hr-panel hr-error-panel">
-        <span className="hr-empty-icon"><Icon name="calendar" size={24} /></span>
-        <h2>Chưa cấu hình năm học</h2>
-        <p>Vui lòng liên hệ quản trị viên để tạo năm học trước khi sử dụng Lớp chủ nhiệm.</p>
-      </div>
-    );
-  }
-
+/** Năm học & ngày nghỉ lễ được quản lý tại Thiết lập tối cao › Thiết lập năm học (chỉ Admin). */
+function EmptySchoolYearState({ isAdmin }) {
+  const openSettings = () => {
+    window.history.pushState({}, '', pathnameForMenu('school-years'));
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
   return (
-    <form
-      className="hr-panel hr-setup-panel"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setPending(true);
-        setError('');
-        try {
-          await createSchoolYear({ name, startDate, endDate, active: true });
-        } catch (err) {
-          setError(messageFor(err));
-        } finally {
-          setPending(false);
-        }
-      }}
-    >
-      <span className="hr-eyebrow">Bước đầu tiên</span>
-      <h2>Thiết lập năm học đầu tiên</h2>
-      <p className="hr-muted">
-        Năm học quyết định lớp, phân công GVCN và lịch ngày học (mặc định Thứ 2 – Thứ 6). Bạn có thể đánh dấu ngày nghỉ và ngày học bù sau.
-      </p>
-      <div className="hr-form-grid">
-        <label className="hr-field">
-          <span>Tên năm học</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ví dụ: 2026-2027" required />
-        </label>
-        <label className="hr-field">
-          <span>Ngày bắt đầu</span>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
-        </label>
-        <label className="hr-field">
-          <span>Ngày kết thúc</span>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
-        </label>
-      </div>
-      <Feedback error={error} />
-      <div className="hr-row">
-        <button type="submit" className="primary-button" disabled={pending}>
-          {pending ? 'Đang tạo năm học…' : 'Tạo năm học'}
-        </button>
-      </div>
-    </form>
+    <div className="hr-panel hr-error-panel">
+      <span className="hr-empty-icon"><Icon name="calendar" size={24} /></span>
+      <h2>Chưa cấu hình năm học</h2>
+      {isAdmin ? (
+        <>
+          <p>Tạo năm học và chọn năm học mặc định trong Thiết lập tối cao › Thiết lập năm học.</p>
+          <button type="button" className="primary-button" onClick={openSettings}>
+            Mở Thiết lập năm học
+          </button>
+        </>
+      ) : (
+        <p>Vui lòng liên hệ quản trị viên để tạo năm học trước khi sử dụng Lớp chủ nhiệm.</p>
+      )}
+    </div>
   );
 }

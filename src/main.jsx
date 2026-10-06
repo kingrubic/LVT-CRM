@@ -12,6 +12,7 @@ import SharedDutyScheduleView from './duties/SharedDutyScheduleView';
 import DutyWorkspaceTabs from './duties/DutyWorkspaceTabs';
 import { WorkUserView } from './work/WorkViews';
 import DocumentTypeSettings from './settings/DocumentTypeSettings';
+import SchoolYearSettings from './settings/SchoolYearSettings';
 import DisplaySettings from './settings/DisplaySettings';
 import UserBulkImport from './settings/UserBulkImport';
 import './settings/userBulkImport.css';
@@ -79,6 +80,7 @@ const SUPREME_SETTINGS = [
   ['roles', 'Thiết lập nhóm quyền'],
   ['positions', 'Thiết lập chức vụ'],
   ['document-types', 'Thiết lập loại văn bản'],
+  ['school-years', 'Thiết lập năm học'],
   ['display-settings', 'Thiết lập hiển thị'],
 ];
 const ROLE_LABELS = { admin: 'Administrator', moderator: 'Moderator', user: 'User' };
@@ -482,6 +484,8 @@ function AppShell({ session }) {
           <PositionManagement />
         ) : active === 'document-types' && isAdmin ? (
           <DocumentTypeSettings />
+        ) : active === 'school-years' && isAdmin ? (
+          <SchoolYearSettings />
         ) : active === 'display-settings' && isAdmin ? (
           <DisplaySettings />
         ) : active === 'notifications' ? (

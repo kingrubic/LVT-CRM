@@ -200,6 +200,7 @@ export function messageFor(error) {
     INVALID_DATE_RANGE: 'Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.',
     CALENDAR_DATE_OUTSIDE_YEAR: 'Ngày nằm ngoài thời gian của năm học.',
     INVALID_CALENDAR_NOTE: 'Ghi chú lịch tối đa 120 ký tự.',
+    HOLIDAY_RANGE_TOO_LONG: 'Mỗi đợt nghỉ tối đa 92 ngày. Hãy chia thành nhiều đợt.',
     ATTENDANCE_TEMPLATE_HEADER_NOT_FOUND:
       'Không tìm thấy dòng tiêu đề. File cần có các cột: Lớp học, Tên học sinh, Ngày sinh, Trạng thái điểm danh, Thời gian điểm danh.',
     IMPORT_TOO_MANY_ROWS: 'File có quá nhiều dòng. Vui lòng kiểm tra lại file điểm danh.',

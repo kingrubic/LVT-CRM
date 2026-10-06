@@ -8,7 +8,6 @@ export function parseHomeroomPath(pathname) {
   const parts = normalized.split('/').filter(Boolean);
   if (parts[1] === 'quan-ly-lop') return { view: 'manage' };
   if (parts[1] === 'vang-cho-xu-ly') return { view: 'pending' };
-  if (parts[1] === 'lich-hoc') return { view: 'calendar' };
   if (parts[1] === 'nhap-diem-danh' || parts[1] === 'import-diem-danh') return { view: 'import' };
   if (parts[1] === 'hoc-sinh' && parts[2]) return { view: 'student', studentId: decodeURIComponent(parts[2]) };
   if (parts[1] === 'lop' && parts[2]) {

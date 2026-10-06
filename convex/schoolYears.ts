@@ -8,10 +8,19 @@ import {
   SCHOOL_YEAR_OVERLAP,
   validateSchoolYearInput,
 } from "./homeroomCatalog";
-import { homeroomActorOrThrow, homeroomCatalogWriterOrThrow, writeAudit } from "./homeroomContext";
-import { normalizeDisplayName } from "./lib";
-import { CALENDAR_KINDS } from "./homeroomAlerts";
-import { assertYmd } from "./homeroomTime";
+import { homeroomActorOrThrow, writeAudit } from "./homeroomContext";
+import { adminOrThrow, normalizeDisplayName } from "./lib";
+import { CALENDAR_KINDS, isDefaultSchoolDay } from "./homeroomAlerts";
+import { addDaysYmd, assertYmd } from "./homeroomTime";
+
+/**
+ * Năm học + lịch nghỉ thuộc Thiết lập tối cao: mọi thao tác ghi chỉ dành cho Administrator.
+ * `active` là cờ "năm học mặc định" — luôn tối đa một năm, Lớp chủ nhiệm mở năm này đầu tiên.
+ */
+
+/** Một đợt nghỉ tối đa ~3 tháng (đủ cho Tết/nghỉ dài), chặn thao tác nhầm cả năm. */
+export const HOLIDAY_RANGE_MAX_DAYS = 92;
+const REMOVE_DATES_MAX = 200;
 
 export const list = query({
   args: {},
@@ -31,15 +40,19 @@ export const create = mutation({
     active: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { user } = await homeroomCatalogWriterOrThrow(ctx);
+    const user = await adminOrThrow(ctx);
     const input = validateSchoolYearInput(args);
     const years = await ctx.db.query("schoolYears").collect();
     if (years.some((year) => normalizeDisplayName(year.name) === normalizeDisplayName(input.name))) {
       throw new Error(SCHOOL_YEAR_NAME_TAKEN);
     }
     const active = args.active !== false;
-    if (findOverlappingActiveYear(years, { ...input, active })) throw new Error(SCHOOL_YEAR_OVERLAP);
     const now = Date.now();
+    if (active) {
+      for (const year of years) {
+        if (year.active) await ctx.db.patch(year._id, { active: false, updatedBy: String(user._id), updatedAt: now });
+      }
+    }
     const id = await ctx.db.insert("schoolYears", {
       ...input,
       active,
@@ -50,7 +63,7 @@ export const create = mutation({
     await writeAudit(ctx, {
       actorUserId: String(user._id),
       action: "schoolYear.create",
-      details: JSON.stringify({ id, name: input.name }),
+      details: JSON.stringify({ id, name: input.name, active }),
     });
     return id;
   },
@@ -65,7 +78,7 @@ export const update = mutation({
     attendanceUploadDueTime: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { user } = await homeroomCatalogWriterOrThrow(ctx);
+    const user = await adminOrThrow(ctx);
     const current = await ctx.db.get(args.id as Id<"schoolYears">);
     if (!current) throw new Error("SCHOOL_YEAR_NOT_FOUND");
     assertSchoolYearEditable(current);
@@ -93,26 +106,26 @@ export const update = mutation({
   },
 });
 
-export const setActive = mutation({
-  args: { id: v.string(), active: v.boolean() },
+/** Đặt năm học mặc định cho menu Lớp chủ nhiệm; các năm khác tự bỏ mặc định. */
+export const setDefault = mutation({
+  args: { id: v.string() },
   handler: async (ctx, args) => {
-    const { user } = await homeroomCatalogWriterOrThrow(ctx);
-    const current = await ctx.db.get(args.id as Id<"schoolYears">);
-    if (!current) throw new Error("SCHOOL_YEAR_NOT_FOUND");
-    assertSchoolYearEditable(current);
+    const user = await adminOrThrow(ctx);
+    const yearId = ctx.db.normalizeId("schoolYears", args.id);
+    const target = yearId ? await ctx.db.get(yearId) : null;
+    if (!target) throw new Error("SCHOOL_YEAR_NOT_FOUND");
+    const now = Date.now();
     const years = await ctx.db.query("schoolYears").collect();
-    if (args.active && findOverlappingActiveYear(years, { ...current, active: true }, args.id)) {
-      throw new Error(SCHOOL_YEAR_OVERLAP);
+    for (const year of years) {
+      const shouldBeActive = year._id === target._id;
+      if (year.active !== shouldBeActive) {
+        await ctx.db.patch(year._id, { active: shouldBeActive, updatedBy: String(user._id), updatedAt: now });
+      }
     }
-    await ctx.db.patch(current._id, {
-      active: args.active,
-      updatedBy: String(user._id),
-      updatedAt: Date.now(),
-    });
     await writeAudit(ctx, {
       actorUserId: String(user._id),
-      action: "schoolYear.setActive",
-      details: JSON.stringify({ id: args.id, active: args.active }),
+      action: "schoolYear.setDefault",
+      details: JSON.stringify({ id: args.id }),
     });
   },
 });
@@ -120,7 +133,7 @@ export const setActive = mutation({
 export const lock = mutation({
   args: { id: v.string() },
   handler: async (ctx, args) => {
-    const { user } = await homeroomCatalogWriterOrThrow(ctx);
+    const user = await adminOrThrow(ctx);
     const current = await ctx.db.get(args.id as Id<"schoolYears">);
     if (!current) throw new Error("SCHOOL_YEAR_NOT_FOUND");
     const now = Date.now();
@@ -169,6 +182,27 @@ export const listCalendarDays = query({
   },
 });
 
+async function editableYearOrThrow(ctx: any, schoolYearId: string) {
+  const yearId = ctx.db.normalizeId("schoolYears", schoolYearId);
+  const year = yearId ? await ctx.db.get(yearId) : null;
+  if (!year) throw new Error("SCHOOL_YEAR_NOT_FOUND");
+  assertSchoolYearEditable(year);
+  return year;
+}
+
+function cleanCalendarNote(note?: string) {
+  const value = note?.trim() || undefined;
+  if (value && value.length > 120) throw new Error("INVALID_CALENDAR_NOTE");
+  return value;
+}
+
+async function calendarRow(ctx: any, schoolYearId: string, date: string) {
+  return await ctx.db
+    .query("schoolCalendarDays")
+    .withIndex("by_year_date", (q: any) => q.eq("schoolYearId", schoolYearId).eq("date", date))
+    .unique();
+}
+
 export const upsertCalendarDay = mutation({
   args: {
     schoolYearId: v.string(),
@@ -177,19 +211,13 @@ export const upsertCalendarDay = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { user } = await homeroomCatalogWriterOrThrow(ctx);
-    const year = await ctx.db.get(args.schoolYearId as Id<"schoolYears">);
-    if (!year) throw new Error("SCHOOL_YEAR_NOT_FOUND");
-    assertSchoolYearEditable(year);
+    const user = await adminOrThrow(ctx);
+    const year = await editableYearOrThrow(ctx, args.schoolYearId);
     if (!(CALENDAR_KINDS as readonly string[]).includes(args.kind)) throw new Error("INVALID_CALENDAR_DAY");
     const date = assertYmd(args.date);
     if (date < year.startDate || date > year.endDate) throw new Error("CALENDAR_DATE_OUTSIDE_YEAR");
-    const note = args.note?.trim() || undefined;
-    if (note && note.length > 120) throw new Error("INVALID_CALENDAR_NOTE");
-    const existing = await ctx.db
-      .query("schoolCalendarDays")
-      .withIndex("by_year_date", (q) => q.eq("schoolYearId", args.schoolYearId).eq("date", date))
-      .unique();
+    const note = cleanCalendarNote(args.note);
+    const existing = await calendarRow(ctx, args.schoolYearId, date);
     const now = Date.now();
     let id;
     if (existing) {
@@ -220,18 +248,70 @@ export const upsertCalendarDay = mutation({
   },
 });
 
+/**
+ * Đánh dấu một đợt nghỉ (Thứ 2 – Thứ 6 trong khoảng) trong một giao dịch.
+ * `replaceDates` (tùy chọn) xóa các ngày nghỉ cũ của đợt đang sửa trước khi ghi đợt mới.
+ */
+export const setHolidayRange = mutation({
+  args: {
+    schoolYearId: v.string(),
+    from: v.string(),
+    to: v.string(),
+    note: v.optional(v.string()),
+    replaceDates: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const user = await adminOrThrow(ctx);
+    const year = await editableYearOrThrow(ctx, args.schoolYearId);
+    const from = assertYmd(args.from);
+    const to = assertYmd(args.to);
+    if (from > to) throw new Error("INVALID_DATE_RANGE");
+    if (from < year.startDate || to > year.endDate) throw new Error("CALENDAR_DATE_OUTSIDE_YEAR");
+    if (addDaysYmd(from, HOLIDAY_RANGE_MAX_DAYS - 1) < to) throw new Error("HOLIDAY_RANGE_TOO_LONG");
+    if ((args.replaceDates?.length || 0) > REMOVE_DATES_MAX) throw new Error("HOLIDAY_RANGE_TOO_LONG");
+    const note = cleanCalendarNote(args.note);
+    const now = Date.now();
+
+    for (const raw of args.replaceDates || []) {
+      const row = await calendarRow(ctx, args.schoolYearId, assertYmd(raw));
+      if (row?.kind === "holiday") await ctx.db.delete(row._id);
+    }
+
+    let count = 0;
+    for (let date = from; date <= to; date = addDaysYmd(date, 1)) {
+      if (!isDefaultSchoolDay(date)) continue;
+      const existing = await calendarRow(ctx, args.schoolYearId, date);
+      if (existing) {
+        await ctx.db.patch(existing._id, { kind: "holiday", note, updatedBy: String(user._id), updatedAt: now });
+      } else {
+        await ctx.db.insert("schoolCalendarDays", {
+          schoolYearId: args.schoolYearId,
+          date,
+          kind: "holiday",
+          note,
+          createdBy: String(user._id),
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      count += 1;
+    }
+    await writeAudit(ctx, {
+      actorUserId: String(user._id),
+      action: "schoolCalendar.setHolidayRange",
+      details: JSON.stringify({ schoolYearId: args.schoolYearId, from, to, count }),
+    });
+    return count;
+  },
+});
+
 export const removeCalendarDay = mutation({
   args: { schoolYearId: v.string(), date: v.string() },
   handler: async (ctx, args) => {
-    const { user } = await homeroomCatalogWriterOrThrow(ctx);
-    const year = await ctx.db.get(args.schoolYearId as Id<"schoolYears">);
-    if (!year) throw new Error("SCHOOL_YEAR_NOT_FOUND");
-    assertSchoolYearEditable(year);
+    const user = await adminOrThrow(ctx);
+    await editableYearOrThrow(ctx, args.schoolYearId);
     const date = assertYmd(args.date);
-    const existing = await ctx.db
-      .query("schoolCalendarDays")
-      .withIndex("by_year_date", (q) => q.eq("schoolYearId", args.schoolYearId).eq("date", date))
-      .unique();
+    const existing = await calendarRow(ctx, args.schoolYearId, date);
     if (!existing) return;
     await ctx.db.delete(existing._id);
     await writeAudit(ctx, {
@@ -239,5 +319,28 @@ export const removeCalendarDay = mutation({
       action: "schoolCalendar.remove",
       details: JSON.stringify({ schoolYearId: args.schoolYearId, date }),
     });
+  },
+});
+
+/** Xóa cả một đợt nghỉ / nhiều ngày đặc biệt cùng lúc (trả các ngày về lịch mặc định). */
+export const removeCalendarDays = mutation({
+  args: { schoolYearId: v.string(), dates: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await adminOrThrow(ctx);
+    await editableYearOrThrow(ctx, args.schoolYearId);
+    if (args.dates.length > REMOVE_DATES_MAX) throw new Error("HOLIDAY_RANGE_TOO_LONG");
+    let count = 0;
+    for (const raw of args.dates) {
+      const row = await calendarRow(ctx, args.schoolYearId, assertYmd(raw));
+      if (!row) continue;
+      await ctx.db.delete(row._id);
+      count += 1;
+    }
+    await writeAudit(ctx, {
+      actorUserId: String(user._id),
+      action: "schoolCalendar.removeMany",
+      details: JSON.stringify({ schoolYearId: args.schoolYearId, count }),
+    });
+    return count;
   },
 });

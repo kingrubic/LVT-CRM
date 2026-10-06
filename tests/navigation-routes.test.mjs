@@ -27,6 +27,8 @@ test('mỗi menu CRM có một đường dẫn con duy nhất', () => {
   assert.equal(pathnameForMenu('roles'), '/thiet-lap-nhom-quyen');
   assert.equal(pathnameForMenu('positions'), '/thiet-lap-chuc-vu');
   assert.equal(pathnameForMenu('document-types'), '/thiet-lap-loai-van-ban');
+  assert.equal(pathnameForMenu('school-years'), '/thiet-lap-nam-hoc');
+  assert.deepEqual(routeForPathname('/thiet-lap-nam-hoc'), { menu: 'school-years', reportSection: undefined });
 });
 
 test('đường dẫn con mở đúng menu và chuẩn hóa dấu gạch cuối', () => {
