@@ -277,6 +277,7 @@ function AppShell({ session }) {
     const pathname = pathnameForMenu(id);
     if (window.location.pathname !== pathname) {
       window.history[replace ? 'replaceState' : 'pushState']({}, '', pathname);
+      window.dispatchEvent(new Event('lvt:locationchange'));
     }
     setMobileOpen(false);
   };

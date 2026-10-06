@@ -200,9 +200,12 @@ export function reconcileAttendanceRows(
       }
       const timeMatch = String(row.rawObservedAt).match(/(\d{1,2}):(\d{2})/);
       if (timeMatch) {
-        const hh = timeMatch[1].padStart(2, "0");
+        let hour = Number(timeMatch[1]);
+        if (/\bpm\b/i.test(String(row.rawObservedAt)) && hour < 12) hour += 12;
+        if (/\bam\b/i.test(String(row.rawObservedAt)) && hour === 12) hour = 0;
+        const hh = String(Math.min(hour, 23)).padStart(2, "0");
         const mm = timeMatch[2];
-        normalizedObservedAt = vietnamWallTimeToUtcMs(context.attendanceDate, `${hh}:${mm}`);
+        if (Number(mm) <= 59) normalizedObservedAt = vietnamWallTimeToUtcMs(context.attendanceDate, `${hh}:${mm}`);
       }
     }
 
@@ -275,4 +278,210 @@ export function decidePublishedDateAction(args: {
   if (mode === REPLACE_MODE_REPLACE) return { action: "replace" as const };
   if (mode === REPLACE_MODE_CANCEL) return { action: "cancel" as const };
   return { action: "require_mode" as const, code: "ATTENDANCE_REPLACE_MODE_REQUIRED" };
+}
+
+/* ------------------------------------------------------------------ */
+/* Whole-school file (one file per day, split by Mã lớp)               */
+/* ------------------------------------------------------------------ */
+
+export type SchoolCameraClass = { classId: string; code: string; name: string };
+
+export type SchoolCameraRow = CameraRawRow & { rawClassName?: string };
+
+export type SchoolClassPreview = {
+  classId: string;
+  code: string;
+  name: string;
+  rowCount: number;
+  matchedCount: number;
+  present: number;
+  late: number;
+  absent: number;
+  rosterCount: number;
+  missingCount: number;
+  errorCount: number;
+  warningCount: number;
+  unconfirmedNameCount: number;
+  publishable: boolean;
+};
+
+function foldText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/\s+/g, " ");
+}
+
+const SCHOOL_STATUS_ALIASES: Record<string, "present" | "late" | "absent"> = {
+  "co mat": "present",
+  present: "present",
+  tre: "late",
+  "di tre": "late",
+  muon: "late",
+  "di muon": "late",
+  late: "late",
+  vang: "absent",
+  "vang mat": "absent",
+  absent: "absent",
+};
+
+/** Template status: Có mặt / Trễ / Vắng (không dấu cũng được). Returns null when blank or unknown. */
+export function parseSchoolCameraStatus(value: string | undefined): "present" | "late" | "absent" | null {
+  return SCHOOL_STATUS_ALIASES[foldText(value || "")] || null;
+}
+
+function schoolIssue(
+  row: SchoolCameraRow,
+  field: string,
+  rejectedValue: string | null,
+  code: string,
+  message: string,
+): AttendanceImportIssue {
+  return { rowNumber: row.rowNumber, field, column: field, rejectedValue, code, message, severity: "error" };
+}
+
+export function reconcileSchoolAttendanceRows(
+  rows: SchoolCameraRow[],
+  context: {
+    attendanceDate: string;
+    classes: SchoolCameraClass[];
+    students: CameraStudent[];
+    confirmNameMatches?: boolean;
+  },
+) {
+  const classByCode = new Map(context.classes.map((row) => [normalizeCode(row.code), row]));
+  const issues: AttendanceImportIssue[] = [];
+  const invalidRows = new Set<number>();
+  const groups = new Map<string, SchoolCameraRow[]>();
+
+  for (const row of rows) {
+    const code = normalizeCode(row.rawClassCode || "");
+    const klass = code ? classByCode.get(code) : undefined;
+    if (!code) {
+      issues.push(schoolIssue(row, "classCode", null, "CAMERA_CLASS_MISSING", "Thiếu mã lớp."));
+      invalidRows.add(row.rowNumber);
+    } else if (!klass) {
+      issues.push(
+        schoolIssue(row, "classCode", row.rawClassCode || null, "CAMERA_CLASS_UNKNOWN", "Mã lớp không có trong năm học (hoặc lớp đã lưu trữ)."),
+      );
+      invalidRows.add(row.rowNumber);
+    }
+    if (!(row.rawStatus || "").trim()) {
+      issues.push(schoolIssue(row, "sourceStatus", null, "CAMERA_STATUS_MISSING", "Thiếu trạng thái (Có mặt / Trễ / Vắng)."));
+      invalidRows.add(row.rowNumber);
+    } else if (!parseSchoolCameraStatus(row.rawStatus)) {
+      issues.push(
+        schoolIssue(row, "sourceStatus", row.rawStatus || null, "CAMERA_STATUS_INVALID", "Trạng thái chỉ nhận: Có mặt, Trễ, Vắng."),
+      );
+      invalidRows.add(row.rowNumber);
+    }
+    if (klass) {
+      const list = groups.get(klass.classId) || [];
+      list.push(row);
+      groups.set(klass.classId, list);
+    }
+  }
+
+  const normalizedRows: Array<SchoolCameraRow & {
+    targetClassId?: string;
+    matchedStudentId?: string;
+    resolution: string;
+    rawObservation: "present" | "late" | "absent" | "unknown";
+    normalizedObservedAt?: number;
+  }> = [];
+  const nameMatches: ProposedNameMatch[] = [];
+  const classPreviews: SchoolClassPreview[] = [];
+
+  for (const klass of context.classes) {
+    const classRows = groups.get(klass.classId) || [];
+    const roster = context.students.filter((row) => row.classId === klass.classId);
+    if (!classRows.length) continue;
+    const result = reconcileAttendanceRows(classRows, {
+      attendanceDate: context.attendanceDate,
+      classId: klass.classId,
+      classCode: klass.code,
+      students: context.students,
+    });
+    issues.push(...result.issues);
+    nameMatches.push(...result.nameMatches);
+    const nameMatchedRows = new Set(result.nameMatches.map((item) => item.rowNumber));
+    const matchedStudentIds = new Set<string>();
+    const preview: SchoolClassPreview = {
+      classId: klass.classId,
+      code: klass.code,
+      name: klass.name,
+      rowCount: classRows.length,
+      matchedCount: 0,
+      present: 0,
+      late: 0,
+      absent: 0,
+      rosterCount: roster.length,
+      missingCount: 0,
+      errorCount: 0,
+      warningCount: 0,
+      unconfirmedNameCount: 0,
+      publishable: false,
+    };
+    for (const row of result.rows) {
+      const status = parseSchoolCameraStatus(row.rawStatus);
+      let resolution = invalidRows.has(row.rowNumber) ? "invalid" : row.resolution;
+      if (resolution === "matched" && nameMatchedRows.has(row.rowNumber) && !context.confirmNameMatches) {
+        resolution = "name_unconfirmed";
+        preview.unconfirmedNameCount += 1;
+      }
+      if (resolution === "matched" && row.matchedStudentId) {
+        matchedStudentIds.add(row.matchedStudentId);
+        preview.matchedCount += 1;
+        if (status === "present") preview.present += 1;
+        if (status === "late") preview.late += 1;
+        if (status === "absent") preview.absent += 1;
+      }
+      normalizedRows.push({
+        ...row,
+        targetClassId: klass.classId,
+        resolution,
+        rawObservation: status || "unknown",
+        normalizedObservedAt: status === "absent" ? undefined : row.normalizedObservedAt,
+      });
+    }
+    const rowNumbers = new Set(classRows.map((row) => row.rowNumber));
+    const classIssues = issues.filter((item) => rowNumbers.has(item.rowNumber));
+    preview.errorCount = classIssues.filter((item) => item.severity === "error").length;
+    preview.warningCount = classIssues.filter((item) => item.severity === "warning").length;
+    preview.missingCount = roster.filter((row) => !matchedStudentIds.has(row.studentId)).length;
+    preview.publishable = preview.errorCount === 0 && preview.unconfirmedNameCount === 0 && preview.matchedCount > 0;
+    classPreviews.push(preview);
+  }
+
+  const handledRows = new Set(normalizedRows.map((item) => item.rowNumber));
+  for (const row of rows) {
+    if (handledRows.has(row.rowNumber)) continue;
+    normalizedRows.push({
+      ...row,
+      resolution: "invalid",
+      rawObservation: parseSchoolCameraStatus(row.rawStatus) || "unknown",
+    });
+  }
+  normalizedRows.sort((a, b) => a.rowNumber - b.rowNumber);
+
+  const blockers = issues.filter((item) => item.severity === "error");
+  const unconfirmed = classPreviews.reduce((sum, row) => sum + row.unconfirmedNameCount, 0);
+  issues.sort((a, b) => a.rowNumber - b.rowNumber);
+  return {
+    ok: blockers.length === 0 && unconfirmed === 0 && classPreviews.length > 0,
+    totalRows: rows.length,
+    issues,
+    blockers,
+    nameMatches,
+    unconfirmedNameCount: unconfirmed,
+    classes: classPreviews,
+    publishableClassIds: classPreviews.filter((row) => row.publishable).map((row) => row.classId),
+    rows: normalizedRows,
+    matchedCount: classPreviews.reduce((sum, row) => sum + row.matchedCount, 0),
+    warningCount: issues.filter((item) => item.severity === "warning").length,
+    errorCount: blockers.length,
+  };
 }

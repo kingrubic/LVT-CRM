@@ -41,6 +41,7 @@ import type * as homeroomAlerts from "../homeroomAlerts.js";
 import type * as homeroomCatalog from "../homeroomCatalog.js";
 import type * as homeroomClasses from "../homeroomClasses.js";
 import type * as homeroomContext from "../homeroomContext.js";
+import type * as homeroomData from "../homeroomData.js";
 import type * as homeroomPolicy from "../homeroomPolicy.js";
 import type * as homeroomReportPolicy from "../homeroomReportPolicy.js";
 import type * as homeroomReports from "../homeroomReports.js";
@@ -127,6 +128,7 @@ declare const fullApi: ApiFromModules<{
   homeroomCatalog: typeof homeroomCatalog;
   homeroomClasses: typeof homeroomClasses;
   homeroomContext: typeof homeroomContext;
+  homeroomData: typeof homeroomData;
   homeroomPolicy: typeof homeroomPolicy;
   homeroomReportPolicy: typeof homeroomReportPolicy;
   homeroomReports: typeof homeroomReports;

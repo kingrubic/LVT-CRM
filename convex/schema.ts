@@ -858,6 +858,8 @@ export default defineSchema({
     .index("by_student_date", ["studentId", "attendanceDate"])
     .index("by_class_date", ["classId", "attendanceDate"])
     .index("by_year_date", ["schoolYearId", "attendanceDate"])
+    .index("by_year_status_date", ["schoolYearId", "effectiveStatus", "attendanceDate"])
+    .index("by_class_status_date", ["classId", "effectiveStatus", "attendanceDate"])
     .index("by_import", ["sourceImportId"]),
   studentAttendanceCorrections: defineTable({
     attendanceDayId: v.string(),

@@ -83,10 +83,9 @@ function normalizePathname(pathname) {
 export function homeroomPathname(args = {}) {
   if (args.studentId) return `/lop-chu-nhiem/hoc-sinh/${encodeURIComponent(args.studentId)}`;
   if (args.manageClasses) return '/lop-chu-nhiem/quan-ly-lop';
-  if (args.importAttendance && args.classId) {
-    return `/lop-chu-nhiem/import-diem-danh/${encodeURIComponent(args.classId)}`;
-  }
-  if (args.importAttendance) return '/lop-chu-nhiem/import-diem-danh';
+  if (args.pendingAbsences) return '/lop-chu-nhiem/vang-cho-xu-ly';
+  if (args.calendar) return '/lop-chu-nhiem/lich-hoc';
+  if (args.importAttendance) return '/lop-chu-nhiem/nhap-diem-danh';
   if (args.classId && args.tab) {
     return `/lop-chu-nhiem/lop/${encodeURIComponent(args.classId)}/${args.tab}`;
   }
