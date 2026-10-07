@@ -253,7 +253,7 @@ final class HomeroomViewController: UITableViewController {
                 rows.append(("Chưa có lớp trong phạm vi ngày này", "Chưa được phân công lớp hoặc năm học chưa có lớp đang hoạt động."))
             }
             rows += overview.classes.map {
-                ("\($0.code) · \($0.name)", "Sĩ số \($0.rosterCount) · GVCN \($0.teacherName)\n\($0.published ? countsText($0.counts) : "Chưa có dữ liệu điểm danh")\nChờ xử lý \($0.pendingTotal) · Xem danh sách lớp và điểm danh")
+                ("\($0.code) · \($0.name)", "Sĩ số \($0.rosterCount) · GVCN \($0.teacherName.isEmpty ? "Chưa phân công" : $0.teacherName)\n\($0.published ? countsText($0.counts) : "Chưa có dữ liệu điểm danh")\nChờ xử lý \($0.pendingTotal) · Xem danh sách lớp và điểm danh")
             }
         }
         tableView.reloadData()

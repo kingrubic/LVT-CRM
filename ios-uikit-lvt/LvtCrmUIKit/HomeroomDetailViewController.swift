@@ -153,7 +153,7 @@ import UIKit
         } else if let data = store.classData {
             let klass = data.scoped.class
             title = klass.code
-            rows.append(("\(klass.code) · \(klass.name)", "Ngày \(VietnamDate.display(store.context.date)) · Sĩ số \(data.scoped.rosterCount)\nGVCN \(data.scoped.currentTeacherName)\n\(klass.status == "archived" ? "Lớp đã lưu trữ" : "Lớp đang hoạt động")", nil))
+            rows.append(("\(klass.code) · \(klass.name)", "Ngày \(VietnamDate.display(store.context.date)) · Sĩ số \(data.scoped.rosterCount)\nGVCN \(data.scoped.currentTeacherName.isEmpty ? "Chưa phân công" : data.scoped.currentTeacherName)\n\(klass.status == "archived" ? "Lớp đã lưu trữ" : "Lớp đang hoạt động")", nil))
             if !dailyPane {
                 let visible = data.roster.rows.filter { matches($0.student.fullName, $0.student.studentCode) }
                 rows.append(("Danh sách lớp · \(visible.count)/\(data.roster.rows.count)", "Theo ghi danh tại ngày đã chọn; liên hệ chỉ hiển thị trong hồ sơ khi máy chủ cho phép.", nil))

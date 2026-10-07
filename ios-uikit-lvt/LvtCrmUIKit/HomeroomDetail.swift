@@ -194,6 +194,8 @@ enum HomeroomDetailDecoder {
             value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "vi_VN")).replacingOccurrences(of: "đ", with: "d")
         }
         let term = normalized(search.trimmingCharacters(in: .whitespacesAndNewlines))
+        // Foundation String.contains("") is false; an empty search must keep every row.
+        if term.isEmpty { return true }
         return normalized(name).contains(term) || normalized(code).contains(term)
     }
     static func require(_ condition: Bool) throws {

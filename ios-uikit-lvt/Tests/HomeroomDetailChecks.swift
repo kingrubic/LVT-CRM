@@ -10,6 +10,8 @@ struct HomeroomDetailChecks {
         precondition(HomeroomDetailDecoder.matchesStudent(name: "Nguyễn Đặng", code: "S01", search: " nguyen dang "))
         precondition(HomeroomDetailDecoder.matchesStudent(name: "Nguyễn Đặng", code: "S01", search: "s01"))
         precondition(!HomeroomDetailDecoder.matchesStudent(name: "Nguyễn Đặng", code: "S01", search: "no match"))
+        precondition(HomeroomDetailDecoder.matchesStudent(name: "Nguyễn Đặng", code: "S01", search: ""))
+        precondition(HomeroomDetailDecoder.matchesStudent(name: "Nguyễn Đặng", code: "S01", search: "   "))
         for payload: [String: Any] in [["rows": [], "showContacts": "false"], [:]] {
             do { _ = try HomeroomDetailDecoder.roster(payload); fatalError("Malformed roster accepted") } catch {}
         }
