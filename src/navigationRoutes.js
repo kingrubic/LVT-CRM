@@ -31,7 +31,7 @@ const REPORT_PATHS = Object.freeze({
 });
 
 /** Primary menus kept off the left sidebar; still reachable (e.g. header bell). */
-const SIDEBAR_HIDDEN_MENUS = Object.freeze(['notifications']);
+const SIDEBAR_HIDDEN_MENUS = Object.freeze(['notifications', 'chat']);
 
 /** Account pages live in the header avatar menu, not the left sidebar. */
 const ACCOUNT_MENU_IDS = Object.freeze(['profile', 'change-password', 'devices']);
