@@ -94,6 +94,18 @@ test('Thông báo vẫn có đường dẫn nhưng không nằm trên sidebar', 
   assert.equal(isSidebarPrimaryMenu('reports'), true);
 });
 
+test('Trao đổi vẫn có đường dẫn nhưng không nằm trên sidebar (header)', () => {
+  assert.equal(pathnameForMenu('chat'), '/trao-doi');
+  assert.deepEqual(routeForPathname('/trao-doi'), {
+    menu: 'chat',
+    reportSection: undefined,
+    chatPath: '/trao-doi',
+    chatKind: '',
+    chatEntityId: '',
+  });
+  assert.equal(isSidebarPrimaryMenu('chat'), false);
+});
+
 test('Ghi nhận lỗi có đường dẫn riêng trên sidebar', () => {
   assert.equal(pathnameForMenu('staff-faults'), '/ghi-nhan-loi');
   assert.deepEqual(routeForPathname('/ghi-nhan-loi'), { menu: 'staff-faults', reportSection: undefined });

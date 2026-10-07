@@ -153,6 +153,7 @@ function AppShell({ session }) {
     if (canManageOperations) return PRIMARY_MENUS;
     return PRIMARY_MENUS.filter(([id]) => id === 'chat' || (menuAccess?.[id] && menuAccess[id] !== 'hidden'));
   }, [canManageOperations, menuAccess]);
+  const canUseChat = visiblePrimaryMenus.some(([id]) => id === 'chat');
   const sidebarPrimaryMenus = useMemo(
     () => visiblePrimaryMenus.filter(([id]) => isSidebarPrimaryMenu(id)),
     [visiblePrimaryMenus],
@@ -462,6 +463,13 @@ function AppShell({ session }) {
             <h1>{title}</h1>
           </div>
           <div className="header-user">
+            {canUseChat ? (
+              <ChatHeaderButton
+                active={active === 'chat'}
+                unreadCount={chatUnread?.count || 0}
+                onClick={() => choose('chat')}
+              />
+            ) : null}
             {canUseNotifications ? (
               <NotificationBell
                 data={notificationFeed}
@@ -541,6 +549,22 @@ function AppShell({ session }) {
     </div>
     </ChatAutoOpenProvider>
     </OwnAvatarProvider>
+  );
+}
+
+function ChatHeaderButton({ active = false, unreadCount = 0, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`header-chat-button${active ? ' is-active' : ''}${unreadCount > 0 ? ' has-unread' : ''}`}
+      onClick={onClick}
+      aria-label={`Trao đổi${unreadCount ? `, ${unreadCount} chưa đọc` : ''}`}
+      aria-current={active ? 'page' : undefined}
+      title="Trao đổi"
+    >
+      {navIconFor('chat')}
+      {unreadCount > 0 ? <span className="header-chat-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
+    </button>
   );
 }
 
