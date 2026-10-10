@@ -4,6 +4,7 @@
 
 - Work only inside this repository. Never scan `/Users/vsc_agent`, the user home, sibling workspaces, or unrelated projects.
 - Start with `git status --short`. Preserve unrelated dirty and untracked files.
+- Prod has live customers: make every change in the sandbox checkout `~/projects/sandbox-lvt-crm` first; promote to `~/projects/LVT-CRM` only after the owner approves. Environments, release flow, deploy commands and backups: `AGENTS.md` → *Môi trường, quy trình phát hành và vận hành*.
 - Never modify or commit `ios-uikit-lvt.zip`, archives, `.derivedData`, runtime caches, logs, secrets, credentials, or local environment files.
 - Do not read macOS Keychain, `.env*`, token stores, OAuth data, private backups, or files outside this repository unless the owner explicitly asks for a narrowly scoped operational task.
 - Do not commit, push, deploy, restart services, delete external data, or change production configuration unless explicitly requested.
@@ -20,7 +21,8 @@
 - Any Android / iOS UIKit change must bump the Profile version (`versionName` / `MARKETING_VERSION`) and build number. See `.cursor/rules/native-app-version.mdc`.
 - Tests: Node test runner under `tests/*.test.mjs`.
 - Production frontend: `https://lvt.vscgroup.io.vn`.
-- Self-hosted Convex deployment commands must use the repository wrapper scripts; never expose or inline admin keys.
+- Convex runs on Convex Cloud (dev `decisive-puma-318` = sandbox, prod `confident-guanaco-953` = customers). Deploy/codegen only through `scripts/lvt-convex-cloud-env.sh` (the npm scripts); never expose or inline deploy/admin keys. The old self-hosted wrapper is retired because `127.0.0.1:3210` now belongs to another project.
+- UI changes (web, Android, iOS) follow `DESIGN.md`; read it before touching screens or styles.
 - Cursor agents also load `.cursor/rules/*.mdc` (core + import always-on; work/auth rules by glob). Keep those rules in sync when changing invariants.
 
 ## Engineering discipline
@@ -104,7 +106,8 @@
 - Treat `convex/_generated/` as generated output; do not hand-edit it.
 - Schema/function changes must typecheck and, when deployment/codegen is explicitly requested, use repository scripts:
   - `npm run typecheck:convex-codegen`
-  - `npm run convex:deploy`
+  - `npm run convex:dev -- --once` (dev)
+  - `LVT_CONVEX_CONFIRM_PROD=confident-guanaco-953 npm run convex:deploy -- -y` (prod; clean worktree of the reviewed commit only)
 - Never run a Convex deploy merely to make generated files change unless deployment is in scope.
 
 ## Required verification
