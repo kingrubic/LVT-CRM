@@ -5,7 +5,7 @@ final class HomeroomViewController: UITableViewController {
     private let repository: HomeroomRepository
     private let session: UserSession
     private let yearButton = UIButton(type: .system)
-    private let datePicker = UIDatePicker()
+    private lazy var dayNavigator = HomeroomDayNavigator(date: date)
     private let pane = UISegmentedControl(items: ["Tổng quan", "Vắng chờ xử lý"])
     private var years: [SchoolYear] = []
     private var yearId: String?
@@ -18,7 +18,13 @@ final class HomeroomViewController: UITableViewController {
     private var errorMessage: String?
     private var loadTask: Task<Void, Never>?
     private var generation = 0
-    private var rows: [(String, String)] = []
+    private enum Row {
+        case info(String, String)
+        case banner(String, String?, HomeroomTone, String)
+        case stats([HomeroomStat], String?)
+        case item(title: String, subtitle: String?, chips: [HomeroomChip], classIndex: Int?)
+    }
+    private var rows: [Row] = []
     private var cameraStores: [String: CameraImportStore] = [:]
     private var managementStores: [String: HomeroomManagementStore] = [:]
 
@@ -99,19 +105,16 @@ final class HomeroomViewController: UITableViewController {
         yearButton.titleLabel?.adjustsFontForContentSizeCategory = true
         yearButton.titleLabel?.numberOfLines = 0
         yearButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-        datePicker.datePickerMode = .date
-        datePicker.preferredDatePickerStyle = .compact
-        datePicker.calendar = Calendar(identifier: .gregorian)
-        datePicker.timeZone = VietnamDate.timeZone
-        datePicker.locale = Locale(identifier: "vi_VN")
-        datePicker.date = VietnamDate.date(from: date) ?? Date()
-        datePicker.accessibilityLabel = "Ngày điểm danh, múi giờ Việt Nam"
-        datePicker.addTarget(self, action: #selector(dateChanged), for: .valueChanged)
+        tableView.register(HomeroomStatTilesCell.self, forCellReuseIdentifier: HomeroomStatTilesCell.reuseIdentifier)
+        tableView.register(HomeroomListCell.self, forCellReuseIdentifier: HomeroomListCell.reuseIdentifier)
+        tableView.register(HomeroomBannerCell.self, forCellReuseIdentifier: HomeroomBannerCell.reuseIdentifier)
+        dayNavigator.presenter = self
+        dayNavigator.onChange = { [weak self] selected in self?.dateChanged(to: selected) }
         pane.selectedSegmentIndex = 0
         pane.isHidden = session.isHomeroomSupervisor
         pane.addTarget(self, action: #selector(paneChanged), for: .valueChanged)
         pane.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-        let stack = UIStackView(arrangedSubviews: [yearButton, datePicker, pane])
+        let stack = UIStackView(arrangedSubviews: [yearButton, dayNavigator, pane])
         stack.axis = .vertical
         stack.spacing = 12
         stack.isLayoutMarginsRelativeArrangement = true
@@ -135,8 +138,7 @@ final class HomeroomViewController: UITableViewController {
 
     @objc private func retry() { load() }
     @objc private func paneChanged() { render() }
-    @objc private func dateChanged() {
-        let selected = VietnamDate.string(from: datePicker.date)
+    private func dateChanged(to selected: String) {
         guard selected != date else { return }
         managementStores.values.forEach { $0.invalidate() }
         date = selected
@@ -144,7 +146,7 @@ final class HomeroomViewController: UITableViewController {
     }
 
     private func updateHeader() {
-        yearButton.setTitle(years.first { $0.id == yearId }?.name ?? "Chọn năm học", for: .normal)
+        yearButton.setTitle(years.first { $0.id == yearId }.map { "Năm học \($0.name)" } ?? "Chọn năm học", for: .normal)
         yearButton.menu = UIMenu(children: years.map { year in
             UIAction(title: year.name, state: year.id == yearId ? .on : .off) { [weak self] _ in
                 guard let self, self.yearId != year.id else { return }
@@ -220,75 +222,83 @@ final class HomeroomViewController: UITableViewController {
     private func render() {
         rows = []
         if loading {
-            rows = [("Đang tải lớp chủ nhiệm…", "Ngày Việt Nam: \(VietnamDate.display(date))")]
+            rows = [.info("Đang tải lớp chủ nhiệm…", HomeroomPresentation.dayTitle(date))]
         } else if let errorMessage {
-            rows = [("Chưa tải được dữ liệu", "\(errorMessage)\nNhấn Tải lại để thử lại. Ngày \(VietnamDate.display(date)).")]
+            rows = [.banner("Chưa tải được dữ liệu", "\(errorMessage)\nKéo xuống hoặc nhấn Tải lại để thử lại.", .danger, "exclamationmark.triangle")]
         } else if years.isEmpty {
-            rows = [("Chưa có năm học", "Quản trị viên cần tạo năm học trước khi xem điểm danh.")]
+            rows = [.banner("Chưa có năm học", "Quản trị viên cần tạo năm học trước khi điểm danh.", .neutral, "calendar")]
         } else if session.isHomeroomSupervisor, let status {
-            rows.append(("Giám thị · Chỉ xem trạng thái công bố", "Ngày \(VietnamDate.display(date)). Không cấp quyền xem danh sách lớp/học sinh. Nhập, kiểm tra và công bố tệp chưa được triển khai."))
-            rows.append(("Đã có dữ liệu cho \(status.publishedClassCount) lớp", status.uploads.isEmpty ? "Chưa có tệp đã công bố cho ngày này." : "\(status.uploads.count) tệp đã công bố."))
-            rows += status.uploads.map { ($0.fileName, "\($0.matchedCount)/\($0.rowCount) dòng khớp · \($0.uploadedByName)") }
+            rows.append(.banner("Tình trạng nhập điểm danh toàn trường", "Giám thị theo dõi việc nhập dữ liệu camera; danh sách lớp và học sinh chỉ dành cho GVCN và quản trị.", .info, "person.3"))
+            rows.append(.stats([HomeroomStat(value: HomeroomPresentation.number(status.publishedClassCount), label: "Lớp đã có dữ liệu", tone: .success)], nil))
+            if status.uploads.isEmpty { rows.append(.banner("Chưa có tệp nào cho ngày này", nil, .neutral, "tray")) }
+            rows += status.uploads.map { .item(title: $0.fileName, subtitle: "\($0.matchedCount)/\($0.rowCount) dòng khớp · \($0.uploadedByName.isEmpty ? "Không rõ người nhập" : $0.uploadedByName)", chips: [], classIndex: nil) }
         } else if pane.selectedSegmentIndex == 1, let pending {
-            rows.append(("Vắng chờ xử lý · \(pending.total) buổi", "Toàn năm học, không lọc theo ngày tổng quan. Nhấn Phân loại vắng để chọn rõ từng buổi; tối đa 100 buổi duy nhất, không chọn phần bị giới hạn."))
-            if pending.truncated {
-                rows.append(("Danh sách bị giới hạn bởi máy chủ", "Hiển thị \(pending.rows.count)/\(pending.total) buổi mới nhất; không phải danh sách đầy đủ."))
-            }
-            if pending.rows.isEmpty { rows.append(("Không có buổi vắng chờ xử lý", "Trong phạm vi được máy chủ cho phép.")) }
-            rows += pending.rows.map {
-                ($0.fullName, "\($0.studentCode) · Lớp \($0.classCode) · \(VietnamDate.display($0.attendanceDate))\n\($0.note)\nQuyền phân loại từ máy chủ: \($0.canCorrect ? "Có" : "Không")")
+            rows.append(.info("Các buổi vắng chưa phân loại trong năm học", pending.truncated ? "Đang hiện \(pending.rows.count) buổi gần nhất trong \(pending.total) buổi." : "Nhấn Phân loại vắng để chọn buổi cần phân loại."))
+            if pending.rows.isEmpty { rows.append(.banner("Không còn buổi vắng nào chờ xử lý", nil, .success, "checkmark.circle")) }
+            rows += pending.rows.map { row in
+                let subtitle = ["Lớp \(row.classCode)", HomeroomPresentation.dayTitle(row.attendanceDate), row.note].filter { !$0.isEmpty }.joined(separator: " · ")
+                return .item(title: row.fullName, subtitle: subtitle, chips: [HomeroomChip(text: "Vắng", tone: .danger)], classIndex: nil)
             }
         } else if let overview {
-            rows.append(("Tổng quan \(VietnamDate.display(overview.date))", "\(overview.studentCount) học sinh · \(overview.classes.count) lớp\n\(countsText(overview.counts))"))
-            rows.append(("Chuyên cần", overview.ratedRows > 0 ? String(format: "%.1f%% · %d dòng được đánh giá", overview.attendanceRate * 100, overview.ratedRows) : "— Chưa có dữ liệu đánh giá"))
+            let schoolDay = overview.schoolDay.isSchoolDay && !overview.schoolDay.outsideYear
             if overview.schoolDay.outsideYear {
-                rows.append(("Ngoài năm học", "Ngày đã chọn nằm ngoài năm học \(overview.schoolYear.name)."))
+                rows.append(.banner("Ngoài năm học", "Ngày đã chọn nằm ngoài năm học \(overview.schoolYear.name).", .info, "calendar.badge.exclamationmark"))
             } else if !overview.schoolDay.isSchoolDay {
-                rows.append(("Không phải ngày học", overview.schoolDay.note.isEmpty ? "Không cần điểm danh." : overview.schoolDay.note))
+                rows.append(.banner(overview.date == overview.today ? "Hôm nay không phải ngày học" : "Không phải ngày học", overview.schoolDay.note.isEmpty ? "Không cần điểm danh." : overview.schoolDay.note, .info, "calendar.badge.minus"))
+            } else {
+                rows.append(.stats(HomeroomPresentation.overviewStats(overview.counts), HomeroomPresentation.overviewSummary(studentCount: overview.studentCount, classCount: overview.classes.count, attendanceRate: overview.attendanceRate, ratedRows: overview.ratedRows)))
             }
-            if overview.missingUploadShouldAlert {
-                rows.append(("Thiếu dữ liệu sau \(overview.missingUploadCutoffTime)", overview.missingClassCodes.joined(separator: ", ")))
+            if schoolDay, overview.missingUploadShouldAlert {
+                rows.append(.banner("Còn \(overview.missingClassCodes.count) lớp chưa có dữ liệu", "Đã quá \(overview.missingUploadCutoffTime): \(overview.missingClassCodes.joined(separator: ", "))", .warning, "exclamationmark.triangle"))
             }
             if overview.classes.isEmpty {
-                rows.append(("Chưa có lớp trong phạm vi ngày này", "Chưa được phân công lớp hoặc năm học chưa có lớp đang hoạt động."))
+                rows.append(.banner("Chưa có lớp", "Bạn chưa được phân công lớp chủ nhiệm trong ngày này.", .neutral, "person.3"))
             }
-            rows += overview.classes.map {
-                ("\($0.code) · \($0.name)", "Sĩ số \($0.rosterCount) · GVCN \($0.teacherName.isEmpty ? "Chưa phân công" : $0.teacherName)\n\($0.published ? countsText($0.counts) : "Chưa có dữ liệu điểm danh")\nChờ xử lý \($0.pendingTotal) · Xem danh sách lớp và điểm danh")
+            rows += overview.classes.enumerated().map { index, klass in
+                .item(title: HomeroomPresentation.classTitle(klass), subtitle: HomeroomPresentation.classSubtitle(klass), chips: HomeroomPresentation.classChips(klass, schoolDay: schoolDay), classIndex: index)
             }
         }
         tableView.reloadData()
         navigationItem.rightBarButtonItem?.isEnabled = !loading && errorMessage == nil && !session.isHomeroomSupervisor && pane.selectedSegmentIndex == 1 && pending?.rows.contains(where: { $0.canCorrect && !$0.classId.isEmpty && !$0.studentId.isEmpty }) == true
     }
 
-    private func countsText(_ counts: AttendanceCounts) -> String {
-        "Có mặt \(counts.present) · Trễ \(counts.late) · Vắng \(counts.absent)\nChưa có dữ liệu \(counts.noData) · Miễn \(counts.exempt)"
-    }
-
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { rows.count }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "homeroom")
-            ?? UITableViewCell(style: .subtitle, reuseIdentifier: "homeroom")
-        var content = cell.defaultContentConfiguration()
-        content.text = rows[indexPath.row].0
-        content.secondaryText = rows[indexPath.row].1
-        content.textProperties.font = .preferredFont(forTextStyle: .headline)
-        content.secondaryTextProperties.font = .preferredFont(forTextStyle: .body)
-        content.textProperties.numberOfLines = 0
-        content.secondaryTextProperties.numberOfLines = 0
-        cell.contentConfiguration = content
-        let isClass = classAt(indexPath.row) != nil
-        cell.selectionStyle = isClass ? .default : .none
-        cell.accessoryType = isClass ? .disclosureIndicator : .none
-        return cell
+        switch rows[indexPath.row] {
+        case let .info(title, detail):
+            let cell = tableView.dequeueReusableCell(withIdentifier: "homeroom") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "homeroom")
+            var content = cell.defaultContentConfiguration()
+            content.text = title
+            content.secondaryText = detail
+            content.textProperties.font = .preferredFont(forTextStyle: .headline)
+            content.secondaryTextProperties.font = .preferredFont(forTextStyle: .subheadline)
+            content.secondaryTextProperties.color = .secondaryLabel
+            content.textProperties.numberOfLines = 0
+            content.secondaryTextProperties.numberOfLines = 0
+            cell.contentConfiguration = content
+            cell.selectionStyle = .none
+            cell.accessoryType = .none
+            return cell
+        case let .banner(title, message, tone, symbol):
+            let cell = tableView.dequeueReusableCell(withIdentifier: HomeroomBannerCell.reuseIdentifier, for: indexPath) as! HomeroomBannerCell
+            cell.configure(title: title, message: message, tone: tone, symbol: symbol)
+            return cell
+        case let .stats(stats, footnote):
+            let cell = tableView.dequeueReusableCell(withIdentifier: HomeroomStatTilesCell.reuseIdentifier, for: indexPath) as! HomeroomStatTilesCell
+            cell.configure(stats, footnote: footnote)
+            return cell
+        case let .item(title, subtitle, chips, classIndex):
+            let cell = tableView.dequeueReusableCell(withIdentifier: HomeroomListCell.reuseIdentifier, for: indexPath) as! HomeroomListCell
+            cell.configure(title: title, subtitle: subtitle, chips: chips, tappable: classIndex != nil)
+            return cell
+        }
     }
 
     private func classAt(_ row: Int) -> HomeroomClassSummary? {
         guard !loading, errorMessage == nil, !session.isHomeroomSupervisor, pane.selectedSegmentIndex == 0,
-              let overview else { return nil }
-        let offset = rows.count - overview.classes.count
-        guard row >= offset, row - offset < overview.classes.count else { return nil }
-        return overview.classes[row - offset]
+              let overview, row < rows.count, case let .item(_, _, _, classIndex?) = rows[row], classIndex < overview.classes.count else { return nil }
+        return overview.classes[classIndex]
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -298,7 +308,7 @@ final class HomeroomViewController: UITableViewController {
         let controller = HomeroomDetailViewController(repository: repository, context: context)
         controller.onClassDateChanged = { [weak self] selected in
             self?.date = selected
-            if let value = VietnamDate.date(from: selected) { self?.datePicker.date = value }
+            self?.dayNavigator.setDate(selected)
         }
         navigationController?.pushViewController(controller, animated: true)
     }

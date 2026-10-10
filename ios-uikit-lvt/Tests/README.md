@@ -138,3 +138,25 @@ Source admission: `assertClassRosterWritable` calls manager-only `assertCanBulkI
 Roster differs from camera: `.xlsx` ≤2 MiB / 200 rows, 1-hour expiry, 16 required named columns, create/merge modes. `generateUploadUrl` takes only classId; `registerUpload` includes storageId/fileName/fileSize/schoolYearId/classId/mode; validateUpload/commit are actions taking only uploadId; getResult returns owned upload and raw row payload/issues. Enrollment begins on server Vietnam commit-today, not selected overview date. Parse rejection legitimately omits mode/columns; it still carries issues/blockers/preview. No client workbook parsing or column remapping is fabricated.
 
 Idempotency: public commit validates first; `storeValidationInternal` rejects committed uploads. `assertImportUploadUsable(forCommit:true)` also rejects committed uploads before the internal alreadyCommitted return. Do not promise repeatable public commit, auto-retry or invent idempotency keys. Uncertain sent writes stay locked even after read-only getResult shows a commit; inspect known IDs, never blindly replay. Explicit abandonment of known staging retains IDs in memory and does not delete server storage. No public lookup by owner/storage, cancel/delete endpoint, or durable recovery is available; expiry is not proof of cleanup. Warnings persist for process death/sign-out/reconstructed controllers. Real workbook persistence/guardian merge/auth revocation/providers/accessibility/rotation remain isolated-runtime gates. No app launch or production requests. L6/L7 not implemented.
+
+## Homeroom presentation checks (đợt 1 giao diện)
+
+```sh
+scratch=$(mktemp -d)
+swiftc -module-cache-path "$scratch/cache" \
+  ios-uikit-lvt/LvtCrmUIKit/AuthModels.swift \
+  ios-uikit-lvt/LvtCrmUIKit/CredentialStore.swift \
+  ios-uikit-lvt/LvtCrmUIKit/ConvexHttpClient.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomRepository.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomDetail.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomWrites.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomCameraImport.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomManagement.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomPendingJournal.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomPresentation.swift \
+  ios-uikit-lvt/Tests/HomeroomPresentationChecks.swift \
+  -o "$scratch/presentation-checks"
+"$scratch/presentation-checks"
+```
+
+Covers class titles/subtitles, one main status chip plus pending chip, no chips on non-school days, every absence status shown as "Vắng", Vietnamese number/percent formatting, weekday titles and day stepping. Android mirrors the same rules in `HomeroomPresentationTest`.

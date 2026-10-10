@@ -8,6 +8,13 @@ struct AppChangelogEntry: Equatable {
 enum AppChangelog {
     static let entries: [AppChangelogEntry] = [
         AppChangelogEntry(
+            version: "1.15.0",
+            highlights: [
+                "Lớp chủ nhiệm gọn và dễ đọc hơn: ô số Có mặt / Trễ / Vắng / Chưa có, mỗi lớp còn 2 dòng kèm trạng thái màu (\"Đủ 41/41\", \"3 vắng\", \"Chưa điểm danh\").",
+                "Chọn ngày bằng nút ‹ ›, ngày nghỉ chỉ hiện một thông báo. Chi tiết lớp mở thẳng phần điểm danh, mỗi học sinh một dòng.",
+            ]
+        ),
+        AppChangelogEntry(
             version: "1.14.1",
             highlights: [
                 "Mục Lớp chủ nhiệm (theo nhóm quyền): tổng quan lớp theo ngày, vắng chờ xử lý, danh sách lớp và hồ sơ học sinh.",
