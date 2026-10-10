@@ -5,6 +5,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.EventBusy
+import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,9 +26,8 @@ import lvt.crm.ui.components.LvtScreen
 @Composable
 fun HomeroomDetailScreen(viewModel: HomeroomDetailViewModel, onClose: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
-    var daily by remember { mutableStateOf(false) }
+    var daily by remember { mutableStateOf(true) }
     var search by remember { mutableStateOf("") }
-    val context = LocalContext.current
     var contactForm by remember(state.context, state.studentId) { mutableStateOf<HomeroomForm?>(null) }
     contactForm?.let { draft -> viewModel.writeOperations?.let { writes -> HomeroomWriteForm(draft, writes, { viewModel.uiState.value.context == draft.context && viewModel.uiState.value.studentId == draft.studentId && viewModel.uiState.value.error == null }, viewModel::clearWriteData, viewModel::refresh) { contactForm = null } } }
     val back = { if (state.studentId != null) viewModel.backToClass() else onClose() }
@@ -33,7 +36,6 @@ fun HomeroomDetailScreen(viewModel: HomeroomDetailViewModel, onClose: () -> Unit
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 OutlinedButton(onClick = back, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (state.studentId != null) "Trở lại lớp" else "Trở lại tổng quan") }
-                Text("Ngày Việt Nam ${formatDate(state.context.date)}", style = MaterialTheme.typography.bodyMedium)
             }
             item(key = "absence-actions") {
                 val data = state.classData
@@ -43,51 +45,80 @@ fun HomeroomDetailScreen(viewModel: HomeroomDetailViewModel, onClose: () -> Unit
             }
             if (state.studentId == null) {
                 item {
-                    OutlinedButton(onClick = {
-                        val selected = LocalDate.parse(state.context.date)
-                        DatePickerDialog(context, { _, year, month, day -> viewModel.selectDate(LocalDate.of(year, month + 1, day).toString()) }, selected.year, selected.monthValue - 1, selected.dayOfMonth).show()
-                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Chọn ngày điểm danh: ${formatDate(state.context.date)}") }
-                    OutlinedButton(onClick = { daily = !daily }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(if (daily) "Xem danh sách lớp" else "Xem điểm danh ngày") }
-                    OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Tìm tên hoặc mã học sinh") }, modifier = Modifier.fillMaxWidth(), singleLine = false)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DayNavigator(date = state.context.date, onDate = viewModel::selectDate)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = daily, onClick = { daily = true }, label = { Text("Điểm danh") }, modifier = Modifier.weight(1f).heightIn(min = 48.dp))
+                            FilterChip(selected = !daily, onClick = { daily = false }, label = { Text("Danh sách lớp") }, modifier = Modifier.weight(1f).heightIn(min = 48.dp))
+                        }
+                        OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text("Tìm học sinh") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    }
                 }
             } else {
                 item {
                     HistoryDateButton("Lịch sử từ", state.context.from) { viewModel.selectHistoryRange(it, state.context.to) }
                     HistoryDateButton("Lịch sử đến", state.context.to) { viewModel.selectHistoryRange(state.context.from, it) }
-                    Text("Chọn khoảng có ngày bắt đầu không sau ngày kết thúc. Phạm vi xem do máy chủ quyết định.")
+                    Text("Ngày bắt đầu không được sau ngày kết thúc.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
             when {
                 state.loading -> item { CircularProgressIndicator(); Text("Đang tải…") }
                 state.error != null -> item {
-                    DetailCard("Chưa tải được dữ liệu", "${state.error}\nDữ liệu cũ đã được xóa; không suy diễn thành danh sách rỗng.")
+                    DetailCard("Chưa tải được dữ liệu", "${state.error}")
                     Button(onClick = viewModel::refresh, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Thử lại") }
                 }
                 state.classData != null -> {
                     val data = state.classData!!
-                    item { DetailCard("${data.scoped.code} · ${data.scoped.name}", "Sĩ số ${data.scoped.rosterCount} · GVCN ${data.scoped.teacherName}\n${if (data.scoped.status == "archived") "Lớp đã lưu trữ" else "Lớp đang hoạt động"}\nTheo ghi danh tại ngày đã chọn; chỉ trong phạm vi máy chủ cho phép.") }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(data.scoped.name.ifBlank { "Lớp ${data.scoped.code}" }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                listOfNotNull(HomeroomPresentation.dayTitle(state.context.date), "GVCN ${data.scoped.teacherName.ifBlank { "chưa phân công" }}", if (data.scoped.status == "archived") "Lớp đã lưu trữ" else null).joinToString(" · "),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                     if (daily) {
+                        val schoolDay = data.daily.schoolDay
                         val rows = data.daily.rows.filter { matchesStudent(it.student, search) }
                         item {
-                            DetailCard("Điểm danh ${formatDate(data.daily.date)} · ${rows.size}/${data.daily.rows.size} học sinh", "${if (data.daily.published) "Đã có dữ liệu công bố" else "Chưa có dữ liệu công bố"}\nQuyền phân loại từ máy chủ: ${if (data.daily.canCorrect) "Có" else "Không"}")
-                            if (data.daily.schoolDay.outsideYear) Text("Ngoài năm học · Không suy diễn thành vắng.")
-                            else if (!data.daily.schoolDay.isSchoolDay) Text("Không phải ngày học · ${data.daily.schoolDay.note}")
-                            if (rows.isEmpty()) Text("Không có học sinh trong danh sách. Thử ngày khác hoặc thay đổi tìm kiếm.")
+                            when {
+                                schoolDay.outsideYear -> HomeroomBanner("Ngoài năm học", "Không cần điểm danh.", HomeroomTone.Info, Icons.Outlined.EventBusy)
+                                !schoolDay.isSchoolDay -> HomeroomBanner("Không phải ngày học", schoolDay.note.ifBlank { "Không cần điểm danh." }, HomeroomTone.Info, Icons.Outlined.EventBusy)
+                                !data.daily.published -> HomeroomBanner("Chưa có dữ liệu điểm danh", "Dữ liệu sẽ hiện sau khi nhập từ camera.", HomeroomTone.Neutral, Icons.Outlined.HourglassEmpty)
+                                else -> StatTiles(HomeroomPresentation.dailyStats(data.daily.rows.map { it.day?.effectiveStatus ?: "no_data" }))
+                            }
+                            if (rows.isEmpty()) Text(if (search.isBlank()) "Lớp chưa có học sinh." else "Không tìm thấy học sinh.", modifier = Modifier.padding(top = 8.dp))
                         }
-                        items(rows) { row ->
-                            DetailCard(row.student.fullName, "${row.student.studentCode} · ${attendanceStatusText(row.day?.effectiveStatus ?: "no_data")}\n${row.day?.rawObservedAt?.let(::attendanceTimestamp) ?: ""}\n${row.day?.note ?: ""}")
-                            StudentButton(row.student, viewModel::openStudent)
+                        val showStatus = data.daily.published && schoolDay.isSchoolDay && !schoolDay.outsideYear
+                        itemsIndexed(rows, key = { _, row -> row.enrollmentId }) { index, row ->
+                            ListSegment(index, rows.size) {
+                                HomeroomListRow(
+                                    title = row.student.fullName,
+                                    subtitle = row.day?.note,
+                                    chips = if (showStatus) listOf(HomeroomPresentation.studentChip(row.day?.effectiveStatus ?: "no_data", row.day?.rawObservedAt?.let(::attendanceClock))) else emptyList(),
+                                    leading = row.rosterNumber?.toString() ?: "—",
+                                    onClick = { viewModel.openStudent(row.student.id) },
+                                )
+                            }
                         }
                     } else {
                         val rows = data.roster.rows.filter { matchesStudent(it.student, search) }
                         item {
-                            Text("Danh sách lớp · ${rows.size}/${data.roster.rows.size}")
-                            Text("Liên hệ chỉ hiển thị trong hồ sơ khi máy chủ cho phép.")
-                            if (rows.isEmpty()) Text(if (data.roster.rows.isEmpty()) "Chưa có học sinh" else "Không có kết quả tìm kiếm")
+                            Text("${rows.size} học sinh", fontWeight = FontWeight.SemiBold)
+                            if (rows.isEmpty()) Text(if (data.roster.rows.isEmpty()) "Lớp chưa có học sinh." else "Không tìm thấy học sinh.")
                         }
-                        items(rows) { row ->
-                            DetailCard("${row.enrollment.rosterNumber ?: "—"}. ${row.student.fullName}", "${row.student.studentCode} · Ghi danh từ ${formatDate(row.enrollment.startDate)}")
-                            StudentButton(row.student, viewModel::openStudent)
+                        itemsIndexed(rows, key = { _, row -> row.student.id }) { index, row ->
+                            ListSegment(index, rows.size) {
+                                HomeroomListRow(
+                                    title = row.student.fullName,
+                                    subtitle = "Mã ${row.student.studentCode}",
+                                    chips = emptyList(),
+                                    leading = row.enrollment.rosterNumber?.toString() ?: "—",
+                                    onClick = { viewModel.openStudent(row.student.id) },
+                                )
+                            }
                         }
                     }
                 }
@@ -106,16 +137,25 @@ fun HomeroomDetailScreen(viewModel: HomeroomDetailViewModel, onClose: () -> Unit
                                 OutlinedButton(onClick = { contactForm = HomeroomForm(state.context, student.id, initialPhone = student.studentPhone ?: "") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Sửa điện thoại học sinh") }
                                 OutlinedButton(enabled = data.profile.guardians.size < 6, onClick = { contactForm = HomeroomForm(state.context, student.id, contactMode = "guardian") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Thêm người giám hộ · ${data.profile.guardians.size}/6") }
                             }
-                        } else Text("Liên hệ được máy chủ ẩn; không có quyền sửa.")
+                        } else Text("Bạn không có quyền xem thông tin liên hệ.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    item { Text("Ghi danh được phép xem · ${data.profile.enrollments.size}", fontWeight = FontWeight.SemiBold) }
+                    item { Text("Quá trình học", fontWeight = FontWeight.SemiBold) }
                     items(data.profile.enrollments) { row -> DetailCard("${row.classCode} · ${row.className}", "${formatDate(row.startDate)} → ${row.endDate?.let(::formatDate) ?: "Đang tiếp tục"}\n${if (row.current) "Hiện tại" else "Lịch sử"} · ${row.status}\n${row.transferReason ?: ""}") }
                     item {
-                        DetailCard("Lịch sử · ${data.history.days.size} buổi · ${data.history.corrections.size} điều chỉnh", "${formatDate(state.context.from)} → ${formatDate(state.context.to)}\nHiển thị toàn bộ các buổi được máy chủ trả về trong khoảng và phạm vi được phép.")
-                        if (data.history.days.isEmpty()) Text("Chưa có lịch sử trong khoảng này; không suy diễn thành có mặt hoặc vắng.")
+                        DetailCard("Lịch sử điểm danh", "${formatDate(state.context.from)} → ${formatDate(state.context.to)} · ${data.history.days.size} buổi · ${data.history.corrections.size} lần điều chỉnh")
+                        if (data.history.days.isEmpty()) Text("Chưa có buổi điểm danh nào trong khoảng này.")
                     }
-                    items(data.history.days.asReversed()) { row -> DetailCard("${formatDate(row.date)} · ${attendanceStatusText(row.record.effectiveStatus)}", "Lớp ID ${row.classId}\n${row.record.rawObservedAt?.let(::attendanceTimestamp) ?: ""}\n${row.record.reasonCode ?: ""} ${row.record.note ?: ""}") }
-                    items(data.history.corrections.sortedByDescending { it.at }) { row -> DetailCard("Điều chỉnh ${formatDate(row.date)}", "${attendanceStatusText(row.previousStatus)} → ${attendanceStatusText(row.nextStatus)}\n${attendanceTimestamp(row.at)} · Người sửa ID ${row.actorUserId}\n${row.reasonCode ?: ""} ${row.note ?: ""}") }
+                    val historyDays = data.history.days.asReversed()
+                    itemsIndexed(historyDays, key = { _, row -> row.id }) { index, row ->
+                        ListSegment(index, historyDays.size) {
+                            HomeroomListRow(
+                                title = HomeroomPresentation.dayTitle(row.date),
+                                subtitle = listOfNotNull(row.record.rawObservedAt?.let(::attendanceClock), row.record.note?.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { null },
+                                chips = listOf(HomeroomPresentation.studentChip(row.record.effectiveStatus, row.record.rawObservedAt?.let(::attendanceClock))),
+                            )
+                        }
+                    }
+                    items(data.history.corrections.sortedByDescending { it.at }) { row -> DetailCard("Điều chỉnh ${formatDate(row.date)}", "${attendanceStatusText(row.previousStatus)} → ${attendanceStatusText(row.nextStatus)} · ${attendanceTimestamp(row.at)}${row.note?.takeIf { it.isNotBlank() }?.let { "\n$it" } ?: ""}") }
                 }
             }
         }
@@ -131,10 +171,6 @@ fun HomeroomDetailScreen(viewModel: HomeroomDetailViewModel, onClose: () -> Unit
     }
 }
 
-@Composable private fun StudentButton(student: StudentIdentity, open: (String) -> Unit) {
-    OutlinedButton(onClick = { open(student.id) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Xem hồ sơ và lịch sử · ${student.fullName}") }
-}
-
 @Composable private fun HistoryDateButton(label: String, date: String, onDate: (String) -> Unit) {
     val context = LocalContext.current
     OutlinedButton(onClick = {
@@ -148,5 +184,7 @@ internal fun matchesStudent(student: StudentIdentity, search: String): Boolean {
     val term = normalized(search.trim())
     return normalized(student.fullName).contains(term) || normalized(student.studentCode).contains(term)
 }
+
+private fun attendanceClock(milliseconds: Double): String = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of("Asia/Ho_Chi_Minh")).format(Instant.ofEpochMilli(milliseconds.toLong()))
 
 private fun attendanceTimestamp(milliseconds: Double): String = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.forLanguageTag("vi-VN")).withZone(ZoneId.of("Asia/Ho_Chi_Minh")).format(Instant.ofEpochMilli(milliseconds.toLong()))

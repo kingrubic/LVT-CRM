@@ -1,6 +1,5 @@
 package lvt.crm.ui.homeroom
 
-import android.app.DatePickerDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -10,14 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.EventBusy
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -25,6 +24,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,14 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import lvt.crm.data.homeroom.HomeroomClassSummary
 import lvt.crm.data.homeroom.HomeroomOverview
 import lvt.crm.data.homeroom.ImportStatus
-import lvt.crm.data.homeroom.PendingAbsence
 import lvt.crm.ui.components.LvtScreen
 import lvt.crm.ui.components.StatePanel
 
@@ -75,17 +73,19 @@ fun HomeroomScreen(viewModel: HomeroomViewModel, canImport: Boolean = false, can
     ) {
         Column(Modifier.fillMaxSize()) {
             if (state.years.isNotEmpty()) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val actionsEnabled = !state.loading && !state.refreshing && state.selectedYearId != null
                     ContextControls(
                         years = state.years.map { it.id to it.name },
                         selectedYearId = state.selectedYearId,
-                        date = state.date,
                         onYear = viewModel::selectYear,
-                        onDate = viewModel::selectDate,
+                        actions = buildList {
+                            if (canImport) add("Nhập camera" to { camera = viewModel.cameraImport() })
+                            if (canManage) add("Danh mục" to { management = viewModel.management() })
+                        },
+                        actionsEnabled = actionsEnabled,
                     )
-                    Text("Ngày tổng quan · Múi giờ Việt Nam", style = MaterialTheme.typography.bodySmall)
-                    if (canImport) OutlinedButton(enabled = !state.loading && !state.refreshing && state.selectedYearId != null, onClick = { camera = viewModel.cameraImport() }) { Text("Nhập camera toàn trường") }
-                    if (canManage) OutlinedButton(enabled = !state.loading && !state.refreshing && state.selectedYearId != null, onClick = { management = viewModel.management() }) { Text("Danh mục / Học sinh / Nhập danh sách") }
+                    DayNavigator(date = state.date, onDate = viewModel::selectDate)
                 }
             }
             val year = state.years.firstOrNull { it.id == state.selectedYearId }
@@ -121,18 +121,18 @@ fun HomeroomScreen(viewModel: HomeroomViewModel, canImport: Boolean = false, can
                             item { ImportStatusCard(state.importStatus) }
                         } else {
                             item {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     FilterChip(
                                         selected = state.pane == HomeroomPane.Overview,
                                         onClick = { viewModel.selectPane(HomeroomPane.Overview) },
                                         label = { Text("Tổng quan") },
-                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                                     )
                                     FilterChip(
                                         selected = state.pane == HomeroomPane.Pending,
                                         onClick = { viewModel.selectPane(HomeroomPane.Pending) },
-                                        label = { Text("Vắng chờ xử lý (${state.pending?.total ?: 0})") },
-                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                        label = { Text("Vắng chờ xử lý (${state.pending?.total ?: 0})", maxLines = 1) },
+                                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                                     )
                                 }
                             }
@@ -153,48 +153,72 @@ fun HomeroomScreen(viewModel: HomeroomViewModel, canImport: Boolean = false, can
 
 private fun androidx.compose.foundation.lazy.LazyListScope.overviewItems(overview: HomeroomOverview?, onClass: (HomeroomClassSummary) -> Unit) {
     if (overview == null) return
+    val schoolDay = overview.schoolDay.isSchoolDay && !overview.schoolDay.outsideYear
     item {
-        val message = when {
-            overview.schoolDay.outsideYear -> "Ngày đã chọn nằm ngoài năm học ${overview.schoolYear.name}."
-            !overview.schoolDay.isSchoolDay -> overview.schoolDay.note.ifBlank { "Không phải ngày học; không cần điểm danh." }
-                        overview.missingUpload.shouldAlert -> "Đã quá ${overview.missingUpload.cutoffTime}; ${overview.missingUpload.missingClassCodes.size} lớp chưa có dữ liệu: ${overview.missingUpload.missingClassCodes.joinToString()}"
-            else -> null
-        }
-        if (message != null) NoticeCard(message, overview.missingUpload.shouldAlert)
-    }
-    item {
-        val counts = overview.counts
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Tổng quan ngày ${formatDate(overview.date)}", fontWeight = FontWeight.SemiBold)
-                Text("${overview.studentCount} học sinh · ${overview.classes.size} lớp · ${overview.pendingTotal} buổi vắng chờ xử lý")
-                Text("Có mặt ${counts.present} · Trễ ${counts.late} · Vắng ${counts.absent} · Chưa có dữ liệu ${counts.noData}")
-                Text(
-                    if (overview.ratedRows > 0) "Chuyên cần ${"%.1f".format(overview.attendanceRate * 100)}%" else "Chuyên cần — (chưa có dữ liệu đánh giá)",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            when {
+                overview.schoolDay.outsideYear -> HomeroomBanner("Ngoài năm học", "Ngày đã chọn nằm ngoài năm học ${overview.schoolYear.name}.", HomeroomTone.Info, Icons.Outlined.EventBusy)
+                !overview.schoolDay.isSchoolDay -> HomeroomBanner(
+                    if (overview.date == overview.today) "Hôm nay không phải ngày học" else "Không phải ngày học",
+                    overview.schoolDay.note.ifBlank { "Không cần điểm danh." },
+                    HomeroomTone.Info,
+                    Icons.Outlined.EventBusy,
+                )
+                else -> {
+                    StatTiles(HomeroomPresentation.overviewStats(overview.counts))
+                    Text(
+                        HomeroomPresentation.overviewSummary(overview.studentCount, overview.classes.size, overview.attendanceRate, overview.ratedRows),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            if (schoolDay && overview.missingUpload.shouldAlert) {
+                HomeroomBanner(
+                    "Còn ${overview.missingUpload.missingClassCodes.size} lớp chưa có dữ liệu",
+                    "Đã quá ${overview.missingUpload.cutoffTime}: ${overview.missingUpload.missingClassCodes.joinToString()}",
+                    HomeroomTone.Warning,
+                    Icons.Outlined.WarningAmber,
                 )
             }
         }
     }
     if (overview.classes.isEmpty()) {
-        item { NoticeCard("Bạn chưa có lớp chủ nhiệm trong ngày này hoặc năm học chưa có lớp đang hoạt động.", false) }
+        item { HomeroomBanner("Chưa có lớp", "Bạn chưa được phân công lớp chủ nhiệm trong ngày này.", HomeroomTone.Neutral, Icons.Outlined.Groups) }
     } else {
-        items(overview.classes, key = { it.id }) { ClassCard(it, onClass) }
+        itemsIndexed(overview.classes, key = { _, row -> row.id }) { index, row ->
+            ListSegment(index, overview.classes.size) {
+                HomeroomListRow(
+                    title = HomeroomPresentation.classTitle(row),
+                    subtitle = HomeroomPresentation.classSubtitle(row),
+                    chips = HomeroomPresentation.classChips(row, schoolDay),
+                    onClick = { onClass(row) },
+                )
+            }
+        }
     }
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.pendingItems(pending: lvt.crm.data.homeroom.PendingAbsences?) {
     if (pending == null) return
     item {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            NoticeCard("Vắng chờ xử lý toàn năm học, không lọc theo ngày tổng quan. Chọn rõ từng buổi được phép ở danh sách phân loại phía trên; tối đa 100 buổi duy nhất, không tự chọn phần bị giới hạn.", false)
-            if (pending.truncated) NoticeCard("Đang hiển thị ${pending.rows.size}/${pending.total} buổi mới nhất. Danh sách đã bị giới hạn bởi máy chủ.", true)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Các buổi vắng chưa phân loại trong năm học", fontWeight = FontWeight.SemiBold)
+            if (pending.truncated) Text("Đang hiện ${pending.rows.size} buổi gần nhất trong ${pending.total} buổi.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
     if (pending.rows.isEmpty()) {
-        item { NoticeCard("Không còn buổi vắng nào chờ xử lý.", false) }
+        item { HomeroomBanner("Không còn buổi vắng nào chờ xử lý", null, HomeroomTone.Success, Icons.Outlined.TaskAlt) }
     } else {
-        items(pending.rows, key = { it.id }) { PendingCard(it) }
+        itemsIndexed(pending.rows, key = { _, row -> row.id }) { index, row ->
+            ListSegment(index, pending.rows.size) {
+                HomeroomListRow(
+                    title = row.fullName,
+                    subtitle = listOf("Lớp ${row.classCode}", HomeroomPresentation.dayTitle(row.attendanceDate), row.note).filter { it.isNotBlank() }.joinToString(" · "),
+                    chips = listOf(HomeroomChip("Vắng", HomeroomTone.Danger)),
+                )
+            }
+        }
     }
 }
 
@@ -202,20 +226,20 @@ private fun androidx.compose.foundation.lazy.LazyListScope.pendingItems(pending:
 private fun ContextControls(
     years: List<Pair<String, String>>,
     selectedYearId: String?,
-    date: String,
     onYear: (String) -> Unit,
-    onDate: (String) -> Unit,
+    actions: List<Pair<String, () -> Unit>>,
+    actionsEnabled: Boolean,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val selected = years.firstOrNull { it.first == selectedYearId }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(selected?.second ?: "Chọn năm học")
+        Box {
+            TextButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("Năm học ${selected?.second ?: "—"}", fontWeight = FontWeight.SemiBold)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 years.forEach { (id, name) ->
@@ -223,80 +247,40 @@ private fun ContextControls(
                 }
             }
         }
-        OutlinedButton(
-            modifier = Modifier.weight(1f),
-            onClick = {
-                val current = runCatching { LocalDate.parse(date) }.getOrDefault(LocalDate.now())
-                DatePickerDialog(
-                    context,
-                    { _, year, month, day -> onDate(LocalDate.of(year, month + 1, day).toString()) },
-                    current.year,
-                    current.monthValue - 1,
-                    current.dayOfMonth,
-                ).show()
-            },
-        ) { Text(formatDate(date)) }
-    }
-}
-
-@Composable
-private fun ClassCard(row: HomeroomClassSummary, onClass: (HomeroomClassSummary) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("${row.code} · ${row.name}", fontWeight = FontWeight.SemiBold)
-            Text("Khối ${row.gradeLevel ?: "—"} · Sĩ số ${row.rosterCount}${row.teacherName.takeIf { it.isNotBlank() }?.let { " · GVCN $it" } ?: ""}")
-            if (row.published) {
-                Text("Có mặt ${row.counts.present} · Trễ ${row.counts.late} · Vắng ${row.counts.absent} · Chưa có dữ liệu ${row.counts.noData}")
-            } else {
-                Text("Chưa có dữ liệu điểm danh", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text("Chờ xử lý ${row.pendingTotal} · Quyền phân loại: ${if (row.canCorrect) "Có" else "Không"} · Chỉ xem.")
-            OutlinedButton(onClick = { onClass(row) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Xem danh sách lớp và điểm danh · ${row.code}") }
+        Box(Modifier.weight(1f))
+        actions.forEach { (label, action) ->
+            OutlinedButton(enabled = actionsEnabled, onClick = action, modifier = Modifier.heightIn(min = 48.dp)) { Text(label, maxLines = 1) }
         }
     }
 }
 
 @Composable
-private fun PendingCard(row: PendingAbsence) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(row.fullName, fontWeight = FontWeight.SemiBold)
-            Text("${row.studentCode} · Lớp ${row.classCode} · ${formatDate(row.attendanceDate)}")
-            if (row.note.isNotBlank()) Text(row.note)
-            Text("Quyền phân loại từ máy chủ: ${if (row.canCorrect) "Có" else "Không"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun SupervisorNotice() = NoticeCard(
-    "Giám thị: trạng thái nhập điểm danh toàn trường, chỉ xem. Chọn tệp, kiểm tra và công bố sẽ được triển khai ở L4; màn hình này không cấp quyền xem danh sách lớp/học sinh.",
-    false,
+private fun SupervisorNotice() = HomeroomBanner(
+    "Tình trạng nhập điểm danh toàn trường",
+    "Giám thị theo dõi việc nhập dữ liệu camera; danh sách lớp và học sinh chỉ dành cho GVCN và quản trị.",
+    HomeroomTone.Info,
+    Icons.Outlined.Groups,
 )
 
 @Composable
 private fun ImportStatusCard(status: ImportStatus?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text("Tình trạng nhập điểm danh", fontWeight = FontWeight.SemiBold)
-            Text("Đã có dữ liệu cho ${status?.publishedClassCount ?: 0} lớp.")
-            val uploads = status?.uploads.orEmpty()
-            if (uploads.isEmpty()) Text("Chưa công bố file nào cho ngày này.")
-            uploads.forEach { upload ->
-                Text("${upload.fileName} · ${upload.matchedCount}/${upload.rowCount} dòng khớp · ${upload.uploadedByName.ifBlank { "Không rõ người nhập" }}")
+    val uploads = status?.uploads.orEmpty()
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatTiles(listOf(HomeroomStat(HomeroomPresentation.number(status?.publishedClassCount ?: 0), "Lớp đã có dữ liệu", HomeroomTone.Success)))
+        if (uploads.isEmpty()) {
+            HomeroomBanner("Chưa có tệp nào cho ngày này", null, HomeroomTone.Neutral, Icons.Outlined.CalendarMonth)
+        } else {
+            uploads.forEachIndexed { index, upload ->
+                ListSegment(index, uploads.size) {
+                    HomeroomListRow(
+                        title = upload.fileName,
+                        subtitle = "${upload.matchedCount}/${upload.rowCount} dòng khớp · ${upload.uploadedByName.ifBlank { "Không rõ người nhập" }}",
+                        chips = emptyList(),
+                    )
+                }
             }
         }
     }
-}
-
-@Composable
-private fun NoticeCard(message: String, warning: Boolean) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (warning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) { Text(message, modifier = Modifier.padding(14.dp)) }
 }
 
 @Composable
