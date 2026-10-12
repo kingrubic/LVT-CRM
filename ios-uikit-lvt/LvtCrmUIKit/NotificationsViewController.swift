@@ -299,7 +299,8 @@ final class NotificationsViewController: UITableViewController {
     private func dueText(_ item: NotificationItem) -> String {
         guard item.dueAt > 0 else { return "" }
         let when = Self.dueFormatter.string(from: Date(timeIntervalSince1970: TimeInterval(item.dueAt) / 1000))
-        if item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat" { return "Lúc \(when)" }
+        if item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat"
+            || DutyWeekPresentation.isWeekNotification(item.sourceType) { return "Lúc \(when)" }
         return when
     }
 

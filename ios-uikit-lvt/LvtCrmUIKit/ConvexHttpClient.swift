@@ -226,6 +226,11 @@ actor ConvexHttpClient {
             "PASSWORD_CHANGE_REQUIRED", "PASSWORD_RESET_FAILED", "PASSWORD_RESET_EMAIL_FAILED",
             "MAIL_NOT_CONFIGURED", "MAIL_AUTH_FAILED", "PUBLIC_SIGNUP_DISABLED", "INVALID_EMAIL",
             "INVALID_AUTH_FLOW",
+            "DUTY_WEEK_MANAGER_REQUIRED", "DUTY_WEEK_REVIEWER_REQUIRED", "DUTY_WEEK_ALREADY_SUBMITTED",
+            "DUTY_WEEK_NOTHING_TO_SUBMIT", "DUTY_WEEK_NOT_SUBMITTED", "DUTY_WEEK_CHANGED",
+            "DUTY_WEEK_RETURN_NOTE_REQUIRED", "DUTY_WEEK_RETURN_NOTE_TOO_LONG", "DUTY_UPDATE_FORBIDDEN", "DUTY_NOT_FOUND",
+            "INVALID_DUTY_TITLE", "INVALID_CONTENT", "INVALID_LOCATION", "INVALID_OTHER_PARTICIPANTS",
+            "INVALID_PARTICIPANT", "INVALID_DEPARTMENT", "END_BEFORE_START",
             "DUTY_CHAT_EMPTY", "WORK_CHAT_EMPTY", "DUTY_CHAT_TOO_LONG", "WORK_CHAT_TOO_LONG",
             "DUTY_CHAT_RECALL_TOO_LATE", "WORK_CHAT_RECALL_TOO_LATE",
             "DUTY_CHAT_RECALL_FORBIDDEN", "WORK_CHAT_RECALL_FORBIDDEN",
@@ -239,8 +244,33 @@ actor ConvexHttpClient {
         return known.first { message.localizedCaseInsensitiveContains($0) } ?? message
     }
 
+    /// Duty and weekly-approval codes; checked before the generic "Invalid…" login wording.
+    static func dutyMessage(_ code: String) -> String? {
+        switch code {
+        case "DUTY_WEEK_MANAGER_REQUIRED": return "Chỉ văn thư (admin/mod) được nộp lịch tuần."
+        case "DUTY_WEEK_REVIEWER_REQUIRED": return "Chỉ Ban Giám hiệu được duyệt hoặc trả lại lịch tuần."
+        case "DUTY_WEEK_ALREADY_SUBMITTED": return "Lịch tuần này đang chờ Ban Giám hiệu duyệt."
+        case "DUTY_WEEK_NOTHING_TO_SUBMIT": return "Lịch tuần này không có thay đổi nào cần duyệt."
+        case "DUTY_WEEK_NOT_SUBMITTED": return "Lịch tuần này không còn ở trạng thái chờ duyệt."
+        case "DUTY_WEEK_CHANGED": return "Văn thư vừa sửa lịch tuần này. Hãy xem lại trước khi duyệt."
+        case "DUTY_WEEK_RETURN_NOTE_REQUIRED": return "Vui lòng ghi lý do trả lại."
+        case "DUTY_WEEK_RETURN_NOTE_TOO_LONG": return "Lý do trả lại tối đa 500 ký tự."
+        case "DUTY_UPDATE_FORBIDDEN": return "Bạn không thể sửa công tác này."
+        case "DUTY_NOT_FOUND": return "Công tác không còn tồn tại."
+        case "INVALID_DUTY_TITLE": return "Tên công tác bắt buộc, tối đa 200 ký tự."
+        case "INVALID_CONTENT": return "Nội dung công tác bắt buộc, tối đa 200 ký tự."
+        case "INVALID_LOCATION": return "Địa điểm bắt buộc, tối đa 200 ký tự."
+        case "INVALID_OTHER_PARTICIPANTS": return "Thành phần khác tối đa 500 ký tự."
+        case "INVALID_PARTICIPANT": return "Có người tham gia không còn hoạt động."
+        case "INVALID_DEPARTMENT": return "Có phòng ban không còn hoạt động."
+        case "END_BEFORE_START": return "Thời gian kết thúc phải sau thời gian bắt đầu."
+        default: return nil
+        }
+    }
+
     static func humanize(_ message: String) -> String {
         let code = extractCode(message)
+        if let duty = dutyMessage(code) { return duty }
         switch true {
         case code == "INVALID_PHONE": return "Số điện thoại không hợp lệ (6–20 ký tự)."
         case code == "INVALID_NAME": return "Họ tên phải có 1–120 ký tự."

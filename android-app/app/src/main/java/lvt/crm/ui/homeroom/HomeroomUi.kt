@@ -38,11 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 
-private data class ToneColors(val text: Color, val background: Color)
+internal data class ToneColors(val text: Color, val background: Color)
 
 /** DESIGN.md status colors (homeroom --hr-* palette) with readable dark-mode variants. */
 @Composable
-private fun toneColors(tone: HomeroomTone): ToneColors {
+internal fun toneColors(tone: HomeroomTone): ToneColors {
     val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     return when (tone) {
         HomeroomTone.Success -> if (dark) ToneColors(Color(0xFF6FD3BE), Color(0xFF10382F)) else ToneColors(Color(0xFF0E7363), Color(0xFFE3F4EF))
