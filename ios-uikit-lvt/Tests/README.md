@@ -160,3 +160,26 @@ swiftc -module-cache-path "$scratch/cache" \
 ```
 
 Covers class titles/subtitles, one main status chip plus pending chip, no chips on non-school days, every absence status shown as "Vắng", Vietnamese number/percent formatting, weekday titles and day stepping. Android mirrors the same rules in `HomeroomPresentationTest`.
+
+### Lịch công tác chung (duyệt theo tuần)
+
+```bash
+scratch=$(mktemp -d)
+swiftc -module-cache-path "$scratch/cache" \
+  ios-uikit-lvt/LvtCrmUIKit/AuthModels.swift \
+  ios-uikit-lvt/LvtCrmUIKit/CredentialStore.swift \
+  ios-uikit-lvt/LvtCrmUIKit/ConvexHttpClient.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomRepository.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomDetail.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomWrites.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomCameraImport.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomManagement.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomPendingJournal.swift \
+  ios-uikit-lvt/LvtCrmUIKit/HomeroomPresentation.swift \
+  ios-uikit-lvt/LvtCrmUIKit/DutyWeekPresentation.swift \
+  ios-uikit-lvt/Tests/DutyWeekPresentationChecks.swift \
+  -o "$scratch/duty-week-checks"
+"$scratch/duty-week-checks"
+```
+
+Covers the Monday–Saturday week, day grouping (a duty that began last week shows on Monday), "14g00" times, participant joining, who may submit/approve, the teacher "chưa được duyệt" notice, edit validation that mirrors `cleanDutyInput`, and that duty error codes are not mistaken for the "Invalid…" login wording. Android mirrors the same rules in `SharedWeekPresentationTest`.

@@ -239,6 +239,8 @@ final class RootTabBarController: UITabBarController, UITabBarControllerDelegate
         if destination.opensChat {
             navigationController.popToRootViewController(animated: false)
             chatHubViewController?.openThread(kind: destination.chatKind, entityId: destination.sourceId)
+        } else if tab == .duties, DutyWeekPresentation.isWeekNotification(destination.sourceType) {
+            dutiesHubViewController?.openShared(weekStart: destination.sourceId, animated: false)
         } else if tab == .duties {
             dutiesHubViewController?.openPersonal(animated: false)
             dutiesHubViewController?.dutiesListController.focus(

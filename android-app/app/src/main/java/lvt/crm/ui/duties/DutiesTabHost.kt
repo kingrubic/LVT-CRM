@@ -48,14 +48,17 @@ fun DutiesTabHost(
     openTab: DutyListTab? = null,
     openFilterToken: Int = 0,
     skipHub: Boolean = false,
+    /** Monday of a week to open on Lịch công tác chung (from an approval notification). */
+    openWeek: String? = null,
 ) {
-    var page by remember { mutableStateOf(if (skipHub || !focusId.isNullOrBlank()) DutiesTabPage.Personal else DutiesTabPage.Hub) }
-    LaunchedEffect(tabOpenToken, skipHub, focusId) {
-        page = if (skipHub || !focusId.isNullOrBlank()) {
-            DutiesTabPage.Personal
-        } else {
-            DutiesTabPage.Hub
-        }
+    fun startPage() = when {
+        !openWeek.isNullOrBlank() -> DutiesTabPage.SharedPicker
+        skipHub || !focusId.isNullOrBlank() -> DutiesTabPage.Personal
+        else -> DutiesTabPage.Hub
+    }
+    var page by remember { mutableStateOf(startPage()) }
+    LaunchedEffect(tabOpenToken, skipHub, focusId, openWeek, focusToken) {
+        page = startPage()
     }
 
     when (page) {
@@ -74,8 +77,10 @@ fun DutiesTabHost(
             openFilterToken = openFilterToken,
             onBackToHub = if (skipHub) null else ({ page = DutiesTabPage.Hub }),
         )
-        DutiesTabPage.SharedPicker -> SharedDutySchedulePickerScreen(
+        DutiesTabPage.SharedPicker -> SharedWeekScreen(
             dutiesRepository = dutiesRepository,
+            initialWeekStart = openWeek,
+            openToken = focusToken,
             onBack = { page = DutiesTabPage.Hub },
         )
     }
@@ -105,7 +110,7 @@ fun DutiesHubScreen(
                 )
                 HubChoiceCard(
                     title = "Lịch công tác chung",
-                    subtitle = "Xem và tải PDF lịch toàn trường",
+                    subtitle = "Lịch tuần toàn trường đã duyệt, duyệt lịch và tải PDF",
                     icon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null, modifier = Modifier.size(32.dp)) },
                     onClick = onOpenShared,
                 )

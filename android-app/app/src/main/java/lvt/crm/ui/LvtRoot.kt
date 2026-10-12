@@ -68,6 +68,7 @@ import lvt.crm.ui.components.accountInitials
 import lvt.crm.ui.duties.DutiesTabHost
 import lvt.crm.ui.duties.DutiesViewModel
 import lvt.crm.ui.duties.DutyListTab
+import lvt.crm.ui.duties.SharedWeekPresentation
 import lvt.crm.ui.home.DashboardScreen
 import lvt.crm.ui.home.DashboardViewModel
 import lvt.crm.ui.home.PlaceholderScreen
@@ -457,7 +458,10 @@ private fun MainShell(
                     dutiesRepository = container.dutiesRepository,
                     chatRepository = container.chatRepository,
                     focusId = focusTarget
-                        ?.takeIf { it.route == Routes.Duties }
+                        ?.takeIf { it.route == Routes.Duties && !SharedWeekPresentation.isWeekNotification(it.sourceType) }
+                        ?.sourceId,
+                    openWeek = focusTarget
+                        ?.takeIf { it.route == Routes.Duties && SharedWeekPresentation.isWeekNotification(it.sourceType) }
                         ?.sourceId,
                     openChat = focusTarget?.opensChat == true && focusTarget?.route == Routes.Duties,
                     focusToken = focusTarget

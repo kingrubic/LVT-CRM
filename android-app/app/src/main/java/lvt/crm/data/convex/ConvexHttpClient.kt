@@ -241,6 +241,23 @@ class ConvexHttpClient(
                 "PUBLIC_SIGNUP_DISABLED",
                 "INVALID_EMAIL",
                 "INVALID_AUTH_FLOW",
+                "DUTY_WEEK_MANAGER_REQUIRED",
+                "DUTY_WEEK_REVIEWER_REQUIRED",
+                "DUTY_WEEK_ALREADY_SUBMITTED",
+                "DUTY_WEEK_NOTHING_TO_SUBMIT",
+                "DUTY_WEEK_NOT_SUBMITTED",
+                "DUTY_WEEK_CHANGED",
+                "DUTY_WEEK_RETURN_NOTE_REQUIRED",
+                "DUTY_WEEK_RETURN_NOTE_TOO_LONG",
+                "DUTY_UPDATE_FORBIDDEN",
+                "DUTY_NOT_FOUND",
+                "INVALID_DUTY_TITLE",
+                "INVALID_CONTENT",
+                "INVALID_LOCATION",
+                "INVALID_OTHER_PARTICIPANTS",
+                "INVALID_PARTICIPANT",
+                "INVALID_DEPARTMENT",
+                "END_BEFORE_START",
                 "DUTY_CHAT_EMPTY",
                 "WORK_CHAT_EMPTY",
                 "DUTY_CHAT_TOO_LONG",
@@ -265,6 +282,23 @@ class ConvexHttpClient(
         fun humanize(message: String): String {
             val code = extractCode(message)
             return when {
+                code == "DUTY_WEEK_MANAGER_REQUIRED" -> "Chỉ văn thư (admin/mod) được nộp lịch tuần."
+                code == "DUTY_WEEK_REVIEWER_REQUIRED" -> "Chỉ Ban Giám hiệu được duyệt hoặc trả lại lịch tuần."
+                code == "DUTY_WEEK_ALREADY_SUBMITTED" -> "Lịch tuần này đang chờ Ban Giám hiệu duyệt."
+                code == "DUTY_WEEK_NOTHING_TO_SUBMIT" -> "Lịch tuần này không có thay đổi nào cần duyệt."
+                code == "DUTY_WEEK_NOT_SUBMITTED" -> "Lịch tuần này không còn ở trạng thái chờ duyệt."
+                code == "DUTY_WEEK_CHANGED" -> "Văn thư vừa sửa lịch tuần này. Hãy xem lại trước khi duyệt."
+                code == "DUTY_WEEK_RETURN_NOTE_REQUIRED" -> "Vui lòng ghi lý do trả lại."
+                code == "DUTY_WEEK_RETURN_NOTE_TOO_LONG" -> "Lý do trả lại tối đa 500 ký tự."
+                code == "DUTY_UPDATE_FORBIDDEN" -> "Bạn không thể sửa công tác này."
+                code == "DUTY_NOT_FOUND" -> "Công tác không còn tồn tại."
+                code == "INVALID_DUTY_TITLE" -> "Tên công tác bắt buộc, tối đa 200 ký tự."
+                code == "INVALID_CONTENT" -> "Nội dung công tác bắt buộc, tối đa 200 ký tự."
+                code == "INVALID_LOCATION" -> "Địa điểm bắt buộc, tối đa 200 ký tự."
+                code == "INVALID_OTHER_PARTICIPANTS" -> "Thành phần khác tối đa 500 ký tự."
+                code == "INVALID_PARTICIPANT" -> "Có người tham gia không còn hoạt động."
+                code == "INVALID_DEPARTMENT" -> "Có phòng ban không còn hoạt động."
+                code == "END_BEFORE_START" -> "Thời gian kết thúc phải sau thời gian bắt đầu."
                 code == "INVALID_PHONE" -> "Số điện thoại không hợp lệ (6–20 ký tự)."
                 code == "INVALID_NAME" -> "Họ tên phải có 1–120 ký tự."
                 code == "INVALID_TEXT" -> "Ghi chú liên hệ tối đa 300 ký tự."

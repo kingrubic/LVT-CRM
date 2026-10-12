@@ -1,5 +1,6 @@
 package lvt.crm.ui.notifications
 
+import lvt.crm.ui.duties.SharedWeekPresentation
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -349,7 +350,7 @@ private fun NotificationCard(
                             modifier = Modifier.size(17.dp),
                         )
                         Text(
-                            "${if (item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat") "Lúc" else "Hạn"} ${formatDueAt(item.dueAt)}",
+                            "${if (item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat" || SharedWeekPresentation.isWeekNotification(item.sourceType)) "Lúc" else "Hạn"} ${formatDueAt(item.dueAt)}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(start = 6.dp),
@@ -423,6 +424,7 @@ private fun FileTypeTile(fileName: String?) {
 
 private fun kindLabel(item: NotificationItem): String = when {
     item.sourceType == "duty_chat" || item.sourceType == "work_chat" || item.sourceType == "group_chat" -> "Trao đổi"
+    SharedWeekPresentation.isWeekNotification(item.sourceType) -> "Lịch công tác chung"
     item.kind == "duty" -> "Công tác"
     item.sourceType == "completion_rejected" -> "Từ chối hoàn thành"
     item.sourceType == "approval" -> "Công văn cần duyệt"
