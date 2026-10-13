@@ -8,6 +8,26 @@ data class AppChangelogEntry(
 object AppChangelog {
     val entries: List<AppChangelogEntry> = listOf(
         AppChangelogEntry(
+            "0.24.0",
+            listOf(
+                "Lịch công tác chung xem theo tuần ngay trên app, mỗi ngày một danh sách. Giáo viên chỉ thấy lịch đã được Ban Giám hiệu duyệt.",
+                "Ban Giám hiệu duyệt hoặc trả lại lịch tuần (kèm lý do) trên app; văn thư sửa công tác và nộp duyệt. Bấm thông báo mở đúng tuần.",
+            ),
+        ),
+        AppChangelogEntry(
+            "0.23.0",
+            listOf(
+                "Lớp chủ nhiệm gọn và dễ đọc hơn: ô số Có mặt / Trễ / Vắng / Chưa có, mỗi lớp còn 2 dòng kèm trạng thái màu (\"Đủ 41/41\", \"3 vắng\", \"Chưa điểm danh\").",
+                "Chọn ngày bằng nút ‹ ›, ngày nghỉ chỉ hiện một thông báo. Chi tiết lớp mở thẳng phần điểm danh, mỗi học sinh một dòng.",
+            ),
+        ),
+        AppChangelogEntry(
+            "0.22.0",
+            listOf(
+                "Mục Lớp chủ nhiệm (theo nhóm quyền): tổng quan lớp theo ngày, vắng chờ xử lý, danh sách lớp và hồ sơ học sinh.",
+            ),
+        ),
+        AppChangelogEntry(
             "0.21.0",
             listOf(
                 "Mục Trao đổi: mọi cuộc trò chuyện Công tác, Công việc và nhóm, theo hoạt động mới nhất.",
